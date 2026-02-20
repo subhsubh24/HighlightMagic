@@ -10,12 +10,15 @@ struct ProcessingView: View {
 
     private var phaseText: String {
         switch progress {
-        case 0..<0.10: "Preparing video..."
-        case 0.10..<0.30: "Analyzing motion..."
-        case 0.30..<0.50: "Detecting faces..."
-        case 0.50..<0.70: "Classifying scenes..."
-        case 0.70..<0.90: "Ranking highlights..."
-        case 0.90..<1.0: "Building clips..."
+        case 0..<0.05: "Preparing video..."
+        case 0.05..<0.20: "Pass 1: Analyzing motion..."
+        case 0.20..<0.35: "Pass 2: Detecting faces..."
+        case 0.35..<0.50: "Pass 3: Classifying scenes..."
+        case 0.50..<0.65: "Pass 4: ML model scoring..."
+        case 0.65..<0.80: "Pass 5: Semantic fusion..."
+        case 0.80..<0.85: "Building highlight segments..."
+        case 0.85..<0.98: "Pass 6: AI refinement..."
+        case 0.98..<1.0: "Generating clips..."
         default: "Complete!"
         }
     }

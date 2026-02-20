@@ -28,41 +28,75 @@ actor HighlightDetectionService {
             throw DetectionError.invalidVideo
         }
 
-        // Phase 1: Motion analysis (0-30%)
-        progressHandler(0.05)
+        // Pass 1: Vision — Motion analysis (0-20%)
+        progressHandler(0.02)
         let motionScores = await analyzeMotion(asset: asset, totalSeconds: totalSeconds) { phase in
-            progressHandler(0.05 + phase * 0.25)
+            progressHandler(0.02 + phase * 0.18)
         }
 
-        // Phase 2: Face detection (30-50%)
-        progressHandler(0.30)
+        // Pass 2: Vision — Face detection (20-35%)
+        progressHandler(0.20)
         let faceScores = await analyzeFaces(asset: asset, totalSeconds: totalSeconds) { phase in
-            progressHandler(0.30 + phase * 0.20)
+            progressHandler(0.20 + phase * 0.15)
         }
 
-        // Phase 3: Scene classification (50-70%)
-        progressHandler(0.50)
+        // Pass 3: Vision — Saliency / Scene (35-50%)
+        progressHandler(0.35)
         let sceneScores = await analyzeScenes(asset: asset, totalSeconds: totalSeconds) { phase in
-            progressHandler(0.50 + phase * 0.20)
+            progressHandler(0.35 + phase * 0.15)
         }
 
-        // Phase 4: Prompt-based semantic scoring (70-90%)
-        progressHandler(0.70)
+        // Pass 4: CoreML — Video-text similarity (50-65%)
+        progressHandler(0.50)
+        var coreMLScores: [Double] = []
+        if !prompt.isEmpty {
+            do {
+                try await CoreMLDetectionService.shared.loadModel()
+                coreMLScores = await CoreMLDetectionService.shared.scoreFrames(
+                    asset: asset,
+                    prompt: prompt,
+                    sampleCount: min(Int(totalSeconds), 30)
+                ) { phase in
+                    progressHandler(0.50 + phase * 0.15)
+                }
+            } catch {
+                // CoreML unavailable — continue without
+            }
+        }
+
+        // Pass 5: Semantic fusion (65-80%)
+        progressHandler(0.65)
         let semanticScores = computeSemanticScores(
             motionScores: motionScores,
             faceScores: faceScores,
             sceneScores: sceneScores,
+            coreMLScores: coreMLScores,
             prompt: prompt,
             totalSeconds: totalSeconds
         )
-        progressHandler(0.90)
+        progressHandler(0.80)
 
-        // Phase 5: Merge & rank segments (90-100%)
-        let segments = buildSegments(
+        // Pass 6: Build candidate segments (80-85%)
+        var segments = buildSegments(
             from: semanticScores,
             totalSeconds: totalSeconds,
             prompt: prompt
         )
+        progressHandler(0.85)
+
+        // Pass 7: Claude Vision refinement for low-confidence segments (85-98%)
+        let avgConfidenceBefore = segments.isEmpty ? 0 : segments.map(\.confidenceScore).reduce(0, +) / Double(segments.count)
+        if avgConfidenceBefore < Constants.claudeAPIConfidenceThreshold,
+           await ClaudeVisionService.shared.isAvailable {
+            segments = await refineWithClaudeVision(
+                segments: segments,
+                asset: asset,
+                prompt: prompt,
+                totalSeconds: totalSeconds
+            ) { phase in
+                progressHandler(0.85 + phase * 0.13)
+            }
+        }
         progressHandler(1.0)
 
         let avgConfidence = segments.isEmpty ? 0 : segments.map(\.confidenceScore).reduce(0, +) / Double(segments.count)
@@ -71,6 +105,50 @@ actor HighlightDetectionService {
             segments: segments,
             overallConfidence: avgConfidence
         )
+    }
+
+    // MARK: - Claude Vision Refinement
+
+    private func refineWithClaudeVision(
+        segments: [HighlightSegment],
+        asset: AVURLAsset,
+        prompt: String,
+        totalSeconds: Double,
+        progressHandler: @Sendable (Double) -> Void
+    ) async -> [HighlightSegment] {
+        let candidateTimestamps = segments.map { $0.startSeconds + $0.duration / 2 }
+
+        do {
+            let scored = try await ClaudeVisionService.shared.scoreHighlights(
+                asset: asset,
+                prompt: prompt,
+                candidateTimestamps: candidateTimestamps
+            ) { phase in
+                progressHandler(phase)
+            }
+
+            // Merge Claude scores with existing segments
+            var refined = segments
+            for scoredItem in scored {
+                if let idx = refined.firstIndex(where: {
+                    abs($0.startSeconds + $0.duration / 2 - scoredItem.seconds) < 5
+                }) {
+                    // Blend: 60% Claude score + 40% original
+                    let blended = scoredItem.score * 0.6 + refined[idx].confidenceScore * 0.4
+                    refined[idx].confidenceScore = blended
+                    if !refined[idx].detectionSources.contains(.claudeVision) {
+                        refined[idx].detectionSources.append(.claudeVision)
+                    }
+                    if !scoredItem.reason.isEmpty {
+                        refined[idx].label = scoredItem.reason
+                    }
+                }
+            }
+
+            return refined.sorted { $0.confidenceScore > $1.confidenceScore }
+        } catch {
+            return segments
+        }
     }
 
     // MARK: - Motion Analysis
@@ -248,16 +326,17 @@ actor HighlightDetectionService {
         motionScores: [Double],
         faceScores: [Double],
         sceneScores: [Double],
+        coreMLScores: [Double] = [],
         prompt: String,
         totalSeconds: Double
     ) -> [Double] {
-        let maxCount = max(motionScores.count, max(faceScores.count, sceneScores.count))
+        let allCounts = [motionScores.count, faceScores.count, sceneScores.count, coreMLScores.count]
+        let maxCount = allCounts.max() ?? 1
         guard maxCount > 0 else { return [0.5] }
 
         var combined = [Double](repeating: 0, count: maxCount)
-
-        // Determine weights based on prompt
         let weights = promptBasedWeights(for: prompt)
+        let hasCoreML = !coreMLScores.isEmpty
 
         for i in 0..<maxCount {
             let motionIdx = i * motionScores.count / maxCount
@@ -268,7 +347,16 @@ actor HighlightDetectionService {
             let face = faceScores.indices.contains(faceIdx) ? faceScores[faceIdx] : 0
             let scene = sceneScores.indices.contains(sceneIdx) ? sceneScores[sceneIdx] : 0
 
-            combined[i] = motion * weights.motion + face * weights.face + scene * weights.scene
+            var score = motion * weights.motion + face * weights.face + scene * weights.scene
+
+            if hasCoreML {
+                let mlIdx = i * coreMLScores.count / maxCount
+                let mlScore = coreMLScores.indices.contains(mlIdx) ? coreMLScores[mlIdx] : 0
+                // Blend: 70% Vision + 30% CoreML when available
+                score = score * 0.7 + mlScore * 0.3
+            }
+
+            combined[i] = score
         }
 
         return combined

@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var storeService = StoreKitService.shared
+    @State private var accountService = UserAccountService.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
 
     var body: some View {
         ZStack {
@@ -34,26 +36,45 @@ struct SettingsView: View {
                                 .foregroundStyle(Theme.accent)
                         }
                     }
+
+                    HStack {
+                        Label("User ID", systemImage: "person.text.rectangle")
+                        Spacer()
+                        Text(String(accountService.userID.prefix(8)) + "...")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
                 } header: {
                     Text("Account")
                 }
 
-                // About section
+                // Saved Projects
                 Section {
                     HStack {
-                        Label("Version", systemImage: "info.circle")
+                        Label("Saved Projects", systemImage: "folder")
                         Spacer()
-                        Text("1.0.0")
+                        Text("\(accountService.savedProjects.count)")
                             .foregroundStyle(Theme.textSecondary)
                     }
 
-                    Button {
-                        Task { await storeService.restorePurchases() }
-                    } label: {
-                        Label("Restore Purchases", systemImage: "arrow.clockwise")
+                    if appState.isProUser {
+                        HStack {
+                            Label("iCloud Sync", systemImage: "icloud")
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    } else {
+                        HStack {
+                            Label("iCloud Sync", systemImage: "icloud.slash")
+                            Spacer()
+                            Text("Pro Only")
+                                .font(.caption)
+                                .foregroundStyle(Theme.textTertiary)
+                        }
                     }
                 } header: {
-                    Text("About")
+                    Text("Projects")
                 }
 
                 // Export settings
@@ -80,6 +101,30 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Export Settings")
+                }
+
+                // About section
+                Section {
+                    HStack {
+                        Label("Version", systemImage: "info.circle")
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+
+                    Button {
+                        Task { await storeService.restorePurchases() }
+                    } label: {
+                        Label("Restore Purchases", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        hasCompletedOnboarding = false
+                    } label: {
+                        Label("Replay Onboarding", systemImage: "arrow.counterclockwise")
+                    }
+                } header: {
+                    Text("About")
                 }
             }
             .scrollContentBackground(.hidden)

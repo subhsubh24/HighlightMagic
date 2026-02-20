@@ -6,10 +6,11 @@ struct EditorView: View {
     @Environment(AppState.self) private var appState
     let clipID: EditedClip.ID
 
-    @State private var player: AVPlayer?
     @State private var thumbnails: [UIImage] = []
     @State private var showMusicPicker = false
-    @State private var showFilterPicker = false
+    @State private var showTemplatePicker = false
+    @State private var showPremiumEffects = false
+    @State private var seekTime: CMTime?
 
     private var clipIndex: Int? {
         appState.generatedClips.firstIndex(where: { $0.id == clipID })
@@ -34,6 +35,28 @@ struct EditorView: View {
         )
     }
 
+    private var trimStartBinding: Binding<CMTime> {
+        Binding(
+            get: { appState.generatedClips.first(where: { $0.id == clipID })?.trimStart ?? .zero },
+            set: { newValue in
+                if let index = appState.generatedClips.firstIndex(where: { $0.id == clipID }) {
+                    appState.generatedClips[index].trimStart = newValue
+                }
+            }
+        )
+    }
+
+    private var trimEndBinding: Binding<CMTime> {
+        Binding(
+            get: { appState.generatedClips.first(where: { $0.id == clipID })?.trimEnd ?? .zero },
+            set: { newValue in
+                if let index = appState.generatedClips.firstIndex(where: { $0.id == clipID }) {
+                    appState.generatedClips[index].trimEnd = newValue
+                }
+            }
+        )
+    }
+
     private var clip: EditedClip? {
         appState.generatedClips.first { $0.id == clipID }
     }
@@ -43,25 +66,21 @@ struct EditorView: View {
             Theme.backgroundGradient
                 .ignoresSafeArea()
 
-            if let clipBinding, let clip {
+            if let clipBinding, let clip, let video = appState.selectedVideo {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Video preview
-                        videoPreviewSection
+                        VideoPreviewPlayer(
+                            videoURL: video.sourceURL,
+                            trimStart: clip.trimStart,
+                            trimEnd: clip.trimEnd
+                        )
 
-                        // Trim controls
                         trimSection(clipBinding)
-
-                        // Caption
                         captionSection(clipBinding)
-
-                        // Music
                         musicSection(clip)
-
-                        // Filters
                         filterSection(clipBinding)
+                        premiumEffectsButton
 
-                        // Export button
                         PrimaryButton(title: "Export Clip", icon: "square.and.arrow.up") {
                             appState.navigationPath.append(AppScreen.export(clipID: clipID))
                         }
@@ -76,48 +95,39 @@ struct EditorView: View {
         }
         .navigationTitle("Edit Clip")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showTemplatePicker = true } label: {
+                    Image(systemName: "rectangle.stack.fill")
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+        }
         .sheet(isPresented: $showMusicPicker) {
             MusicPickerSheet(selectedTrack: musicBinding)
         }
-        .task { await setupPlayer() }
+        .sheet(isPresented: $showTemplatePicker) {
+            TemplatePickerSheet(clipBinding: clipBinding)
+        }
+        .sheet(isPresented: $showPremiumEffects) {
+            PremiumEffectsSheet()
+        }
         .task { await loadTimelineThumbnails() }
     }
 
     // MARK: - Sections
 
-    @ViewBuilder
-    private var videoPreviewSection: some View {
-        if let player {
-            VideoPlayer(player: player)
-                .frame(height: 420)
-                .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius)
-                        .stroke(Theme.surfaceLight, lineWidth: 1)
-                )
-        } else {
-            RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius)
-                .fill(Theme.surfaceColor)
-                .frame(height: 420)
-                .overlay { ProgressView().tint(.white) }
-        }
-    }
-
     private func trimSection(_ binding: Binding<EditedClip>) -> some View {
         EditorSection(title: "Trim", icon: "scissors") {
             VStack(spacing: 12) {
-                // Timeline thumbnails
-                if !thumbnails.isEmpty {
-                    HStack(spacing: 2) {
-                        ForEach(thumbnails.indices, id: \.self) { index in
-                            Image(uiImage: thumbnails[index])
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 44)
-                                .clipped()
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                VideoTrimSlider(
+                    trimStart: trimStartBinding,
+                    trimEnd: trimEndBinding,
+                    segmentStart: binding.wrappedValue.segment.startTime,
+                    segmentEnd: binding.wrappedValue.segment.endTime,
+                    thumbnails: thumbnails
+                ) { time in
+                    seekTime = time
                 }
 
                 HStack {
@@ -125,13 +135,27 @@ struct EditorView: View {
                         .font(Theme.caption)
                         .foregroundStyle(Theme.textTertiary)
                     Spacer()
-                    Text("\(Int(binding.wrappedValue.duration))s clip")
-                        .font(Theme.caption)
+                    Text("\(Int(binding.wrappedValue.duration))s")
+                        .font(Theme.caption.bold())
                         .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Theme.accent.opacity(0.15))
+                        .clipShape(Capsule())
                     Spacer()
                     Text(formatTime(CMTimeGetSeconds(binding.wrappedValue.trimEnd)))
                         .font(Theme.caption)
                         .foregroundStyle(Theme.textTertiary)
+                }
+
+                if binding.wrappedValue.duration > Constants.maxClipDuration {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text("Max \(Int(Constants.maxClipDuration))s — trim to shorten")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(.orange)
                 }
             }
         }
@@ -147,7 +171,6 @@ struct EditorView: View {
                     .background(Theme.surfaceLight)
                     .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.smallCornerRadius))
 
-                // Caption style picker
                 HStack(spacing: 8) {
                     ForEach(CaptionStyle.allCases, id: \.self) { style in
                         CaptionStyleButton(
@@ -164,15 +187,24 @@ struct EditorView: View {
 
     private func musicSection(_ clip: EditedClip) -> some View {
         EditorSection(title: "Music", icon: "music.note") {
-            Button {
-                showMusicPicker = true
-            } label: {
+            Button { showMusicPicker = true } label: {
                 HStack {
                     Image(systemName: clip.selectedMusicTrack != nil ? "music.note" : "plus.circle")
                         .foregroundStyle(Theme.accent)
                     Text(clip.selectedMusicTrack?.name ?? "Add Music")
                         .font(Theme.body)
                         .foregroundStyle(.white)
+
+                    if let track = clip.selectedMusicTrack {
+                        Text(track.mood.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Theme.accent.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -203,22 +235,61 @@ struct EditorView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private func setupPlayer() async {
-        guard let video = appState.selectedVideo, let clip else { return }
-        let playerItem = AVPlayerItem(url: video.sourceURL)
-        let newPlayer = AVPlayer(playerItem: playerItem)
-        await newPlayer.seek(to: clip.trimStart, toleranceBefore: .zero, toleranceAfter: .zero)
-        player = newPlayer
+    @ViewBuilder
+    private var premiumEffectsButton: some View {
+        Button {
+            if appState.isProUser {
+                showPremiumEffects = true
+            } else {
+                appState.navigationPath.append(AppScreen.paywall)
+            }
+        } label: {
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.yellow)
+                Text("Premium Effects")
+                    .font(Theme.headline)
+                    .foregroundStyle(.white)
+                Spacer()
+                if !appState.isProUser {
+                    Text("PRO")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Theme.primaryGradient)
+                        .clipShape(Capsule())
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(14)
+            .background(Theme.surfaceColor)
+            .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.yellow.opacity(0.3), .orange.opacity(0.3)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
+
+    // MARK: - Helpers
 
     private func loadTimelineThumbnails() async {
         guard let video = appState.selectedVideo else { return }
         thumbnails = await ThumbnailService.shared.timelineThumbnails(
             for: video.sourceURL,
-            count: 8,
-            size: CGSize(width: 60, height: 44)
+            count: 10,
+            size: CGSize(width: 60, height: 56)
         )
     }
 
@@ -229,7 +300,7 @@ struct EditorView: View {
     }
 }
 
-// MARK: - Editor Subcomponents
+// MARK: - Reusable Editor Subcomponents
 
 struct EditorSection<Content: View>: View {
     let title: String
@@ -246,7 +317,6 @@ struct EditorSection<Content: View>: View {
                     .font(Theme.headline)
                     .foregroundStyle(.white)
             }
-
             content
         }
         .padding(14)
@@ -289,7 +359,6 @@ struct FilterButton: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(isSelected ? Theme.accent : .clear, lineWidth: 2)
                     )
-
                 Text(filter.rawValue)
                     .font(.caption2)
                     .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
