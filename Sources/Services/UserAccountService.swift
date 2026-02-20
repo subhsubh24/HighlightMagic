@@ -112,6 +112,31 @@ final class UserAccountService {
         persistProjects()
     }
 
+    // MARK: - Account Deletion (App Store Requirement)
+
+    func deleteAllData() {
+        // Remove all projects
+        savedProjects.removeAll()
+        persistProjects()
+
+        // Clear iCloud data
+        iCloudStore.removeObject(forKey: "saved_projects")
+        iCloudStore.synchronize()
+
+        // Remove project thumbnails
+        try? FileManager.default.removeItem(at: projectsDirectory)
+        try? FileManager.default.createDirectory(
+            at: projectsDirectory,
+            withIntermediateDirectories: true
+        )
+
+        // Reset anonymous user ID
+        KeychainHelper.delete(key: "user_anonymous_id")
+        let newID = UUID().uuidString
+        KeychainHelper.save(key: "user_anonymous_id", value: newID)
+        userID = newID
+    }
+
     func startObservingCloudChanges() {
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,

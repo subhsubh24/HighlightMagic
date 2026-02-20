@@ -1,23 +1,53 @@
 import Foundation
 import AVFoundation
 import UIKit
+import Security
+import os.log
 
 actor ClaudeVisionService {
     static let shared = ClaudeVisionService()
 
     private let maxFramesPerRequest = 4
     private let endpoint = "https://api.anthropic.com/v1/messages"
+    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClaudeVision")
+    private var lastRequestTime: Date = .distantPast
+    private let minRequestInterval: TimeInterval = 1.0 // Rate limit: 1 req/sec
 
+    /// API key resolution order:
+    /// 1. Environment variable (dev/CI builds)
+    /// 2. Keychain (production — set via Settings or first-launch config)
+    /// 3. Info.plist "ANTHROPIC_API_KEY" (fallback for managed deployments)
     private var apiKey: String? {
-        // Load from environment or keychain
-        ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
-            ?? KeychainHelper.load(key: "claude_api_key")
+        if let envKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"],
+           !envKey.isEmpty, envKey.hasPrefix("sk-ant-") {
+            return envKey
+        }
+        if let keychainKey = KeychainHelper.load(key: "claude_api_key"),
+           !keychainKey.isEmpty, keychainKey.hasPrefix("sk-ant-") {
+            return keychainKey
+        }
+        if let plistKey = Bundle.main.object(forInfoDictionaryKey: "ANTHROPIC_API_KEY") as? String,
+           !plistKey.isEmpty, plistKey.hasPrefix("sk-ant-") {
+            return plistKey
+        }
+        return nil
     }
 
     private init() {}
 
     var isAvailable: Bool {
         apiKey != nil
+    }
+
+    /// Store an API key securely for future sessions
+    nonisolated static func configureAPIKey(_ key: String) {
+        guard key.hasPrefix("sk-ant-") else { return }
+        KeychainHelper.save(key: "claude_api_key", value: key)
+    }
+
+    /// Remove stored API key
+    nonisolated static func removeAPIKey() {
+        KeychainHelper.delete(key: "claude_api_key")
     }
 
     // MARK: - Score Highlight Candidates
@@ -51,6 +81,12 @@ actor ClaudeVisionService {
             let batchEnd = min(batchStart + maxFramesPerRequest, candidateTimestamps.count)
             let batchTimestamps = Array(candidateTimestamps[batchStart..<batchEnd])
 
+            // Rate limiting
+            let elapsed = Date.now.timeIntervalSince(lastRequestTime)
+            if elapsed < minRequestInterval {
+                try? await Task.sleep(for: .seconds(minRequestInterval - elapsed))
+            }
+
             // Extract frames
             var frames: [(time: Double, base64: String)] = []
             for timestamp in batchTimestamps {
@@ -64,19 +100,44 @@ actor ClaudeVisionService {
 
             guard !frames.isEmpty else { continue }
 
-            // Build API request
-            let scored = try await callClaudeVision(
+            // Build API request with retry
+            let scored = try await callClaudeVisionWithRetry(
                 frames: frames,
                 prompt: prompt,
                 apiKey: apiKey
             )
             allScored.append(contentsOf: scored)
+            lastRequestTime = .now
 
             let progress = Double(batchEnd) / Double(candidateTimestamps.count)
             progressHandler(progress)
         }
 
         return allScored
+    }
+
+    // MARK: - API Call with Retry
+
+    private func callClaudeVisionWithRetry(
+        frames: [(time: Double, base64: String)],
+        prompt: String,
+        apiKey: String,
+        maxRetries: Int = 2
+    ) async throws -> [ScoredTimestamp] {
+        var lastError: Error = ClaudeVisionError.requestFailed
+        for attempt in 0...maxRetries {
+            do {
+                return try await callClaudeVision(frames: frames, prompt: prompt, apiKey: apiKey)
+            } catch {
+                lastError = error
+                logger.warning("Claude Vision attempt \(attempt + 1) failed: \(error.localizedDescription)")
+                if attempt < maxRetries {
+                    let delay = Double(1 << attempt) // 1s, 2s exponential backoff
+                    try? await Task.sleep(for: .seconds(delay))
+                }
+            }
+        }
+        throw lastError
     }
 
     // MARK: - API Call
@@ -88,7 +149,6 @@ actor ClaudeVisionService {
     ) async throws -> [ScoredTimestamp] {
         var contentBlocks: [[String: Any]] = []
 
-        // Add instruction text
         let instruction = """
         Analyze these video frames and score each for highlight potential.
         User wants: "\(prompt.isEmpty ? "best moments" : prompt)"
@@ -97,8 +157,7 @@ actor ClaudeVisionService {
         """
         contentBlocks.append(["type": "text", "text": instruction])
 
-        // Add image blocks
-        for (i, frame) in frames.enumerated() {
+        for frame in frames {
             contentBlocks.append([
                 "type": "text",
                 "text": "Frame at \(String(format: "%.1f", frame.time))s:"
@@ -111,7 +170,6 @@ actor ClaudeVisionService {
                     "data": frame.base64
                 ] as [String: Any]
             ])
-            _ = i // suppress unused warning
         }
 
         let requestBody: [String: Any] = [
@@ -136,8 +194,19 @@ actor ClaudeVisionService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ClaudeVisionError.requestFailed
+        }
+
+        switch httpResponse.statusCode {
+        case 200...299:
+            break
+        case 429:
+            throw ClaudeVisionError.rateLimited
+        case 401:
+            throw ClaudeVisionError.invalidAPIKey
+        default:
+            logger.error("Claude API HTTP \(httpResponse.statusCode)")
             throw ClaudeVisionError.requestFailed
         }
 
@@ -154,7 +223,6 @@ actor ClaudeVisionService {
             return frameTimes.map { ScoredTimestamp(seconds: $0, score: 0.5, reason: "Parse failed") }
         }
 
-        // Extract JSON array from response
         guard let jsonStart = text.firstIndex(of: "["),
               let jsonEnd = text.lastIndex(of: "]") else {
             return frameTimes.map { ScoredTimestamp(seconds: $0, score: 0.5, reason: "No JSON") }
@@ -178,12 +246,16 @@ actor ClaudeVisionService {
 // MARK: - Keychain Helper
 
 enum KeychainHelper {
+    private static let serviceName = "com.highlightmagic.app"
+
     static func save(key: String, value: String) {
         guard let data = value.data(using: .utf8) else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
@@ -192,6 +264,7 @@ enum KeychainHelper {
     static func load(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
@@ -201,19 +274,32 @@ enum KeychainHelper {
         guard status == errSecSuccess, let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
+
+    static func delete(key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 enum ClaudeVisionError: LocalizedError {
     case noAPIKey
+    case invalidAPIKey
     case invalidEndpoint
     case requestFailed
+    case rateLimited
     case parseFailed
 
     var errorDescription: String? {
         switch self {
-        case .noAPIKey: "Claude API key not configured."
+        case .noAPIKey: "Claude API key not configured. Add your key in Settings."
+        case .invalidAPIKey: "Claude API key is invalid. Check your key in Settings."
         case .invalidEndpoint: "Invalid API endpoint."
-        case .requestFailed: "Claude Vision request failed."
+        case .requestFailed: "Claude Vision request failed. Check your connection."
+        case .rateLimited: "Too many requests. Please wait a moment."
         case .parseFailed: "Failed to parse Claude response."
         }
     }

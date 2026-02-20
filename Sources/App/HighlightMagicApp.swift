@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct HighlightMagicApp: App {
     @State private var appState = AppState()
+    @State private var networkMonitor = NetworkMonitor.shared
 
     init() {
         CrashReporting.initialize()

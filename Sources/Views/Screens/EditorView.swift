@@ -177,6 +177,7 @@ struct EditorView: View {
                             style: style,
                             isSelected: binding.wrappedValue.captionStyle == style
                         ) {
+                            HapticFeedback.selection()
                             binding.wrappedValue.captionStyle = style
                         }
                     }
@@ -227,6 +228,7 @@ struct EditorView: View {
                             filter: filter,
                             isSelected: binding.wrappedValue.selectedFilter == filter
                         ) {
+                            HapticFeedback.selection()
                             binding.wrappedValue.selectedFilter = filter
                         }
                     }

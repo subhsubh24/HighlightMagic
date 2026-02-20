@@ -10,6 +10,10 @@ actor ThumbnailService {
 
     private init() {}
 
+    func clearCache() {
+        cache.removeAll()
+    }
+
     func thumbnail(for url: URL, at time: CMTime, size: CGSize = CGSize(width: 360, height: 640)) async -> UIImage? {
         let cacheKey = "\(url.absoluteString)_\(CMTimeGetSeconds(time))_\(size.width)x\(size.height)"
 

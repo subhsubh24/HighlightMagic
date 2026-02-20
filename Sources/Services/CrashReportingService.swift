@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os.log
 
 enum CrashReporting {
@@ -37,14 +38,18 @@ enum CrashReporting {
         os_signpost(.end, log: signpostLog, name: name, signpostID: id)
     }
 
-    // MARK: - Crash Reporting Stub
+    /// Measure an async block with signpost instrumentation
+    static func measure<T>(_ name: StaticString, block: () async throws -> T) async rethrows -> T {
+        let id = beginSignpost(name)
+        defer { endSignpost(name, id: id) }
+        return try await block()
+    }
 
-    /// In production, integrate with Firebase Crashlytics or Sentry
+    // MARK: - Crash Reporting
+
     static func initialize() {
-        // Register for uncaught exception handling
         NSSetUncaughtExceptionHandler { exception in
             logger.fault("Uncaught exception: \(exception.name.rawValue) — \(exception.reason ?? "no reason")")
-            // In production: send to Crashlytics/Sentry
         }
 
         logInfo("CrashReporting initialized")
@@ -54,6 +59,31 @@ enum CrashReporting {
 
     static func logMemoryWarning() {
         logWarning("Low memory warning received")
-        // Clear thumbnail caches, release non-essential resources
+
+        // Proactively clear caches
+        Task {
+            await ThumbnailService.shared.clearCache()
+        }
+
+        // Log memory footprint for debugging
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        if result == KERN_SUCCESS {
+            let usedMB = info.resident_size / (1024 * 1024)
+            logWarning("Memory footprint: \(usedMB)MB")
+        }
+    }
+
+    // MARK: - Battery Level Check
+
+    static var isLowBattery: Bool {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        return UIDevice.current.batteryLevel > 0 && UIDevice.current.batteryLevel < 0.1
+            && UIDevice.current.batteryState == .unplugged
     }
 }

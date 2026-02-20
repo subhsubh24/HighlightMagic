@@ -7,6 +7,8 @@ struct HomeView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isLoadingVideo = false
     @State private var loadError: String?
+    @State private var logoScale: CGFloat = 0.8
+    @State private var logoOpacity: Double = 0
 
     var body: some View {
         ZStack {
@@ -16,11 +18,12 @@ struct HomeView: View {
             VStack(spacing: 32) {
                 Spacer()
 
-                // Logo / Title
+                // Logo / Title with entrance animation
                 VStack(spacing: 12) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 56))
                         .foregroundStyle(Theme.primaryGradient)
+                        .symbolEffect(.pulse, options: .repeating.speed(0.5))
 
                     Text("Highlight Magic")
                         .font(Theme.largeTitle)
@@ -30,6 +33,14 @@ struct HomeView: View {
                         .font(Theme.body)
                         .foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center)
+                }
+                .scaleEffect(logoScale)
+                .opacity(logoOpacity)
+                .onAppear {
+                    withAnimation(Theme.springAnimation) {
+                        logoScale = 1.0
+                        logoOpacity = 1.0
+                    }
                 }
 
                 Spacer()
@@ -58,8 +69,10 @@ struct HomeView: View {
                     .shadow(color: Theme.accent.opacity(0.4), radius: 12, y: 6)
                 }
                 .disabled(isLoadingVideo)
+                .buttonStyle(ScaleButtonStyle())
                 .onChange(of: selectedPhotoItem) { _, newItem in
                     guard let item = newItem else { return }
+                    HapticFeedback.light()
                     Task { await loadVideo(from: item) }
                 }
 
@@ -83,6 +96,7 @@ struct HomeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    HapticFeedback.selection()
                     appState.navigationPath.append(AppScreen.settings)
                 } label: {
                     Image(systemName: "gearshape")
@@ -93,6 +107,7 @@ struct HomeView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if !appState.isProUser {
                     Button {
+                        HapticFeedback.selection()
                         appState.navigationPath.append(AppScreen.paywall)
                     } label: {
                         Text("PRO")
@@ -126,6 +141,7 @@ struct HomeView: View {
         do {
             guard let movieData = try await item.loadTransferable(type: VideoTransferable.self) else {
                 loadError = "Could not load video data."
+                HapticFeedback.error()
                 return
             }
 
@@ -133,13 +149,16 @@ struct HomeView: View {
 
             guard video.isWithinLimit else {
                 loadError = "Video must be 10 minutes or shorter."
+                HapticFeedback.error()
                 return
             }
 
+            HapticFeedback.success()
             appState.selectedVideo = video
             appState.navigationPath.append(AppScreen.prompt)
         } catch {
             loadError = error.localizedDescription
+            HapticFeedback.error()
         }
     }
 }

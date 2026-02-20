@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum Theme {
     // MARK: - Colors
@@ -21,6 +22,12 @@ enum Theme {
         endPoint: .bottom
     )
 
+    static let goldGradient = LinearGradient(
+        colors: [.yellow, .orange],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
     static let accent = Color(hex: "7C3AED")
     static let accentPink = Color(hex: "EC4899")
     static let surfaceColor = Color(hex: "1E1E3A")
@@ -28,6 +35,14 @@ enum Theme {
     static let textPrimary = Color.white
     static let textSecondary = Color.white.opacity(0.7)
     static let textTertiary = Color.white.opacity(0.4)
+    static let success = Color.green
+    static let warning = Color.orange
+    static let error = Color.red
+
+    // MARK: - Glass Material
+
+    static let glassBackground = Color.white.opacity(0.08)
+    static let glassBorder = Color.white.opacity(0.12)
 
     // MARK: - Typography
 
@@ -36,6 +51,11 @@ enum Theme {
     static let headline = Font.system(size: 17, weight: .semibold, design: .rounded)
     static let body = Font.system(size: 15, weight: .regular, design: .default)
     static let caption = Font.system(size: 12, weight: .medium, design: .default)
+
+    // MARK: - Animations
+
+    static let springAnimation = Animation.spring(duration: 0.4, bounce: 0.3)
+    static let smoothAnimation = Animation.easeInOut(duration: 0.3)
 }
 
 // MARK: - Color Hex Extension
@@ -61,5 +81,52 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// MARK: - Glass Card Modifier
+
+struct GlassCardModifier: ViewModifier {
+    var cornerRadius: CGFloat = Constants.Layout.cornerRadius
+
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial.opacity(0.5))
+            .background(Theme.glassBackground)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(Theme.glassBorder, lineWidth: 0.5)
+            )
+    }
+}
+
+extension View {
+    func glassCard(cornerRadius: CGFloat = Constants.Layout.cornerRadius) -> some View {
+        modifier(GlassCardModifier(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Haptics
+
+enum HapticFeedback {
+    static func light() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func medium() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    static func error() {
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
     }
 }

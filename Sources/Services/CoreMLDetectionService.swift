@@ -3,12 +3,23 @@ import CoreML
 import Vision
 import AVFoundation
 import CoreImage
+import os.log
 
 actor CoreMLDetectionService {
     static let shared = CoreMLDetectionService()
 
     private var model: VNCoreMLModel?
     private var isModelLoaded = false
+    private var loadAttempted = false
+    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "CoreML")
+
+    /// Supported model filenames in priority order (quantized first for smaller footprint)
+    private let modelCandidates: [(resource: String, ext: String)] = [
+        ("VideoHighlightModel_q8", "mlmodelc"),   // INT8 quantized (~25MB)
+        ("VideoHighlightModel_q16", "mlmodelc"),   // FP16 quantized (~50MB)
+        ("VideoHighlightModel", "mlmodelc"),        // Full precision fallback
+        ("MobileViCLIP", "mlmodelc")                // Alternative architecture
+    ]
 
     private init() {}
 
@@ -16,24 +27,38 @@ actor CoreMLDetectionService {
 
     func loadModel() async throws {
         guard !isModelLoaded else { return }
-
-        // Attempt to load bundled CoreML model (MobileViCLIP or similar)
-        // In production, replace with actual .mlmodel compiled asset
-        if let modelURL = Bundle.main.url(
-            forResource: "VideoHighlightModel",
-            withExtension: "mlmodelc"
-        ) {
-            do {
-                let mlModel = try MLModel(contentsOf: modelURL)
-                model = try VNCoreMLModel(for: mlModel)
-                isModelLoaded = true
-            } catch {
-                throw CoreMLError.modelLoadFailed(error.localizedDescription)
-            }
-        } else {
-            // Fallback: use built-in Vision classifiers
+        guard !loadAttempted else {
+            // Already attempted and failed — use Vision fallback silently
             isModelLoaded = true
+            return
         }
+        loadAttempted = true
+
+        // Try each model candidate in priority order
+        for candidate in modelCandidates {
+            if let modelURL = Bundle.main.url(
+                forResource: candidate.resource,
+                withExtension: candidate.ext
+            ) {
+                do {
+                    let config = MLModelConfiguration()
+                    config.computeUnits = .cpuAndNeuralEngine // Prefer ANE for efficiency
+
+                    let mlModel = try MLModel(contentsOf: modelURL, configuration: config)
+                    model = try VNCoreMLModel(for: mlModel)
+                    isModelLoaded = true
+                    logger.info("Loaded CoreML model: \(candidate.resource)")
+                    return
+                } catch {
+                    logger.warning("Failed to load \(candidate.resource): \(error.localizedDescription)")
+                    continue
+                }
+            }
+        }
+
+        // No bundled model found — gracefully fall back to Vision classifiers
+        logger.info("No CoreML model bundled — using Vision classification fallback")
+        isModelLoaded = true
     }
 
     // MARK: - Video-Text Similarity Scoring

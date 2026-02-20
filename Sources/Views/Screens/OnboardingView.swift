@@ -6,21 +6,24 @@ struct OnboardingView: View {
     @State private var currentPage = 0
     @State private var isRequestingPermission = false
 
-    private let pages: [(icon: String, title: String, subtitle: String)] = [
+    private let pages: [(icon: String, title: String, subtitle: String, colors: [Color])] = [
         (
             "sparkles",
             "Welcome to\nHighlight Magic",
-            "Turn your raw videos into share-ready highlights automatically with on-device AI."
+            "Turn your raw videos into share-ready highlights automatically with on-device AI.",
+            [Color(hex: "7C3AED"), Color(hex: "EC4899")]
         ),
         (
             "wand.and.stars",
             "Smart Detection",
-            "Our AI analyzes motion, faces, and scenes to find the best moments — or describe what you want."
+            "Our AI analyzes motion, faces, and scenes to find the best moments — or describe what you want.",
+            [Color(hex: "3B82F6"), Color(hex: "8B5CF6")]
         ),
         (
             "square.and.arrow.up",
             "Export & Share",
-            "Get vertical clips optimized for TikTok, Reels, and Shorts with music, filters, and captions."
+            "Get vertical clips optimized for TikTok, Reels, and Shorts with music, filters, and captions.",
+            [Color(hex: "EC4899"), Color(hex: "F97316")]
         )
     ]
 
@@ -43,11 +46,12 @@ struct OnboardingView: View {
                 // Page indicator
                 HStack(spacing: 8) {
                     ForEach(pages.indices, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentPage ? Theme.accent : Theme.surfaceLight)
-                            .frame(width: 8, height: 8)
-                            .scaleEffect(index == currentPage ? 1.2 : 1.0)
-                            .animation(.spring(duration: 0.3), value: currentPage)
+                        Capsule()
+                            .fill(index == currentPage
+                                  ? AnyShapeStyle(Theme.primaryGradient)
+                                  : AnyShapeStyle(Theme.surfaceLight))
+                            .frame(width: index == currentPage ? 24 : 8, height: 8)
+                            .animation(Theme.springAnimation, value: currentPage)
                     }
                 }
                 .padding(.bottom, 32)
@@ -56,7 +60,7 @@ struct OnboardingView: View {
                 VStack(spacing: 16) {
                     if currentPage < pages.count - 1 {
                         PrimaryButton(title: "Next") {
-                            withAnimation { currentPage += 1 }
+                            withAnimation(Theme.springAnimation) { currentPage += 1 }
                         }
                     } else {
                         PrimaryButton(
@@ -85,10 +89,40 @@ struct OnboardingView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: pages[index].icon)
-                .font(.system(size: 72))
-                .foregroundStyle(Theme.primaryGradient)
-                .symbolEffect(.pulse, options: .repeating)
+            // Animated icon with gradient ring
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: pages[index].colors.map { $0.opacity(0.15) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 160, height: 160)
+
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: pages[index].colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .frame(width: 130, height: 130)
+
+                Image(systemName: pages[index].icon)
+                    .font(.system(size: 56))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: pages[index].colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .symbolEffect(.pulse, options: .repeating.speed(0.6))
+            }
 
             Text(pages[index].title)
                 .font(Theme.largeTitle)
@@ -110,6 +144,10 @@ struct OnboardingView: View {
         isRequestingPermission = true
         let _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         isRequestingPermission = false
-        hasCompletedOnboarding = true
+        Analytics.onboardingCompleted()
+        HapticFeedback.success()
+        withAnimation(Theme.springAnimation) {
+            hasCompletedOnboarding = true
+        }
     }
 }

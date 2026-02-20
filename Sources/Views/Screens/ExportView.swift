@@ -111,6 +111,7 @@ struct ExportView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72))
                 .foregroundStyle(.green)
+                .transition(.scale.combined(with: .opacity))
 
             Text("Export Complete!")
                 .font(Theme.title)
@@ -122,6 +123,7 @@ struct ExportView: View {
 
             VStack(spacing: 12) {
                 PrimaryButton(title: "Share", icon: "square.and.arrow.up") {
+                    Analytics.exportShared()
                     showShareSheet = true
                 }
 
@@ -135,6 +137,13 @@ struct ExportView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                 }
+                .buttonStyle(ScaleButtonStyle())
+
+                // "Made with Highlight Magic" badge for social sharing
+                Text("Made with Highlight Magic")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.top, 4)
             }
         }
     }
@@ -173,6 +182,7 @@ struct ExportView: View {
 
         exportState = .exporting
         exportProgress = 0
+        let exportStartTime = Date.now
 
         let config = ExportService.ExportConfig(
             sourceURL: video.sourceURL,
@@ -195,8 +205,14 @@ struct ExportView: View {
             exportedURL = url
             appState.incrementExportCount()
             exportState = .completed
+            HapticFeedback.success()
+            Analytics.exportCompleted(
+                durationMs: Int(Date.now.timeIntervalSince(exportStartTime) * 1000)
+            )
         } catch {
             exportState = .failed(error.localizedDescription)
+            HapticFeedback.error()
+            Analytics.exportFailed(error: error.localizedDescription)
         }
     }
 }

@@ -57,8 +57,8 @@ struct ProcessingView: View {
                     Text(phaseText)
                         .font(Theme.headline)
                         .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut, value: phaseText)
+                        .contentTransition(.interpolate)
+                        .animation(Theme.smoothAnimation, value: phaseText)
 
                     ProgressView(value: progress)
                         .tint(Theme.accent)
@@ -105,6 +105,9 @@ struct ProcessingView: View {
             return
         }
 
+        let startTime = Date.now
+        Analytics.detectionStarted(prompt: appState.userPrompt)
+
         do {
             let result = try await HighlightDetectionService.shared.detectHighlights(
                 in: video.sourceURL,
@@ -125,6 +128,15 @@ struct ProcessingView: View {
                 segments: result.segments
             )
             appState.generatedClips = clips
+
+            let durationMs = Int(Date.now.timeIntervalSince(startTime) * 1000)
+            let avgConf = result.segments.isEmpty ? 0 :
+                result.segments.map(\.confidenceScore).reduce(0, +) / Double(result.segments.count)
+            Analytics.detectionCompleted(
+                segmentCount: result.segments.count,
+                avgConfidence: avgConf,
+                durationMs: durationMs
+            )
 
             // Navigate to results
             appState.navigationPath.append(AppScreen.results)

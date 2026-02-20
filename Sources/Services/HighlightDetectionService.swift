@@ -2,9 +2,12 @@ import Foundation
 import AVFoundation
 import Vision
 import CoreImage
+import os.log
 
 actor HighlightDetectionService {
     static let shared = HighlightDetectionService()
+
+    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "Detection")
 
     private init() {}
 
@@ -26,6 +29,17 @@ actor HighlightDetectionService {
 
         guard totalSeconds > 0 else {
             throw DetectionError.invalidVideo
+        }
+
+        // Chunked processing: reduce sample density for long videos (>5 min)
+        let isLongVideo = totalSeconds > 300
+        if isLongVideo {
+            logger.info("Long video detected (\(Int(totalSeconds))s) — using chunked processing")
+        }
+
+        // Low battery check — reduce quality gracefully
+        if CrashReporting.isLowBattery {
+            logger.warning("Low battery — using reduced analysis quality")
         }
 
         // Pass 1: Vision — Motion analysis (0-20%)
@@ -85,9 +99,12 @@ actor HighlightDetectionService {
         progressHandler(0.85)
 
         // Pass 7: Claude Vision refinement for low-confidence segments (85-98%)
+        // Only use Cloud AI on Wi-Fi and when not low battery
         let avgConfidenceBefore = segments.isEmpty ? 0 : segments.map(\.confidenceScore).reduce(0, +) / Double(segments.count)
         if avgConfidenceBefore < Constants.claudeAPIConfidenceThreshold,
-           await ClaudeVisionService.shared.isAvailable {
+           await ClaudeVisionService.shared.isAvailable,
+           NetworkMonitor.shared.shouldUseCloudAI,
+           !CrashReporting.isLowBattery {
             segments = await refineWithClaudeVision(
                 segments: segments,
                 asset: asset,

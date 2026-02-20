@@ -6,7 +6,10 @@ struct ClipCard: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            HapticFeedback.light()
+            onTap()
+        } label: {
             VStack(spacing: 0) {
                 // Thumbnail
                 ZStack {
@@ -85,7 +88,7 @@ struct ClipCard: View {
                     .stroke(Theme.surfaceLight, lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {

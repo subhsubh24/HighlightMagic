@@ -21,6 +21,7 @@ struct ResultsView: View {
                         Text("Found \(appState.generatedClips.count) Highlights")
                             .font(Theme.title)
                             .foregroundStyle(.white)
+                            .contentTransition(.numericText())
 
                         Text("Apply a template or tap clips to edit individually")
                             .font(Theme.body)
@@ -84,7 +85,8 @@ struct ResultsView: View {
                             template: template,
                             isSelected: selectedTemplate?.id == template.id
                         ) {
-                            withAnimation(.spring(duration: 0.3)) {
+                            HapticFeedback.selection()
+                            withAnimation(Theme.springAnimation) {
                                 selectedTemplate = template
                                 applyTemplateToAllClips(template)
                             }

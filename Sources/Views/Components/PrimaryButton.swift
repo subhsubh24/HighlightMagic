@@ -8,7 +8,10 @@ struct PrimaryButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticFeedback.medium()
+            action()
+        } label: {
             HStack(spacing: 8) {
                 if isLoading {
                     ProgressView()
@@ -32,6 +35,16 @@ struct PrimaryButton: View {
             .shadow(color: isDisabled ? .clear : Theme.accent.opacity(0.3), radius: 10, y: 4)
         }
         .disabled(isDisabled || isLoading)
-        .buttonStyle(.plain)
+        .buttonStyle(ScaleButtonStyle())
+    }
+}
+
+/// Press-down scale animation for tactile feedback
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

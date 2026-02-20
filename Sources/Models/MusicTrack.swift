@@ -37,7 +37,24 @@ struct MusicTrack: Identifiable, Hashable, Sendable {
     }
 
     var bundleURL: URL? {
-        Bundle.main.url(forResource: fileName, withExtension: fileExtension)
+        // Try primary bundle location
+        if let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension) {
+            return url
+        }
+        // Try Resources/Music subdirectory
+        if let url = Bundle.main.url(
+            forResource: fileName,
+            withExtension: fileExtension,
+            subdirectory: "Music"
+        ) {
+            return url
+        }
+        return nil
+    }
+
+    /// Whether the audio file is available in the bundle
+    var isAvailable: Bool {
+        bundleURL != nil
     }
 }
 
