@@ -4,14 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple } from "@/lib/frame-extractor";
-import { detectMultiClipHighlights } from "@/actions/detect";
+import { scoreAllFrames, planFromScores } from "@/actions/detect";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
 import { uuid } from "@/lib/utils";
 
 const DETECTION_PASSES = [
   "Extracting frames from all clips...",
-  "Watching everything to understand your content...",
   "Scoring the best moments...",
   "Planning your highlight tape...",
   "Applying editing style for best flow...",
@@ -33,41 +32,53 @@ export default function DetectingStep() {
 
     async function runDetection() {
       try {
-        // Phase 1: Extract frames from all media files (0-40%)
+        // Phase 1: Extract frames from all media files (0-30%)
         setPassIndex(0);
         const frames = await extractFramesFromMultiple(
           state.mediaFiles,
-          (pct) => setProgress(pct * 0.4)
+          (pct) => setProgress(pct * 0.3)
         );
 
-        // Phase 2-4: Detect via server action (40-90%)
+        // Phase 2: Score frames via server action (30-60%)
         setPassIndex(1);
-        setProgress(40);
+        setProgress(30);
 
-        // Diminishing progress curve — slows down as it approaches 90%
-        // so it never "stalls" at a fixed number. Pass labels advance by elapsed time.
-        const apiStartTime = Date.now();
-        const progressTimer = setInterval(() => {
-          const elapsed = (Date.now() - apiStartTime) / 1000;
+        // Diminishing progress within scoring phase
+        const scoringTimer = setInterval(() => {
           setProgress((prev) => {
-            // Diminishing increment: fast early, crawls later (never hard-stalls)
-            const remaining = 92 - prev;
+            const remaining = 58 - prev;
             const increment = Math.max(0.05, remaining * 0.02);
-            return Math.min(prev + increment, 92);
+            return Math.min(prev + increment, 58);
           });
-          // Advance pass labels based on elapsed time (typical: score ~10s, plan ~20s, style ~30s)
-          if (elapsed > 25) setPassIndex(3);
-          else if (elapsed > 12) setPassIndex(2);
-          else setPassIndex(1);
         }, 200);
 
-        const result = await detectMultiClipHighlights(
+        const scores = await scoreAllFrames(
           frames,
           state.selectedTemplate?.name
         );
 
-        clearInterval(progressTimer);
-        setPassIndex(4);
+        clearInterval(scoringTimer);
+
+        // Phase 3: Plan highlights via server action (60-90%)
+        setPassIndex(2);
+        setProgress(60);
+
+        const plannerTimer = setInterval(() => {
+          setProgress((prev) => {
+            const remaining = 92 - prev;
+            const increment = Math.max(0.05, remaining * 0.02);
+            return Math.min(prev + increment, 92);
+          });
+        }, 200);
+
+        const result = await planFromScores(
+          frames,
+          scores,
+          state.selectedTemplate?.name
+        );
+
+        clearInterval(plannerTimer);
+        setPassIndex(3);
         setProgress(95);
 
         // Set the detected theme (template override takes priority)

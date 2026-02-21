@@ -100,7 +100,7 @@ interface MultiFrameInput {
   base64: string;
 }
 
-interface MultiFrameScore {
+export interface ScoredFrame {
   sourceFileId: string;
   sourceType: "video" | "photo";
   timestamp: number;
@@ -161,19 +161,9 @@ export async function detectHighlights(
   return detectMultiClipHighlights(multiFrames, templateName);
 }
 
-// ── Multi-clip detection ──
+// ── Helpers ──
 
-export async function detectMultiClipHighlights(
-  frames: MultiFrameInput[],
-  templateName?: string
-): Promise<DetectionResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
-  }
-
-  // Group frames by source file for context
+function buildSourceFilesMap(frames: MultiFrameInput[]): Map<string, { name: string; type: "video" | "photo"; frameCount: number }> {
   const sourceFiles = new Map<string, { name: string; type: "video" | "photo"; frameCount: number }>();
   for (const f of frames) {
     if (!sourceFiles.has(f.sourceFileId)) {
@@ -181,9 +171,23 @@ export async function detectMultiClipHighlights(
     }
     sourceFiles.get(f.sourceFileId)!.frameCount++;
   }
+  return sourceFiles;
+}
+
+// ── Phase 1: Score all frames ──
+
+export async function scoreAllFrames(
+  frames: MultiFrameInput[],
+  templateName?: string
+): Promise<ScoredFrame[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
+  }
+
+  const sourceFiles = buildSourceFilesMap(frames);
 
   // Batch frames BY SOURCE FILE so the AI sees temporal flow within each video.
-  // This gives much better understanding than random cross-source batches.
   const framesBySource = new Map<string, MultiFrameInput[]>();
   for (const f of frames) {
     if (!framesBySource.has(f.sourceFileId)) framesBySource.set(f.sourceFileId, []);
@@ -192,32 +196,42 @@ export async function detectMultiClipHighlights(
 
   const batches: MultiFrameInput[][] = [];
   for (const [, sourceFrames] of framesBySource) {
-    // Chunk each source's frames into batches, preserving temporal order
     for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
       batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
     }
   }
 
-  // Score batches with concurrency limit to avoid 429 rate limits
   const batchResults = await runWithConcurrency(
     batches.map((batch) => () => analyzeMultiBatch(apiKey, batch, sourceFiles, templateName)),
     MAX_CONCURRENCY
   );
-  const allScores: MultiFrameScore[] = batchResults.flat();
+  return batchResults.flat();
+}
 
-  // Second pass: plan the highlight tape AND detect content theme.
-  // Send the original frames so the planner can SEE the footage, not just read scores.
-  // Retry up to 3 times — the planner is the most critical AI call.
+// ── Phase 2: Plan highlights from scores ──
+
+export async function planFromScores(
+  frames: MultiFrameInput[],
+  scores: ScoredFrame[],
+  templateName?: string
+): Promise<DetectionResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
+  }
+
+  const sourceFiles = buildSourceFilesMap(frames);
+
   let planResult: { clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string } | null = null;
   let lastPlanError: string | null = null;
   for (let planAttempt = 0; planAttempt < 3; planAttempt++) {
     try {
-      const result = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
+      const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName);
       if (result.clips.length > 0) {
         planResult = result;
         break;
       }
-      lastPlanError = `returned 0 valid clips (scores: ${allScores.length} frames from ${sourceFiles.size} sources)`;
+      lastPlanError = `returned 0 valid clips (scores: ${scores.length} frames from ${sourceFiles.size} sources)`;
       console.warn(`Planner ${lastPlanError} (attempt ${planAttempt + 1}/3), retrying...`);
     } catch (err) {
       lastPlanError = err instanceof Error ? err.message : String(err);
@@ -235,6 +249,16 @@ export async function detectMultiClipHighlights(
   throw new Error(`AI planner failed after 3 attempts: ${lastPlanError ?? "unknown error"}. Please try again.`);
 }
 
+// ── Multi-clip detection (convenience wrapper) ──
+
+export async function detectMultiClipHighlights(
+  frames: MultiFrameInput[],
+  templateName?: string
+): Promise<DetectionResult> {
+  const scores = await scoreAllFrames(frames, templateName);
+  return planFromScores(frames, scores, templateName);
+}
+
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
 const MAX_BATCH_RETRIES = 2;
 
@@ -248,7 +272,7 @@ async function analyzeMultiBatch(
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string,
   attempt = 0
-): Promise<MultiFrameScore[]> {
+): Promise<ScoredFrame[]> {
   const sourceList = Array.from(sourceFiles.entries())
     .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
     .join("\n");
@@ -409,7 +433,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       role?: string;
     }>;
 
-    const results: MultiFrameScore[] = [];
+    const results: ScoredFrame[] = [];
     for (const p of parsed) {
       // Validate frame index — skip entries that point outside the batch
       if (!Number.isInteger(p.index) || p.index < 0 || p.index >= batch.length) {
@@ -464,7 +488,7 @@ const API_IMAGE_PAYLOAD_BUDGET = 25 * 1024 * 1024; // 25 MB of base64 (leaves ~7
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
-  scores: MultiFrameScore[],
+  scores: ScoredFrame[],
   frames: MultiFrameInput[],
 ): MultiFrameInput[] {
   // Build a lookup from (sourceFileId, timestamp) → frame
@@ -474,7 +498,7 @@ function selectPlannerFrames(
   }
 
   // Group scores by source, sorted best-first
-  const bySource = new Map<string, MultiFrameScore[]>();
+  const bySource = new Map<string, ScoredFrame[]>();
   for (const s of scores) {
     if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
     bySource.get(s.sourceFileId)!.push(s);
@@ -487,7 +511,7 @@ function selectPlannerFrames(
   const usedKeys = new Set<string>();
   let totalBytes = 0;
 
-  function addFrame(score: MultiFrameScore): boolean {
+  function addFrame(score: ScoredFrame): boolean {
     if (selected.length >= API_MAX_IMAGES) return false;
     const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
     const frame = frameLookup.get(key);
@@ -521,7 +545,7 @@ function selectPlannerFrames(
 
 async function planHighlightTape(
   apiKey: string,
-  scores: MultiFrameScore[],
+  scores: ScoredFrame[],
   allFrames: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string
@@ -542,7 +566,7 @@ async function planHighlightTape(
     .join("\n");
 
   // Send ALL scores grouped by source, with temporal ordering within each source
-  const scoresBySource = new Map<string, MultiFrameScore[]>();
+  const scoresBySource = new Map<string, ScoredFrame[]>();
   for (const s of scores) {
     if (!scoresBySource.has(s.sourceFileId)) scoresBySource.set(s.sourceFileId, []);
     scoresBySource.get(s.sourceFileId)!.push(s);
@@ -732,7 +756,7 @@ Respond with ONLY a JSON object:
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
 
   // Build a score lookup so we can annotate each frame with its score + label
-  const scoreLookup = new Map<string, MultiFrameScore>();
+  const scoreLookup = new Map<string, ScoredFrame>();
   for (const s of scores) {
     scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s);
   }
