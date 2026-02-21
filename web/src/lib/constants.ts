@@ -15,7 +15,7 @@ export const WATERMARK_TEXT = "Highlight Magic";
 export const WATERMARK_OPACITY = 0.4;
 
 export const FRAME_SAMPLE_INTERVAL_SECONDS = 1; // Extract 1 frame per second — miss nothing
-export const MAX_FRAMES_PER_BATCH = 20; // Larger batches = more cross-frame context per AI call
+export const MAX_FRAMES_PER_BATCH = 50; // Larger batches = more cross-frame context per AI call (API allows 100 images, ~25MB budget)
 
 // ── Viral features ──
 export const LOOP_CROSSFADE_DURATION = 0.5; // seconds of crossfade for seamless loop

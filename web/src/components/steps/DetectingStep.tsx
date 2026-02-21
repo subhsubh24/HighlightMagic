@@ -44,12 +44,21 @@ export default function DetectingStep() {
         setPassIndex(1);
         setProgress(40);
 
+        // Diminishing progress curve — slows down as it approaches 90%
+        // so it never "stalls" at a fixed number. Pass labels advance by elapsed time.
+        const apiStartTime = Date.now();
         const progressTimer = setInterval(() => {
+          const elapsed = (Date.now() - apiStartTime) / 1000;
           setProgress((prev) => {
-            const idx = Math.floor(((prev - 40) / 50) * 3) + 1;
-            if (idx !== passIndex) setPassIndex(Math.min(idx, DETECTION_PASSES.length - 1));
-            return Math.min(prev + 0.5, 88);
+            // Diminishing increment: fast early, crawls later (never hard-stalls)
+            const remaining = 92 - prev;
+            const increment = Math.max(0.05, remaining * 0.02);
+            return Math.min(prev + increment, 92);
           });
+          // Advance pass labels based on elapsed time (typical: score ~10s, plan ~20s, style ~30s)
+          if (elapsed > 25) setPassIndex(3);
+          else if (elapsed > 12) setPassIndex(2);
+          else setPassIndex(1);
         }, 200);
 
         const result = await detectMultiClipHighlights(
@@ -72,7 +81,19 @@ export default function DetectingStep() {
           dispatch({ type: "SET_CONTENT_SUMMARY", summary: result.contentSummary });
         }
 
-        const detectedClips = result.clips;
+        // Validate AI output — filter out clips with invalid time ranges
+        const detectedClips = result.clips.filter((c) => {
+          if (c.startTime >= c.endTime) {
+            console.warn(`Dropping clip: startTime (${c.startTime}) >= endTime (${c.endTime})`);
+            return false;
+          }
+          const media = state.mediaFiles.find((m) => m.id === c.sourceFileId);
+          if (media && media.duration > 0 && c.endTime > media.duration + 1) {
+            // Allow 1s tolerance for rounding, but warn
+            console.warn(`Clip endTime (${c.endTime}s) exceeds source "${media.name}" duration (${media.duration}s)`);
+          }
+          return true;
+        });
 
         // Convert to app types
         const highlights = detectedClips.map((c) => ({
@@ -125,8 +146,22 @@ export default function DetectingStep() {
         dispatch({ type: "SET_CLIPS", clips });
         dispatch({ type: "SET_STEP", step: "results" });
       } catch (err) {
-        console.error("Detection failed:", err);
-        setError("Detection failed. Please try again or use different files.");
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("Detection failed:", message);
+
+        if (message.includes("ANTHROPIC_API_KEY")) {
+          setError("API key not configured. Please set ANTHROPIC_API_KEY in your environment.");
+        } else if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
+          setError("Rate limit exceeded. Please wait a minute and try again.");
+        } else if (message.includes("529") || message.toLowerCase().includes("overload")) {
+          setError("AI service is temporarily overloaded. Please try again in a few minutes.");
+        } else if (message.includes("401") || message.includes("403")) {
+          setError("API authentication failed. Please check your ANTHROPIC_API_KEY.");
+        } else if (message.includes("planner failed")) {
+          setError("AI couldn't find highlight-worthy moments. Try videos with more action, faces, or variety.");
+        } else {
+          setError(`Detection failed: ${message.slice(0, 150)}`);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

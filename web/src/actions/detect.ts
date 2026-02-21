@@ -188,13 +188,20 @@ export async function detectMultiClipHighlights(
   // Send the original frames so the planner can SEE the footage, not just read scores.
   // Retry up to 3 times — the planner is the most critical AI call.
   let planResult: { clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string } | null = null;
+  let lastPlanError: string | null = null;
   for (let planAttempt = 0; planAttempt < 3; planAttempt++) {
-    const result = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
-    if (result.clips.length > 0) {
-      planResult = result;
-      break;
+    try {
+      const result = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
+      if (result.clips.length > 0) {
+        planResult = result;
+        break;
+      }
+      lastPlanError = `returned 0 valid clips (scores: ${allScores.length} frames from ${sourceFiles.size} sources)`;
+      console.warn(`Planner ${lastPlanError} (attempt ${planAttempt + 1}/3), retrying...`);
+    } catch (err) {
+      lastPlanError = err instanceof Error ? err.message : String(err);
+      console.warn(`Planner threw (attempt ${planAttempt + 1}/3): ${lastPlanError}`);
     }
-    console.warn(`Planner returned 0 clips (attempt ${planAttempt + 1}/3), retrying...`);
     if (planAttempt < 2) {
       await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, planAttempt)));
     }
@@ -204,7 +211,7 @@ export async function detectMultiClipHighlights(
     return planResult;
   }
 
-  throw new Error("AI planner failed to produce clips after 3 attempts. Please try again.");
+  throw new Error(`AI planner failed after 3 attempts: ${lastPlanError ?? "unknown error"}. Please try again.`);
 }
 
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
@@ -332,23 +339,40 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
       console.error(`Scoring batch error (attempt ${attempt + 1}):`, response.status, errorBody);
+
+      // Don't retry client errors (4xx except 429) — they'll fail identically every time
+      const isRetryable = response.status === 429 || response.status >= 500;
+      if (isRetryable && attempt < MAX_BATCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+      }
+      throw new Error(`Scoring failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+
+    // With extended thinking, response has thinking blocks + text blocks.
+    // Safely extract the text block with a type guard.
+    let text: string | null = null;
+    if (Array.isArray(data.content)) {
+      const textBlock = data.content.find((b: { type: string; text?: string }) => b.type === "text");
+      text = textBlock?.text ?? null;
+    }
+
+    if (!text) {
+      const preview = JSON.stringify(data).slice(0, 300);
+      console.warn(`Scoring: no text block in response (attempt ${attempt + 1}):`, preview);
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
       }
-      throw new Error(`Scoring failed after ${attempt + 1} attempts (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
+      throw new Error(`Scoring returned no text content after ${attempt + 1} attempts`);
     }
 
-    const data = await response.json();
-    // With extended thinking, response has thinking blocks + text blocks
-    const textBlock = (data.content as Array<{ type: string; text?: string }>)?.find(
-      (b) => b.type === "text"
-    );
-    const text = textBlock?.text ?? data.content?.[0]?.text ?? "[]";
     const jsonMatch = text.match(/\[[\s\S]*\]/);
 
     if (!jsonMatch) {
-      console.warn(`Scoring batch returned unparsable response (attempt ${attempt + 1})`);
+      console.warn(`Scoring: unparsable response (attempt ${attempt + 1}):`, text.slice(0, 300));
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
@@ -364,17 +388,28 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       role?: string;
     }>;
 
-    return parsed.map((p) => {
+    const results: MultiFrameScore[] = [];
+    for (const p of parsed) {
+      // Validate frame index — skip entries that point outside the batch
+      if (!Number.isInteger(p.index) || p.index < 0 || p.index >= batch.length) {
+        console.warn(`Scoring: invalid frame index ${p.index} (batch has ${batch.length} frames), skipping`);
+        continue;
+      }
+      if (typeof p.score !== "number" || isNaN(p.score)) {
+        console.warn(`Scoring: invalid score ${p.score} for frame ${p.index}, skipping`);
+        continue;
+      }
       const frame = batch[p.index];
-      return {
-        sourceFileId: frame?.sourceFileId ?? batch[0].sourceFileId,
-        sourceType: frame?.sourceType ?? "video",
-        timestamp: frame?.timestamp ?? 0,
+      results.push({
+        sourceFileId: frame.sourceFileId,
+        sourceType: frame.sourceType,
+        timestamp: frame.timestamp,
         score: Math.max(0, Math.min(1, p.score)),
         label: p.label || "highlight",
         narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
-      };
-    });
+      });
+    }
+    return results;
   } catch (err) {
     console.error(`Scoring batch exception (attempt ${attempt + 1}):`, err);
     if (attempt < MAX_BATCH_RETRIES) {
@@ -741,12 +776,19 @@ Respond with ONLY a JSON object:
     }
 
     const data = await response.json();
+
     // With extended thinking, response has thinking blocks + text blocks.
-    // Find the actual text block (skip thinking blocks).
-    const textBlock = (data.content as Array<{ type: string; text?: string }>)?.find(
-      (b) => b.type === "text"
-    );
-    const text = textBlock?.text ?? data.content?.[0]?.text ?? "{}";
+    // Safely extract the text block with a type guard.
+    let text: string | null = null;
+    if (Array.isArray(data.content)) {
+      const textBlock = data.content.find((b: { type: string; text?: string }) => b.type === "text");
+      text = textBlock?.text ?? null;
+    }
+
+    if (!text) {
+      const preview = JSON.stringify(data).slice(0, 300);
+      throw new Error(`Planner: no text block in response: ${preview}`);
+    }
 
     // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
     const objMatch = text.match(/\{[\s\S]*\}/);
@@ -771,12 +813,18 @@ Respond with ONLY a JSON object:
           }>;
         };
 
+        if (!parsed.contentSummary) {
+          console.warn("Planner: AI returned no contentSummary");
+        }
         const contentSummary = parsed.contentSummary ?? "";
 
         const theme: DetectedTheme =
           parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
             ? (parsed.theme as DetectedTheme)
             : "cinematic";
+        if (parsed.theme && !VALID_THEMES.includes(parsed.theme as DetectedTheme)) {
+          console.warn(`Planner: unrecognized theme "${parsed.theme}", falling back to "cinematic"`);
+        }
 
         const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
         const VALID_TRANSITIONS = [
@@ -790,7 +838,31 @@ Respond with ONLY a JSON object:
         ];
         const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
 
-        const clips = (parsed.clips ?? []).map((p, i) => ({
+        if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
+          console.warn("Planner: AI returned no clips array or empty clips");
+          return { clips: [], detectedTheme: theme, contentSummary };
+        }
+
+        const clips = parsed.clips.filter((p, i) => {
+          // Validate required fields
+          if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
+            console.warn(`Planner: clip ${i} missing required fields, skipping`);
+            return false;
+          }
+          // Validate time range
+          if (p.startTime >= p.endTime) {
+            console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
+            return false;
+          }
+          return true;
+        }).map((p, i) => {
+          if (p.velocityPreset && !VALID_VELOCITIES.includes(p.velocityPreset)) {
+            console.warn(`Planner: clip ${i} unrecognized velocity "${p.velocityPreset}", defaulting to "normal"`);
+          }
+          if (p.filter && !VALID_FILTERS.includes(p.filter)) {
+            console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
+          }
+          return {
           id: crypto.randomUUID(),
           sourceFileId: p.sourceFileId,
           startTime: Math.max(0, p.startTime),
@@ -815,7 +887,7 @@ Respond with ONLY a JSON object:
             ? p.entryPunchScale : undefined,
           kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
             ? p.kenBurnsIntensity : undefined,
-        }));
+        }; });
 
         return { clips, detectedTheme: theme, contentSummary };
     }
