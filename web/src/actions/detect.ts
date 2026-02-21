@@ -5,31 +5,43 @@ import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 // ── API helpers ──
 
 /** Max concurrent API calls to avoid rate limits (retry handles any 429s) */
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 2;
 
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
 const INITIAL_BACKOFF_MS = 2000;
+/** Cap Retry-After waits — a 78s wait is absurd when we can just retry sooner */
+const MAX_RETRY_WAIT_MS = 30_000;
+
+/** Per-request timeouts — safety net against infinite API hangs */
+const SCORING_TIMEOUT_MS = 90_000; // 90s per scoring batch
+const PLANNER_TIMEOUT_MS = 180_000; // 3 min for planner (heaviest call)
 
 /**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
+ * Each attempt gets its own timeout via AbortSignal to prevent infinite hangs.
  */
 async function fetchWithRetry(
   url: string,
   init: RequestInit,
-  label: string
+  label: string,
+  timeoutMs?: number
 ): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch(url, init);
+    const fetchInit = timeoutMs
+      ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
+      : init;
+    const response = await fetch(url, fetchInit);
     if (response.ok) return response;
 
     // Only retry on rate-limit (429) or overloaded (529)
     if (response.status === 429 || response.status === 529) {
-      // Use Retry-After header if available, else exponential backoff
+      // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
       const retryAfter = response.headers.get("retry-after");
-      const waitMs = retryAfter
+      const rawWaitMs = retryAfter
         ? parseFloat(retryAfter) * 1000
         : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
       console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;
@@ -39,7 +51,10 @@ async function fetchWithRetry(
     return response;
   }
   // All retries exhausted — make one final attempt and return whatever we get
-  return fetch(url, init);
+  const fetchInit = timeoutMs
+    ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
+    : init;
+  return fetch(url, fetchInit);
 }
 
 /**
@@ -324,16 +339,17 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 128000,
+          max_tokens: 16384,
           thinking: {
             type: "enabled",
-            budget_tokens: 100000,
+            budget_tokens: 10000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
         }),
       },
-      "Scoring batch"
+      "Scoring batch",
+      SCORING_TIMEOUT_MS
     );
 
     if (!response.ok) {
@@ -757,17 +773,18 @@ Respond with ONLY a JSON object:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-opus-4-6",
-          max_tokens: 128000,
+          model: "claude-sonnet-4-6",
+          max_tokens: 32000,
           thinking: {
             type: "enabled",
-            budget_tokens: 100000,
+            budget_tokens: 20000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
         }),
       },
-      "Planner"
+      "Planner",
+      PLANNER_TIMEOUT_MS
     );
 
     if (!response.ok) {

@@ -149,7 +149,9 @@ export default function DetectingStep() {
         const message = err instanceof Error ? err.message : String(err);
         console.error("Detection failed:", message);
 
-        if (message.includes("ANTHROPIC_API_KEY")) {
+        if (message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("TimeoutError") || message.includes("aborted")) {
+          setError("Request timed out. Try shorter clips or fewer files, then try again.");
+        } else if (message.includes("ANTHROPIC_API_KEY")) {
           setError("API key not configured. Please set ANTHROPIC_API_KEY in your environment.");
         } else if (message.includes("429") || message.toLowerCase().includes("rate limit")) {
           setError("Rate limit exceeded. Please wait a minute and try again.");
