@@ -32,23 +32,6 @@ export function getAvailableTracks(isPro: boolean): MusicTrack[] {
   return isPro ? MUSIC_TRACKS : FREE_TRACKS;
 }
 
-export function getSuggestedTrack(prompt: string): MusicTrack | undefined {
-  const lower = prompt.toLowerCase();
-  const moodMap: [string[], TrackMood][] = [
-    [["epic", "summit", "peak", "mountain"], "Epic"],
-    [["chill", "relax", "sunset"], "Chill"],
-    [["fun", "funny", "party"], "Fun"],
-    [["workout", "gym", "run"], "Energetic"],
-    [["cinematic", "dramatic", "movie"], "Dramatic"],
-  ];
-  for (const [keywords, mood] of moodMap) {
-    if (keywords.some((k) => lower.includes(k))) {
-      return MUSIC_TRACKS.find((t) => t.mood === mood);
-    }
-  }
-  return MUSIC_TRACKS.find((t) => t.mood === "Upbeat");
-}
-
 export function getSuggestedTrackForTemplate(template: HighlightTemplate): MusicTrack | undefined {
   return MUSIC_TRACKS.find((t) => t.mood === template.suggestedMusicMood);
 }

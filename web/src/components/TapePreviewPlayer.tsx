@@ -50,11 +50,15 @@ export default function TapePreviewPlayer() {
     [state.clips]
   );
 
-  // Fallback transitions from theme — used when AI didn't specify per-clip
-  const themeTransitions = useMemo<TransitionType[]>(
-    () => getThemeTransitions(state.detectedTheme, Math.max(0, sortedClips.length - 1)),
-    [state.detectedTheme, sortedClips.length]
-  );
+  // Fallback transitions from theme — used only when AI didn't specify per-clip
+  const themeTransitions = useMemo<TransitionType[]>(() => {
+    const fallbacks = getThemeTransitions(state.detectedTheme, Math.max(0, sortedClips.length - 1));
+    const missing = sortedClips.filter((c, i) => i > 0 && !c.transitionType).length;
+    if (missing > 0) {
+      console.warn(`Preview: ${missing}/${sortedClips.length - 1} clips missing AI transition, using theme fallback`);
+    }
+    return fallbacks;
+  }, [state.detectedTheme, sortedClips]);
 
   // Beat grid from the first clip's selected music track (shared across tape)
   const beatGrid = useMemo<BeatGrid | null>(() => {

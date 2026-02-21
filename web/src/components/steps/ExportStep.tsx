@@ -422,6 +422,10 @@ async function renderHighlightTape(
   const style = getEditingStyle(theme);
   // Fallback transitions from theme — used only when AI didn't specify per-clip
   const themeTransitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
+  const missingTransitions = clips.filter((c, i) => i > 0 && !c.clip.transitionType).length;
+  if (missingTransitions > 0) {
+    console.warn(`Export: ${missingTransitions}/${clips.length - 1} clips missing AI transition, using theme fallback`);
+  }
 
   // Beat grid for beat-sync
   let beatGrid: BeatGrid | null = null;

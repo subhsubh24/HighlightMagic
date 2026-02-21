@@ -34,18 +34,3 @@ export const ALL_FILTERS: VideoFilter[] = [
   "VintageFilm",
 ];
 
-/** Suggested filter per theme for automatic grading. */
-export function getSuggestedFilter(theme: string): VideoFilter {
-  const map: Record<string, VideoFilter> = {
-    sports: "TealOrange",
-    cooking: "GoldenHour",
-    travel: "TealOrange",
-    gaming: "MoodyCinematic",
-    party: "Vibrant",
-    fitness: "TealOrange",
-    pets: "GoldenHour",
-    vlog: "CleanAiry",
-    cinematic: "MoodyCinematic",
-  };
-  return map[theme] ?? "None";
-}
