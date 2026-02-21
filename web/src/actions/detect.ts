@@ -13,13 +13,8 @@ const INITIAL_BACKOFF_MS = 2000;
 /** Cap Retry-After waits — a 78s wait is absurd when we can just retry sooner */
 const MAX_RETRY_WAIT_MS = 30_000;
 
-/** Per-request timeouts — safety net against infinite API hangs */
-const SCORING_TIMEOUT_MS = 120_000; // 120s per scoring batch (50 images + thinking)
-const PLANNER_TIMEOUT_MS = 180_000; // 3 min for planner (heaviest call)
-
 /**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
- * Each attempt gets its own timeout via AbortSignal to prevent infinite hangs.
  */
 async function fetchWithRetry(
   url: string,
@@ -359,8 +354,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           messages: [{ role: "user", content }],
         }),
       },
-      "Scoring batch",
-      SCORING_TIMEOUT_MS
+      "Scoring batch"
     );
 
     if (!response.ok) {
@@ -794,8 +788,7 @@ Respond with ONLY a JSON object:
           messages: [{ role: "user", content: userContent }],
         }),
       },
-      "Planner",
-      PLANNER_TIMEOUT_MS
+      "Planner"
     );
 
     if (!response.ok) {
