@@ -95,10 +95,20 @@ export async function detectMultiClipHighlights(
     sourceFiles.get(f.sourceFileId)!.frameCount++;
   }
 
-  // Batch frames for Claude Vision
+  // Batch frames BY SOURCE FILE so the AI sees temporal flow within each video.
+  // This gives much better understanding than random cross-source batches.
+  const framesBySource = new Map<string, MultiFrameInput[]>();
+  for (const f of frames) {
+    if (!framesBySource.has(f.sourceFileId)) framesBySource.set(f.sourceFileId, []);
+    framesBySource.get(f.sourceFileId)!.push(f);
+  }
+
   const batches: MultiFrameInput[][] = [];
-  for (let i = 0; i < frames.length; i += MAX_FRAMES_PER_BATCH) {
-    batches.push(frames.slice(i, i + MAX_FRAMES_PER_BATCH));
+  for (const [, sourceFrames] of framesBySource) {
+    // Chunk each source's frames into batches, preserving temporal order
+    for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
+      batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
+    }
   }
 
   // Score all batches in parallel — no reason to wait for one batch before starting the next
@@ -222,10 +232,10 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 8000,
+        max_tokens: 16000,
         thinking: {
           type: "enabled",
-          budget_tokens: 5000,
+          budget_tokens: 10000,
         },
         system: systemPrompt,
         messages: [{ role: "user", content }],
@@ -584,11 +594,11 @@ Respond with ONLY a JSON object:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 25000,
+        model: "claude-opus-4-6",
+        max_tokens: 64000,
         thinking: {
           type: "enabled",
-          budget_tokens: 16000,
+          budget_tokens: 50000,
         },
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
