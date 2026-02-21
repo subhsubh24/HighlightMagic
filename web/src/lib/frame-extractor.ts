@@ -9,6 +9,68 @@ export interface ExtractedFrame {
   sourceType: "video" | "photo";
   timestamp: number;
   base64: string;
+  audioEnergy?: number; // 0.0-1.0 normalized RMS energy at this timestamp
+}
+
+/**
+ * Extract audio energy levels at given timestamps from a video.
+ * Uses Web Audio API to decode the audio track and compute RMS energy.
+ * Returns a Map of timestamp → normalized energy (0.0-1.0).
+ * Fails gracefully (returns empty map) if audio can't be decoded.
+ */
+async function extractAudioEnergy(
+  videoUrl: string,
+  timestamps: number[]
+): Promise<Map<number, number>> {
+  try {
+    const response = await fetch(videoUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new AudioContext();
+
+    let audioBuffer: AudioBuffer;
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    } catch {
+      // Video has no audio track or unsupported format
+      audioCtx.close();
+      return new Map();
+    }
+
+    const channelData = audioBuffer.getChannelData(0);
+    const sampleRate = audioBuffer.sampleRate;
+    const windowSamples = Math.floor(sampleRate * 0.5); // 0.5s analysis window
+
+    const energyMap = new Map<number, number>();
+
+    for (const ts of timestamps) {
+      const centerSample = Math.floor(ts * sampleRate);
+      const start = Math.max(0, centerSample - Math.floor(windowSamples / 2));
+      const end = Math.min(channelData.length, centerSample + Math.floor(windowSamples / 2));
+
+      if (end <= start) {
+        energyMap.set(ts, 0);
+        continue;
+      }
+
+      let sumSquares = 0;
+      for (let i = start; i < end; i++) {
+        sumSquares += channelData[i] * channelData[i];
+      }
+      energyMap.set(ts, Math.sqrt(sumSquares / (end - start)));
+    }
+
+    // Normalize to 0-1 range
+    const maxEnergy = Math.max(...energyMap.values(), 0.001);
+    for (const [ts, energy] of energyMap) {
+      energyMap.set(ts, Math.round((energy / maxEnergy) * 100) / 100);
+    }
+
+    audioCtx.close();
+    return energyMap;
+  } catch {
+    // Graceful fallback — audio analysis is optional
+    return new Map();
+  }
 }
 
 /**
@@ -18,7 +80,7 @@ export async function extractFrames(
   videoUrl: string,
   duration: number,
   onProgress?: (pct: number) => void
-): Promise<{ timestamp: number; base64: string }[]> {
+): Promise<{ timestamp: number; base64: string; audioEnergy?: number }[]> {
   const video = document.createElement("video");
   video.crossOrigin = "anonymous";
   video.muted = true;
@@ -36,9 +98,13 @@ export async function extractFrames(
   canvas.height = Math.round(video.videoHeight * scale);
   const ctx = canvas.getContext("2d")!;
 
-  const frames: { timestamp: number; base64: string }[] = [];
+  const frames: { timestamp: number; base64: string; audioEnergy?: number }[] = [];
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
   const totalFrames = Math.floor(duration / interval);
+
+  // Build timestamps list and start audio analysis in parallel with visual extraction
+  const timestamps = Array.from({ length: totalFrames + 1 }, (_, i) => i * interval);
+  const audioPromise = extractAudioEnergy(videoUrl, timestamps);
 
   for (let i = 0; i <= totalFrames; i++) {
     const time = i * interval;
@@ -53,6 +119,14 @@ export async function extractFrames(
     frames.push({ timestamp: time, base64 });
 
     onProgress?.(((i + 1) / (totalFrames + 1)) * 100);
+  }
+
+  // Attach audio energy to each frame
+  const audioEnergies = await audioPromise;
+  if (audioEnergies.size > 0) {
+    for (const frame of frames) {
+      frame.audioEnergy = audioEnergies.get(frame.timestamp);
+    }
   }
 
   return frames;
@@ -99,6 +173,7 @@ export async function extractFramesFromMultiple(
           sourceType: "video",
           timestamp: frame.timestamp,
           base64: frame.base64,
+          audioEnergy: frame.audioEnergy,
         });
       }
     }

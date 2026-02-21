@@ -98,6 +98,7 @@ interface MultiFrameInput {
   sourceType: "video" | "photo";
   timestamp: number;
   base64: string;
+  audioEnergy?: number; // 0.0-1.0 normalized RMS energy at this timestamp
 }
 
 export interface ScoredFrame {
@@ -313,7 +314,16 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    - RHYTHM: A transition beat, texture, pacing control
    - CLOSER: Could end the reel and trigger a replay/loop
 
-Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 6 dimensions):
+7. AUDIO ENERGY — Each frame is annotated with its audio energy level (0.0-1.0).
+   Use this to understand the SOUNDTRACK of the moment:
+   - High energy (0.7+) = loud/active (crowd cheering, bass drop, impact, laughter)
+   - Medium energy (0.3-0.7) = moderate activity (conversation, ambient music, movement)
+   - Low energy (0.0-0.3) = quiet (silence, calm, anticipation, whispers)
+   Audio energy tells you what the EARS experience while the eyes see the frame.
+   A visually calm frame with a sudden audio spike = something just happened (reaction moment).
+   Rising audio energy = building tension. Audio peak + visual peak = HERO moment.
+
+Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 7 dimensions, including audio):
 - 0.85-1.0: VIRAL POTENTIAL — this frame alone could carry a reel. Scroll-stopping,
   emotionally loaded, share-worthy. Peak action, raw genuine emotion, stunning composition,
   dramatic lighting, unexpected beauty, decisive moments, perfect timing.
@@ -351,9 +361,12 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       type: "image",
       source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
     });
+    const audioTag = frame.audioEnergy != null
+      ? `, audioEnergy: ${frame.audioEnergy.toFixed(2)}`
+      : "";
     content.push({
       type: "text",
-      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s`,
+      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}`,
     });
   });
 
@@ -369,10 +382,10 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 16384,
+          max_tokens: 25000,
           thinking: {
             type: "enabled",
-            budget_tokens: 12000,
+            budget_tokens: 20000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -572,6 +585,14 @@ async function planHighlightTape(
     scoresBySource.get(s.sourceFileId)!.push(s);
   }
 
+  // Build audio energy lookup from frames
+  const audioLookup = new Map<string, number>();
+  for (const f of allFrames) {
+    if (f.audioEnergy != null) {
+      audioLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f.audioEnergy);
+    }
+  }
+
   const allScoresSummary = Array.from(scoresBySource.entries())
     .map(([fileId, fileScores]) => {
       const info = sourceFiles.get(fileId);
@@ -580,10 +601,19 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
-          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${roleTag}  "${s.label}"`;
+          const audioVal = audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`);
+          const audioTag = audioVal != null ? `  audio:${audioVal.toFixed(2)}` : "";
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${roleTag}  "${s.label}"`;
         }
       );
-      return `${header}\n${lines.join("\n")}`;
+
+      // Build ASCII audio energy visualization for this source
+      const audioVals = sorted.map((s) => audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
+      const audioViz = audioVals.length > 0
+        ? `  Audio energy: ${audioVals.map((v) => ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][Math.min(7, Math.floor(v * 8))]).join("")}`
+        : "";
+
+      return `${header}${audioViz ? "\n" + audioViz : ""}\n${lines.join("\n")}`;
     })
     .join("\n\n");
 
@@ -672,6 +702,19 @@ Pick the one that will make THIS specific content look its absolute best on Inst
 
 Think about: What theme makes this content MOST shareable on Instagram? Match the style to the CONTENT.
 
+STEP 2.5: READ THE AUDIO
+Each frame and score has an AUDIO ENERGY value (0.0-1.0) and each source has an ASCII audio
+visualization. This is the SOUNDTRACK of the footage — what the ears hear at each moment.
+Use audio to make SMARTER editing decisions:
+- START clips at audio onsets (energy spikes) — cuts that land on sound hits feel intentional
+- END clips at natural audio drops or silence — clean exits
+- Match transition STYLE to audio: hard cut on a beat/impact, crossfade during quiet/ambient
+- Use velocity ramping with audio: slow-mo during audio peaks = dramatic emphasis
+- High audio + high visual score = absolute HERO moment — don't miss these
+- Rising audio energy = building tension — perfect for ramp_in velocity
+- Sudden audio spike with calm visual = something just happened off-screen (reaction opportunity)
+- Audio silence boundaries = natural clip boundaries — the content is telling you where to cut
+
 STEP 3: CREATE THE HIGHLIGHT TAPE
 You're making a reel that needs to compete with millions of other posts for attention.
 
@@ -700,6 +743,8 @@ YOU DECIDE EVERYTHING:
 - How long photos display (whatever serves the edit best)
 - The clip ordering, pacing, and rhythm — all of it is your call
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
+- NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
+  If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
@@ -778,7 +823,8 @@ Respond with ONLY a JSON object:
       ? `${((frame.timestamp / approxDuration) * 100).toFixed(0)}% through`
       : "start";
 
-    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})`;
+    const audioVal = frame.audioEnergy != null ? ` | AUDIO: ${frame.audioEnergy.toFixed(2)}` : "";
+    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
       annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;
@@ -803,10 +849,10 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 40000,
+          max_tokens: 100000,
           thinking: {
             type: "enabled",
-            budget_tokens: 30000,
+            budget_tokens: 80000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
@@ -934,7 +980,20 @@ Respond with ONLY a JSON object:
             ? p.kenBurnsIntensity : undefined,
         }; });
 
-        return { clips, detectedTheme: theme, contentSummary };
+        // Deduplicate: drop clips with overlapping time ranges from the same source
+        const uniqueClips: typeof clips = [];
+        const seen = new Set<string>();
+        for (const clip of clips) {
+          const key = `${clip.sourceFileId}::${clip.startTime}::${clip.endTime}`;
+          if (seen.has(key)) {
+            console.warn(`Planner: dropping duplicate clip ${key}`);
+            continue;
+          }
+          seen.add(key);
+          uniqueClips.push(clip);
+        }
+
+        return { clips: uniqueClips, detectedTheme: theme, contentSummary };
     }
 
     throw new Error("Planner response could not be parsed as JSON");

@@ -34,7 +34,13 @@ type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
 /** Try codecs in preference order. */
 function pickMimeType(): { mimeType: string; ext: string } {
   const candidates = [
+    // Chrome 131+ uses avc1 naming for H.264 in MP4
+    { mimeType: 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"', ext: "mp4" },
+    { mimeType: "video/mp4;codecs=avc1", ext: "mp4" },
+    // Safari uses h264 naming
     { mimeType: "video/mp4;codecs=h264", ext: "mp4" },
+    { mimeType: "video/mp4", ext: "mp4" },
+    // WebM fallback
     { mimeType: "video/webm;codecs=h264", ext: "webm" },
     { mimeType: "video/webm;codecs=vp9", ext: "webm" },
     { mimeType: "video/webm;codecs=vp8", ext: "webm" },
