@@ -8,6 +8,8 @@ struct HighlightTemplate: Identifiable, Hashable, Sendable {
     let suggestedFilter: VideoFilter
     let suggestedCaptionStyle: CaptionStyle
     let suggestedMusicMood: TrackMood
+    let suggestedVelocityStyle: VelocityEditService.VelocityStyle
+    let suggestedKineticCaption: KineticCaptionStyle
     let colorAccent: String // hex
 
     init(
@@ -18,6 +20,8 @@ struct HighlightTemplate: Identifiable, Hashable, Sendable {
         suggestedFilter: VideoFilter,
         suggestedCaptionStyle: CaptionStyle,
         suggestedMusicMood: TrackMood,
+        suggestedVelocityStyle: VelocityEditService.VelocityStyle = .hero,
+        suggestedKineticCaption: KineticCaptionStyle = .pop,
         colorAccent: String
     ) {
         self.id = id
@@ -27,6 +31,8 @@ struct HighlightTemplate: Identifiable, Hashable, Sendable {
         self.suggestedFilter = suggestedFilter
         self.suggestedCaptionStyle = suggestedCaptionStyle
         self.suggestedMusicMood = suggestedMusicMood
+        self.suggestedVelocityStyle = suggestedVelocityStyle
+        self.suggestedKineticCaption = suggestedKineticCaption
         self.colorAccent = colorAccent
     }
 }
@@ -37,9 +43,11 @@ struct TemplateLibrary {
             name: "Adventure",
             icon: "mountain.2.fill",
             description: "Epic outdoor moments with cinematic flair",
-            suggestedFilter: .vibrant,
+            suggestedFilter: .warmGlow,
             suggestedCaptionStyle: .bold,
             suggestedMusicMood: .epic,
+            suggestedVelocityStyle: .hero,
+            suggestedKineticCaption: .pop,
             colorAccent: "F59E0B"
         ),
         HighlightTemplate(
@@ -49,15 +57,19 @@ struct TemplateLibrary {
             suggestedFilter: .warm,
             suggestedCaptionStyle: .classic,
             suggestedMusicMood: .chill,
+            suggestedVelocityStyle: .smooth,
+            suggestedKineticCaption: .slide,
             colorAccent: "EF4444"
         ),
         HighlightTemplate(
             name: "Fitness",
             icon: "figure.run",
-            description: "High-energy workout clips",
+            description: "High-energy workout clips with beat-synced velocity",
             suggestedFilter: .cool,
             suggestedCaptionStyle: .bold,
             suggestedMusicMood: .energetic,
+            suggestedVelocityStyle: .bullet,
+            suggestedKineticCaption: .bounce,
             colorAccent: "10B981"
         ),
         HighlightTemplate(
@@ -67,42 +79,52 @@ struct TemplateLibrary {
             suggestedFilter: .vibrant,
             suggestedCaptionStyle: .neon,
             suggestedMusicMood: .fun,
+            suggestedVelocityStyle: .montage,
+            suggestedKineticCaption: .bounce,
             colorAccent: "F97316"
         ),
         HighlightTemplate(
             name: "Travel",
             icon: "airplane",
-            description: "Beautiful travel memories with cinematic warmth",
-            suggestedFilter: .warm,
+            description: "Cinematic travel memories with smooth velocity",
+            suggestedFilter: .tealOrange,
             suggestedCaptionStyle: .minimal,
             suggestedMusicMood: .chill,
+            suggestedVelocityStyle: .smooth,
+            suggestedKineticCaption: .slide,
             colorAccent: "3B82F6"
         ),
         HighlightTemplate(
             name: "Daily Life",
             icon: "sun.max.fill",
             description: "Clean, minimal everyday moments",
-            suggestedFilter: .none,
+            suggestedFilter: .cleanAiry,
             suggestedCaptionStyle: .minimal,
             suggestedMusicMood: .upbeat,
+            suggestedVelocityStyle: .montage,
+            suggestedKineticCaption: .typewriter,
             colorAccent: "8B5CF6"
         ),
         HighlightTemplate(
             name: "Gaming",
             icon: "gamecontroller.fill",
-            description: "Bold, high-contrast gaming highlights",
-            suggestedFilter: .noir,
+            description: "Bold, high-contrast gaming highlights with sharp cuts",
+            suggestedFilter: .moody,
             suggestedCaptionStyle: .neon,
             suggestedMusicMood: .energetic,
+            suggestedVelocityStyle: .bullet,
+            suggestedKineticCaption: .pop,
             colorAccent: "06B6D4"
         ),
         HighlightTemplate(
             name: "Party",
             icon: "party.popper.fill",
-            description: "Vibrant party and celebration clips",
+            description: "Vibrant party clips with beat-drop velocity",
             suggestedFilter: .vibrant,
             suggestedCaptionStyle: .bold,
             suggestedMusicMood: .fun,
+            suggestedVelocityStyle: .hero,
+            suggestedKineticCaption: .pop,
             colorAccent: "EC4899"
         )
     ]

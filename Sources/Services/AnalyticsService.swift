@@ -39,12 +39,19 @@ enum Analytics {
         logEvent("template_applied", parameters: ["name": name])
     }
 
-    static func exportStarted(filter: String, hasMusic: Bool, hasCaption: Bool) {
-        logEvent("export_started", parameters: [
+    static func exportStarted(filter: String, hasMusic: Bool, hasCaption: Bool, viralConfig: ViralEditConfig? = nil) {
+        var params: [String: String] = [
             "filter": filter,
             "music": hasMusic ? "true" : "false",
             "caption": hasCaption ? "true" : "false"
-        ])
+        ]
+        if let config = viralConfig {
+            params["beat_sync"] = config.beatSyncEnabled ? "true" : "false"
+            params["velocity"] = config.velocityStyle.rawValue
+            params["loop"] = config.seamlessLoopEnabled ? "true" : "false"
+            params["kinetic_caption"] = config.kineticCaptionStyle.rawValue
+        }
+        logEvent("export_started", parameters: params)
     }
 
     static func exportCompleted(durationMs: Int) {

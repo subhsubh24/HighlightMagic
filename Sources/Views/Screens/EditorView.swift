@@ -78,6 +78,7 @@ struct EditorView: View {
                         trimSection(clipBinding)
                         captionSection(clipBinding)
                         musicSection(clip)
+                        viralEditSection(clipBinding)
                         filterSection(clipBinding)
                         premiumEffectsButton
 
@@ -237,6 +238,108 @@ struct EditorView: View {
         }
     }
 
+    private func viralEditSection(_ binding: Binding<EditedClip>) -> some View {
+        EditorSection(title: "Viral Edit", icon: "bolt.heart.fill") {
+            VStack(spacing: 14) {
+                // Beat Sync toggle
+                HStack {
+                    Image(systemName: "waveform.badge.music")
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Beat Sync")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                        Text("Align cuts to music beats")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: binding.viralConfig.beatSyncEnabled)
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Velocity Style picker
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "gauge.with.dots.needle.67percent")
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 24)
+                        Text("Velocity Style")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(VelocityEditService.VelocityStyle.allCases, id: \.self) { style in
+                                VelocityStyleButton(
+                                    style: style,
+                                    isSelected: binding.wrappedValue.viralConfig.velocityStyle == style
+                                ) {
+                                    HapticFeedback.selection()
+                                    binding.wrappedValue.viralConfig.velocityStyle = style
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Seamless Loop toggle
+                HStack {
+                    Image(systemName: "repeat")
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Seamless Loop")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                        Text("Smooth restart for higher watch time")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: binding.viralConfig.seamlessLoopEnabled)
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Kinetic Caption Style
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "textformat.abc.dottedunderline")
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 24)
+                        Text("Caption Animation")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(KineticCaptionStyle.allCases, id: \.self) { style in
+                                KineticStyleButton(
+                                    style: style,
+                                    isSelected: binding.wrappedValue.viralConfig.kineticCaptionStyle == style
+                                ) {
+                                    HapticFeedback.selection()
+                                    binding.wrappedValue.viralConfig.kineticCaptionStyle = style
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var premiumEffectsButton: some View {
         Button {
@@ -377,6 +480,59 @@ struct FilterButton: View {
         case .cool: Color.blue.opacity(0.4)
         case .noir: Color.gray.opacity(0.6)
         case .fade: Color.white.opacity(0.2)
+        case .warmGlow: Color.yellow.opacity(0.4)
+        case .tealOrange: Color.teal.opacity(0.4)
+        case .moody: Color(hex: "374151").opacity(0.6)
+        case .vintageFilm: Color.brown.opacity(0.4)
+        case .cleanAiry: Color(hex: "BAE6FD").opacity(0.3)
         }
+    }
+}
+
+struct VelocityStyleButton: View {
+    let style: VelocityEditService.VelocityStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: style.icon)
+                    .font(.body)
+                    .foregroundStyle(isSelected ? .white : Theme.textSecondary)
+                    .frame(width: 40, height: 40)
+                    .background(isSelected ? AnyShapeStyle(Theme.primaryGradient) : AnyShapeStyle(Theme.surfaceLight))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(style.rawValue)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Theme.accent : Theme.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct KineticStyleButton: View {
+    let style: KineticCaptionStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: style.icon)
+                    .font(.caption2)
+                Text(style.rawValue)
+                    .font(.caption.bold())
+            }
+            .foregroundStyle(isSelected ? .white : Theme.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? AnyShapeStyle(Theme.primaryGradient) : AnyShapeStyle(Theme.surfaceLight))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

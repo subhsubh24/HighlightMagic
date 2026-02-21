@@ -17,6 +17,18 @@ struct ExportView: View {
         appState.generatedClips.first { $0.id == clipID }
     }
 
+    private var exportPhaseText: String {
+        switch exportProgress {
+        case 0..<0.08: "Detecting beats..."
+        case 0.08..<0.12: "Building velocity curves..."
+        case 0.12..<0.22: "Composing video timeline..."
+        case 0.22..<0.30: "Mixing audio tracks..."
+        case 0.30..<0.35: "Creating seamless loop..."
+        case 0.35..<0.42: "Applying filters & captions..."
+        default: "Rendering final export..."
+        }
+    }
+
     var body: some View {
         ZStack {
             Theme.backgroundGradient
@@ -77,7 +89,21 @@ struct ExportView: View {
                     InfoRow(label: "Format", value: "MP4 \u{2022} 1080\u{00D7}1920")
                     InfoRow(label: "Filter", value: clip.selectedFilter.rawValue)
                     if let music = clip.selectedMusicTrack {
-                        InfoRow(label: "Music", value: music.name)
+                        InfoRow(label: "Music", value: "\(music.name) (\(music.bpm) BPM)")
+                    }
+
+                    // Viral edit features summary
+                    if clip.viralConfig.beatSyncEnabled {
+                        InfoRow(label: "Beat Sync", value: "On")
+                    }
+                    if clip.viralConfig.velocityStyle != .none {
+                        InfoRow(label: "Velocity", value: clip.viralConfig.velocityStyle.rawValue)
+                    }
+                    if clip.viralConfig.seamlessLoopEnabled {
+                        InfoRow(label: "Loop", value: "Seamless")
+                    }
+                    if clip.viralConfig.kineticCaptionStyle != .none {
+                        InfoRow(label: "Caption FX", value: clip.viralConfig.kineticCaptionStyle.rawValue)
                     }
 
                     // Watermark toggle
@@ -118,9 +144,11 @@ struct ExportView: View {
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
 
-            Text("Applying filters, music & captions")
+            Text(exportPhaseText)
                 .font(Theme.body)
                 .foregroundStyle(Theme.textSecondary)
+                .contentTransition(.interpolate)
+                .animation(.easeInOut(duration: 0.3), value: exportPhaseText)
         }
     }
 
@@ -215,13 +243,16 @@ struct ExportView: View {
             captionStyle: clip.captionStyle,
             musicTrack: clip.selectedMusicTrack,
             addWatermark: shouldWatermark,
-            outputSize: ExportService.ExportConfig.defaultSize
+            outputSize: ExportService.ExportConfig.defaultSize,
+            viralConfig: clip.viralConfig,
+            cinematicGrade: clip.cinematicGrade
         )
 
         Analytics.exportStarted(
             filter: clip.selectedFilter.rawValue,
             hasMusic: clip.selectedMusicTrack != nil,
-            hasCaption: !clip.captionText.isEmpty
+            hasCaption: !clip.captionText.isEmpty,
+            viralConfig: clip.viralConfig
         )
 
         do {

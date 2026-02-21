@@ -104,6 +104,8 @@ struct ResultsView: View {
         for i in appState.generatedClips.indices {
             appState.generatedClips[i].selectedFilter = template.suggestedFilter
             appState.generatedClips[i].captionStyle = template.suggestedCaptionStyle
+            appState.generatedClips[i].viralConfig.velocityStyle = template.suggestedVelocityStyle
+            appState.generatedClips[i].viralConfig.kineticCaptionStyle = template.suggestedKineticCaption
             if let track = MusicLibrary.suggestedTrackForTemplate(template) {
                 appState.generatedClips[i].selectedMusicTrack = track
             }

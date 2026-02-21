@@ -12,6 +12,8 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var captionText: String
     var captionStyle: CaptionStyle
     var selectedFilter: VideoFilter
+    var viralConfig: ViralEditConfig
+    var cinematicGrade: CinematicGrade
     var exportURL: URL?
 
     init(
@@ -23,7 +25,9 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         selectedMusicTrack: MusicTrack? = nil,
         captionText: String = "",
         captionStyle: CaptionStyle = .bold,
-        selectedFilter: VideoFilter = .none
+        selectedFilter: VideoFilter = .none,
+        viralConfig: ViralEditConfig = .default,
+        cinematicGrade: CinematicGrade = .none
     ) {
         self.id = id
         self.sourceVideoID = sourceVideoID
@@ -34,6 +38,8 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         self.captionText = captionText
         self.captionStyle = captionStyle
         self.selectedFilter = selectedFilter
+        self.viralConfig = viralConfig
+        self.cinematicGrade = cinematicGrade
     }
 
     var duration: TimeInterval {
@@ -81,6 +87,12 @@ enum VideoFilter: String, CaseIterable, Hashable, Sendable {
     case cool = "Cool"
     case noir = "Noir"
     case fade = "Fade"
+    // Cinematic grades (Tier 3)
+    case warmGlow = "Warm Glow"
+    case tealOrange = "Teal & Orange"
+    case moody = "Moody"
+    case vintageFilm = "Vintage Film"
+    case cleanAiry = "Clean Airy"
 
     var ciFilterName: String? {
         switch self {
@@ -90,6 +102,11 @@ enum VideoFilter: String, CaseIterable, Hashable, Sendable {
         case .cool: "CITemperatureAndTint"
         case .noir: "CIPhotoEffectNoir"
         case .fade: "CIPhotoEffectFade"
+        case .warmGlow: "CITemperatureAndTint"
+        case .tealOrange: "CIVibrance"
+        case .moody: "CIColorControls"
+        case .vintageFilm: "CISepiaTone"
+        case .cleanAiry: "CIExposureAdjust"
         }
     }
 
@@ -101,6 +118,18 @@ enum VideoFilter: String, CaseIterable, Hashable, Sendable {
         case .cool: ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 8000, y: 0)]
         case .noir: [:]
         case .fade: [:]
+        case .warmGlow: ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 4800, y: 0)]
+        case .tealOrange: ["inputAmount": 0.6]
+        case .moody: ["inputContrast": 1.3, "inputSaturation": 0.7, "inputBrightness": -0.05]
+        case .vintageFilm: ["inputIntensity": 0.3]
+        case .cleanAiry: ["inputEV": 0.4]
+        }
+    }
+
+    var isCinematic: Bool {
+        switch self {
+        case .warmGlow, .tealOrange, .moody, .vintageFilm, .cleanAiry: true
+        default: false
         }
     }
 }
