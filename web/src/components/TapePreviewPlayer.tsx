@@ -314,8 +314,8 @@ export default function TapePreviewPlayer() {
         drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed);
       }
 
-      // Beat flash overlay (subtle brightness pulse on strong beats for high-energy themes)
-      if (currentBeatIntensity > 0.5 && ["sports", "gaming", "party", "fitness"].includes(state.detectedTheme)) {
+      // Beat flash overlay (subtle brightness pulse on strong beats — AI chose the theme, beat sync is user toggle)
+      if (currentBeatIntensity > 0.5) {
         ctx.save();
         ctx.globalAlpha = (currentBeatIntensity - 0.5) * 0.12;
         ctx.fillStyle = "white";
