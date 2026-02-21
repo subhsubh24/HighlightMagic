@@ -13,6 +13,7 @@ export const EXPORT_WIDTH = 1080;
 export const EXPORT_HEIGHT = 1920;
 export const EXPORT_FRAME_RATE = 30;
 export const HIGHLIGHT_CONFIDENCE_THRESHOLD = 0.5; // slightly lower threshold for multi-source
+export const TRANSITION_DURATION = 0.3; // seconds — fast, punchy sports-edit transitions
 export const WATERMARK_TEXT = "Highlight Magic";
 export const WATERMARK_OPACITY = 0.4;
 

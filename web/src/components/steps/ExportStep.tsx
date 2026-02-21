@@ -4,7 +4,22 @@ import { useState, useRef, useCallback } from "react";
 import { ArrowLeft, Download, Share2, RotateCcw, Check, Crown, Film } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
-import { WATERMARK_TEXT, WATERMARK_OPACITY, FREE_EXPORT_LIMIT, IOS_APP_STORE_URL, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
+import {
+  WATERMARK_TEXT,
+  WATERMARK_OPACITY,
+  FREE_EXPORT_LIMIT,
+  IOS_APP_STORE_URL,
+  PHOTO_DISPLAY_DURATION,
+  TRANSITION_DURATION,
+} from "@/lib/constants";
+import {
+  getTransitionSequence,
+  getClipAlpha,
+  getTransitionTransform,
+  drawTransitionOverlay,
+  getClipEntryScale,
+  type TransitionType,
+} from "@/lib/transitions";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
 import type { EditedClip } from "@/lib/types";
@@ -35,7 +50,6 @@ export default function ExportStep() {
     haptic();
 
     try {
-      // Build clip render instructions
       const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
         const media = getMediaFile(state, clip.sourceFileId);
         return {
@@ -113,6 +127,7 @@ export default function ExportStep() {
             <div className="flex flex-col gap-2 text-sm">
               <Row label="Clips" value={`${sortedClips.length} clips combined`} />
               <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
+              <Row label="Transitions" value="Flash, zoom, whip, glitch" />
               <Row label="Format" value="WebM · 1080×1920" />
               {isFree && <Row label="Watermark" value="Included (Free tier)" />}
               {isFree && (
@@ -160,21 +175,33 @@ export default function ExportStep() {
           </div>
           <p className="text-lg font-semibold text-white">{Math.round(progress)}%</p>
           <p className="text-sm text-[var(--text-secondary)]">
-            Rendering {sortedClips.length} clips into one highlight tape...
+            Rendering {sortedClips.length} clips with transitions...
           </p>
         </div>
       )}
 
-      {/* Done phase */}
+      {/* Done phase — video player */}
       {phase === "done" && (
-        <div className="flex flex-col items-center gap-6 py-8">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--success)]">
-            <Check className="h-10 w-10 text-white" />
-          </div>
+        <div className="flex flex-col items-center gap-5 py-4 w-full">
+          {/* Video preview player */}
+          {blobUrl && (
+            <div className="relative aspect-[9/16] w-full max-w-xs overflow-hidden rounded-2xl bg-black">
+              <video
+                src={blobUrl}
+                className="h-full w-full object-contain"
+                controls
+                playsInline
+                autoPlay
+                loop
+                muted
+              />
+            </div>
+          )}
+
           <div className="text-center">
-            <h3 className="text-2xl font-bold text-white">Highlight Tape Ready!</h3>
-            <p className="mt-1 text-[var(--text-secondary)]">
-              {sortedClips.length} clips combined into one video — ready to share
+            <h3 className="text-xl font-bold text-white">Highlight Tape Ready!</h3>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {sortedClips.length} clips with pro transitions — ready to share
             </p>
           </div>
 
@@ -188,9 +215,7 @@ export default function ExportStep() {
               Share
             </button>
             <button
-              onClick={() => {
-                dispatch({ type: "RESET" });
-              }}
+              onClick={() => dispatch({ type: "RESET" })}
               className="flex items-center justify-center gap-2 py-3 text-sm text-[var(--text-tertiary)] hover:text-white"
             >
               <RotateCcw className="h-4 w-4" />
@@ -200,7 +225,6 @@ export default function ExportStep() {
 
           <p className="text-xs text-[var(--text-tertiary)]">Made with Highlight Magic</p>
 
-          {/* iOS upsell */}
           {isFree && (
             <a
               href={IOS_APP_STORE_URL}
@@ -263,7 +287,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── Multi-clip rendering ──
+// ── Multi-clip rendering with sports-edit transitions ──
 
 interface RenderClipInstruction {
   clip: EditedClip;
@@ -273,10 +297,6 @@ interface RenderClipInstruction {
   captionText: string;
 }
 
-/**
- * Render all clips sequentially into one combined WebM video.
- * Plays each clip segment in order on a canvas, records with MediaRecorder.
- */
 async function renderHighlightTape(
   clips: RenderClipInstruction[],
   watermarkText: string | null,
@@ -293,7 +313,6 @@ async function renderHighlightTape(
     videoBitsPerSecond: 8_000_000,
   });
   const chunks: Blob[] = [];
-
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
   };
@@ -301,10 +320,19 @@ async function renderHighlightTape(
   const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
   let elapsedTotal = 0;
 
+  // Assign varied transitions
+  const transitions = getTransitionSequence(Math.max(0, clips.length - 1));
+
+  // Canvas to store last frame for crossfade
+  let crossfadeCanvas: HTMLCanvasElement | null = null;
+
   recorder.start();
 
-  for (const instruction of clips) {
+  for (let i = 0; i < clips.length; i++) {
+    const instruction = clips[i];
     const clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+    const transType = i > 0 ? transitions[i - 1] : null;
+    const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(
@@ -314,7 +342,9 @@ async function renderHighlightTape(
         watermarkText,
         (pct) => {
           onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-        }
+        },
+        crossfadeFrom,
+        transType
       );
     } else {
       await renderVideoClip(
@@ -324,8 +354,20 @@ async function renderHighlightTape(
         watermarkText,
         (pct) => {
           onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-        }
+        },
+        crossfadeFrom,
+        transType
       );
+    }
+
+    // Capture last frame for next transition
+    if (i < clips.length - 1) {
+      if (!crossfadeCanvas) {
+        crossfadeCanvas = document.createElement("canvas");
+        crossfadeCanvas.width = canvas.width;
+        crossfadeCanvas.height = canvas.height;
+      }
+      crossfadeCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
     }
 
     elapsedTotal += clipDuration;
@@ -346,7 +388,9 @@ function renderVideoClip(
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
   watermarkText: string | null,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  crossfadeFrom: HTMLCanvasElement | null,
+  transType: TransitionType | null
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -358,18 +402,18 @@ function renderVideoClip(
     video.onloadeddata = () => {
       const videoAspect = video.videoWidth / video.videoHeight;
       const canvasAspect = canvas.width / canvas.height;
-      let drawW: number, drawH: number, drawX: number, drawY: number;
+      let baseW: number, baseH: number, baseX: number, baseY: number;
 
       if (videoAspect > canvasAspect) {
-        drawH = canvas.height;
-        drawW = drawH * videoAspect;
-        drawX = (canvas.width - drawW) / 2;
-        drawY = 0;
+        baseH = canvas.height;
+        baseW = baseH * videoAspect;
+        baseX = (canvas.width - baseW) / 2;
+        baseY = 0;
       } else {
-        drawW = canvas.width;
-        drawH = drawW / videoAspect;
-        drawX = 0;
-        drawY = (canvas.height - drawH) / 2;
+        baseW = canvas.width;
+        baseH = baseW / videoAspect;
+        baseX = 0;
+        baseY = (canvas.height - baseH) / 2;
       }
 
       const { trimStart, trimEnd } = instruction.clip;
@@ -389,12 +433,66 @@ function renderVideoClip(
           const elapsed = video.currentTime - trimStart;
           onProgress(Math.min(99, (elapsed / duration) * 100));
 
-          ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-          ctx.drawImage(video, drawX, drawY, drawW, drawH);
-          ctx.filter = "none";
+          // Apply clip entry punch scale
+          const entryScale = getClipEntryScale(elapsed);
+
+          // Transition zone (first TRANSITION_DURATION seconds)
+          if (crossfadeFrom && transType && elapsed < TRANSITION_DURATION) {
+            const progress = elapsed / TRANSITION_DURATION;
+            const outAlpha = getClipAlpha(transType, progress, true);
+            const inAlpha = getClipAlpha(transType, progress, false);
+            const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
+            const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
+
+            // Clear
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw outgoing frame with exit transform
+            if (outAlpha > 0) {
+              ctx.save();
+              ctx.globalAlpha = outAlpha;
+              const ow = canvas.width * outTransform.scale;
+              const oh = canvas.height * outTransform.scale;
+              const ox = (canvas.width - ow) / 2 + outTransform.offsetX;
+              const oy = (canvas.height - oh) / 2 + outTransform.offsetY;
+              ctx.drawImage(crossfadeFrom, ox, oy, ow, oh);
+              ctx.restore();
+            }
+
+            // Draw incoming frame with entry transform
+            if (inAlpha > 0) {
+              const totalScale = inTransform.scale * entryScale;
+              const dw = baseW * totalScale;
+              const dh = baseH * totalScale;
+              const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
+              const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
+
+              ctx.save();
+              ctx.globalAlpha = inAlpha;
+              ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+              ctx.drawImage(video, dx, dy, dw, dh);
+              ctx.filter = "none";
+              ctx.restore();
+            }
+
+            // Transition overlay effect
+            drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress);
+            ctx.globalAlpha = 1;
+          } else {
+            // Normal rendering (with entry punch for first few frames)
+            const scale = entryScale;
+            const dw = baseW * scale;
+            const dh = baseH * scale;
+            const dx = (canvas.width - dw) / 2;
+            const dy = (canvas.height - dh) / 2;
+
+            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+            ctx.drawImage(video, dx, dy, dw, dh);
+            ctx.filter = "none";
+          }
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
-
           requestAnimationFrame(drawFrame);
         };
 
@@ -411,7 +509,9 @@ function renderPhotoClip(
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
   watermarkText: string | null,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  crossfadeFrom: HTMLCanvasElement | null,
+  transType: TransitionType | null
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -420,50 +520,102 @@ function renderPhotoClip(
     img.onload = () => {
       const imgAspect = img.width / img.height;
       const canvasAspect = canvas.width / canvas.height;
-      let drawW: number, drawH: number, drawX: number, drawY: number;
+      let baseW: number, baseH: number, baseX: number, baseY: number;
 
       if (imgAspect > canvasAspect) {
-        drawH = canvas.height;
-        drawW = drawH * imgAspect;
-        drawX = (canvas.width - drawW) / 2;
-        drawY = 0;
+        baseH = canvas.height;
+        baseW = baseH * imgAspect;
+        baseX = (canvas.width - baseW) / 2;
+        baseY = 0;
       } else {
-        drawW = canvas.width;
-        drawH = drawW / imgAspect;
-        drawX = 0;
-        drawY = (canvas.height - drawH) / 2;
+        baseW = canvas.width;
+        baseH = baseW / imgAspect;
+        baseX = 0;
+        baseY = (canvas.height - baseH) / 2;
       }
 
       const durationMs = PHOTO_DISPLAY_DURATION * 1000;
+      const transitionMs = TRANSITION_DURATION * 1000;
       const startTime = performance.now();
 
       const drawFrame = () => {
-        const elapsed = performance.now() - startTime;
+        const elapsedMs = performance.now() - startTime;
 
-        if (elapsed >= durationMs) {
+        if (elapsedMs >= durationMs) {
           onProgress(100);
           resolve();
           return;
         }
 
-        onProgress((elapsed / durationMs) * 100);
+        const elapsedSec = elapsedMs / 1000;
+        onProgress((elapsedMs / durationMs) * 100);
 
-        // Subtle Ken Burns zoom effect
-        const zoomProgress = elapsed / durationMs;
-        const scale = 1 + zoomProgress * 0.05;
-        const scaledW = drawW * scale;
-        const scaledH = drawH * scale;
-        const scaledX = drawX - (scaledW - drawW) / 2;
-        const scaledY = drawY - (scaledH - drawH) / 2;
+        // Ken Burns zoom
+        const zoomProgress = elapsedMs / durationMs;
+        const kenBurnsScale = 1 + zoomProgress * 0.05;
 
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-        ctx.drawImage(img, scaledX, scaledY, scaledW, scaledH);
-        ctx.filter = "none";
+        // Entry punch
+        const entryScale = getClipEntryScale(elapsedSec);
+
+        // Transition zone
+        if (crossfadeFrom && transType && elapsedMs < transitionMs) {
+          const progress = elapsedMs / transitionMs;
+          const outAlpha = getClipAlpha(transType, progress, true);
+          const inAlpha = getClipAlpha(transType, progress, false);
+          const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
+          const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
+
+          // Clear
+          ctx.fillStyle = "black";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw outgoing
+          if (outAlpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = outAlpha;
+            const ow = canvas.width * outTransform.scale;
+            const oh = canvas.height * outTransform.scale;
+            const ox = (canvas.width - ow) / 2 + outTransform.offsetX;
+            const oy = (canvas.height - oh) / 2 + outTransform.offsetY;
+            ctx.drawImage(crossfadeFrom, ox, oy, ow, oh);
+            ctx.restore();
+          }
+
+          // Draw incoming (current photo with Ken Burns + entry punch + transition transform)
+          if (inAlpha > 0) {
+            const totalScale = kenBurnsScale * entryScale * inTransform.scale;
+            const dw = baseW * totalScale;
+            const dh = baseH * totalScale;
+            const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
+            const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
+
+            ctx.save();
+            ctx.globalAlpha = inAlpha;
+            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+            ctx.drawImage(img, dx, dy, dw, dh);
+            ctx.filter = "none";
+            ctx.restore();
+          }
+
+          // Transition overlay
+          drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress);
+          ctx.globalAlpha = 1;
+        } else {
+          // Normal rendering
+          const totalScale = kenBurnsScale * entryScale;
+          const dw = baseW * totalScale;
+          const dh = baseH * totalScale;
+          const dx = (canvas.width - dw) / 2;
+          const dy = (canvas.height - dh) / 2;
+
+          ctx.fillStyle = "black";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+          ctx.drawImage(img, dx, dy, dw, dh);
+          ctx.filter = "none";
+        }
 
         drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
-
         requestAnimationFrame(drawFrame);
       };
 
