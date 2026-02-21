@@ -27,6 +27,7 @@ interface MultiFrameScore {
   timestamp: number;
   score: number;
   label: string;
+  narrativeRole?: string; // HOOK | HERO | REACTION | RHYTHM | CLOSER
 }
 
 export type DetectedTheme =
@@ -100,12 +101,11 @@ export async function detectMultiClipHighlights(
     batches.push(frames.slice(i, i + MAX_FRAMES_PER_BATCH));
   }
 
-  const allScores: MultiFrameScore[] = [];
-
-  for (const batch of batches) {
-    const scores = await analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
-    allScores.push(...scores);
-  }
+  // Score all batches in parallel — no reason to wait for one batch before starting the next
+  const batchResults = await Promise.all(
+    batches.map((batch) => analyzeMultiBatch(apiKey, batch, sourceFiles, templateName))
+  );
+  const allScores: MultiFrameScore[] = batchResults.flat();
 
   // Second pass: plan the highlight tape AND detect content theme.
   // Send the original frames so the planner can SEE the footage, not just read scores.
@@ -194,7 +194,10 @@ NOT: "person smiling" → YES: "genuine surprised reaction, mouth open eyes wide
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
-[{"index": 0, "score": 0.85, "label": "vivid description + viral reason + narrative role"}]`;
+[{"index": 0, "score": 0.85, "role": "HERO", "label": "vivid description + viral reason + narrative role"}]
+
+The "role" field must be one of: HOOK, HERO, REACTION, RHYTHM, CLOSER.
+Pick the BEST fit for each frame — what role would this moment play in a viral reel?`;
 
   const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
 
@@ -218,8 +221,12 @@ Respond with ONLY a JSON array:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2048,
+        model: "claude-sonnet-4-6",
+        max_tokens: 8000,
+        thinking: {
+          type: "enabled",
+          budget_tokens: 5000,
+        },
         system: systemPrompt,
         messages: [{ role: "user", content }],
       }),
@@ -237,7 +244,11 @@ Respond with ONLY a JSON array:
     }
 
     const data = await response.json();
-    const text = data.content?.[0]?.text ?? "[]";
+    // With extended thinking, response has thinking blocks + text blocks
+    const textBlock = (data.content as Array<{ type: string; text?: string }>)?.find(
+      (b) => b.type === "text"
+    );
+    const text = textBlock?.text ?? data.content?.[0]?.text ?? "[]";
     const jsonMatch = text.match(/\[[\s\S]*\]/);
 
     if (!jsonMatch) {
@@ -250,7 +261,13 @@ Respond with ONLY a JSON array:
       }));
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as Array<{ index: number; score: number; label: string }>;
+    const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
+    const parsed = JSON.parse(jsonMatch[0]) as Array<{
+      index: number;
+      score: number;
+      label: string;
+      role?: string;
+    }>;
 
     return parsed.map((p) => {
       const frame = batch[p.index];
@@ -260,6 +277,7 @@ Respond with ONLY a JSON array:
         timestamp: frame?.timestamp ?? 0,
         score: Math.max(0, Math.min(1, p.score)),
         label: p.label || "highlight",
+        narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
       };
     });
   } catch (err) {
@@ -373,7 +391,10 @@ async function planHighlightTape(
       const header = `── ${info?.name ?? fileId} (${info?.type ?? "video"}) ──`;
       const sorted = [...fileScores].sort((a, b) => a.timestamp - b.timestamp); // temporal order
       const lines = sorted.map(
-        (s) => `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}  "${s.label}"`
+        (s) => {
+          const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${roleTag}  "${s.label}"`;
+        }
       );
       return `${header}\n${lines.join("\n")}`;
     })
@@ -543,7 +564,8 @@ Respond with ONLY a JSON object:
 
     let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})`;
     if (scoreData) {
-      annotation += ` | SCORE: ${scoreData.score.toFixed(2)} | "${scoreData.label}"`;
+      const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
+      annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;
     }
     userContent.push({ type: "text", text: annotation });
   }
@@ -562,11 +584,11 @@ Respond with ONLY a JSON object:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 16000,
+        model: "claude-sonnet-4-6",
+        max_tokens: 25000,
         thinking: {
           type: "enabled",
-          budget_tokens: 10000,
+          budget_tokens: 16000,
         },
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
