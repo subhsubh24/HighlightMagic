@@ -191,24 +191,46 @@ export async function detectMultiClipHighlights(
 
   // Second pass: plan the highlight tape AND detect content theme.
   // Send the original frames so the planner can SEE the footage, not just read scores.
-  const planResult = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
-
-  // Fall back to clustering if the planning call fails
-  if (planResult.clips.length === 0) {
-    return { clips: clusterMultiIntoClips(allScores), detectedTheme: planResult.detectedTheme, contentSummary: planResult.contentSummary };
+  // Retry up to 3 times — the planner is the most critical AI call.
+  let planResult: { clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string } | null = null;
+  for (let planAttempt = 0; planAttempt < 3; planAttempt++) {
+    const result = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
+    if (result.clips.length > 0) {
+      planResult = result;
+      break;
+    }
+    console.warn(`Planner returned 0 clips (attempt ${planAttempt + 1}/3), retrying...`);
+    if (planAttempt < 2) {
+      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, planAttempt)));
+    }
   }
 
-  return planResult;
+  if (planResult && planResult.clips.length > 0) {
+    return planResult;
+  }
+
+  // Last resort fallback — only reached if planner fails 3 times
+  console.warn("Planner failed all 3 attempts, falling back to score-based clustering");
+  return {
+    clips: clusterMultiIntoClips(allScores),
+    detectedTheme: planResult?.detectedTheme ?? "cinematic",
+    contentSummary: planResult?.contentSummary ?? "",
+  };
 }
+
+/** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
+const MAX_BATCH_RETRIES = 2;
 
 /**
  * Score frames across multiple source files.
+ * Retries the entire batch on failure before falling back.
  */
 async function analyzeMultiBatch(
   apiKey: string,
   batch: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
-  templateName?: string
+  templateName?: string,
+  attempt = 0
 ): Promise<MultiFrameScore[]> {
   const sourceList = Array.from(sourceFiles.entries())
     .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
@@ -306,10 +328,10 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 16000,
+          max_tokens: 32000,
           thinking: {
             type: "enabled",
-            budget_tokens: 10000,
+            budget_tokens: 20000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -320,13 +342,19 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
-      console.error("Claude API error (scoring):", response.status, errorBody);
+      console.error(`Scoring batch error (attempt ${attempt + 1}):`, response.status, errorBody);
+      if (attempt < MAX_BATCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+      }
+      // All retries exhausted — return clearly marked unscored results
+      console.warn(`Scoring batch failed after ${attempt + 1} attempts, returning unscored frames`);
       return batch.map((f) => ({
         sourceFileId: f.sourceFileId,
         sourceType: f.sourceType,
         timestamp: f.timestamp,
-        score: Math.random() * 0.5 + 0.3,
-        label: "frame",
+        score: 0.5,
+        label: "[UNSCORED — AI analysis failed for this frame]",
       }));
     }
 
@@ -339,12 +367,17 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     const jsonMatch = text.match(/\[[\s\S]*\]/);
 
     if (!jsonMatch) {
+      console.warn(`Scoring batch returned unparsable response (attempt ${attempt + 1})`);
+      if (attempt < MAX_BATCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+      }
       return batch.map((f) => ({
         sourceFileId: f.sourceFileId,
         sourceType: f.sourceType,
         timestamp: f.timestamp,
         score: 0.5,
-        label: "frame",
+        label: "[UNSCORED — AI response was unparsable]",
       }));
     }
 
@@ -368,13 +401,17 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       };
     });
   } catch (err) {
-    console.error("Detection error:", err);
+    console.error(`Scoring batch exception (attempt ${attempt + 1}):`, err);
+    if (attempt < MAX_BATCH_RETRIES) {
+      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+    }
     return batch.map((f) => ({
       sourceFileId: f.sourceFileId,
       sourceType: f.sourceType,
       timestamp: f.timestamp,
-      score: Math.random() * 0.5 + 0.3,
-      label: "frame",
+      score: 0.5,
+      label: "[UNSCORED — unexpected error during analysis]",
     }));
   }
 }
@@ -388,12 +425,9 @@ const VALID_THEMES: DetectedTheme[] = [
 ];
 
 /**
- * Select frames for the planner to see — no artificial cap.
- * Every source file gets ALL its scored frames shown so the AI can deeply
- * understand the full footage. Sorted by score within each source,
- * with all sources represented first, then remaining frames by score.
- */
-/**
+ * Select frames for the planner — sends as many as the API allows.
+ * Every source gets at least 1 frame, then fills remaining budget by score.
+ *
  * Claude API hard limits (Messages API):
  * - 100 images per request
  * - 32 MB total payload
