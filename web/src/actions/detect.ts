@@ -1,10 +1,6 @@
 "use server";
 
-import {
-  MAX_FRAMES_PER_BATCH,
-  MAX_CLIP_DURATION,
-  PHOTO_DISPLAY_DURATION,
-} from "@/lib/constants";
+import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 
 // ── API helpers ──
 
@@ -23,7 +19,6 @@ async function fetchWithRetry(
   init: RequestInit,
   label: string
 ): Promise<Response> {
-  let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(url, init);
     if (response.ok) return response;
@@ -154,7 +149,7 @@ export async function detectMultiClipHighlights(
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    return { clips: simulateMultiDetection(frames), detectedTheme: "cinematic", contentSummary: "" };
+    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
   }
 
   // Group frames by source file for context
@@ -209,13 +204,7 @@ export async function detectMultiClipHighlights(
     return planResult;
   }
 
-  // Last resort fallback — only reached if planner fails 3 times
-  console.warn("Planner failed all 3 attempts, falling back to score-based clustering");
-  return {
-    clips: clusterMultiIntoClips(allScores),
-    detectedTheme: planResult?.detectedTheme ?? "cinematic",
-    contentSummary: planResult?.contentSummary ?? "",
-  };
+  throw new Error("AI planner failed to produce clips after 3 attempts. Please try again.");
 }
 
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
@@ -328,10 +317,10 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 32000,
+          max_tokens: 128000,
           thinking: {
             type: "enabled",
-            budget_tokens: 20000,
+            budget_tokens: 100000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -347,15 +336,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
       }
-      // All retries exhausted — return clearly marked unscored results
-      console.warn(`Scoring batch failed after ${attempt + 1} attempts, returning unscored frames`);
-      return batch.map((f) => ({
-        sourceFileId: f.sourceFileId,
-        sourceType: f.sourceType,
-        timestamp: f.timestamp,
-        score: 0.5,
-        label: "[UNSCORED — AI analysis failed for this frame]",
-      }));
+      throw new Error(`Scoring failed after ${attempt + 1} attempts (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
     }
 
     const data = await response.json();
@@ -372,13 +353,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
       }
-      return batch.map((f) => ({
-        sourceFileId: f.sourceFileId,
-        sourceType: f.sourceType,
-        timestamp: f.timestamp,
-        score: 0.5,
-        label: "[UNSCORED — AI response was unparsable]",
-      }));
+      throw new Error(`Scoring returned unparsable response after ${attempt + 1} attempts`);
     }
 
     const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
@@ -406,13 +381,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
       return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
     }
-    return batch.map((f) => ({
-      sourceFileId: f.sourceFileId,
-      sourceType: f.sourceType,
-      timestamp: f.timestamp,
-      score: 0.5,
-      label: "[UNSCORED — unexpected error during analysis]",
-    }));
+    throw new Error(`Scoring batch failed after ${attempt + 1} attempts: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -754,10 +723,10 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 64000,
+          max_tokens: 128000,
           thinking: {
             type: "enabled",
-            budget_tokens: 50000,
+            budget_tokens: 100000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
@@ -889,108 +858,3 @@ Respond with ONLY a JSON object:
   }
 }
 
-/**
- * Fallback clustering for multi-source clips.
- * Always includes every source file — no clip count cap.
- */
-function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
-  const bySource = new Map<string, MultiFrameScore[]>();
-  for (const s of scores) {
-    if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
-    bySource.get(s.sourceFileId)!.push(s);
-  }
-
-  const clips: DetectedClip[] = [];
-  let order = 0;
-
-  for (const [sourceFileId, fileScores] of bySource) {
-    const sorted = [...fileScores].sort((a, b) => b.score - a.score);
-    const best = sorted[0];
-    if (!best) continue;
-
-    if (best.sourceType === "photo") {
-      clips.push({
-        id: crypto.randomUUID(),
-        sourceFileId,
-        startTime: 0,
-        endTime: PHOTO_DISPLAY_DURATION,
-        confidenceScore: best.score,
-        label: best.label,
-        velocityPreset: "normal",
-        order: order++,
-      });
-    } else {
-      // Cluster nearby high-scoring frames around the best moment
-      const nearby = fileScores.filter(
-        (f) => Math.abs(f.timestamp - best.timestamp) <= MAX_CLIP_DURATION / 2
-      );
-
-      const timestamps = nearby.map((f) => f.timestamp);
-      const minT = Math.min(...timestamps);
-      const maxT = Math.max(...timestamps);
-      const center = (minT + maxT) / 2;
-      // Shorter clip (2s min) for weaker sources, longer for strong ones
-      const minHalf = best.score >= 0.65 ? 2.5 : 1;
-      const halfDur = Math.max(minHalf, (maxT - minT) / 2);
-
-      clips.push({
-        id: crypto.randomUUID(),
-        sourceFileId,
-        startTime: Math.round(Math.max(0, center - halfDur) * 10) / 10,
-        endTime: Math.round(Math.min(center + halfDur, center + MAX_CLIP_DURATION / 2) * 10) / 10,
-        confidenceScore: Math.round((nearby.reduce((s, f) => s + f.score, 0) / nearby.length) * 100) / 100,
-        label: best.label,
-        velocityPreset: "normal",
-        order: order++,
-      });
-    }
-  }
-
-  // Sort by confidence descending then re-number with hook-first ordering
-  clips.sort((a, b) => b.confidenceScore - a.confidenceScore);
-  clips.forEach((c, i) => { c.order = i; });
-  return clips;
-}
-
-/**
- * Simulated multi-clip detection when no API key is configured.
- * Always includes every source file.
- */
-function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
-  const sourceIds = [...new Set(frames.map((f) => f.sourceFileId))];
-  const clips: DetectedClip[] = [];
-
-  sourceIds.forEach((sourceId, i) => {
-    const sourceFrames = frames.filter((f) => f.sourceFileId === sourceId);
-    const isPhoto = sourceFrames[0]?.sourceType === "photo";
-
-    if (isPhoto) {
-      clips.push({
-        id: crypto.randomUUID(),
-        sourceFileId: sourceId,
-        startTime: 0,
-        endTime: PHOTO_DISPLAY_DURATION,
-        confidenceScore: Math.round((0.9 - i * 0.04) * 100) / 100,
-        label: "Photo moment",
-        velocityPreset: "normal",
-        order: i,
-      });
-    } else {
-      const maxTime = sourceFrames[sourceFrames.length - 1]?.timestamp ?? 30;
-      const center = maxTime / 2;
-      const halfDur = 1 + Math.random() * 5;
-      clips.push({
-        id: crypto.randomUUID(),
-        sourceFileId: sourceId,
-        startTime: Math.max(0, center - halfDur),
-        endTime: Math.min(maxTime, center + halfDur),
-        confidenceScore: Math.round((0.95 - i * 0.05) * 100) / 100,
-        label: "Highlight moment",
-        velocityPreset: "normal",
-        order: i,
-      });
-    }
-  });
-
-  return clips;
-}
