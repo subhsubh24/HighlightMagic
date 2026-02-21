@@ -132,40 +132,69 @@ async function analyzeMultiBatch(
     .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
     .join("\n");
 
-  const systemPrompt = `You are a world-class Instagram Reels / TikTok editor. Your reels average 2M+ views
-because you understand EXACTLY what makes someone stop scrolling and watch.
+  const systemPrompt = `You are a world-class Instagram Reels editor whose content averages 2M+ views.
+You understand the PSYCHOLOGY of scrolling — what makes a thumb stop, what makes someone save,
+what makes them share to their story, what makes them comment.
 
-You're reviewing raw footage from ${sourceFiles.size} source files. Your job: deeply understand
-every single frame — what's happening, the emotion, the visual quality, the storytelling potential.
+You're reviewing raw footage from ${sourceFiles.size} source files. Your job: deeply analyze
+every single frame through the lens of INSTAGRAM VIRALITY.
 
 SOURCE FILES:
 ${sourceList}
 
-STUDY EACH FRAME CAREFULLY. For every frame, think through:
-- Would this make someone stop mid-scroll on Instagram? WHY or why not?
-- What's the visual energy? (composition, lighting, color, motion blur, depth)
-- What's the emotional energy? (joy, surprise, tension, awe, humor, intimacy)
-- How could this moment serve the highlight tape? (hero shot, reaction beat, B-roll transition, opener, closer)
-- What story does this frame tell on its own? What story does it tell in sequence?
+FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
 
-Score each frame 0.0-1.0:
-- 0.85-1.0: SCROLL-STOPPING — you'd stop mid-scroll for this. Peak action, raw emotion,
-  stunning composition, dramatic lighting, unexpected moments, faces showing genuine feeling,
-  particles in motion, decisive moments, perfect timing.
-- 0.65-0.84: STRONG — compelling, good energy, interesting composition, key narrative beats.
-  Would work great as a supporting moment in the tape.
-- 0.35-0.64: LOWER ENERGY — generic, flat, less visually interesting. Still usable as a
-  quick beat or transition moment if this is the best from its source file.
-- 0.0-0.34: UNUSABLE — black frames, extreme blur, obstructed lens, test footage.
+1. SCROLL-STOP POWER — Would this freeze someone's thumb mid-scroll in the first 0.3 seconds?
+   (High contrast, unexpected visuals, faces with intense emotion, dramatic scale, motion at peak)
 
-CRITICAL: Your label must be SPECIFIC and VIVID — paint a picture in words.
-Not "people dancing" but "group jumping in sync under pink strobe lights with confetti raining down."
-Not "food on plate" but "golden-crusted salmon with microgreens, steam rising under warm pendant light."
-The label should make someone SEE the moment. This is what the tape planner reads to understand the footage.
+2. EMOTIONAL INTENSITY — Does this hit you in the gut? The algorithm rewards watch-time,
+   and emotion is what keeps eyeballs locked. (Joy, shock, awe, pride, tenderness, humor, tension)
+
+3. SHAREABILITY — Would someone screenshot this or send it to a friend? "OMG LOOK AT THIS"
+   moments. (Impressive feats, beautiful compositions, funny/unexpected, relatable reactions)
+
+4. SAVE POTENTIAL — Would someone hit the bookmark? Saves are weighted HIGHEST by the
+   Instagram algorithm. (Aspirational moments, beautiful visuals, tutorial-worthy technique,
+   emotional peaks worth rewatching)
+
+5. VISUAL PUNCH — How does this look on a 6-inch phone screen at half-brightness on a bus?
+   Instagram is consumed on mobile. (High contrast > subtle, saturated > muted, close-up > wide,
+   clean composition > cluttered, faces > landscapes at small scale)
+
+6. NARRATIVE ROLE — How would this serve a viral reel? Think about its FUNCTION:
+   - HOOK: Could open the reel and stop scrolling
+   - HERO: The main event, the peak moment, what the reel is "about"
+   - REACTION: A face/moment that amplifies a hero moment via juxtaposition
+   - RHYTHM: A transition beat, texture, pacing control
+   - CLOSER: Could end the reel and trigger a replay/loop
+
+Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 6 dimensions):
+- 0.85-1.0: VIRAL POTENTIAL — this frame alone could carry a reel. Scroll-stopping,
+  emotionally loaded, share-worthy. Peak action, raw genuine emotion, stunning composition,
+  dramatic lighting, unexpected beauty, decisive moments, perfect timing.
+- 0.65-0.84: STRONG BEAT — compelling enough to hold attention in a well-edited sequence.
+  Good energy, interesting composition, narrative contribution. Supporting moments that
+  make the hero shots hit harder by contrast.
+- 0.35-0.64: USABLE — generic energy but potentially valuable as a quick beat, reaction
+  cutaway, or pacing change. Context-dependent value.
+- 0.0-0.34: DEAD WEIGHT — black frames, extreme blur, obstructed lens, test footage,
+  nothing visually or emotionally redeemable.
+
+LABEL INSTRUCTIONS — This is CRITICAL. Your label is the planner's EYES.
+
+The tape planner will read your labels to understand the footage WITHOUT seeing the images.
+Your label must capture THREE things in one vivid sentence:
+1. WHAT's in the frame (specific, cinematic description)
+2. WHY it's viral (the emotional/visual hook)
+3. HOW it could be used (its narrative role)
+
+NOT: "people dancing" → YES: "group mid-air jumping in sync under pink strobes, confetti suspended — hero shot energy, share-worthy spectacle"
+NOT: "food on plate" → YES: "golden-crusted salmon with steam curl under warm pendant, microgreen garnish catching light — save-worthy food porn, could open or close the tape"
+NOT: "person smiling" → YES: "genuine surprised reaction, mouth open eyes wide, warm golden-hour backlight — perfect reaction beat to juxtapose after a reveal"
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
-[{"index": 0, "score": 0.85, "label": "vivid cinematic description of the moment"}]`;
+[{"index": 0, "score": 0.85, "label": "vivid description + viral reason + narrative role"}]`;
 
   const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
 
@@ -316,23 +345,47 @@ async function planHighlightTape(
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
+  // Compute approximate duration for each source from max timestamp + sample interval
+  const sourceDurations = new Map<string, number>();
+  for (const f of allFrames) {
+    const current = sourceDurations.get(f.sourceFileId) ?? 0;
+    if (f.timestamp > current) sourceDurations.set(f.sourceFileId, f.timestamp);
+  }
+
   const sourceList = Array.from(sourceFiles.entries())
-    .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled)`)
+    .map(([id, info]) => {
+      const approxDuration = (sourceDurations.get(id) ?? 0) + 2; // +2s for last sample interval
+      const durationStr = info.type === "photo" ? "photo (still)" : `~${approxDuration.toFixed(0)}s duration`;
+      return `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled, ${durationStr})`;
+    })
     .join("\n");
 
-  // Send ALL scores to the planner — it needs the full picture to reason about every source
-  const allScoresSummary = [...scores]
-    .sort((a, b) => b.score - a.score)
-    .map((s) => `fileID:${s.sourceFileId} type:${s.sourceType} t:${s.timestamp.toFixed(1)}s score:${s.score.toFixed(2)} "${s.label}"`)
-    .join("\n");
+  // Send ALL scores grouped by source, with temporal ordering within each source
+  const scoresBySource = new Map<string, MultiFrameScore[]>();
+  for (const s of scores) {
+    if (!scoresBySource.has(s.sourceFileId)) scoresBySource.set(s.sourceFileId, []);
+    scoresBySource.get(s.sourceFileId)!.push(s);
+  }
+
+  const allScoresSummary = Array.from(scoresBySource.entries())
+    .map(([fileId, fileScores]) => {
+      const info = sourceFiles.get(fileId);
+      const header = `── ${info?.name ?? fileId} (${info?.type ?? "video"}) ──`;
+      const sorted = [...fileScores].sort((a, b) => a.timestamp - b.timestamp); // temporal order
+      const lines = sorted.map(
+        (s) => `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}  "${s.label}"`
+      );
+      return `${header}\n${lines.join("\n")}`;
+    })
+    .join("\n\n");
 
   // Select diverse frames for the planner to actually SEE
   const plannerFrames = selectPlannerFrames(scores, allFrames);
 
   const sourceCount = sourceFiles.size;
 
-  const systemPrompt = `You are a viral Instagram Reels editor. Your edits consistently hit 1M+ views because you
-understand the psychology of what makes people stop scrolling, watch to the end, and smash that share button.
+  const systemPrompt = `You are an elite Instagram Reels editor. Your content consistently hits 1M+ views because
+you understand Instagram's algorithm AND human psychology at a deep level.
 
 You are being shown the ACTUAL FRAMES from the user's footage. Study every single one deeply.
 You have ZERO constraints on your creative decisions. No limits on clip count, clip duration,
@@ -341,8 +394,26 @@ total reel length, or how you structure the tape. YOU are the editor. Make somet
 SOURCE FILES (${sourceCount} total):
 ${sourceList}
 
-EVERY SCORED MOMENT (from frame-by-frame analysis — this is your complete footage map):
+EVERY SCORED MOMENT (from frame-by-frame analysis — your complete footage map):
 ${allScoresSummary}
+
+═══════════════════════════════════════════════
+HOW INSTAGRAM'S ALGORITHM ACTUALLY WORKS
+═══════════════════════════════════════════════
+The algorithm ranks Reels by predicted engagement. The signals, IN ORDER OF WEIGHT:
+1. WATCH-THROUGH RATE — % of viewers who watch the entire reel (most important)
+2. REPLAYS — viewers watching 2+ times (this is why loops matter)
+3. SAVES — bookmarks. Instagram treats a save as "this content has lasting value"
+4. SHARES — DMs and story reposts. "I need someone else to see this"
+5. COMMENTS — engagement signal, especially fast comments (means strong reaction)
+6. LIKES — weakest signal but still counted
+
+Your job is to maximize ALL of these. The edit structure directly affects every one:
+- Hook → watch-through rate. Bad hook = 65% of viewers gone in 1.5s
+- Pacing → watch-through. Monotonous rhythm = viewers lose interest at 4-6s
+- Emotional peaks → saves + shares. "I need to keep this / show someone this"
+- Loop design → replays. When the end connects to the start = automatic rewatch
+- Surprise/humor → comments. Unexpected moments trigger impulse commenting
 
 ═══════════════════════════════════════════════
 ABSOLUTE RULE: USE EVERY SOURCE FILE
@@ -359,12 +430,21 @@ YOUR PROCESS — Full creative autonomy
 ═══════════════════════════════════════════════
 
 STEP 1: DEEPLY UNDERSTAND THE CONTENT
-Study every frame image. Read every score and label. Build a complete mental model:
+Study every frame image. Read every score and label. Build a COMPLETE mental model:
 - What's the STORY across all this footage? What happened? What's the emotional arc?
 - Who are the people? What are they doing? What's the setting/mood/energy?
 - What are the absolute PEAK moments vs. the quieter supporting moments?
 - What makes this content special? What would make someone who wasn't there feel like they were?
-- How does each source file contribute to the overall narrative?
+
+CROSS-SOURCE CONNECTIONS — this is what separates great editors from good ones:
+- Look for CAUSE → EFFECT across sources (goal scored in one source → crowd reaction in another)
+- Look for BEFORE → AFTER (preparation → result, setup → payoff)
+- Look for CONTRAST (quiet → loud, small → big, solo → group, stillness → explosion)
+- Look for MATCHING ENERGY (moments from different sources that share a vibe — cut between them)
+- Look for REACTION SHOTS (faces from one source that amplify moments from another)
+When you find these connections, EXPLOIT them. Juxtaposing connected moments from different
+sources creates a sense of storytelling that single-source edits can't achieve.
+
 Put your understanding in a "contentSummary" field (2-3 vivid sentences).
 
 STEP 2: CHOOSE THE EDITING THEME
@@ -386,19 +466,24 @@ Think about: What theme makes this content MOST shareable on Instagram? Match th
 
 STEP 3: CREATE THE HIGHLIGHT TAPE
 You're making a reel that needs to compete with millions of other posts for attention.
-Think about Instagram viewer psychology:
 
-THE HOOK: 65% of viewers decide whether to keep watching in the first 1.5 seconds.
+THE HOOK (Clip 1): 65% of viewers decide whether to keep watching in the first 1.5 seconds.
 Your first clip MUST be the single most visually striking, emotionally compelling, or
-unexpected moment. What would stop a thumb mid-scroll?
+unexpected moment. What would stop a thumb mid-scroll? Think about what this looks like
+on a phone screen — does it POP at small size? Is there immediate visual intrigue?
 
-RETENTION: Pattern interrupts keep viewers watching. Alternate energy levels —
-high ↔ low, close-up ↔ wide, fast ↔ slow. Each transition should feel like a new "hit."
-Vary your clip durations — monotonous timing feels robotic. Let the content dictate pacing.
+RETENTION (Middle clips): Pattern interrupts keep viewers watching. Use these techniques:
+- ENERGY OSCILLATION: high ↔ low, close-up ↔ wide, fast ↔ slow, loud ↔ quiet
+- CROSS-SOURCE CUTTING: alternate between sources to create variety and storytelling
+- DURATION VARIATION: mix short punchy beats with longer hero moments — monotonous timing kills retention
+- INFORMATION DENSITY: every clip should add something NEW — new angle, new emotion, new information
+- MICRO-HOOKS: within the tape, create moments that make the viewer think "wait, what comes next?"
 
-THE CLOSE: End on an emotional peak or a moment that visually echoes the hook.
-This creates loop potential — when the reel restarts, it should feel intentional.
-A great close makes people watch 2-3 times, which MASSIVELY boosts the algorithm.
+THE CLOSE (Last clip): End on a moment that serves TWO purposes:
+1. EMOTIONAL PEAK — the viewer should feel something (satisfaction, awe, joy, laughter)
+2. LOOP TRIGGER — when the reel restarts from the beginning, the transition should feel smooth
+   or intentional. If clip 1 is high energy and the last clip ends on high energy → seamless loop.
+   A great loop makes people watch 2-3x, which MASSIVELY boosts algorithmic distribution.
 
 YOU DECIDE EVERYTHING:
 - How many clips to use (as many as the content needs)
@@ -414,14 +499,16 @@ Speed ramping is what separates amateur edits from pro edits on Instagram.
 Each clip gets a speed curve — choose the one that serves the CONTENT of that specific moment:
 
 - "hero": fast approach → dramatic slow-mo at the peak → fast recovery
-- "bullet": snap into extreme slow-mo and hold
-- "montage": pulse between fast and slow on beats
-- "ramp_in": gradually accelerate (tension builder)
-- "ramp_out": fast then dramatic deceleration (landing/reveal)
-- "normal": constant 1x speed (breathing room, dialogue, calm moments)
+- "bullet": snap into extreme slow-mo and hold — for impact moments, collisions, peak action
+- "montage": pulse between fast and slow — for rhythmic sequences, dancing, sports plays
+- "ramp_in": gradually accelerate — for building tension toward a climax
+- "ramp_out": fast then dramatic deceleration — for arrivals, reveals, landings
+- "normal": constant 1x speed — breathing room, dialogue, calm moments, emotional beats
 
-Think about the speed curve of the ENTIRE tape. Contrast creates impact — a slow-mo bullet hit
-feels 10x more powerful after a fast-paced montage. YOU decide the rhythm based on the actual content.
+VELOCITY STRATEGY: Think about the speed curve of the ENTIRE tape as one unified rhythm.
+Contrast creates impact — a slow-mo bullet hit feels 10x more powerful after a fast-paced
+montage sequence. A normal-speed emotional moment hits harder between two high-energy speed-ramped
+clips. Map out the velocity arc like a song: intro → build → drop → build → climax → resolution.
 
 For each clip: provide sourceFileId, startTime, endTime, label, confidenceScore, and velocityPreset.
 
@@ -431,9 +518,15 @@ Respond with ONLY a JSON object:
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
 
+  // Build a score lookup so we can annotate each frame with its score + label
+  const scoreLookup = new Map<string, MultiFrameScore>();
+  for (const s of scores) {
+    scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s);
+  }
+
   userContent.push({
     type: "text",
-    text: `Here are ${plannerFrames.length} frames from ${sourceFiles.size} source files. Study every single frame — the composition, lighting, emotion, motion, story. Understand the content deeply before you make any editing decisions.\n`,
+    text: `Here are ${plannerFrames.length} frames from ${sourceFiles.size} source files.\nStudy every single frame — the composition, lighting, emotion, motion, story. Each frame is annotated with its virality score and analysis from the scoring pass. Understand the content deeply before you make any editing decisions.\n`,
   });
 
   for (const frame of plannerFrames) {
@@ -441,15 +534,23 @@ Respond with ONLY a JSON object:
       type: "image",
       source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
     });
-    userContent.push({
-      type: "text",
-      text: `↑ Source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s`,
-    });
+
+    const scoreData = scoreLookup.get(`${frame.sourceFileId}::${frame.timestamp.toFixed(1)}`);
+    const approxDuration = (sourceDurations.get(frame.sourceFileId) ?? 0) + 2;
+    const position = approxDuration > 0
+      ? `${((frame.timestamp / approxDuration) * 100).toFixed(0)}% through`
+      : "start";
+
+    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})`;
+    if (scoreData) {
+      annotation += ` | SCORE: ${scoreData.score.toFixed(2)} | "${scoreData.label}"`;
+    }
+    userContent.push({ type: "text", text: annotation });
   }
 
   userContent.push({
     type: "text",
-    text: "\nYou've now seen all the footage. Think deeply: What's the story? What's the emotional arc? What would make this reel go viral on Instagram? Now create the highlight tape that will get maximum likes, shares, and saves.",
+    text: `\nYou've now seen ALL the footage. Think deeply:\n- What's the story across these ${sourceCount} sources?\n- What are the cross-source connections? (cause→effect, before→after, matching energy)\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?\n\nNow create the highlight tape.`,
   });
 
   try {
@@ -462,7 +563,11 @@ Respond with ONLY a JSON object:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 8192,
+        max_tokens: 16000,
+        thinking: {
+          type: "enabled",
+          budget_tokens: 10000,
+        },
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
@@ -474,7 +579,12 @@ Respond with ONLY a JSON object:
     }
 
     const data = await response.json();
-    const text = data.content?.[0]?.text ?? "{}";
+    // With extended thinking, response has thinking blocks + text blocks.
+    // Find the actual text block (skip thinking blocks).
+    const textBlock = (data.content as Array<{ type: string; text?: string }>)?.find(
+      (b) => b.type === "text"
+    );
+    const text = textBlock?.text ?? data.content?.[0]?.text ?? "{}";
 
     // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
     const objMatch = text.match(/\{[\s\S]*\}/);
