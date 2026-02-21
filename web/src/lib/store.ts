@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AppStep, EditedClip, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle } from "./types";
+import type { AppState, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -13,6 +13,7 @@ export const initialState: AppState = {
   videoUrl: null,
   videoDuration: 0,
   selectedTemplate: null,
+  detectedTheme: "cinematic",
   highlights: [],
   clips: [],
   activeClipId: null,
@@ -40,6 +41,7 @@ export type Action =
   | { type: "REORDER_MEDIA"; fromIndex: number; toIndex: number }
   | { type: "CLEAR_MEDIA" }
   | { type: "SET_TEMPLATE"; template: HighlightTemplate | null }
+  | { type: "SET_THEME"; theme: EditingTheme }
   | { type: "SET_HIGHLIGHTS"; highlights: HighlightSegment[] }
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
@@ -78,6 +80,8 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "SET_TEMPLATE":
       return { ...state, selectedTemplate: action.template };
+    case "SET_THEME":
+      return { ...state, detectedTheme: action.theme };
     case "SET_HIGHLIGHTS":
       return { ...state, highlights: action.highlights };
     case "SET_CLIPS":
@@ -111,7 +115,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, exportsUsed: state.exportsUsed + 1 };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
-      return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed };
+      return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const };
     default:
       return state;
   }

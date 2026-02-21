@@ -5,9 +5,10 @@ import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, Chevron
 import { useApp, getMediaFile } from "@/lib/store";
 import { ALL_FILTERS, VIDEO_FILTERS } from "@/lib/filters";
 import { getAvailableTracks, getSuggestedTrackForTemplate } from "@/lib/music";
+import { getEditingStyle, ALL_THEMES } from "@/lib/editing-styles";
 import { formatTime, haptic } from "@/lib/utils";
 import TapePreviewPlayer from "@/components/TapePreviewPlayer";
-import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip } from "@/lib/types";
+import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip, EditingTheme } from "@/lib/types";
 
 const CAPTION_STYLES: { value: CaptionStyle; label: string; css: string }[] = [
   { value: "Bold", label: "Bold", css: "text-2xl font-black uppercase tracking-wider" },
@@ -161,6 +162,39 @@ export default function EditorStep() {
       {/* ═══ PREVIEW MODE ═══ */}
       {mode === "preview" && (
         <>
+          {/* Detected theme badge + switcher */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[var(--text-tertiary)]">
+                AI-detected style: <span className="font-semibold text-white">{getEditingStyle(state.detectedTheme).label}</span>
+              </p>
+              <p className="text-[10px] text-[var(--text-tertiary)]">
+                {getEditingStyle(state.detectedTheme).description.split("—")[0].trim()}
+              </p>
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {ALL_THEMES.map((t) => {
+                const s = getEditingStyle(t);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      dispatch({ type: "SET_THEME", theme: t });
+                      haptic(5);
+                    }}
+                    className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      state.detectedTheme === t
+                        ? "bg-[var(--accent)] text-white"
+                        : "bg-white/5 text-[var(--text-tertiary)] hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Full tape preview player */}
           <div className="w-full max-w-xs self-center">
             <TapePreviewPlayer />
@@ -168,7 +202,7 @@ export default function EditorStep() {
 
           {/* Tape info */}
           <div className="text-center text-xs text-[var(--text-tertiary)]">
-            {sortedClips.length} clips · ~{Math.round(totalTapeDuration)}s total · with crossfade transitions
+            {sortedClips.length} clips · ~{Math.round(totalTapeDuration)}s total
           </div>
         </>
       )}

@@ -74,6 +74,19 @@ export interface FrameAnalysis {
   reasoning: string;
 }
 
+// ── Editing theme (AI-detected or template-derived) ──
+
+export type EditingTheme =
+  | "sports"
+  | "cooking"
+  | "travel"
+  | "gaming"
+  | "party"
+  | "fitness"
+  | "pets"
+  | "vlog"
+  | "cinematic";
+
 // ── App state ──
 
 export type AppStep = "upload" | "detecting" | "results" | "editor" | "export";
@@ -87,6 +100,7 @@ export interface AppState {
   videoUrl: string | null;
   videoDuration: number;
   selectedTemplate: HighlightTemplate | null;
+  detectedTheme: EditingTheme;
   highlights: HighlightSegment[];
   clips: EditedClip[];
   activeClipId: string | null;

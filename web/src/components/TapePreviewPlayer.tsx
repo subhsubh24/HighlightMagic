@@ -4,9 +4,8 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
-import { TRANSITION_DURATION } from "@/lib/constants";
+import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
 import {
-  getTransitionSequence,
   getClipAlpha,
   getTransitionTransform,
   drawTransitionOverlay,
@@ -39,18 +38,21 @@ export default function TapePreviewPlayer() {
   const mediaMapRef = useRef<Map<string, HTMLVideoElement | HTMLImageElement>>(new Map());
   const activeClipsRef = useRef<Set<string>>(new Set());
 
+  // Get the editing style for the detected theme
+  const style = useMemo(() => getEditingStyle(state.detectedTheme), [state.detectedTheme]);
+
   const sortedClips = useMemo(
     () => [...state.clips].sort((a, b) => a.order - b.order),
     [state.clips]
   );
 
-  // Assign varied transition types between clips
+  // Theme-aware transitions
   const transitions = useMemo<TransitionType[]>(
-    () => getTransitionSequence(Math.max(0, sortedClips.length - 1)),
-    [sortedClips.length]
+    () => getThemeTransitions(state.detectedTheme, Math.max(0, sortedClips.length - 1)),
+    [state.detectedTheme, sortedClips.length]
   );
 
-  // Build timeline with overlapping transitions
+  // Build timeline with overlapping transitions (duration from theme)
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
     let t = 0;
@@ -71,11 +73,11 @@ export default function TapePreviewPlayer() {
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
-        t -= TRANSITION_DURATION;
+        t -= style.transitionDuration;
       }
     }
     return entries;
-  }, [sortedClips, state]);
+  }, [sortedClips, state, style.transitionDuration]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -117,7 +119,7 @@ export default function TapePreviewPlayer() {
     }
   }, []);
 
-  // Draw a single clip frame, applying transition transform
+  // Draw a single clip frame with transition transform
   const drawMediaFrame = useCallback(
     (
       ctx: CanvasRenderingContext2D,
@@ -126,7 +128,8 @@ export default function TapePreviewPlayer() {
       entry: TimelineEntry,
       localTime: number,
       alpha: number,
-      transform: TransitionTransform
+      transform: TransitionTransform,
+      kenBurnsIntensity: number
     ) => {
       const el = mediaMapRef.current.get(entry.clip.id);
       if (!el) return;
@@ -147,37 +150,30 @@ export default function TapePreviewPlayer() {
         sh = el.naturalHeight || h;
       }
 
-      // Scale to cover canvas (fill mode)
       const sa = sw / sh;
       const ca = w / h;
-      let dw: number, dh: number, dx: number, dy: number;
+      let dw: number, dh: number;
       if (sa > ca) {
         dh = h;
         dw = dh * sa;
-        dx = (w - dw) / 2;
-        dy = 0;
       } else {
         dw = w;
         dh = dw / sa;
-        dx = 0;
-        dy = (h - dh) / 2;
       }
 
-      // Ken Burns zoom for photos
+      // Ken Burns zoom for photos (intensity from theme)
       if (entry.mediaType === "photo") {
         const p = Math.min(localTime / entry.clipDuration, 1);
-        const scale = 1 + p * 0.05;
+        const scale = 1 + p * kenBurnsIntensity;
         dw *= scale;
         dh *= scale;
-        dx = (w - dw) / 2;
-        dy = (h - dh) / 2;
       }
 
-      // Apply transition transform (zoom / offset)
+      // Apply transition transform
       dw *= transform.scale;
       dh *= transform.scale;
-      dx = (w - dw) / 2 + transform.offsetX;
-      dy = (h - dh) / 2 + transform.offsetY;
+      const dx = (w - dw) / 2 + transform.offsetX;
+      const dy = (h - dh) / 2 + transform.offsetY;
 
       try {
         ctx.drawImage(el, dx, dy, dw, dh);
@@ -187,7 +183,6 @@ export default function TapePreviewPlayer() {
 
       ctx.filter = "none";
 
-      // Caption overlay
       if (entry.captionText) {
         ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
         ctx.font = `bold ${Math.round(h * 0.025)}px -apple-system, sans-serif`;
@@ -216,7 +211,7 @@ export default function TapePreviewPlayer() {
       ctx.fillRect(0, 0, c.width, c.height);
 
       const nowActive = new Set<string>();
-      let activeTransInfo: { type: TransitionType; progress: number } | null = null;
+      let activeTransInfo: { type: TransitionType; progress: number; seed: number } | null = null;
 
       for (let i = 0; i < timeline.length; i++) {
         const e = timeline[i];
@@ -229,37 +224,37 @@ export default function TapePreviewPlayer() {
         let alpha = 1;
         let transform: TransitionTransform = { scale: 1, offsetX: 0, offsetY: 0 };
 
-        // Check if this clip is the INCOMING clip during a transition (first TRANSITION_DURATION)
-        if (i > 0 && lt < TRANSITION_DURATION) {
+        // Incoming clip during transition
+        if (i > 0 && lt < style.transitionDuration) {
           const transType = transitions[i - 1];
-          const progress = lt / TRANSITION_DURATION;
+          const progress = lt / style.transitionDuration;
           alpha = getClipAlpha(transType, progress, false);
           transform = getTransitionTransform(transType, progress, false, c.width);
-          if (!activeTransInfo) activeTransInfo = { type: transType, progress };
+          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1 };
         }
 
-        // Check if this clip is the OUTGOING clip during a transition (last TRANSITION_DURATION)
-        if (i < timeline.length - 1 && timeToEnd < TRANSITION_DURATION) {
+        // Outgoing clip during transition
+        if (i < timeline.length - 1 && timeToEnd < style.transitionDuration) {
           const transType = transitions[i];
-          const progress = 1 - timeToEnd / TRANSITION_DURATION;
+          const progress = 1 - timeToEnd / style.transitionDuration;
           alpha = getClipAlpha(transType, progress, true);
           transform = getTransitionTransform(transType, progress, true, c.width);
-          if (!activeTransInfo) activeTransInfo = { type: transType, progress };
+          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i };
         }
 
-        // Clip entry "punch" scale (outside of transitions too)
-        const entryScale = getClipEntryScale(lt);
+        // Entry punch (customizable per theme)
+        const entryScale = getClipEntryScale(lt, style.entryPunchScale, style.entryPunchDuration);
         transform = { ...transform, scale: transform.scale * entryScale };
 
-        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform);
+        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, style.kenBurnsIntensity);
       }
 
-      // Draw transition overlay effect on top
+      // Transition overlay
       if (activeTransInfo) {
-        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress);
+        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed);
       }
 
-      // Manage video element playback
+      // Manage video playback
       for (const id of nowActive) {
         if (!activeClipsRef.current.has(id)) {
           const e = timeline.find((x) => x.clip.id === id);
@@ -278,7 +273,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, transitions, drawMediaFrame]
+    [timeline, transitions, style, drawMediaFrame]
   );
 
   // Animation loop
@@ -357,11 +352,9 @@ export default function TapePreviewPlayer() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Canvas preview — 9:16 aspect ratio */}
       <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black">
         <canvas ref={canvasRef} className="h-full w-full" />
 
-        {/* Play overlay */}
         {playerState !== "playing" && (
           <button
             onClick={play}
@@ -374,7 +367,6 @@ export default function TapePreviewPlayer() {
           </button>
         )}
 
-        {/* Pause button when playing */}
         {playerState === "playing" && (
           <button
             onClick={pause}
@@ -385,34 +377,31 @@ export default function TapePreviewPlayer() {
           </button>
         )}
 
-        {/* Time badge */}
         <div className="absolute right-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs font-mono text-white backdrop-blur-sm">
           {Math.round(progress * totalDuration)}s / {Math.round(totalDuration)}s
         </div>
 
-        {/* Clip indicator */}
         <div className="absolute left-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
-          {sortedClips.length} clips
+          {style.label} style
         </div>
       </div>
 
-      {/* Timeline progress bar with clip segments */}
+      {/* Timeline */}
       <div className="relative h-7 rounded-full bg-white/10 overflow-hidden">
-        {timeline.map((e, i) => {
-          const leftPct = (e.globalStart / totalDuration) * 100;
-          const widthPct = (e.clipDuration / totalDuration) * 100;
-          return (
-            <div
-              key={e.clip.id}
-              className="absolute top-0 h-full border-r border-white/20 last:border-r-0"
-              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-            >
-              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white/40">
-                {i + 1}
-              </span>
-            </div>
-          );
-        })}
+        {timeline.map((e, i) => (
+          <div
+            key={e.clip.id}
+            className="absolute top-0 h-full border-r border-white/20 last:border-r-0"
+            style={{
+              left: `${(e.globalStart / totalDuration) * 100}%`,
+              width: `${(e.clipDuration / totalDuration) * 100}%`,
+            }}
+          >
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white/40">
+              {i + 1}
+            </span>
+          </div>
+        ))}
         <div
           className="absolute top-0 h-full bg-[var(--accent)]/30 transition-[width] duration-100"
           style={{ width: `${progress * 100}%` }}

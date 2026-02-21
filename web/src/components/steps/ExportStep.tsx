@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Check, Crown, Film } from "lucide-react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -10,10 +10,9 @@ import {
   FREE_EXPORT_LIMIT,
   IOS_APP_STORE_URL,
   PHOTO_DISPLAY_DURATION,
-  TRANSITION_DURATION,
 } from "@/lib/constants";
+import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
 import {
-  getTransitionSequence,
   getClipAlpha,
   getTransitionTransform,
   drawTransitionOverlay,
@@ -22,7 +21,7 @@ import {
 } from "@/lib/transitions";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
-import type { EditedClip } from "@/lib/types";
+import type { EditedClip, EditingTheme } from "@/lib/types";
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit";
 
@@ -35,6 +34,7 @@ export default function ExportStep() {
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const style = getEditingStyle(state.detectedTheme);
 
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
@@ -64,6 +64,7 @@ export default function ExportStep() {
       const blob = await renderHighlightTape(
         renderClips,
         isFree ? WATERMARK_TEXT : null,
+        state.detectedTheme,
         (pct) => setProgress(pct)
       );
 
@@ -127,7 +128,7 @@ export default function ExportStep() {
             <div className="flex flex-col gap-2 text-sm">
               <Row label="Clips" value={`${sortedClips.length} clips combined`} />
               <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
-              <Row label="Transitions" value="Flash, zoom, whip, glitch" />
+              <Row label="Editing Style" value={`${style.label} — ${style.description.split("—")[0].trim()}`} />
               <Row label="Format" value="WebM · 1080×1920" />
               {isFree && <Row label="Watermark" value="Included (Free tier)" />}
               {isFree && (
@@ -138,7 +139,6 @@ export default function ExportStep() {
               )}
             </div>
 
-            {/* Tape sequence preview */}
             <div className="mt-4 flex gap-1 overflow-x-auto">
               {sortedClips.map((clip, i) => {
                 const m = getMediaFile(state, clip.sourceFileId);
@@ -175,7 +175,7 @@ export default function ExportStep() {
           </div>
           <p className="text-lg font-semibold text-white">{Math.round(progress)}%</p>
           <p className="text-sm text-[var(--text-secondary)]">
-            Rendering {sortedClips.length} clips with transitions...
+            Rendering with {style.label.toLowerCase()} editing style...
           </p>
         </div>
       )}
@@ -183,7 +183,6 @@ export default function ExportStep() {
       {/* Done phase — video player */}
       {phase === "done" && (
         <div className="flex flex-col items-center gap-5 py-4 w-full">
-          {/* Video preview player */}
           {blobUrl && (
             <div className="relative aspect-[9/16] w-full max-w-xs overflow-hidden rounded-2xl bg-black">
               <video
@@ -201,7 +200,7 @@ export default function ExportStep() {
           <div className="text-center">
             <h3 className="text-xl font-bold text-white">Highlight Tape Ready!</h3>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {sortedClips.length} clips with pro transitions — ready to share
+              {sortedClips.length} clips · {style.label} style — ready to share
             </p>
           </div>
 
@@ -272,7 +271,6 @@ export default function ExportStep() {
         </div>
       )}
 
-      {/* Hidden canvas for rendering */}
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
@@ -287,7 +285,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── Multi-clip rendering with sports-edit transitions ──
+// ── Theme-aware multi-clip rendering ──
 
 interface RenderClipInstruction {
   clip: EditedClip;
@@ -300,12 +298,16 @@ interface RenderClipInstruction {
 async function renderHighlightTape(
   clips: RenderClipInstruction[],
   watermarkText: string | null,
+  theme: EditingTheme,
   onProgress: (pct: number) => void
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;
   const ctx = canvas.getContext("2d")!;
+
+  const style = getEditingStyle(theme);
+  const transitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
 
   const stream = canvas.captureStream(30);
   const recorder = new MediaRecorder(stream, {
@@ -319,11 +321,6 @@ async function renderHighlightTape(
 
   const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
   let elapsedTotal = 0;
-
-  // Assign varied transitions
-  const transitions = getTransitionSequence(Math.max(0, clips.length - 1));
-
-  // Canvas to store last frame for crossfade
   let crossfadeCanvas: HTMLCanvasElement | null = null;
 
   recorder.start();
@@ -335,32 +332,15 @@ async function renderHighlightTape(
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
     if (instruction.mediaType === "photo") {
-      await renderPhotoClip(
-        ctx,
-        canvas,
-        instruction,
-        watermarkText,
-        (pct) => {
-          onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-        },
-        crossfadeFrom,
-        transType
-      );
+      await renderPhotoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, (pct) => {
+        onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
+      });
     } else {
-      await renderVideoClip(
-        ctx,
-        canvas,
-        instruction,
-        watermarkText,
-        (pct) => {
-          onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-        },
-        crossfadeFrom,
-        transType
-      );
+      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, (pct) => {
+        onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
+      });
     }
 
-    // Capture last frame for next transition
     if (i < clips.length - 1) {
       if (!crossfadeCanvas) {
         crossfadeCanvas = document.createElement("canvas");
@@ -388,9 +368,11 @@ function renderVideoClip(
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
   watermarkText: string | null,
-  onProgress: (pct: number) => void,
+  style: ReturnType<typeof getEditingStyle>,
+  transType: TransitionType | null,
   crossfadeFrom: HTMLCanvasElement | null,
-  transType: TransitionType | null
+  transitionSeed: number,
+  onProgress: (pct: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -400,21 +382,11 @@ function renderVideoClip(
     video.preload = "auto";
 
     video.onloadeddata = () => {
-      const videoAspect = video.videoWidth / video.videoHeight;
-      const canvasAspect = canvas.width / canvas.height;
-      let baseW: number, baseH: number, baseX: number, baseY: number;
-
-      if (videoAspect > canvasAspect) {
-        baseH = canvas.height;
-        baseW = baseH * videoAspect;
-        baseX = (canvas.width - baseW) / 2;
-        baseY = 0;
-      } else {
-        baseW = canvas.width;
-        baseH = baseW / videoAspect;
-        baseX = 0;
-        baseY = (canvas.height - baseH) / 2;
-      }
+      const va = video.videoWidth / video.videoHeight;
+      const ca = canvas.width / canvas.height;
+      let baseW: number, baseH: number;
+      if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
+      else { baseW = canvas.width; baseH = baseW / va; }
 
       const { trimStart, trimEnd } = instruction.clip;
       const duration = trimEnd - trimStart;
@@ -433,60 +405,26 @@ function renderVideoClip(
           const elapsed = video.currentTime - trimStart;
           onProgress(Math.min(99, (elapsed / duration) * 100));
 
-          // Apply clip entry punch scale
-          const entryScale = getClipEntryScale(elapsed);
+          const entryScale = getClipEntryScale(elapsed, style.entryPunchScale, style.entryPunchDuration);
 
-          // Transition zone (first TRANSITION_DURATION seconds)
-          if (crossfadeFrom && transType && elapsed < TRANSITION_DURATION) {
-            const progress = elapsed / TRANSITION_DURATION;
-            const outAlpha = getClipAlpha(transType, progress, true);
-            const inAlpha = getClipAlpha(transType, progress, false);
-            const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
-            const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-
-            // Clear
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw outgoing frame with exit transform
-            if (outAlpha > 0) {
-              ctx.save();
-              ctx.globalAlpha = outAlpha;
-              const ow = canvas.width * outTransform.scale;
-              const oh = canvas.height * outTransform.scale;
-              const ox = (canvas.width - ow) / 2 + outTransform.offsetX;
-              const oy = (canvas.height - oh) / 2 + outTransform.offsetY;
-              ctx.drawImage(crossfadeFrom, ox, oy, ow, oh);
-              ctx.restore();
-            }
-
-            // Draw incoming frame with entry transform
-            if (inAlpha > 0) {
+          if (crossfadeFrom && transType && elapsed < style.transitionDuration) {
+            const progress = elapsed / style.transitionDuration;
+            renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
+              const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
               const totalScale = inTransform.scale * entryScale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
               const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
               const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
-
-              ctx.save();
-              ctx.globalAlpha = inAlpha;
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, dx, dy, dw, dh);
               ctx.filter = "none";
-              ctx.restore();
-            }
-
-            // Transition overlay effect
-            drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress);
-            ctx.globalAlpha = 1;
+            });
           } else {
-            // Normal rendering (with entry punch for first few frames)
-            const scale = entryScale;
-            const dw = baseW * scale;
-            const dh = baseH * scale;
+            const dw = baseW * entryScale;
+            const dh = baseH * entryScale;
             const dx = (canvas.width - dw) / 2;
             const dy = (canvas.height - dh) / 2;
-
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(video, dx, dy, dw, dh);
             ctx.filter = "none";
@@ -509,105 +447,56 @@ function renderPhotoClip(
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
   watermarkText: string | null,
-  onProgress: (pct: number) => void,
+  style: ReturnType<typeof getEditingStyle>,
+  transType: TransitionType | null,
   crossfadeFrom: HTMLCanvasElement | null,
-  transType: TransitionType | null
+  transitionSeed: number,
+  onProgress: (pct: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
 
     img.onload = () => {
-      const imgAspect = img.width / img.height;
-      const canvasAspect = canvas.width / canvas.height;
-      let baseW: number, baseH: number, baseX: number, baseY: number;
-
-      if (imgAspect > canvasAspect) {
-        baseH = canvas.height;
-        baseW = baseH * imgAspect;
-        baseX = (canvas.width - baseW) / 2;
-        baseY = 0;
-      } else {
-        baseW = canvas.width;
-        baseH = baseW / imgAspect;
-        baseX = 0;
-        baseY = (canvas.height - baseH) / 2;
-      }
+      const ia = img.width / img.height;
+      const ca = canvas.width / canvas.height;
+      let baseW: number, baseH: number;
+      if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
+      else { baseW = canvas.width; baseH = baseW / ia; }
 
       const durationMs = PHOTO_DISPLAY_DURATION * 1000;
-      const transitionMs = TRANSITION_DURATION * 1000;
+      const transitionMs = style.transitionDuration * 1000;
       const startTime = performance.now();
 
       const drawFrame = () => {
         const elapsedMs = performance.now() - startTime;
-
-        if (elapsedMs >= durationMs) {
-          onProgress(100);
-          resolve();
-          return;
-        }
+        if (elapsedMs >= durationMs) { onProgress(100); resolve(); return; }
 
         const elapsedSec = elapsedMs / 1000;
         onProgress((elapsedMs / durationMs) * 100);
 
-        // Ken Burns zoom
-        const zoomProgress = elapsedMs / durationMs;
-        const kenBurnsScale = 1 + zoomProgress * 0.05;
+        const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
+        const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-        // Entry punch
-        const entryScale = getClipEntryScale(elapsedSec);
-
-        // Transition zone
         if (crossfadeFrom && transType && elapsedMs < transitionMs) {
           const progress = elapsedMs / transitionMs;
-          const outAlpha = getClipAlpha(transType, progress, true);
-          const inAlpha = getClipAlpha(transType, progress, false);
-          const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
-          const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-
-          // Clear
-          ctx.fillStyle = "black";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Draw outgoing
-          if (outAlpha > 0) {
-            ctx.save();
-            ctx.globalAlpha = outAlpha;
-            const ow = canvas.width * outTransform.scale;
-            const oh = canvas.height * outTransform.scale;
-            const ox = (canvas.width - ow) / 2 + outTransform.offsetX;
-            const oy = (canvas.height - oh) / 2 + outTransform.offsetY;
-            ctx.drawImage(crossfadeFrom, ox, oy, ow, oh);
-            ctx.restore();
-          }
-
-          // Draw incoming (current photo with Ken Burns + entry punch + transition transform)
-          if (inAlpha > 0) {
+          renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
+            const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
             const totalScale = kenBurnsScale * entryScale * inTransform.scale;
             const dw = baseW * totalScale;
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
             const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
-
-            ctx.save();
-            ctx.globalAlpha = inAlpha;
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(img, dx, dy, dw, dh);
             ctx.filter = "none";
-            ctx.restore();
-          }
-
-          // Transition overlay
-          drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress);
-          ctx.globalAlpha = 1;
+          });
         } else {
-          // Normal rendering
           const totalScale = kenBurnsScale * entryScale;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
           const dx = (canvas.width - dw) / 2;
           const dy = (canvas.height - dh) / 2;
-
           ctx.fillStyle = "black";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
@@ -625,6 +514,51 @@ function renderPhotoClip(
     img.onerror = () => reject(new Error("Failed to load image for rendering"));
     img.src = instruction.mediaUrl;
   });
+}
+
+/**
+ * Composite one transition frame: outgoing + incoming + overlay.
+ * `drawIncoming` is a callback that draws the incoming clip to the canvas.
+ */
+function renderTransitionFrame(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  crossfadeFrom: HTMLCanvasElement,
+  transType: TransitionType,
+  progress: number,
+  seed: number,
+  drawIncoming: () => void
+) {
+  const outAlpha = getClipAlpha(transType, progress, true);
+  const inAlpha = getClipAlpha(transType, progress, false);
+  const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
+
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw outgoing frame
+  if (outAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = outAlpha;
+    const ow = canvas.width * outTransform.scale;
+    const oh = canvas.height * outTransform.scale;
+    const ox = (canvas.width - ow) / 2 + outTransform.offsetX;
+    const oy = (canvas.height - oh) / 2 + outTransform.offsetY;
+    ctx.drawImage(crossfadeFrom, ox, oy, ow, oh);
+    ctx.restore();
+  }
+
+  // Draw incoming frame
+  if (inAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = inAlpha;
+    drawIncoming();
+    ctx.restore();
+  }
+
+  // Overlay effect
+  ctx.globalAlpha = 1;
+  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed);
 }
 
 function drawOverlays(

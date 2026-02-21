@@ -5,14 +5,15 @@ import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple } from "@/lib/frame-extractor";
 import { detectMultiClipHighlights } from "@/actions/detect";
+import { templateToTheme } from "@/lib/editing-styles";
 import { uuid } from "@/lib/utils";
 
 const DETECTION_PASSES = [
   "Extracting frames from all clips...",
   "Analyzing motion & composition...",
   "Scoring highlight potential...",
-  "Planning your highlight tape...",
-  "Ordering clips for best flow...",
+  "Detecting content theme & planning tape...",
+  "Applying editing style for best flow...",
 ];
 
 export default function DetectingStep() {
@@ -49,7 +50,7 @@ export default function DetectingStep() {
           });
         }, 200);
 
-        const detectedClips = await detectMultiClipHighlights(
+        const result = await detectMultiClipHighlights(
           frames,
           state.selectedTemplate?.name
         );
@@ -57,6 +58,14 @@ export default function DetectingStep() {
         clearInterval(progressTimer);
         setPassIndex(4);
         setProgress(95);
+
+        // Set the detected theme (template override takes priority)
+        const theme = state.selectedTemplate
+          ? templateToTheme(state.selectedTemplate.id)
+          : result.detectedTheme;
+        dispatch({ type: "SET_THEME", theme });
+
+        const detectedClips = result.clips;
 
         // Convert to app types
         const highlights = detectedClips.map((c) => ({
