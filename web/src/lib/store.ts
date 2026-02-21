@@ -11,7 +11,6 @@ export const initialState: AppState = {
   videoFile: null,
   videoUrl: null,
   videoDuration: 0,
-  userPrompt: "",
   selectedTemplate: null,
   highlights: [],
   clips: [],
@@ -25,7 +24,6 @@ export const initialState: AppState = {
 export type Action =
   | { type: "SET_STEP"; step: AppStep }
   | { type: "SET_VIDEO"; file: File; url: string; duration: number }
-  | { type: "SET_PROMPT"; prompt: string }
   | { type: "SET_TEMPLATE"; template: HighlightTemplate | null }
   | { type: "SET_HIGHLIGHTS"; highlights: HighlightSegment[] }
   | { type: "SET_CLIPS"; clips: EditedClip[] }
@@ -40,8 +38,6 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, step: action.step };
     case "SET_VIDEO":
       return { ...state, videoFile: action.file, videoUrl: action.url, videoDuration: action.duration };
-    case "SET_PROMPT":
-      return { ...state, userPrompt: action.prompt };
     case "SET_TEMPLATE":
       return { ...state, selectedTemplate: action.template };
     case "SET_HIGHLIGHTS":

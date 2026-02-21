@@ -18,7 +18,7 @@ export default function ResultsStep() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => dispatch({ type: "SET_STEP", step: "prompt" })}
+          onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
           className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[var(--text-secondary)] transition-colors hover:bg-white/10"
           aria-label="Go back"
         >

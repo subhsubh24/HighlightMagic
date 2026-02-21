@@ -28,14 +28,13 @@ interface DetectedClip {
  */
 export async function detectHighlights(
   frames: FrameInput[],
-  userPrompt: string,
   templateName?: string
 ): Promise<DetectedClip[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     // Fallback: simulate detection with heuristic scoring
-    return simulateDetection(frames, userPrompt);
+    return simulateDetection(frames);
   }
 
   // Batch frames for Claude Vision
@@ -47,7 +46,7 @@ export async function detectHighlights(
   const allScores: FrameScore[] = [];
 
   for (const batch of batches) {
-    const scores = await analyzeBatch(apiKey, batch, userPrompt, templateName);
+    const scores = await analyzeBatch(apiKey, batch, templateName);
     allScores.push(...scores);
   }
 
@@ -58,13 +57,12 @@ export async function detectHighlights(
 async function analyzeBatch(
   apiKey: string,
   batch: FrameInput[],
-  prompt: string,
   templateName?: string
 ): Promise<FrameScore[]> {
   const systemPrompt = `You are a video highlight detection AI. Analyze each video frame and score it for "highlight potential" from 0.0 to 1.0.
 
 Consider: motion intensity, facial expressions, scene composition, visual interest, and emotional impact.
-${prompt ? `User is looking for: "${prompt}"` : "Auto-detect the most interesting moments."}
+Auto-detect the most interesting, exciting, and share-worthy moments.
 ${templateName ? `Style context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array of objects, one per frame:
@@ -185,7 +183,7 @@ function clusterIntoClips(scores: FrameScore[]): DetectedClip[] {
  * Simulated detection when no API key is configured.
  * Uses simple heuristics (distribute across video timeline).
  */
-function simulateDetection(frames: FrameInput[], prompt: string): DetectedClip[] {
+function simulateDetection(frames: FrameInput[]): DetectedClip[] {
   const totalDuration = frames[frames.length - 1]?.timestamp ?? 60;
 
   // Create 3 evenly-spaced clips with simulated scores
@@ -200,9 +198,7 @@ function simulateDetection(frames: FrameInput[], prompt: string): DetectedClip[]
       startTime: Math.max(0, center - clipDuration / 2),
       endTime: Math.min(totalDuration, center + clipDuration / 2),
       confidenceScore: Math.round((0.95 - i * 0.12) * 100) / 100,
-      label: prompt
-        ? `Matches "${prompt.slice(0, 30)}"`
-        : ["Action moment", "Key scene", "Visual highlight"][i],
+      label: ["Action moment", "Key scene", "Visual highlight"][i],
     });
   }
 

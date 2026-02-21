@@ -3,7 +3,7 @@
 import { useApp } from "@/lib/store";
 import Header from "./Header";
 import UploadStep from "./steps/UploadStep";
-import PromptStep from "./steps/PromptStep";
+
 import DetectingStep from "./steps/DetectingStep";
 import ResultsStep from "./steps/ResultsStep";
 import EditorStep from "./steps/EditorStep";
@@ -22,7 +22,6 @@ export default function AppShell() {
         aria-live="polite"
       >
         {state.step === "upload" && <UploadStep />}
-        {state.step === "prompt" && <PromptStep />}
         {state.step === "detecting" && <DetectingStep />}
         {state.step === "results" && <ResultsStep />}
         {state.step === "editor" && <EditorStep />}

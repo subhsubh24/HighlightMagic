@@ -59,14 +59,13 @@ export interface FrameAnalysis {
 
 // ── App state ──
 
-export type AppStep = "upload" | "prompt" | "detecting" | "results" | "editor" | "export";
+export type AppStep = "upload" | "detecting" | "results" | "editor" | "export";
 
 export interface AppState {
   step: AppStep;
   videoFile: File | null;
   videoUrl: string | null;
   videoDuration: number;
-  userPrompt: string;
   selectedTemplate: HighlightTemplate | null;
   highlights: HighlightSegment[];
   clips: EditedClip[];

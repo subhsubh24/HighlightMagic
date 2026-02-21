@@ -50,7 +50,6 @@ export default function DetectingStep() {
 
         const detectedClips = await detectHighlights(
           frames,
-          state.userPrompt,
           state.selectedTemplate?.name
         );
 
@@ -96,7 +95,7 @@ export default function DetectingStep() {
         dispatch({ type: "SET_STEP", step: "results" });
       } catch (err) {
         console.error("Detection failed:", err);
-        dispatch({ type: "SET_STEP", step: "prompt" });
+        dispatch({ type: "SET_STEP", step: "upload" });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

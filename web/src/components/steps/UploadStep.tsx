@@ -40,7 +40,7 @@ export default function UploadStep() {
         }
         haptic();
         dispatch({ type: "SET_VIDEO", file, url, duration: video.duration });
-        dispatch({ type: "SET_STEP", step: "prompt" });
+        dispatch({ type: "SET_STEP", step: "detecting" });
       };
       video.onerror = () => {
         setError("Could not read this video file. Try a different format.");
@@ -70,7 +70,7 @@ export default function UploadStep() {
           <span className="bg-accent-gradient bg-clip-text text-transparent">viral Reels</span>
         </h1>
         <p className="mx-auto max-w-md text-[var(--text-secondary)]">
-          Upload a video, tell us what to find, and AI creates share-ready highlights in seconds.
+          Upload a video and AI automatically finds the best moments in seconds.
         </p>
       </div>
 
