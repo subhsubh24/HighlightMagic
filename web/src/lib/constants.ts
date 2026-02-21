@@ -20,6 +20,11 @@ export const WATERMARK_OPACITY = 0.4;
 export const FRAME_SAMPLE_INTERVAL_SECONDS = 2; // Extract 1 frame per 2s for analysis
 export const MAX_FRAMES_PER_BATCH = 10; // Claude Vision batch limit
 
+// ── Viral features ──
+export const LOOP_CROSSFADE_DURATION = 0.5; // seconds of crossfade for seamless loop
+export const EXPORT_BITRATE = 12_000_000; // 12 Mbps (optimized for platform compression)
+export const BEAT_SYNC_TOLERANCE_MS = 50; // max ms off-beat before snapping
+
 export const IOS_APP_STORE_URL =
   process.env.NEXT_PUBLIC_IOS_APP_STORE_URL ??
   "https://apps.apple.com/app/highlight-magic/id0000000000";

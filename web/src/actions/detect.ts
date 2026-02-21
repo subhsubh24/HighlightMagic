@@ -272,12 +272,23 @@ You must do TWO things:
    - vlog: daily life/talking head → clean jump cuts, minimal transitions
    - cinematic: general/mixed/artistic → film dissolves, subtle light leaks
 
-2. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments with professional flow.
-   - Opening with a strong hook
-   - Building energy, pacing, and variety
-   - Mixing source files for a montage feel
-   - Photos as transition beats or establishing shots (${PHOTO_DISPLAY_DURATION}s each)
-   - Ending with a peak moment
+2. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments optimized for TikTok/Reels virality.
+
+   HOOK-FIRST ORDERING (critical for scroll-stopping):
+   - Clip #1 MUST be the most visually striking, high-motion, or emotionally compelling moment.
+     The viewer decides to keep watching within 1.5 seconds. Pick the frame that would
+     stop someone mid-scroll: dramatic action, beautiful composition, surprising moment,
+     or peak emotion. Do NOT start with a calm establishing shot.
+   - Clip #2 should sustain the energy — match or build on the hook's intensity.
+   - Middle clips: vary the energy (action → reaction → beauty → humor) for pattern interrupts.
+   - Final clip: end on a peak moment or satisfying conclusion — this frames loop potential.
+     Ideally pick something visually similar to the hook so the loop back feels seamless.
+
+   ADDITIONAL RULES:
+   - Mix source files for a montage feel
+   - Photos work as transition beats or emotional pauses (${PHOTO_DISPLAY_DURATION}s each)
+   - Prefer shorter, punchier clips (${MIN_CLIP_DURATION}-15s) over long ones — faster pacing = higher retention
+   - Avoid consecutive clips from the same source file when possible (visual variety = pattern interrupt)
 ${templateName ? `   - Style hint: ${templateName}` : ""}
 
 For video clips: startTime and endTime (${MIN_CLIP_DURATION}-${MAX_CLIP_DURATION}s each).

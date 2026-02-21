@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film } from "lucide-react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -10,6 +10,8 @@ import {
   FREE_EXPORT_LIMIT,
   IOS_APP_STORE_URL,
   PHOTO_DISPLAY_DURATION,
+  EXPORT_BITRATE,
+  LOOP_CROSSFADE_DURATION,
 } from "@/lib/constants";
 import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
 import {
@@ -19,22 +21,45 @@ import {
   getClipEntryScale,
   type TransitionType,
 } from "@/lib/transitions";
+import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
+import { getSpeedAtPosition } from "@/lib/velocity";
+import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
+import { createMuxedStream } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
-import type { EditedClip, EditingTheme } from "@/lib/types";
+import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit";
+
+/** Try codecs in preference order. */
+function pickMimeType(): { mimeType: string; ext: string } {
+  const candidates = [
+    { mimeType: "video/mp4;codecs=h264", ext: "mp4" },
+    { mimeType: "video/webm;codecs=h264", ext: "webm" },
+    { mimeType: "video/webm;codecs=vp9", ext: "webm" },
+    { mimeType: "video/webm;codecs=vp8", ext: "webm" },
+    { mimeType: "video/webm", ext: "webm" },
+  ];
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mimeType)) {
+      return c;
+    }
+  }
+  return { mimeType: "video/webm", ext: "webm" };
+}
 
 export default function ExportStep() {
   const { state, dispatch } = useApp();
   const [phase, setPhase] = useState<ExportPhase>("preview");
   const [progress, setProgress] = useState(0);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [exportExt, setExportExt] = useState("webm");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
   const style = getEditingStyle(state.detectedTheme);
+  const hasMusic = sortedClips.some((c) => c.selectedMusicTrack);
 
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
@@ -58,13 +83,19 @@ export default function ExportStep() {
           mediaType: media?.type ?? "video",
           filterCSS: VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
+          captionStyle: clip.captionStyle,
         };
       });
+
+      const { mimeType, ext } = pickMimeType();
+      setExportExt(ext);
 
       const blob = await renderHighlightTape(
         renderClips,
         isFree ? WATERMARK_TEXT : null,
         state.detectedTheme,
+        state.viralOptions,
+        mimeType,
         (pct) => setProgress(pct)
       );
 
@@ -83,7 +114,7 @@ export default function ExportStep() {
     if (!blobUrl) return;
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = `highlight-tape-${Date.now()}.webm`;
+    a.download = `highlight-tape-${Date.now()}.${exportExt}`;
     a.click();
     haptic();
   };
@@ -93,7 +124,9 @@ export default function ExportStep() {
     try {
       const response = await fetch(blobUrl);
       const blob = await response.blob();
-      const file = new File([blob], "highlight-tape.webm", { type: "video/webm" });
+      const file = new File([blob], `highlight-tape.${exportExt}`, {
+        type: exportExt === "mp4" ? "video/mp4" : "video/webm",
+      });
       if (navigator.share) {
         await navigator.share({ files: [file], title: "Made with Highlight Magic" });
       } else {
@@ -103,6 +136,13 @@ export default function ExportStep() {
       handleDownload();
     }
   };
+
+  const toggleViralOption = (key: keyof ViralExportOptions) => {
+    dispatch({ type: "SET_VIRAL_OPTIONS", options: { [key]: !state.viralOptions[key] } });
+  };
+
+  const { mimeType: detectedMime } = typeof MediaRecorder !== "undefined" ? pickMimeType() : { mimeType: "video/webm" };
+  const formatLabel = detectedMime.includes("mp4") ? "MP4 · H.264" : "WebM · VP9";
 
   return (
     <div className="flex flex-1 flex-col items-center gap-6 animate-fade-in">
@@ -129,7 +169,7 @@ export default function ExportStep() {
               <Row label="Clips" value={`${sortedClips.length} clips combined`} />
               <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
               <Row label="Editing Style" value={`${style.label} — ${style.description.split("—")[0].trim()}`} />
-              <Row label="Format" value="WebM · 1080×1920" />
+              <Row label="Format" value={`${formatLabel} · 1080×1920`} />
               {isFree && <Row label="Watermark" value="Included (Free tier)" />}
               {isFree && (
                 <Row
@@ -155,6 +195,50 @@ export default function ExportStep() {
               })}
             </div>
           </div>
+
+          {/* Viral options */}
+          <div className="glass-card w-full p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+              Viral Optimization
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <label className="flex cursor-pointer items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Music className="h-4 w-4 text-emerald-400" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Beat Sync</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)]">
+                      Snap cuts to the music&apos;s beat grid
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={state.viralOptions.beatSync}
+                  onChange={() => toggleViralOption("beatSync")}
+                  className="h-4 w-4 rounded accent-[var(--accent)]"
+                />
+              </label>
+              <label className="flex cursor-pointer items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <Repeat className="h-4 w-4 text-blue-400" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Seamless Loop</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)]">
+                      Cross-fade end into start for TikTok replay
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={state.viralOptions.seamlessLoop}
+                  onChange={() => toggleViralOption("seamlessLoop")}
+                  className="h-4 w-4 rounded accent-[var(--accent)]"
+                />
+              </label>
+            </div>
+          </div>
+
           <button onClick={handleExport} className="btn-primary flex w-full items-center justify-center gap-2">
             <Download className="h-5 w-5" />
             Export Highlight Tape
@@ -177,6 +261,10 @@ export default function ExportStep() {
           <p className="text-sm text-[var(--text-secondary)]">
             Rendering with {style.label.toLowerCase()} editing style...
           </p>
+          <div className="flex gap-2 text-[10px] text-[var(--text-tertiary)]">
+            {state.viralOptions.beatSync && hasMusic && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400">Beat Sync</span>}
+            {state.viralOptions.seamlessLoop && <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-blue-400">Loop</span>}
+          </div>
         </div>
       )}
 
@@ -285,7 +373,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── Theme-aware multi-clip rendering ──
+// ── Theme-aware multi-clip rendering with viral features ──
 
 interface RenderClipInstruction {
   clip: EditedClip;
@@ -293,12 +381,15 @@ interface RenderClipInstruction {
   mediaType: "video" | "photo";
   filterCSS: string;
   captionText: string;
+  captionStyle: CaptionStyle;
 }
 
 async function renderHighlightTape(
   clips: RenderClipInstruction[],
   watermarkText: string | null,
   theme: EditingTheme,
+  viralOptions: ViralExportOptions,
+  mimeType: string,
   onProgress: (pct: number) => void
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
@@ -309,36 +400,66 @@ async function renderHighlightTape(
   const style = getEditingStyle(theme);
   const transitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
 
-  const stream = canvas.captureStream(30);
+  // Beat grid for beat-sync
+  let beatGrid: BeatGrid | null = null;
+  if (viralOptions.beatSync) {
+    const track = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack;
+    if (track) beatGrid = buildBeatGrid(track.bpm, 300);
+  }
+
+  // Audio muxing: combine canvas video with music track audio (if available)
+  const canvasStream = canvas.captureStream(30);
+  const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
+  const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
+  const { stream, cleanup: audioCleanup } = await createMuxedStream(canvasStream, musicTrack, totalDuration);
+
   const recorder = new MediaRecorder(stream, {
-    mimeType: "video/webm;codecs=vp9",
-    videoBitsPerSecond: 8_000_000,
+    mimeType,
+    videoBitsPerSecond: EXPORT_BITRATE,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data);
   };
 
-  const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
   let elapsedTotal = 0;
   let crossfadeCanvas: HTMLCanvasElement | null = null;
+
+  // For seamless loop: save the first frame
+  let firstFrameCanvas: HTMLCanvasElement | null = null;
 
   recorder.start();
 
   for (let i = 0; i < clips.length; i++) {
     const instruction = clips[i];
-    const clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+    let clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+
+    // Beat-sync: snap clip duration to beat grid
+    if (beatGrid && beatGrid.beatInterval > 0) {
+      const beats = Math.max(2, Math.round(clipDuration / beatGrid.beatInterval));
+      clipDuration = beats * beatGrid.beatInterval;
+    }
+
     const transType = i > 0 ? transitions[i - 1] : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
     if (instruction.mediaType === "photo") {
-      await renderPhotoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, (pct) => {
+      await renderPhotoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
     } else {
-      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, (pct) => {
+      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
+    }
+
+    // Save first frame for seamless loop
+    if (i === 0 && viralOptions.seamlessLoop) {
+      firstFrameCanvas = document.createElement("canvas");
+      firstFrameCanvas.width = canvas.width;
+      firstFrameCanvas.height = canvas.height;
+      // We'll capture it after the first render frame (already drawn on canvas)
+      firstFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
     }
 
     if (i < clips.length - 1) {
@@ -353,13 +474,71 @@ async function renderHighlightTape(
     elapsedTotal += clipDuration;
   }
 
+  // Seamless loop: cross-fade last frame into first frame
+  if (viralOptions.seamlessLoop && firstFrameCanvas) {
+    await renderLoopCrossfade(ctx, canvas, firstFrameCanvas, LOOP_CROSSFADE_DURATION);
+  }
+
   recorder.stop();
 
   return new Promise((resolve) => {
     recorder.onstop = () => {
+      audioCleanup();
       onProgress(100);
-      resolve(new Blob(chunks, { type: "video/webm" }));
+      const blobType = mimeType.includes("mp4") ? "video/mp4" : "video/webm";
+      resolve(new Blob(chunks, { type: blobType }));
     };
+  });
+}
+
+/**
+ * Render the seamless loop crossfade at the end of the tape.
+ * Blends the current canvas (last frame) with the first frame over LOOP_CROSSFADE_DURATION.
+ */
+function renderLoopCrossfade(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  firstFrameCanvas: HTMLCanvasElement,
+  durationSec: number
+): Promise<void> {
+  return new Promise((resolve) => {
+    // Save the last frame
+    const lastFrameCanvas = document.createElement("canvas");
+    lastFrameCanvas.width = canvas.width;
+    lastFrameCanvas.height = canvas.height;
+    lastFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
+
+    const durationMs = durationSec * 1000;
+    const startTime = performance.now();
+
+    const drawFrame = () => {
+      const elapsed = performance.now() - startTime;
+      if (elapsed >= durationMs) {
+        resolve();
+        return;
+      }
+
+      const progress = elapsed / durationMs;
+
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw last frame fading out
+      ctx.save();
+      ctx.globalAlpha = 1 - progress;
+      ctx.drawImage(lastFrameCanvas, 0, 0);
+      ctx.restore();
+
+      // Draw first frame fading in
+      ctx.save();
+      ctx.globalAlpha = progress;
+      ctx.drawImage(firstFrameCanvas, 0, 0);
+      ctx.restore();
+
+      requestAnimationFrame(drawFrame);
+    };
+
+    requestAnimationFrame(drawFrame);
   });
 }
 
@@ -372,6 +551,8 @@ function renderVideoClip(
   transType: TransitionType | null,
   crossfadeFrom: HTMLCanvasElement | null,
   transitionSeed: number,
+  beatGrid: BeatGrid | null,
+  canvasDuration: number,
   onProgress: (pct: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -389,29 +570,63 @@ function renderVideoClip(
       else { baseW = canvas.width; baseH = baseW / va; }
 
       const { trimStart, trimEnd } = instruction.clip;
-      const duration = trimEnd - trimStart;
+      const velocityPreset = instruction.clip.velocityPreset ?? "normal";
       video.currentTime = trimStart;
 
       video.onseeked = () => {
         video.play();
 
+        const renderStartTime = performance.now();
+        const canvasDurationMs = canvasDuration * 1000;
+
         const drawFrame = () => {
-          if (video.currentTime >= trimEnd || video.paused) {
+          const canvasElapsedMs = performance.now() - renderStartTime;
+          const canvasElapsedSec = canvasElapsedMs / 1000;
+
+          if (canvasElapsedMs >= canvasDurationMs || video.paused) {
             video.pause();
             resolve();
             return;
           }
 
-          const elapsed = video.currentTime - trimStart;
-          onProgress(Math.min(99, (elapsed / duration) * 100));
+          // Stop if video reached trim end
+          if (video.currentTime >= trimEnd) {
+            // Hold last frame for remaining canvas time
+            if (canvasElapsedMs < canvasDurationMs) {
+              requestAnimationFrame(drawFrame);
+              return;
+            }
+            video.pause();
+            resolve();
+            return;
+          }
 
-          const entryScale = getClipEntryScale(elapsed, style.entryPunchScale, style.entryPunchDuration);
+          onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
 
-          if (crossfadeFrom && transType && elapsed < style.transitionDuration) {
-            const progress = elapsed / style.transitionDuration;
+          // Apply velocity
+          if (velocityPreset !== "normal") {
+            const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
+            const speed = getSpeedAtPosition(posInClip, velocityPreset);
+            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
+              video.playbackRate = clampedSpeed;
+            }
+          }
+
+          const entryScale = getClipEntryScale(canvasElapsedSec, style.entryPunchScale, style.entryPunchDuration);
+
+          // Beat pulse
+          let beatPulse = 1;
+          if (beatGrid) {
+            const intensity = getBeatIntensity(canvasElapsedSec, beatGrid);
+            beatPulse = 1 + intensity * 0.012;
+          }
+
+          if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
+            const progress = canvasElapsedSec / style.transitionDuration;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
               const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-              const totalScale = inTransform.scale * entryScale;
+              const totalScale = inTransform.scale * entryScale * beatPulse;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
               const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
@@ -421,16 +636,19 @@ function renderVideoClip(
               ctx.filter = "none";
             });
           } else {
-            const dw = baseW * entryScale;
-            const dh = baseH * entryScale;
+            const totalScale = entryScale * beatPulse;
+            const dw = baseW * totalScale;
+            const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2;
             const dy = (canvas.height - dh) / 2;
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(video, dx, dy, dw, dh);
             ctx.filter = "none";
           }
 
-          drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration);
           requestAnimationFrame(drawFrame);
         };
 
@@ -451,6 +669,8 @@ function renderPhotoClip(
   transType: TransitionType | null,
   crossfadeFrom: HTMLCanvasElement | null,
   transitionSeed: number,
+  beatGrid: BeatGrid | null,
+  canvasDuration: number,
   onProgress: (pct: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -464,7 +684,7 @@ function renderPhotoClip(
       if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
       else { baseW = canvas.width; baseH = baseW / ia; }
 
-      const durationMs = PHOTO_DISPLAY_DURATION * 1000;
+      const durationMs = (canvasDuration > 0 ? canvasDuration : PHOTO_DISPLAY_DURATION) * 1000;
       const transitionMs = style.transitionDuration * 1000;
       const startTime = performance.now();
 
@@ -478,11 +698,18 @@ function renderPhotoClip(
         const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
         const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
+        // Beat pulse
+        let beatPulse = 1;
+        if (beatGrid) {
+          const intensity = getBeatIntensity(elapsedSec, beatGrid);
+          beatPulse = 1 + intensity * 0.012;
+        }
+
         if (crossfadeFrom && transType && elapsedMs < transitionMs) {
           const progress = elapsedMs / transitionMs;
           renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
             const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-            const totalScale = kenBurnsScale * entryScale * inTransform.scale;
+            const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse;
             const dw = baseW * totalScale;
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
@@ -492,7 +719,7 @@ function renderPhotoClip(
             ctx.filter = "none";
           });
         } else {
-          const totalScale = kenBurnsScale * entryScale;
+          const totalScale = kenBurnsScale * entryScale * beatPulse;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
           const dx = (canvas.width - dw) / 2;
@@ -504,7 +731,7 @@ function renderPhotoClip(
           ctx.filter = "none";
         }
 
-        drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
+        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || PHOTO_DISPLAY_DURATION);
         requestAnimationFrame(drawFrame);
       };
 
@@ -518,7 +745,6 @@ function renderPhotoClip(
 
 /**
  * Composite one transition frame: outgoing + incoming + overlay.
- * `drawIncoming` is a callback that draws the incoming clip to the canvas.
  */
 function renderTransitionFrame(
   ctx: CanvasRenderingContext2D,
@@ -565,7 +791,10 @@ function drawOverlays(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   watermarkText: string | null,
-  captionText: string
+  captionText: string,
+  captionStyle: CaptionStyle,
+  localTime: number,
+  clipDuration: number
 ) {
   if (watermarkText) {
     ctx.save();
@@ -577,14 +806,17 @@ function drawOverlays(
     ctx.restore();
   }
 
+  // Kinetic text instead of static caption
   if (captionText) {
-    ctx.save();
-    ctx.font = "bold 48px -apple-system, sans-serif";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(0,0,0,0.7)";
-    ctx.shadowBlur = 8;
-    ctx.fillText(captionText, canvas.width / 2, canvas.height - 200);
-    ctx.restore();
+    const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height);
+    drawKineticCaption(
+      ctx,
+      captionText,
+      captionStyle,
+      kTransform,
+      canvas.width,
+      canvas.height,
+      48
+    );
   }
 }

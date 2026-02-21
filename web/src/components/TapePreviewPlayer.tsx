@@ -13,6 +13,9 @@ import {
   type TransitionType,
   type TransitionTransform,
 } from "@/lib/transitions";
+import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
+import { getSpeedAtPosition } from "@/lib/velocity";
+import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
 import type { EditedClip } from "@/lib/types";
 
 const PREVIEW_WIDTH = 540;
@@ -52,7 +55,16 @@ export default function TapePreviewPlayer() {
     [state.detectedTheme, sortedClips.length]
   );
 
+  // Beat grid from the first clip's selected music track (shared across tape)
+  const beatGrid = useMemo<BeatGrid | null>(() => {
+    if (!state.viralOptions.beatSync) return null;
+    const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
+    if (!track) return null;
+    return buildBeatGrid(track.bpm, 300);
+  }, [sortedClips, state.viralOptions.beatSync]);
+
   // Build timeline with overlapping transitions (duration from theme)
+  // When beat-sync is enabled, snap clip boundaries to beat grid
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
     let t = 0;
@@ -60,7 +72,14 @@ export default function TapePreviewPlayer() {
       const clip = sortedClips[i];
       const media = getMediaFile(state, clip.sourceFileId);
       if (!media) continue;
-      const dur = clip.trimEnd - clip.trimStart;
+      let dur = clip.trimEnd - clip.trimStart;
+
+      // Beat-sync: snap duration to nearest beat boundary
+      if (beatGrid && beatGrid.beatInterval > 0) {
+        const beats = Math.max(2, Math.round(dur / beatGrid.beatInterval));
+        dur = beats * beatGrid.beatInterval;
+      }
+
       entries.push({
         clip,
         mediaUrl: media.url,
@@ -77,7 +96,7 @@ export default function TapePreviewPlayer() {
       }
     }
     return entries;
-  }, [sortedClips, state, style.transitionDuration]);
+  }, [sortedClips, state, style.transitionDuration, beatGrid]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -119,7 +138,7 @@ export default function TapePreviewPlayer() {
     }
   }, []);
 
-  // Draw a single clip frame with transition transform
+  // Draw a single clip frame with transition transform, velocity, and kinetic text
   const drawMediaFrame = useCallback(
     (
       ctx: CanvasRenderingContext2D,
@@ -129,7 +148,8 @@ export default function TapePreviewPlayer() {
       localTime: number,
       alpha: number,
       transform: TransitionTransform,
-      kenBurnsIntensity: number
+      kenBurnsIntensity: number,
+      currentBeatIntensity: number
     ) => {
       const el = mediaMapRef.current.get(entry.clip.id);
       if (!el) return;
@@ -169,6 +189,13 @@ export default function TapePreviewPlayer() {
         dh *= scale;
       }
 
+      // Beat pulse: subtle scale bump on beats (adds satisfying rhythm feel)
+      if (currentBeatIntensity > 0) {
+        const pulseScale = 1 + currentBeatIntensity * 0.015;
+        dw *= pulseScale;
+        dh *= pulseScale;
+      }
+
       // Apply transition transform
       dw *= transform.scale;
       dh *= transform.scale;
@@ -183,15 +210,24 @@ export default function TapePreviewPlayer() {
 
       ctx.filter = "none";
 
+      // Kinetic text instead of static caption
       if (entry.captionText) {
         ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
-        ctx.font = `bold ${Math.round(h * 0.025)}px -apple-system, sans-serif`;
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(0,0,0,0.7)";
-        ctx.shadowBlur = 4;
-        ctx.fillText(entry.captionText, w / 2, h * 0.89);
-        ctx.shadowBlur = 0;
+        const kTransform = getKineticTransform(
+          entry.clip.captionStyle,
+          localTime,
+          entry.clipDuration,
+          h
+        );
+        drawKineticCaption(
+          ctx,
+          entry.captionText,
+          entry.clip.captionStyle,
+          kTransform,
+          w,
+          h,
+          Math.round(h * 0.025)
+        );
       }
 
       ctx.restore();
@@ -209,6 +245,9 @@ export default function TapePreviewPlayer() {
 
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, c.width, c.height);
+
+      // Beat intensity for visual pulse
+      const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid) : 0;
 
       const nowActive = new Set<string>();
       let activeTransInfo: { type: TransitionType; progress: number; seed: number } | null = null;
@@ -246,7 +285,7 @@ export default function TapePreviewPlayer() {
         const entryScale = getClipEntryScale(lt, style.entryPunchScale, style.entryPunchDuration);
         transform = { ...transform, scale: transform.scale * entryScale };
 
-        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, style.kenBurnsIntensity);
+        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, style.kenBurnsIntensity, currentBeatIntensity);
       }
 
       // Transition overlay
@@ -254,12 +293,32 @@ export default function TapePreviewPlayer() {
         drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed);
       }
 
-      // Manage video playback
+      // Beat flash overlay (subtle brightness pulse on strong beats for high-energy themes)
+      if (currentBeatIntensity > 0.5 && ["sports", "gaming", "party", "fitness"].includes(state.detectedTheme)) {
+        ctx.save();
+        ctx.globalAlpha = (currentBeatIntensity - 0.5) * 0.12;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.restore();
+      }
+
+      // Manage video playback + velocity
       for (const id of nowActive) {
-        if (!activeClipsRef.current.has(id)) {
-          const e = timeline.find((x) => x.clip.id === id);
-          const el = mediaMapRef.current.get(id);
-          if (el instanceof HTMLVideoElement && e) {
+        const e = timeline.find((x) => x.clip.id === id);
+        const el = mediaMapRef.current.get(id);
+        if (el instanceof HTMLVideoElement && e) {
+          // Apply velocity (playback rate)
+          const preset = e.clip.velocityPreset ?? "normal";
+          if (preset !== "normal") {
+            const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
+            const speed = getSpeedAtPosition(posInClip, preset);
+            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
+              el.playbackRate = clampedSpeed;
+            }
+          }
+
+          if (!activeClipsRef.current.has(id)) {
             el.currentTime = e.clip.trimStart + (t - e.globalStart);
             el.play().catch(() => {});
           }
@@ -268,12 +327,15 @@ export default function TapePreviewPlayer() {
       for (const id of activeClipsRef.current) {
         if (!nowActive.has(id)) {
           const el = mediaMapRef.current.get(id);
-          if (el instanceof HTMLVideoElement) el.pause();
+          if (el instanceof HTMLVideoElement) {
+            el.pause();
+            el.playbackRate = 1;
+          }
         }
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, transitions, style, drawMediaFrame]
+    [timeline, transitions, style, drawMediaFrame, beatGrid, state.detectedTheme]
   );
 
   // Animation loop
@@ -384,10 +446,27 @@ export default function TapePreviewPlayer() {
         <div className="absolute left-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
           {style.label} style
         </div>
+
+        {/* Beat sync indicator */}
+        {beatGrid && (
+          <div className="absolute left-2 bottom-3 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-emerald-400 backdrop-blur-sm">
+            {beatGrid.bpm} BPM
+          </div>
+        )}
       </div>
 
-      {/* Timeline */}
+      {/* Timeline with beat markers */}
       <div className="relative h-7 rounded-full bg-white/10 overflow-hidden">
+        {/* Beat markers */}
+        {beatGrid && totalDuration > 0 && beatGrid.beats
+          .filter((b) => b <= totalDuration)
+          .map((beat, i) => (
+            <div
+              key={i}
+              className="absolute top-0 h-full w-px bg-white/10"
+              style={{ left: `${(beat / totalDuration) * 100}%` }}
+            />
+          ))}
         {timeline.map((e, i) => (
           <div
             key={e.clip.id}

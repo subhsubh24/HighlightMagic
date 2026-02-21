@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle } from "./types";
+import type { AppState, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -19,6 +19,7 @@ export const initialState: AppState = {
   activeClipId: null,
   isProUser: false,
   exportsUsed: 0,
+  viralOptions: { beatSync: true, seamlessLoop: true },
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
@@ -49,6 +50,7 @@ export type Action =
   | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number }
   | { type: "REMOVE_CLIP"; clipId: string }
   | { type: "INCREMENT_EXPORTS" }
+  | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -113,6 +115,8 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "INCREMENT_EXPORTS":
       return { ...state, exportsUsed: state.exportsUsed + 1 };
+    case "SET_VIRAL_OPTIONS":
+      return { ...state, viralOptions: { ...state.viralOptions, ...action.options } };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const };

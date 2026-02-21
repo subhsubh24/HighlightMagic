@@ -1,14 +1,15 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, ChevronRight, Film, Image, Play, Scissors } from "lucide-react";
+import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, ChevronRight, Film, Image, Play, Scissors, Gauge } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { ALL_FILTERS, VIDEO_FILTERS } from "@/lib/filters";
 import { getAvailableTracks, getSuggestedTrackForTemplate } from "@/lib/music";
 import { getEditingStyle, ALL_THEMES } from "@/lib/editing-styles";
 import { formatTime, haptic } from "@/lib/utils";
 import TapePreviewPlayer from "@/components/TapePreviewPlayer";
-import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip, EditingTheme } from "@/lib/types";
+import { ALL_VELOCITY_PRESETS, VELOCITY_LABELS } from "@/lib/velocity";
+import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip, EditingTheme, VelocityPreset } from "@/lib/types";
 
 const CAPTION_STYLES: { value: CaptionStyle; label: string; css: string }[] = [
   { value: "Bold", label: "Bold", css: "text-2xl font-black uppercase tracking-wider" },
@@ -17,7 +18,7 @@ const CAPTION_STYLES: { value: CaptionStyle; label: string; css: string }[] = [
   { value: "Classic", label: "Classic", css: "text-xl font-serif italic" },
 ];
 
-type EditorTab = "trim" | "music" | "caption" | "filter";
+type EditorTab = "trim" | "speed" | "music" | "caption" | "filter";
 type EditorMode = "preview" | "edit";
 
 export default function EditorStep() {
@@ -104,6 +105,7 @@ export default function EditorStep() {
 
   const tabs: { id: EditorTab; icon: React.ReactNode; label: string }[] = [
     { id: "trim", icon: <ArrowLeft className="h-4 w-4 rotate-90" />, label: "Trim" },
+    { id: "speed", icon: <Gauge className="h-4 w-4" />, label: "Speed" },
     { id: "music", icon: <Music className="h-4 w-4" />, label: "Music" },
     { id: "caption", icon: <Type className="h-4 w-4" />, label: "Caption" },
     { id: "filter", icon: <Palette className="h-4 w-4" />, label: "Filter" },
@@ -368,6 +370,18 @@ export default function EditorStep() {
                 No trimming needed.
               </div>
             )}
+            {activeTab === "speed" && !isPhoto && (
+              <VelocityPanel
+                selected={clip.velocityPreset ?? "normal"}
+                onSelect={(v) => updateClip({ velocityPreset: v })}
+              />
+            )}
+            {activeTab === "speed" && isPhoto && (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-[var(--text-tertiary)]">
+                <Gauge className="h-8 w-8" />
+                Speed curves apply to video clips only.
+              </div>
+            )}
             {activeTab === "music" && (
               <MusicPanel
                 selected={clip.selectedMusicTrack}
@@ -556,28 +570,104 @@ function FilterPanel({
   selected: VideoFilter;
   onSelect: (f: VideoFilter) => void;
 }) {
+  // Human-readable display names for filters
+  const displayNames: Partial<Record<VideoFilter, string>> = {
+    GoldenHour: "Golden Hour",
+    TealOrange: "Teal & Orange",
+    MoodyCinematic: "Moody",
+    CleanAiry: "Clean Airy",
+    VintageFilm: "Vintage",
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {ALL_FILTERS.map((filter) => (
-        <button
-          key={filter}
-          onClick={() => {
-            onSelect(filter);
-            haptic(5);
-          }}
-          className={`flex flex-col items-center gap-2 rounded-xl p-3 transition-all ${
-            selected === filter
-              ? "bg-[var(--accent)]/10 border-2 border-[var(--accent)] scale-[1.02]"
-              : "border border-white/10 bg-white/5 hover:bg-white/10"
-          }`}
-        >
-          <div
-            className="h-10 w-full rounded-lg bg-gradient-to-br from-purple-500 to-pink-500"
-            style={{ filter: VIDEO_FILTERS[filter] }}
-          />
-          <span className="text-xs font-medium text-white">{filter}</span>
-        </button>
-      ))}
+    <div className="flex flex-col gap-3">
+      <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Standard</p>
+      <div className="grid grid-cols-3 gap-2">
+        {(["None", "Vibrant", "Warm", "Cool", "Noir", "Fade"] as VideoFilter[]).map((filter) => (
+          <button
+            key={filter}
+            onClick={() => { onSelect(filter); haptic(5); }}
+            className={`flex flex-col items-center gap-2 rounded-xl p-3 transition-all ${
+              selected === filter
+                ? "bg-[var(--accent)]/10 border-2 border-[var(--accent)] scale-[1.02]"
+                : "border border-white/10 bg-white/5 hover:bg-white/10"
+            }`}
+          >
+            <div
+              className="h-10 w-full rounded-lg bg-gradient-to-br from-purple-500 to-pink-500"
+              style={{ filter: VIDEO_FILTERS[filter] }}
+            />
+            <span className="text-xs font-medium text-white">{filter}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">Cinematic</p>
+      <div className="grid grid-cols-3 gap-2">
+        {(["GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm"] as VideoFilter[]).map((filter) => (
+          <button
+            key={filter}
+            onClick={() => { onSelect(filter); haptic(5); }}
+            className={`flex flex-col items-center gap-2 rounded-xl p-3 transition-all ${
+              selected === filter
+                ? "bg-[var(--accent)]/10 border-2 border-[var(--accent)] scale-[1.02]"
+                : "border border-white/10 bg-white/5 hover:bg-white/10"
+            }`}
+          >
+            <div
+              className="h-10 w-full rounded-lg bg-gradient-to-br from-orange-400 to-teal-500"
+              style={{ filter: VIDEO_FILTERS[filter] }}
+            />
+            <span className="text-[10px] font-medium text-white">{displayNames[filter] ?? filter}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VelocityPanel({
+  selected,
+  onSelect,
+}: {
+  selected: VelocityPreset;
+  onSelect: (v: VelocityPreset) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-[var(--text-tertiary)]">
+        Speed curves control playback speed over the clip — the signature viral edit technique.
+      </p>
+      <div className="flex flex-col gap-2">
+        {ALL_VELOCITY_PRESETS.map((preset) => {
+          const info = VELOCITY_LABELS[preset];
+          return (
+            <button
+              key={preset}
+              onClick={() => { onSelect(preset); haptic(5); }}
+              className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${
+                selected === preset
+                  ? "bg-[var(--accent)]/10 border border-[var(--accent)]"
+                  : "bg-white/5 hover:bg-white/10"
+              }`}
+            >
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                preset === "normal" ? "bg-white/10" : "bg-gradient-to-br from-purple-500/30 to-pink-500/30"
+              }`}>
+                <Gauge className={`h-4 w-4 ${selected === preset ? "text-[var(--accent)]" : "text-[var(--text-tertiary)]"}`} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white">{info.label}</p>
+                <p className="text-xs text-[var(--text-tertiary)]">{info.description}</p>
+              </div>
+              {preset !== "normal" && (
+                <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300">
+                  Viral
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

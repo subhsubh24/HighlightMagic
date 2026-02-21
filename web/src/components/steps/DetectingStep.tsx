@@ -97,6 +97,7 @@ export default function DetectingStep() {
           captionText: "",
           captionStyle: "Bold" as const,
           selectedFilter: state.selectedTemplate?.suggestedFilter ?? ("None" as const),
+          velocityPreset: "normal" as const,
         }));
 
         setProgress(100);

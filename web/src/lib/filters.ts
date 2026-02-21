@@ -10,6 +10,42 @@ export const VIDEO_FILTERS: Record<VideoFilter, string> = {
   Cool: "saturate(0.9) brightness(1.05) hue-rotate(15deg)",
   Noir: "grayscale(1) contrast(1.3)",
   Fade: "contrast(0.9) brightness(1.1) saturate(0.8)",
+  // ── Cinematic LUT-style grades ──
+  // These simulate the most viral color grading styles from TikTok/Reels.
+  // Applied at ~50-70% intensity via CSS filters to keep skin tones natural.
+  GoldenHour: "sepia(0.15) saturate(1.35) brightness(1.08) contrast(1.05) hue-rotate(-5deg)",
+  TealOrange: "saturate(1.2) contrast(1.25) brightness(1.02) hue-rotate(5deg)",
+  MoodyCinematic: "saturate(0.85) contrast(1.35) brightness(0.92)",
+  CleanAiry: "brightness(1.12) contrast(0.92) saturate(1.15)",
+  VintageFilm: "sepia(0.25) saturate(0.9) contrast(1.1) brightness(1.05)",
 };
 
-export const ALL_FILTERS: VideoFilter[] = ["None", "Vibrant", "Warm", "Cool", "Noir", "Fade"];
+export const ALL_FILTERS: VideoFilter[] = [
+  "None",
+  "Vibrant",
+  "Warm",
+  "Cool",
+  "Noir",
+  "Fade",
+  "GoldenHour",
+  "TealOrange",
+  "MoodyCinematic",
+  "CleanAiry",
+  "VintageFilm",
+];
+
+/** Suggested filter per theme for automatic grading. */
+export function getSuggestedFilter(theme: string): VideoFilter {
+  const map: Record<string, VideoFilter> = {
+    sports: "TealOrange",
+    cooking: "GoldenHour",
+    travel: "TealOrange",
+    gaming: "MoodyCinematic",
+    party: "Vibrant",
+    fitness: "TealOrange",
+    pets: "GoldenHour",
+    vlog: "CleanAiry",
+    cinematic: "MoodyCinematic",
+  };
+  return map[theme] ?? "None";
+}

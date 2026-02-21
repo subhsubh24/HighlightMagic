@@ -15,7 +15,10 @@ export interface MusicTrack {
   isPremium: boolean;
 }
 
-export type VideoFilter = "None" | "Vibrant" | "Warm" | "Cool" | "Noir" | "Fade";
+export type VideoFilter =
+  | "None" | "Vibrant" | "Warm" | "Cool" | "Noir" | "Fade"
+  // Cinematic LUT-style grades
+  | "GoldenHour" | "TealOrange" | "MoodyCinematic" | "CleanAiry" | "VintageFilm";
 
 export type CaptionStyle = "Bold" | "Minimal" | "Neon" | "Classic";
 
@@ -54,6 +57,8 @@ export interface HighlightSegment {
   detectionSources: string[];
 }
 
+export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage";
+
 export interface EditedClip {
   id: string;
   sourceFileId: string; // which uploaded file this came from
@@ -65,6 +70,14 @@ export interface EditedClip {
   captionText: string;
   captionStyle: CaptionStyle;
   selectedFilter: VideoFilter;
+  velocityPreset: VelocityPreset;
+}
+
+export interface ViralExportOptions {
+  /** Enable beat-sync: snap cuts to the music's BPM grid. */
+  beatSync: boolean;
+  /** Enable seamless loop: cross-fade last 0.5s into first 0.5s for TikTok replay. */
+  seamlessLoop: boolean;
 }
 
 export interface FrameAnalysis {
@@ -106,4 +119,6 @@ export interface AppState {
   activeClipId: string | null;
   isProUser: boolean;
   exportsUsed: number;
+  // Viral export options
+  viralOptions: ViralExportOptions;
 }
