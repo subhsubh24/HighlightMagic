@@ -290,9 +290,15 @@ You must do THREE things:
    ADDITIONAL RULES:
    - Mix source files for a montage feel
    - Photos work as transition beats or emotional pauses (${PHOTO_DISPLAY_DURATION}s each)
-   - Prefer shorter, punchier clips (${MIN_CLIP_DURATION}-15s) over long ones — faster pacing = higher retention
    - Avoid consecutive clips from the same source file when possible (visual variety = pattern interrupt)
 ${templateName ? `   - Style hint: ${templateName}` : ""}
+
+   GENRE-SPECIFIC CLIP DURATION (critical — pacing defines the genre):
+   - party/gaming: SHORT & PUNCHY clips (${MIN_CLIP_DURATION}-8s). Cut on every beat. Energy dies if clips exceed 10s.
+   - sports/fitness: MEDIUM clips (${MIN_CLIP_DURATION}-12s). Hit hard, recover, hit again.
+   - wedding: MIX of short ceremony hits (${MIN_CLIP_DURATION}-8s) and longer emotional moments (8-15s to let moments breathe).
+   - travel/cinematic: LONGER clips OK (${MIN_CLIP_DURATION}-15s). Let the viewer soak in the visuals.
+   - cooking/pets/vlog: MEDIUM clips (${MIN_CLIP_DURATION}-12s). Comfortable, not rushed.
 
 3. ASSIGN VELOCITY PRESETS — give each clip its own speed curve. Variety is critical.
    NEVER give every clip the same preset — that kills the rhythm.
