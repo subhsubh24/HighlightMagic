@@ -434,7 +434,19 @@ async function renderHighlightTape(
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
   const audioPipeline = await createAudioPipeline(canvasStream, musicTrack);
-  const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
+  // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
+  let totalDuration = 0;
+  for (let i = 0; i < clips.length; i++) {
+    let clipDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+    if (beatGrid && beatGrid.beatInterval > 0) {
+      const beats = Math.max(2, Math.round(clipDur / beatGrid.beatInterval));
+      clipDur = beats * beatGrid.beatInterval;
+    }
+    totalDuration += clipDur;
+    if (i < clips.length - 1) {
+      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? style.transitionDuration;
+    }
+  }
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,
