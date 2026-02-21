@@ -190,7 +190,7 @@ Respond with ONLY a JSON array:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: "user", content }],
       }),
@@ -253,11 +253,11 @@ const VALID_THEMES: DetectedTheme[] = [
   "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "wedding", "cinematic",
 ];
 
-const MAX_PLANNER_FRAMES = 20; // visual frames sent to the planner — more context = better decisions
-
 /**
- * Select a diverse set of top-scoring frames for the planner to see.
- * Ensures every source file is represented, then fills remaining slots by score.
+ * Select frames for the planner to see — no artificial cap.
+ * Every source file gets ALL its scored frames shown so the AI can deeply
+ * understand the full footage. Sorted by score within each source,
+ * with all sources represented first, then remaining frames by score.
  */
 function selectPlannerFrames(
   scores: MultiFrameScore[],
@@ -269,7 +269,7 @@ function selectPlannerFrames(
     frameLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f);
   }
 
-  // Ensure at least one frame per source file (the best-scoring one)
+  // Group scores by source
   const bySource = new Map<string, MultiFrameScore[]>();
   for (const s of scores) {
     if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
@@ -279,11 +279,11 @@ function selectPlannerFrames(
   const selected: MultiFrameInput[] = [];
   const usedKeys = new Set<string>();
 
-  // Top 2 frames per source so the planner understands each file's range
+  // ALL frames from every source, sorted best-first within each source
   for (const [, fileScores] of bySource) {
-    const topTwo = [...fileScores].sort((a, b) => b.score - a.score).slice(0, 2);
-    for (const best of topTwo) {
-      const key = `${best.sourceFileId}::${best.timestamp.toFixed(1)}`;
+    const sorted = [...fileScores].sort((a, b) => b.score - a.score);
+    for (const score of sorted) {
+      const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
       const frame = frameLookup.get(key);
       if (frame && !usedKeys.has(key)) {
         selected.push(frame);
@@ -292,13 +292,12 @@ function selectPlannerFrames(
     }
   }
 
-  // Fill remaining slots with highest-scoring frames we haven't picked
+  // Add any remaining frames not yet included
   const remaining = [...scores]
     .sort((a, b) => b.score - a.score)
     .filter((s) => !usedKeys.has(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`));
 
   for (const s of remaining) {
-    if (selected.length >= MAX_PLANNER_FRAMES) break;
     const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
     const frame = frameLookup.get(key);
     if (frame) {
@@ -336,6 +335,8 @@ async function planHighlightTape(
 understand the psychology of what makes people stop scrolling, watch to the end, and smash that share button.
 
 You are being shown the ACTUAL FRAMES from the user's footage. Study every single one deeply.
+You have ZERO constraints on your creative decisions. No limits on clip count, clip duration,
+total reel length, or how you structure the tape. YOU are the editor. Make something incredible.
 
 SOURCE FILES (${sourceCount} total):
 ${sourceList}
@@ -348,69 +349,64 @@ ABSOLUTE RULE: USE EVERY SOURCE FILE
 ═══════════════════════════════════════════════
 The user uploaded ${sourceCount} files. They chose these files for a reason.
 You MUST include at least one clip from EVERY single source file. No exceptions.
-- Strong sources → longer, prominent clips that carry the tape
-- Weaker sources → shorter beats (2-4s). Even a quick flash, a reaction shot, or a
-  transitional cutaway is better than leaving it out entirely
+- Strong sources → longer, more prominent clips that carry the tape
+- Weaker sources → shorter appearances. Even a brief flash, a reaction cutaway, or a
+  transitional beat is better than leaving it out entirely. YOU decide how long.
 - The user should NEVER open their highlight reel and think "where's my clip?"
 
 ═══════════════════════════════════════════════
-YOUR PROCESS — Think like a pro editor, not a robot
+YOUR PROCESS — Full creative autonomy
 ═══════════════════════════════════════════════
 
 STEP 1: DEEPLY UNDERSTAND THE CONTENT
-Look at every frame image. Read every score and label. Build a mental model:
+Study every frame image. Read every score and label. Build a complete mental model:
 - What's the STORY across all this footage? What happened? What's the emotional arc?
 - Who are the people? What are they doing? What's the setting/mood/energy?
 - What are the absolute PEAK moments vs. the quieter supporting moments?
 - What makes this content special? What would make someone who wasn't there feel like they were?
+- How does each source file contribute to the overall narrative?
 Put your understanding in a "contentSummary" field (2-3 vivid sentences).
 
 STEP 2: CHOOSE THE EDITING THEME
 Your theme choice controls the entire visual style of the reel — transitions, effects, and pacing.
 Pick the one that will make THIS specific content look its absolute best on Instagram:
 
-- "sports" → 0.3s cuts, flash/zoom-punch/whip/glitch transitions, entry punch zooms — NFL highlight energy
-- "cooking" → 0.8s dissolves, crossfade/light-leak/soft-zoom — warm Bon Appétit / Tasty aesthetic
-- "travel" → 1.0s cinematic dissolves, light leaks, dip-to-black — Sam Kolder drone-shot vibes
-- "gaming" → 0.25s cuts, glitch/color-flash/strobe/zoom-punch — esports montage energy
-- "party" → 0.25s cuts, color-flash/strobe/flash/glitch — nightlife/festival beat-sync energy
-- "fitness" → 0.3s cuts, zoom-punch/flash/hard-flash/whip — motivational power edit
-- "pets" → 0.6s crossfades, soft-zoom/light-leak — cute animal compilation warmth
-- "vlog" → 0.15s hard-cuts, dip-to-black — clean modern YouTube style
-- "wedding" → 0.9s dissolves, crossfade/light-leak/soft-zoom/dip-to-black — romantic film elegance
-- "cinematic" → 0.7s dissolves, crossfade/dip-to-black/light-leak — professional default
+- "sports" → flash/zoom-punch/whip/glitch transitions, entry punch zooms — NFL highlight energy
+- "cooking" → crossfade/light-leak/soft-zoom dissolves — warm Bon Appétit / Tasty aesthetic
+- "travel" → cinematic dissolves, light leaks, dip-to-black — Sam Kolder drone-shot vibes
+- "gaming" → glitch/color-flash/strobe/zoom-punch — esports montage energy
+- "party" → color-flash/strobe/flash/glitch — nightlife/festival beat-sync energy
+- "fitness" → zoom-punch/flash/hard-flash/whip — motivational power edit
+- "pets" → crossfades, soft-zoom/light-leak — cute animal compilation warmth
+- "vlog" → hard-cuts, dip-to-black — clean modern YouTube style
+- "wedding" → crossfade/light-leak/soft-zoom/dip-to-black dissolves — romantic film elegance
+- "cinematic" → crossfade/dip-to-black/light-leak dissolves — professional default
 
-Think about: What theme makes this content MOST shareable on Instagram? A beach vacation
-deserves "travel" dissolves, not "gaming" glitches. A dance party needs "party" strobes, not "cooking" warmth.
+Think about: What theme makes this content MOST shareable on Instagram? Match the style to the CONTENT.
 
 STEP 3: CREATE THE HIGHLIGHT TAPE
 You're making a reel that needs to compete with millions of other posts for attention.
 Think about Instagram viewer psychology:
 
-THE HOOK (first 1.5 seconds):
-- 65% of viewers decide whether to keep watching in the first 1.5 seconds
-- Your first clip MUST be the single most visually striking, emotionally compelling, or
-  unexpected moment from ALL the footage. What would stop a thumb mid-scroll?
+THE HOOK: 65% of viewers decide whether to keep watching in the first 1.5 seconds.
+Your first clip MUST be the single most visually striking, emotionally compelling, or
+unexpected moment. What would stop a thumb mid-scroll?
 
-RETENTION (middle):
-- Pattern interrupts every 3-5 seconds keep viewers watching. Alternate between:
-  high energy ↔ breathing room, close-up ↔ wide shot, fast ↔ slow, loud ↔ quiet
-- Each clip transition should feel like a new "hit" — a reason to keep watching
-- Vary clip durations. Monotonous timing (all 5s clips) feels robotic.
-  Mix short punchy beats (2-3s) with longer hero moments (6-12s).
+RETENTION: Pattern interrupts keep viewers watching. Alternate energy levels —
+high ↔ low, close-up ↔ wide, fast ↔ slow. Each transition should feel like a new "hit."
+Vary your clip durations — monotonous timing feels robotic. Let the content dictate pacing.
 
-THE CLOSE (last clip):
-- End on an emotional peak or a moment that visually echoes the hook
-- This creates loop potential — when the reel restarts, it should feel intentional
-- A great close makes people watch 2-3 times, which MASSIVELY boosts the algorithm
+THE CLOSE: End on an emotional peak or a moment that visually echoes the hook.
+This creates loop potential — when the reel restarts, it should feel intentional.
+A great close makes people watch 2-3 times, which MASSIVELY boosts the algorithm.
 
-DURATION STRATEGY:
-- Hero moments: 5-15s — let them breathe, these are why people share the reel
-- Supporting beats: 3-5s — enough to register and contribute to the story
-- Quick flashes: 2-3s — B-roll, reactions, transitional energy, weaker source files
-- Photos: ${PHOTO_DISPLAY_DURATION}s each — emotional pauses or transition beats
-- Total reel: aim for 15-45 seconds of pure magic
-- Avoid consecutive clips from the same source file — variety keeps attention
+YOU DECIDE EVERYTHING:
+- How many clips to use (as many as the content needs)
+- How long each clip is (as short or as long as the moment deserves)
+- How long the total reel is (as long as it needs to be to tell the story)
+- How long photos display (whatever serves the edit best)
+- The clip ordering, pacing, and rhythm — all of it is your call
+- Avoid consecutive clips from the same source file when possible — variety keeps attention
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: ASSIGN VELOCITY PRESETS
@@ -418,24 +414,16 @@ Speed ramping is what separates amateur edits from pro edits on Instagram.
 Each clip gets a speed curve — choose the one that serves the CONTENT of that specific moment:
 
 - "hero": fast approach → dramatic slow-mo at the peak → fast recovery
-  Best for: THE moment of the reel. A goal scored, a first kiss, a dance move landing, a reveal.
 - "bullet": snap into extreme slow-mo and hold
-  Best for: impact moments. A collision, a surprise reaction, a dramatic entrance.
 - "montage": pulse between fast and slow on beats
-  Best for: rhythmic sequences. Dancing, sports plays, cooking steps, travel montage.
-- "ramp_in": gradually accelerate
-  Best for: building tension. Approaching a climax, walking toward something, countdown moments.
-- "ramp_out": fast then dramatic deceleration
-  Best for: arrivals and reveals. Landing a trick, reaching a summit, unveiling a finished dish.
-- "normal": constant 1x speed
-  Best for: breathing room. Let an emotional moment speak for itself. Dialogue. Calm B-roll.
+- "ramp_in": gradually accelerate (tension builder)
+- "ramp_out": fast then dramatic deceleration (landing/reveal)
+- "normal": constant 1x speed (breathing room, dialogue, calm moments)
 
-RHYTHM MATTERS: Think about the speed curve of the ENTIRE tape. If every clip is "hero",
-nothing feels special. Create contrast — a slow-mo bullet hit feels 10x more powerful after
-a fast-paced montage sequence. YOU decide the rhythm based on the actual content.
+Think about the speed curve of the ENTIRE tape. Contrast creates impact — a slow-mo bullet hit
+feels 10x more powerful after a fast-paced montage. YOU decide the rhythm based on the actual content.
 
-For video clips: startTime and endTime (2-${MAX_CLIP_DURATION}s each).
-For photos: startTime=0, endTime=${PHOTO_DISPLAY_DURATION}.
+For each clip: provide sourceFileId, startTime, endTime, label, confidenceScore, and velocityPreset.
 
 Respond with ONLY a JSON object:
 {"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero"}]}`;
@@ -474,7 +462,7 @@ Respond with ONLY a JSON object:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
