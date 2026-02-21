@@ -115,6 +115,7 @@ export interface AppState {
   videoDuration: number;
   selectedTemplate: HighlightTemplate | null;
   detectedTheme: EditingTheme;
+  contentSummary: string;
   highlights: HighlightSegment[];
   clips: EditedClip[];
   activeClipId: string | null;

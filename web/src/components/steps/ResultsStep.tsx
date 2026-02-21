@@ -60,6 +60,15 @@ export default function ResultsStep() {
         </div>
       </div>
 
+      {/* AI content summary */}
+      {state.contentSummary && sortedClips.length > 0 && (
+        <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+          <p className="text-sm text-[var(--text-secondary)] italic leading-relaxed">
+            {state.contentSummary}
+          </p>
+        </div>
+      )}
+
       {/* Empty state */}
       {sortedClips.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">

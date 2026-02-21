@@ -58,6 +58,7 @@ export interface DetectedClip {
 export interface DetectionResult {
   clips: DetectedClip[];
   detectedTheme: DetectedTheme;
+  contentSummary: string;
 }
 
 // ── Legacy single-video detection (backward compat) ──
@@ -84,7 +85,7 @@ export async function detectMultiClipHighlights(
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    return { clips: simulateMultiDetection(frames), detectedTheme: "cinematic" };
+    return { clips: simulateMultiDetection(frames), detectedTheme: "cinematic", contentSummary: "" };
   }
 
   // Group frames by source file for context
@@ -109,12 +110,13 @@ export async function detectMultiClipHighlights(
     allScores.push(...scores);
   }
 
-  // Second pass: plan the highlight tape AND detect content theme
-  const planResult = await planHighlightTape(apiKey, allScores, sourceFiles, templateName);
+  // Second pass: plan the highlight tape AND detect content theme.
+  // Send the original frames so the planner can SEE the footage, not just read scores.
+  const planResult = await planHighlightTape(apiKey, allScores, frames, sourceFiles, templateName);
 
   // Fall back to clustering if the planning call fails
   if (planResult.clips.length === 0) {
-    return { clips: clusterMultiIntoClips(allScores), detectedTheme: planResult.detectedTheme };
+    return { clips: clusterMultiIntoClips(allScores), detectedTheme: planResult.detectedTheme, contentSummary: planResult.contentSummary };
   }
 
   return planResult;
@@ -236,14 +238,71 @@ const VALID_THEMES: DetectedTheme[] = [
   "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "wedding", "cinematic",
 ];
 
+const MAX_PLANNER_FRAMES = 15; // visual frames sent to the planner
+
+/**
+ * Select a diverse set of top-scoring frames for the planner to see.
+ * Ensures every source file is represented, then fills remaining slots by score.
+ */
+function selectPlannerFrames(
+  scores: MultiFrameScore[],
+  frames: MultiFrameInput[],
+): MultiFrameInput[] {
+  // Build a lookup from (sourceFileId, timestamp) → frame
+  const frameLookup = new Map<string, MultiFrameInput>();
+  for (const f of frames) {
+    frameLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f);
+  }
+
+  // Ensure at least one frame per source file (the best-scoring one)
+  const bySource = new Map<string, MultiFrameScore[]>();
+  for (const s of scores) {
+    if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
+    bySource.get(s.sourceFileId)!.push(s);
+  }
+
+  const selected: MultiFrameInput[] = [];
+  const usedKeys = new Set<string>();
+
+  // One best frame per source
+  for (const [, fileScores] of bySource) {
+    const best = [...fileScores].sort((a, b) => b.score - a.score)[0];
+    if (!best) continue;
+    const key = `${best.sourceFileId}::${best.timestamp.toFixed(1)}`;
+    const frame = frameLookup.get(key);
+    if (frame && !usedKeys.has(key)) {
+      selected.push(frame);
+      usedKeys.add(key);
+    }
+  }
+
+  // Fill remaining slots with highest-scoring frames we haven't picked
+  const remaining = [...scores]
+    .sort((a, b) => b.score - a.score)
+    .filter((s) => !usedKeys.has(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`));
+
+  for (const s of remaining) {
+    if (selected.length >= MAX_PLANNER_FRAMES) break;
+    const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
+    const frame = frameLookup.get(key);
+    if (frame) {
+      selected.push(frame);
+      usedKeys.add(key);
+    }
+  }
+
+  return selected;
+}
+
 async function planHighlightTape(
   apiKey: string,
   scores: MultiFrameScore[],
+  allFrames: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string
-): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme }> {
+): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
   const sourceList = Array.from(sourceFiles.entries())
-    .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
+    .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled)`)
     .join("\n");
 
   const topScores = [...scores]
@@ -252,17 +311,26 @@ async function planHighlightTape(
     .map((s) => `fileID:${s.sourceFileId} type:${s.sourceType} t:${s.timestamp.toFixed(1)}s score:${s.score.toFixed(2)} "${s.label}"`)
     .join("\n");
 
-  const systemPrompt = `You are an expert video editor creating a TikTok / Reels highlight tape from multiple source clips and photos.
+  // Select diverse frames for the planner to actually SEE
+  const plannerFrames = selectPlannerFrames(scores, allFrames);
+
+  const systemPrompt = `You are an expert video editor creating an Instagram Reels / TikTok highlight tape.
+You are being shown the ACTUAL FRAMES from the source footage so you can see what you're working with.
 
 SOURCE FILES:
 ${sourceList}
 
-TOP SCORING MOMENTS (from AI frame analysis):
+SCORED MOMENTS (from frame-by-frame analysis — higher score = more highlight-worthy):
 ${topScores}
 
-You must do THREE things:
+You must do FOUR things in order:
 
-1. DETECT THE CONTENT THEME — analyze what the content is about and pick the best editing style.
+1. WATCH & UNDERSTAND — Look at every frame image carefully. Describe what's actually happening
+   across all the source clips. What's the story? What's the vibe? Who's in it? What are the
+   peak moments vs. the filler? Think like a cinematographer reviewing dailies before making cuts.
+   Put this in a "contentSummary" field (2-3 sentences, vivid and specific).
+
+2. DETECT THE CONTENT THEME — based on what you actually SAW, pick the editing style.
    Choose exactly one: sports, cooking, travel, gaming, party, fitness, pets, vlog, wedding, cinematic
    - sports: athletic/competition content → fast cuts, flash transitions, zoom punches
    - cooking: food preparation/plating → smooth dissolves, warm tones, gentle pacing
@@ -275,7 +343,14 @@ You must do THREE things:
    - wedding: ceremony/vows/reception/first dance/toasts → romantic dissolves, elegant slow reveals, warm tones
    - cinematic: general/mixed/artistic → film dissolves, subtle light leaks
 
-2. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments optimized for TikTok/Reels virality.
+3. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments. Think about what would make
+   someone stop scrolling, watch to the end, and hit share.
+
+   EDITORIAL THINKING (do this before picking clips):
+   - What's the single most visually striking moment? That's your hook.
+   - What moments CONTRAST with each other? Contrast creates rhythm (action/calm, wide/close, fast/slow).
+   - What's the emotional peak? Build toward it, don't blow it early.
+   - What ending would make someone want to watch again? (Loop potential)
 
    HOOK-FIRST ORDERING (critical for scroll-stopping):
    - Clip #1 MUST be the most visually striking, high-motion, or emotionally compelling moment.
@@ -300,7 +375,7 @@ ${templateName ? `   - Style hint: ${templateName}` : ""}
    - travel/cinematic: LONGER clips OK (${MIN_CLIP_DURATION}-15s). Let the viewer soak in the visuals.
    - cooking/pets/vlog: MEDIUM clips (${MIN_CLIP_DURATION}-12s). Comfortable, not rushed.
 
-3. ASSIGN VELOCITY PRESETS — give each clip its own speed curve. Variety is critical.
+4. ASSIGN VELOCITY PRESETS — give each clip its own speed curve. Variety is critical.
    NEVER give every clip the same preset — that kills the rhythm.
 
    Available presets:
@@ -324,7 +399,31 @@ For video clips: startTime and endTime (${MIN_CLIP_DURATION}-${MAX_CLIP_DURATION
 For photos: startTime=0, endTime=${PHOTO_DISPLAY_DURATION}.
 
 Respond with ONLY a JSON object:
-{"theme": "party", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 15, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero"}]}`;
+{"contentSummary": "Vivid 2-3 sentence description of the content and story", "theme": "party", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 15, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero"}]}`;
+
+  // Build a multimodal message: show the planner the actual frames
+  const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
+
+  userContent.push({
+    type: "text",
+    text: "Here are the top frames from the source footage. Watch them all carefully, understand what's happening, then plan the best possible highlight tape.\n",
+  });
+
+  for (const frame of plannerFrames) {
+    userContent.push({
+      type: "image",
+      source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
+    });
+    userContent.push({
+      type: "text",
+      text: `↑ Source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s`,
+    });
+  }
+
+  userContent.push({
+    type: "text",
+    text: "\nNow analyze everything you see above. What's the story? What are the best moments? Create the highlight tape.",
+  });
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -336,25 +435,26 @@ Respond with ONLY a JSON object:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
-        messages: [{ role: "user", content: "Detect the content theme and create the highlight tape." }],
+        messages: [{ role: "user", content: userContent }],
       }),
     });
 
     if (!response.ok) {
       console.error("Planning API error:", response.status);
-      return { clips: [], detectedTheme: "cinematic" };
+      return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
     }
 
     const data = await response.json();
     const text = data.content?.[0]?.text ?? "{}";
 
-    // Try to parse as the new object format: {"theme": "...", "clips": [...]}
+    // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
     const objMatch = text.match(/\{[\s\S]*\}/);
     if (objMatch) {
       try {
         const parsed = JSON.parse(objMatch[0]) as {
+          contentSummary?: string;
           theme?: string;
           clips?: Array<{
             sourceFileId: string;
@@ -365,6 +465,8 @@ Respond with ONLY a JSON object:
             velocityPreset?: string;
           }>;
         };
+
+        const contentSummary = parsed.contentSummary ?? "";
 
         const theme: DetectedTheme =
           parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
@@ -386,7 +488,7 @@ Respond with ONLY a JSON object:
           order: i,
         }));
 
-        return { clips, detectedTheme: theme };
+        return { clips, detectedTheme: theme, contentSummary };
       } catch {
         // Fall through to legacy array parse
       }
@@ -394,7 +496,7 @@ Respond with ONLY a JSON object:
 
     // Legacy fallback: parse as plain array
     const arrMatch = text.match(/\[[\s\S]*\]/);
-    if (!arrMatch) return { clips: [], detectedTheme: "cinematic" };
+    if (!arrMatch) return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
 
     const parsed = JSON.parse(arrMatch[0]) as Array<{
       sourceFileId: string;
@@ -417,10 +519,11 @@ Respond with ONLY a JSON object:
         order: i,
       })),
       detectedTheme: "cinematic",
+      contentSummary: "",
     };
   } catch (err) {
     console.error("Planning error:", err);
-    return { clips: [], detectedTheme: "cinematic" };
+    return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
   }
 }
 

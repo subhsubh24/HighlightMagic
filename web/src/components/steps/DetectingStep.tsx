@@ -11,9 +11,9 @@ import { uuid } from "@/lib/utils";
 
 const DETECTION_PASSES = [
   "Extracting frames from all clips...",
-  "Analyzing motion & composition...",
-  "Scoring highlight potential...",
-  "Detecting content theme & planning tape...",
+  "Watching everything to understand your content...",
+  "Scoring the best moments...",
+  "Planning your highlight tape...",
   "Applying editing style for best flow...",
 ];
 
@@ -66,6 +66,11 @@ export default function DetectingStep() {
           ? templateToTheme(state.selectedTemplate.id)
           : result.detectedTheme;
         dispatch({ type: "SET_THEME", theme });
+
+        // Store the AI's content understanding
+        if (result.contentSummary) {
+          dispatch({ type: "SET_CONTENT_SUMMARY", summary: result.contentSummary });
+        }
 
         const detectedClips = result.clips;
 

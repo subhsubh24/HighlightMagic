@@ -14,6 +14,7 @@ export const initialState: AppState = {
   videoDuration: 0,
   selectedTemplate: null,
   detectedTheme: "cinematic",
+  contentSummary: "",
   highlights: [],
   clips: [],
   activeClipId: null,
@@ -43,6 +44,7 @@ export type Action =
   | { type: "CLEAR_MEDIA" }
   | { type: "SET_TEMPLATE"; template: HighlightTemplate | null }
   | { type: "SET_THEME"; theme: EditingTheme }
+  | { type: "SET_CONTENT_SUMMARY"; summary: string }
   | { type: "SET_HIGHLIGHTS"; highlights: HighlightSegment[] }
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
@@ -84,6 +86,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, selectedTemplate: action.template };
     case "SET_THEME":
       return { ...state, detectedTheme: action.theme };
+    case "SET_CONTENT_SUMMARY":
+      return { ...state, contentSummary: action.summary };
     case "SET_HIGHLIGHTS":
       return { ...state, highlights: action.highlights };
     case "SET_CLIPS":
@@ -119,7 +123,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, viralOptions: { ...state.viralOptions, ...action.options } };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
-      return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const };
+      return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const, contentSummary: "" };
     default:
       return state;
   }
