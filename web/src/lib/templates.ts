@@ -83,4 +83,14 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedMusicMood: "Fun",
     colorAccent: "#EC4899",
   },
+  {
+    id: "wedding",
+    name: "Wedding",
+    icon: "Heart",
+    description: "Elegant wedding highlights with romantic warmth",
+    suggestedFilter: "Warm",
+    suggestedCaptionStyle: "Minimal",
+    suggestedMusicMood: "Epic",
+    colorAccent: "#F9A8D4",
+  },
 ];

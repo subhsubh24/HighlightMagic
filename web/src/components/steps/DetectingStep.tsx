@@ -6,7 +6,7 @@ import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple } from "@/lib/frame-extractor";
 import { detectMultiClipHighlights } from "@/actions/detect";
 import { templateToTheme } from "@/lib/editing-styles";
-import { getSuggestedVelocity } from "@/lib/velocity";
+import { getSuggestedVelocity, ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
 import { uuid } from "@/lib/utils";
 
 const DETECTION_PASSES = [
@@ -99,7 +99,9 @@ export default function DetectingStep() {
           captionText: "",
           captionStyle: "Bold" as const,
           selectedFilter: state.selectedTemplate?.suggestedFilter ?? ("None" as const),
-          velocityPreset: getSuggestedVelocity(theme),
+          velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
+            ? (c.velocityPreset as VelocityPreset)
+            : getSuggestedVelocity(theme),
         }));
 
         setProgress(100);

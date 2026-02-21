@@ -191,6 +191,7 @@ export function getSuggestedVelocity(theme: string): VelocityPreset {
     cooking: "normal",
     pets: "normal",
     vlog: "normal",
+    wedding: "ramp_out",
     cinematic: "ramp_out",
   };
   return map[theme] ?? "normal";

@@ -41,6 +41,7 @@ export type DetectedTheme =
   | "fitness"
   | "pets"
   | "vlog"
+  | "wedding"
   | "cinematic";
 
 export interface DetectedClip {
@@ -50,6 +51,7 @@ export interface DetectedClip {
   endTime: number;
   confidenceScore: number;
   label: string;
+  velocityPreset: string;
   order: number;
 }
 
@@ -231,7 +233,7 @@ Respond with ONLY a JSON array:
  * from the scored frames across all source files.
  */
 const VALID_THEMES: DetectedTheme[] = [
-  "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "cinematic",
+  "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "wedding", "cinematic",
 ];
 
 async function planHighlightTape(
@@ -258,10 +260,10 @@ ${sourceList}
 TOP SCORING MOMENTS (from AI frame analysis):
 ${topScores}
 
-You must do TWO things:
+You must do THREE things:
 
 1. DETECT THE CONTENT THEME — analyze what the content is about and pick the best editing style.
-   Choose exactly one: sports, cooking, travel, gaming, party, fitness, pets, vlog, cinematic
+   Choose exactly one: sports, cooking, travel, gaming, party, fitness, pets, vlog, wedding, cinematic
    - sports: athletic/competition content → fast cuts, flash transitions, zoom punches
    - cooking: food preparation/plating → smooth dissolves, warm tones, gentle pacing
    - travel: scenic/adventure/landmarks → cinematic dissolves, light leaks, slow zooms
@@ -270,6 +272,7 @@ You must do TWO things:
    - fitness: workouts/gym/exercise → impact zooms, power flashes
    - pets: animals/pets → soft crossfades, warm glows, gentle pacing
    - vlog: daily life/talking head → clean jump cuts, minimal transitions
+   - wedding: ceremony/vows/reception/first dance/toasts → romantic dissolves, elegant slow reveals, warm tones
    - cinematic: general/mixed/artistic → film dissolves, subtle light leaks
 
 2. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments optimized for TikTok/Reels virality.
@@ -291,11 +294,31 @@ You must do TWO things:
    - Avoid consecutive clips from the same source file when possible (visual variety = pattern interrupt)
 ${templateName ? `   - Style hint: ${templateName}` : ""}
 
+3. ASSIGN VELOCITY PRESETS — give each clip its own speed curve. Variety is critical.
+   NEVER give every clip the same preset — that kills the rhythm.
+
+   Available presets:
+   - "hero": fast approach → dramatic slow-mo at the peak → fast recovery. Best for: action peaks, emotional hits, hero moments.
+   - "bullet": snap into extreme slow-mo and hold. Best for: impact moments, surprising reveals, dramatic reactions.
+   - "montage": pulse between fast and slow on beats. Best for: dancing, rhythmic action, multi-beat sequences.
+   - "ramp_in": gradually build speed. Best for: approach shots, building tension, energy ramp-ups.
+   - "ramp_out": start fast then dramatic deceleration. Best for: cinematic reveals, landing moments, emotional arrivals.
+   - "normal": constant 1x speed. Best for: dialogue, calm moments, breathing room between intense clips.
+
+   PACING RULES (this is what separates pro edits from amateur):
+   - Clip #1 (hook): "hero" or "bullet" — stop the scroll with dramatic speed.
+   - Clip #2 (sustain): contrast with the hook — if hook was "hero", use "normal" or "ramp_in".
+   - Middle clips: alternate intensity. After a speed-ramped clip, use "normal" for breathing room.
+     After "normal", hit them with "hero" or "bullet". Never use the same preset twice in a row.
+   - Final clip: "hero" or "ramp_out" — end on a dramatic note.
+   - For photos: always use "normal".
+   - Maximum 2 clips with the same preset in the entire tape.
+
 For video clips: startTime and endTime (${MIN_CLIP_DURATION}-${MAX_CLIP_DURATION}s each).
 For photos: startTime=0, endTime=${PHOTO_DISPLAY_DURATION}.
 
 Respond with ONLY a JSON object:
-{"theme": "sports", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 15, "label": "brief description", "confidenceScore": 0.9}]}`;
+{"theme": "party", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 15, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero"}]}`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -333,6 +356,7 @@ Respond with ONLY a JSON object:
             endTime: number;
             label: string;
             confidenceScore: number;
+            velocityPreset?: string;
           }>;
         };
 
@@ -341,6 +365,8 @@ Respond with ONLY a JSON object:
             ? (parsed.theme as DetectedTheme)
             : "cinematic";
 
+        const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
+
         const clips = (parsed.clips ?? []).map((p, i) => ({
           id: crypto.randomUUID(),
           sourceFileId: p.sourceFileId,
@@ -348,6 +374,9 @@ Respond with ONLY a JSON object:
           endTime: p.endTime,
           confidenceScore: Math.max(0, Math.min(1, p.confidenceScore)),
           label: p.label || "Highlight",
+          velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
+            ? p.velocityPreset
+            : "normal",
           order: i,
         }));
 
@@ -367,6 +396,7 @@ Respond with ONLY a JSON object:
       endTime: number;
       label: string;
       confidenceScore: number;
+      velocityPreset?: string;
     }>;
 
     return {
@@ -377,6 +407,7 @@ Respond with ONLY a JSON object:
         endTime: p.endTime,
         confidenceScore: Math.max(0, Math.min(1, p.confidenceScore)),
         label: p.label || "Highlight",
+        velocityPreset: p.velocityPreset || "normal",
         order: i,
       })),
       detectedTheme: "cinematic",
@@ -385,6 +416,13 @@ Respond with ONLY a JSON object:
     console.error("Planning error:", err);
     return { clips: [], detectedTheme: "cinematic" };
   }
+}
+
+/** Fallback velocity assignment that varies by clip position (hook → build → peak → resolve). */
+const FALLBACK_VELOCITIES = ["hero", "normal", "bullet", "ramp_in", "ramp_out"];
+function fallbackVelocity(index: number, isPhoto: boolean): string {
+  if (isPhoto) return "normal";
+  return FALLBACK_VELOCITIES[index % FALLBACK_VELOCITIES.length];
 }
 
 /**
@@ -415,6 +453,7 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
         endTime: PHOTO_DISPLAY_DURATION,
         confidenceScore: best.score,
         label: best.label,
+        velocityPreset: "normal",
         order: order++,
       });
     } else {
@@ -437,6 +476,7 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
         endTime: Math.round(Math.min(center + halfDur, center + MAX_CLIP_DURATION / 2) * 10) / 10,
         confidenceScore: Math.round((nearby.reduce((s, f) => s + f.score, 0) / nearby.length) * 100) / 100,
         label: best.label,
+        velocityPreset: fallbackVelocity(order, false),
         order: order++,
       });
     }
@@ -466,6 +506,7 @@ function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
         endTime: PHOTO_DISPLAY_DURATION,
         confidenceScore: Math.round((0.9 - i * 0.08) * 100) / 100,
         label: "Photo moment",
+        velocityPreset: "normal",
         order: i,
       });
     } else {
@@ -479,6 +520,7 @@ function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
         endTime: Math.min(maxTime, center + halfDur),
         confidenceScore: Math.round((0.95 - i * 0.1) * 100) / 100,
         label: ["Opening hook", "Action moment", "Peak energy", "Key scene", "Closing shot"][i % 5],
+        velocityPreset: fallbackVelocity(i, false),
         order: i,
       });
     }

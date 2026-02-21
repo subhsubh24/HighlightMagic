@@ -108,6 +108,16 @@ export const EDITING_STYLES: Record<EditingTheme, EditingStyle> = {
     entryPunchScale: 1.0,
     entryPunchDuration: 0,
   },
+  wedding: {
+    theme: "wedding",
+    label: "Wedding",
+    description: "Romantic dissolves, elegant slow reveals, warm light leaks — timeless love story",
+    transitionDuration: 0.9,
+    transitions: ["crossfade", "light_leak", "soft_zoom", "dip_to_black", "crossfade"],
+    kenBurnsIntensity: 0.07,
+    entryPunchScale: 1.01,
+    entryPunchDuration: 0.25,
+  },
   cinematic: {
     theme: "cinematic",
     label: "Cinematic",
@@ -133,6 +143,7 @@ export function templateToTheme(templateId: string): EditingTheme {
     "daily-life": "vlog",
     gaming: "gaming",
     party: "party",
+    wedding: "wedding",
   };
   return map[templateId] ?? "cinematic";
 }
@@ -181,5 +192,6 @@ export const ALL_THEMES: EditingTheme[] = [
   "fitness",
   "pets",
   "vlog",
+  "wedding",
   "cinematic",
 ];

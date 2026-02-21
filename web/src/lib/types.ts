@@ -98,6 +98,7 @@ export type EditingTheme =
   | "fitness"
   | "pets"
   | "vlog"
+  | "wedding"
   | "cinematic";
 
 // ── App state ──
