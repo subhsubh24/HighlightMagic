@@ -1,4 +1,5 @@
 import { WifiOff } from "lucide-react";
+import { IOS_APP_STORE_URL } from "@/lib/constants";
 
 export default function OfflinePage() {
   return (
@@ -11,7 +12,7 @@ export default function OfflinePage() {
       <p className="text-sm text-[var(--text-tertiary)]">
         Want offline AI? Get the{" "}
         <a
-          href="https://apps.apple.com/app/highlight-magic/id0000000000"
+          href={IOS_APP_STORE_URL}
           className="text-[var(--accent)] underline"
         >
           iOS app

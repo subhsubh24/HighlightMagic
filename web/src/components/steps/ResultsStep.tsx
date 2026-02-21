@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
 import { useRef, useState } from "react";
@@ -60,8 +60,25 @@ export default function ResultsStep() {
         </div>
       </div>
 
+      {/* Empty state */}
+      {sortedClips.length === 0 && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">
+          <VideoOff className="h-16 w-16 text-[var(--text-tertiary)]" />
+          <h3 className="text-xl font-bold text-white">No Highlights Found</h3>
+          <p className="max-w-sm text-center text-[var(--text-secondary)]">
+            Try different videos or photos — clips with more action, faces, or variety tend to work best.
+          </p>
+          <button
+            onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
+            className="btn-primary"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
       {/* Tape overview — horizontal mini-timeline */}
-      <div className="flex gap-1 rounded-xl bg-white/5 p-2 overflow-x-auto">
+      {sortedClips.length > 0 && (<><div className="flex gap-1 rounded-xl bg-white/5 p-2 overflow-x-auto">
         {sortedClips.map((clip, index) => {
           const media = getMediaFile(state, clip.sourceFileId);
           const duration = clip.trimEnd - clip.trimStart;
@@ -211,6 +228,7 @@ export default function ResultsStep() {
           template — filter & music auto-applied during edit
         </div>
       )}
+      </>)}
     </div>
   );
 }

@@ -90,8 +90,27 @@ struct EditorView: View {
                     .padding(Constants.Layout.padding)
                 }
             } else {
-                Text("Clip not found")
-                    .foregroundStyle(Theme.textSecondary)
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.orange)
+                    Text("Clip not found")
+                        .font(Theme.headline)
+                        .foregroundStyle(.white)
+                    Text("This clip may have been removed.")
+                        .font(Theme.body)
+                        .foregroundStyle(Theme.textSecondary)
+                    Button {
+                        appState.navigationPath.removeLast()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                            Text("Go Back")
+                        }
+                        .font(Theme.headline)
+                        .foregroundStyle(Theme.accent)
+                    }
+                }
             }
         }
         .navigationTitle("Edit Clip")

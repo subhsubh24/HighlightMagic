@@ -20,6 +20,7 @@ export default function DetectingStep() {
   const { state, dispatch } = useApp();
   const [progress, setProgress] = useState(0);
   const [passIndex, setPassIndex] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const hasStarted = useRef(false);
 
   const fileCount = state.mediaFiles.length;
@@ -110,11 +111,29 @@ export default function DetectingStep() {
         dispatch({ type: "SET_STEP", step: "results" });
       } catch (err) {
         console.error("Detection failed:", err);
-        dispatch({ type: "SET_STEP", step: "upload" });
+        setError("Detection failed. Please try again or use different files.");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (error) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-red-500/20">
+          <Sparkles className="h-9 w-9 text-red-400" />
+        </div>
+        <h2 className="text-xl font-bold text-white">Something went wrong</h2>
+        <p className="max-w-sm text-center text-[var(--text-secondary)]">{error}</p>
+        <button
+          onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
+          className="btn-primary mt-2"
+        >
+          Go Back &amp; Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 animate-fade-in">

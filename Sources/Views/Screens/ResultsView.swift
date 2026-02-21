@@ -12,54 +12,79 @@ struct ResultsView: View {
 
             ScrollView {
                 VStack(spacing: 24) {
-                    // Header
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.green)
+                    if appState.generatedClips.isEmpty {
+                        // Empty state
+                        VStack(spacing: 16) {
+                            Image(systemName: "video.slash")
+                                .font(.system(size: 56))
+                                .foregroundStyle(Theme.textTertiary)
 
-                        Text("Found \(appState.generatedClips.count) Highlights")
-                            .font(Theme.title)
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText())
+                            Text("No Highlights Found")
+                                .font(Theme.title)
+                                .foregroundStyle(.white)
 
-                        Text("Apply a template or tap clips to edit individually")
+                            Text("Try a different video or adjust your prompt to help the AI find the best moments.")
+                                .font(Theme.body)
+                                .foregroundStyle(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 24)
+
+                            PrimaryButton(title: "Try Again", icon: "arrow.counterclockwise") {
+                                appState.clearSession()
+                                appState.navigationPath = NavigationPath()
+                            }
+                            .padding(.top, 8)
+                        }
+                        .padding(.top, 60)
+                    } else {
+                        // Header
+                        VStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 44))
+                                .foregroundStyle(.green)
+
+                            Text("Found \(appState.generatedClips.count) Highlights")
+                                .font(Theme.title)
+                                .foregroundStyle(.white)
+                                .contentTransition(.numericText())
+
+                            Text("Apply a template or tap clips to edit individually")
+                                .font(Theme.body)
+                                .foregroundStyle(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 8)
+                        .accessibilityElement(children: .combine)
+
+                        // Template carousel
+                        templateCarousel
+
+                        // Clip cards
+                        ForEach(appState.generatedClips) { clip in
+                            ClipCard(
+                                clip: clip,
+                                thumbnail: thumbnails[clip.id]
+                            ) {
+                                appState.navigationPath.append(AppScreen.editor(clipID: clip.id))
+                            }
+                            .accessibilityLabel("Highlight: \(clip.segment.label), \(Int(clip.duration)) seconds")
+                            .accessibilityHint("Double tap to edit this clip")
+                        }
+
+                        // Start over
+                        Button {
+                            appState.clearSession()
+                            appState.navigationPath = NavigationPath()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Start Over")
+                            }
                             .font(Theme.body)
                             .foregroundStyle(Theme.textSecondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 8)
-                    .accessibilityElement(children: .combine)
-
-                    // Template carousel
-                    templateCarousel
-
-                    // Clip cards
-                    ForEach(appState.generatedClips) { clip in
-                        ClipCard(
-                            clip: clip,
-                            thumbnail: thumbnails[clip.id]
-                        ) {
-                            appState.navigationPath.append(AppScreen.editor(clipID: clip.id))
+                            .padding(.top, 16)
                         }
-                        .accessibilityLabel("Highlight: \(clip.segment.label), \(Int(clip.duration)) seconds")
-                        .accessibilityHint("Double tap to edit this clip")
-                    }
-
-                    // Start over
-                    Button {
-                        appState.clearSession()
-                        appState.navigationPath = NavigationPath()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.counterclockwise")
-                            Text("Start Over")
-                        }
-                        .font(Theme.body)
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(.top, 16)
-                    }
-                }
+                    }}
                 .padding(Constants.Layout.padding)
             }
         }

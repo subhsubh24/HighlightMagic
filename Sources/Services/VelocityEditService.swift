@@ -136,7 +136,17 @@ actor VelocityEditService {
                 beatInterval: beatMap.beatInterval
             )
         case .none:
-            fatalError("Unreachable")
+            return VelocityMap(
+                segments: [VelocitySegment(
+                    sourceStart: 0,
+                    sourceEnd: clipDuration,
+                    speed: 1.0,
+                    easeIn: false,
+                    easeOut: false
+                )],
+                originalDuration: clipDuration,
+                outputDuration: clipDuration
+            )
         }
     }
 

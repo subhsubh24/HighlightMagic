@@ -29,7 +29,7 @@ import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
 
-type ExportPhase = "preview" | "rendering" | "done" | "limit-hit";
+type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
 
 /** Try codecs in preference order. */
 function pickMimeType(): { mimeType: string; ext: string } {
@@ -106,7 +106,7 @@ export default function ExportStep() {
       haptic([10, 50, 10]);
     } catch (err) {
       console.error("Export failed:", err);
-      setPhase("preview");
+      setPhase("error");
     }
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
@@ -328,6 +328,28 @@ export default function ExportStep() {
               </div>
             </a>
           )}
+        </div>
+      )}
+
+      {/* Error phase */}
+      {phase === "error" && (
+        <div className="flex flex-col items-center gap-6 py-12">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-red-500/20">
+            <Film className="h-9 w-9 text-red-400" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-xl font-bold text-white">Export Failed</h3>
+            <p className="mt-1 max-w-sm text-[var(--text-secondary)]">
+              Something went wrong while rendering your highlight tape. Please try again.
+            </p>
+          </div>
+          <button
+            onClick={() => setPhase("preview")}
+            className="btn-primary flex items-center gap-2"
+          >
+            <RotateCcw className="h-5 w-5" />
+            Try Again
+          </button>
         </div>
       )}
 

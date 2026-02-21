@@ -224,7 +224,11 @@ struct ExportView: View {
             return
         }
 
-        guard let clip, let video = appState.selectedVideo else { return }
+        guard let clip, let video = appState.selectedVideo else {
+            exportState = .failed("Could not load clip or video. Please go back and try again.")
+            HapticFeedback.error()
+            return
+        }
 
         exportState = .exporting
         exportProgress = 0
