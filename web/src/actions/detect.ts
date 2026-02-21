@@ -323,7 +323,16 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    A visually calm frame with a sudden audio spike = something just happened (reaction moment).
    Rising audio energy = building tension. Audio peak + visual peak = HERO moment.
 
-Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 7 dimensions, including audio):
+8. TEMPORAL DYNAMICS — Where does this frame sit in the moment's arc?
+   This is what separates editors who find moments from editors who FEEL them.
+   - Is this the PEAK of the action, or the wind-up just BEFORE impact?
+   - Is energy RISING (anticipation/approach), PEAKING (climax/impact), or FALLING (aftermath/reaction)?
+   - Peak moments are rare and precious — the ball hitting the net, the first bite, the jump's apex.
+   - Wind-up frames create tension that makes peaks DEVASTATING (the arm pulling back before the throw).
+   - Aftermath frames capture raw reaction (the face 0.5s after the surprise, the crowd erupting).
+   - Compare each frame to its neighbors in the timeline — is energy building or releasing?
+
+Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 8 dimensions):
 - 0.85-1.0: VIRAL POTENTIAL — this frame alone could carry a reel. Scroll-stopping,
   emotionally loaded, share-worthy. Peak action, raw genuine emotion, stunning composition,
   dramatic lighting, unexpected beauty, decisive moments, perfect timing.
@@ -338,14 +347,16 @@ Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 7 dimensions, i
 LABEL INSTRUCTIONS — This is CRITICAL. Your label is the planner's EYES.
 
 The tape planner will read your labels to understand the footage WITHOUT seeing the images.
-Your label must capture THREE things in one vivid sentence:
+Your label must capture FIVE things in one vivid sentence:
 1. WHAT's in the frame (specific, cinematic description)
-2. WHY it's viral (the emotional/visual hook)
-3. HOW it could be used (its narrative role)
+2. MOTION — what's moving and how (camera panning, subject mid-leap, static close-up, slow drift)
+3. ENERGY ARC — is this a build-up, peak, or aftermath? (approaching impact / at the apex / reacting after)
+4. WHY it's viral (the emotional/visual hook)
+5. HOW it could be used (its narrative role + suggested speed treatment)
 
-NOT: "people dancing" → YES: "group mid-air jumping in sync under pink strobes, confetti suspended — hero shot energy, share-worthy spectacle"
-NOT: "food on plate" → YES: "golden-crusted salmon with steam curl under warm pendant, microgreen garnish catching light — save-worthy food porn, could open or close the tape"
-NOT: "person smiling" → YES: "genuine surprised reaction, mouth open eyes wide, warm golden-hour backlight — perfect reaction beat to juxtapose after a reveal"
+NOT: "people dancing" → YES: "group mid-air jumping in sync under pink strobes, confetti frozen at apex — PEAK energy, share-worthy spectacle, hero shot begging for bullet slow-mo"
+NOT: "food on plate" → YES: "golden-crusted salmon, steam curl drifting up under warm pendant, camera slowly pushing in — RISING beauty, save-worthy food porn, could open the tape with ramp_out into the detail"
+NOT: "person smiling" → YES: "genuine shocked reaction 0.5s after reveal, mouth open eyes wide, completely still — AFTERMATH energy, golden-hour backlight, perfect reaction beat to hard-cut after a hero moment"
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
@@ -715,26 +726,54 @@ Use audio to make SMARTER editing decisions:
 - Sudden audio spike with calm visual = something just happened off-screen (reaction opportunity)
 - Audio silence boundaries = natural clip boundaries — the content is telling you where to cut
 
-STEP 3: CREATE THE HIGHLIGHT TAPE
-You're making a reel that needs to compete with millions of other posts for attention.
+STEP 3: CHOOSE YOUR REEL STRUCTURE
+Before placing a single clip, decide the ARCHITECTURE. Random clip order = amateur.
+Intentional structure = professional. Choose the pattern that fits YOUR content:
 
-THE HOOK (Clip 1): 65% of viewers decide whether to keep watching in the first 1.5 seconds.
+COLD OPEN — Start at the climax, then rewind to build back.
+  Clip 1 is the peak moment (teaser). Then context/build-up. Then we arrive at the full peak again.
+  Best for: one big moment with a story (the winning goal, the proposal, the reveal).
+  Why it works: instant hook + curiosity ("how did we get here?") + satisfying payoff.
+
+ESCALATION — Each clip tops the last. Start strong, end STRONGEST.
+  Low energy → medium → high → higher → HIGHEST. The reel is a crescendo.
+  Best for: highlight compilations, trip montages, "best of" content.
+  Why it works: every clip feels like "it can't get better" → and then it does.
+
+CONTRAST CUT — Alternate between opposing energies. A ↔ B ↔ A ↔ B.
+  Quiet → loud. Before → after. Solo → group. Stillness → explosion.
+  Best for: transformations, multi-source variety, day/night content.
+  Why it works: contrast amplifies both sides. Silence makes the drop LOUDER.
+
+RHYTHM BUILD — Short punchy clips that get longer as stakes increase.
+  0.5s, 0.5s, 0.5s, 0.8s, 0.8s, 1.5s, 3s hero, 0.5s, 0.5s, 2s closer.
+  Best for: music-driven edits, party content, sports montages, dance compilations.
+  Why it works: fast cuts create urgency, longer clips create weight. The rhythm IS the story.
+
+EMOTIONAL ARC — Setup → rising tension → climax → emotional release → reflective close.
+  The classic story structure. Works for EVERYTHING when done well.
+  Best for: event films, wedding content, day-in-the-life, travel stories.
+  Why it works: humans are wired for narrative. A story with a climax feels COMPLETE.
+
+THE HOOK (Clip 1): 65% of viewers decide in the first 1.5 seconds. Period.
 Your first clip MUST be the single most visually striking, emotionally compelling, or
-unexpected moment. What would stop a thumb mid-scroll? Think about what this looks like
-on a phone screen — does it POP at small size? Is there immediate visual intrigue?
+unexpected moment in the footage. On a 6-inch phone, mid-scroll, half-brightness — does
+this STOP a thumb? If you chose Cold Open, this is your climax teaser. If Escalation,
+this is your lowest bar (but it still needs to be strong enough to HOOK).
 
-RETENTION (Middle clips): Pattern interrupts keep viewers watching. Use these techniques:
-- ENERGY OSCILLATION: high ↔ low, close-up ↔ wide, fast ↔ slow, loud ↔ quiet
-- CROSS-SOURCE CUTTING: alternate between sources to create variety and storytelling
-- DURATION VARIATION: mix short punchy beats with longer hero moments — monotonous timing kills retention
-- INFORMATION DENSITY: every clip should add something NEW — new angle, new emotion, new information
-- MICRO-HOOKS: within the tape, create moments that make the viewer think "wait, what comes next?"
+RETENTION (Middle clips): The 3-SECOND BRAIN — mobile viewers re-evaluate every 3 seconds.
+Every 3 seconds, something must change: new clip, new energy level, new visual, speed shift.
+- ENERGY OSCILLATION: high ↔ low, close ↔ wide, fast ↔ slow, loud ↔ quiet
+- TENSION-RELEASE CYCLES: build → payoff → breathe → build. Never sustain one energy too long.
+- CROSS-SOURCE CUTTING: alternate between sources for variety and implied storytelling
+- DURATION VARIATION: mix 0.5s beats with 3-4s hero holds. Monotonous timing = death.
+- INFORMATION DENSITY: every clip adds something NEW — angle, emotion, information, energy level
+- MICRO-HOOKS: moments that make the viewer think "wait, what comes next?" — keep them past the mid-point
 
-THE CLOSE (Last clip): End on a moment that serves TWO purposes:
-1. EMOTIONAL PEAK — the viewer should feel something (satisfaction, awe, joy, laughter)
-2. LOOP TRIGGER — when the reel restarts from the beginning, the transition should feel smooth
-   or intentional. If clip 1 is high energy and the last clip ends on high energy → seamless loop.
-   A great loop makes people watch 2-3x, which MASSIVELY boosts algorithmic distribution.
+THE CLOSE (Last clip): Must serve TWO purposes simultaneously:
+1. EMOTIONAL PEAK — the viewer should feel satisfied, awed, delighted, or moved
+2. LOOP TRIGGER — when the reel restarts, the last→first transition should feel intentional.
+   Match energy levels (both high, or both calm). A great loop = 2-3x watches = algorithm boost.
 
 YOU DECIDE EVERYTHING:
 - How many clips to use (as many as the content needs)
@@ -752,39 +791,108 @@ For each clip, you make EVERY visual decision. Think about what makes NFL player
 top influencer reels look so polished — it's because every single cut, color grade, and
 effect is chosen intentionally for THAT specific moment.
 
-VELOCITY PRESETS — speed ramping separates amateur from pro:
-- "hero": fast approach → dramatic slow-mo at peak → fast recovery
-- "bullet": snap into extreme slow-mo and hold — impact moments, peak action
-- "montage": pulse between fast and slow — rhythmic sequences, dancing
-- "ramp_in": gradually accelerate — building tension toward climax
-- "ramp_out": fast then dramatic deceleration — arrivals, reveals, landings
-- "normal": constant 1x speed — breathing room, dialogue, calm moments
-Think about the velocity arc of the ENTIRE tape like a song: intro → build → drop → build → climax.
+VELOCITY PRESETS — speed ramping is what separates "nice edit" from "HOW did they do that":
 
-TRANSITIONS — choose the SPECIFIC transition entering each clip (skip for clip 1):
-High-energy: "flash" (white flash), "zoom_punch" (zoom slam), "whip" (horizontal wipe),
-             "hard_flash" (darken→blast→reveal), "glitch" (RGB shift + scan lines)
-Smooth:      "crossfade" (dissolve), "light_leak" (warm golden overlay), "soft_zoom" (gentle zoom dissolve)
-Stylized:    "color_flash" (neon color flash), "strobe" (rapid on/off flash)
-Clean:       "hard_cut" (instant cut), "dip_to_black" (fade to black then up)
-Mix them strategically — a zoom_punch into an action shot, a crossfade into an emotional moment,
-a hard_cut for rhythm. Never repeat the same transition twice in a row (pattern interrupt).
-Also set transitionDuration per clip: 0.15s (instant) to 1.0s (cinematic dissolve).
+KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
+The velocity preset defines WHEN slow-mo happens. Your clip boundaries decide WHAT gets the slow-mo.
 
-COLOR GRADING — choose the filter for each clip:
-"TealOrange" (sports/cinematic), "GoldenHour" (warm/dreamy), "MoodyCinematic" (moody/dark),
-"Vibrant" (saturated/energetic), "Warm" (cozy/intimate), "Cool" (clean/modern),
-"CleanAiry" (bright/fresh), "VintageFilm" (nostalgic/retro), "Noir" (B&W dramatic),
-"Fade" (muted/editorial), "None" (natural)
-Pro editors DON'T use one grade for everything — they shift grades to create mood changes.
-A warm golden hero moment → cut to teal/orange action → back to warm for the close = emotional journey.
+- "hero": slow-mo lives at 35-55% through the clip. Fast approach → DRAMATIC SLOW-MO → fast out.
+  → Place startTime so the peak moment falls in the middle third of the clip.
+  → If the big moment is at t=12s in source, try startTime=9, endTime=16 (peak at ~43%).
+  → The fast lead-in BUILDS TENSION, the slow-mo lets the audience FEEL the moment, the fast exit maintains energy.
+
+- "bullet": snap to extreme slow-mo at 25%, holds until 65%. The clip IS the moment.
+  → Place the peak moment early. The entire middle is slow-mo — every frame matters.
+  → Best for: peak action (the dunk, the flip, the catch), moments where detail is the payoff.
+
+- "ramp_out": decelerates to 0.3x at the end. The moment IS the destination.
+  → The peak should be at the END of the clip. We slow down INTO it.
+  → Best for: landings, reveals, punchlines, "and then..." moments. The payoff lives at the end.
+
+- "ramp_in": accelerates from 0.5x to 3x. Building toward something.
+  → The peak is AFTER this clip (the next clip delivers). This clip is the build-up.
+  → Best for: approach shots, tension building, "watch what happens next" energy.
+
+- "montage": pulses 3 times between fast and slow. Multiple beats within one clip.
+  → Use for rhythmic sequences where several micro-moments deserve emphasis.
+  → Best for: dancing, cooking sequences, multi-action sports, rapid-fire montage sections.
+
+- "normal": constant 1x. Use deliberately as BREATHING ROOM between ramped clips.
+  → Pro editors ramp almost everything. "Normal" = a conscious choice to let the audience rest.
+  → Best for: dialogue, establishing context, emotional pauses, calm before the storm.
+
+VELOCITY ARC OF THE TAPE — the speed ramp pattern should feel like a song:
+Intro (ramp_in/normal) → Build (montage/ramp_in) → DROP (hero/bullet) →
+Recovery (normal) → Second build (montage) → Finale (hero/bullet) → Outro (ramp_out into loop)
+
+TRANSITIONS ARE NOT DECORATION — THEY CREATE MEANING.
+Every cut communicates RELATIONSHIP between the outgoing and incoming moment.
+Choose the transition that tells the RIGHT STORY for that specific cut:
+
+"zoom_punch" → IMPACT. Slamming the viewer into a moment. "LOOK AT THIS."
+  Use entering: action peaks, reveals, dramatic moments. The incoming clip MUST justify the energy.
+"flash" → PUNCTUATION. A visual exclamation mark. Something just happened.
+  Use on: beat drops, impacts, surprise moments. The flash says "did you SEE that?"
+"hard_flash" → EXPLOSION. Darken → blast → reveal. Maximum dramatic weight.
+  Use on: the single biggest moment in the tape. The climactic cut. Use sparingly (1-2 per reel max).
+"whip" → MOMENTUM. Energy is flowing, we're going somewhere, time is moving.
+  Use between: moments with forward motion, scene changes that maintain energy, montage rhythm.
+"glitch" → DISRUPTION. Something unexpected. Digital chaos, surprise incoming.
+  Use before: reveals, tonal shifts, between contrasting moments. Injects unpredictability.
+"crossfade" → CONNECTION. These moments are linked. One BECOMES the other.
+  Use between: emotionally connected moments, same-subject different-angle, parallel stories.
+"light_leak" → MEMORY. Warmth, nostalgia, beauty. A soft emotional bridge.
+  Use into: beautiful/sentimental moments, golden hour, intimate scenes. Feels like remembering.
+"soft_zoom" → DRIFT. Gentle, contemplative. The visual equivalent of a deep breath.
+  Use into: establishing shots, calm moments, beauty reveals. Creates breathing room.
+"dip_to_black" → CHAPTER BREAK. A breath. Reset. "That was one thing, this is another."
+  Use on: major mood shifts, before the final act, after an emotional peak that needs space.
+"color_flash" → SYNESTHESIA. A beat you can SEE. Rhythm made visual. Neon energy.
+  Use on: music beats, rapid montage cuts, party/gaming energy, stylistic accents.
+"strobe" → RAPID-FIRE. Sensory overload, peak excitement, maximum energy.
+  Use on: climactic montage sequences, before a dramatic slowdown for contrast. Very intense.
+"hard_cut" → CONFIDENCE. No frills. "This content speaks for itself."
+  Use for: vlog style, when content is strong enough to carry, direct jumps, clean rhythm.
+
+CRITICAL PRINCIPLE: Match transition energy to what FOLLOWS, not what precedes.
+The transition PREPARES the viewer for what's coming. A zoom_punch into a calm scene = dissonant.
+A crossfade into an explosion = underwhelming. The transition is the PROMISE, the next clip is the DELIVERY.
+Never repeat the same transition twice in a row. Set transitionDuration: 0.15s (snappy) to 1.0s (cinematic).
+
+COLOR GRADING — color is EMOTION made visible. Shift grades to create a mood journey:
+"TealOrange" → cinematic drama, sports intensity, blockbuster energy
+"GoldenHour" → warmth, beauty, nostalgia, "magic hour" dreaminess
+"MoodyCinematic" → dark, moody, tension, dramatic weight, nighttime
+"Vibrant" → joy, energy, celebration, maximum saturation pop
+"Warm" → intimacy, coziness, connection, soft emotional moments
+"Cool" → clean, modern, calm, distance, sophistication
+"CleanAiry" → bright, fresh, daytime, youthful, optimistic
+"VintageFilm" → memory, nostalgia, throwback, "remember when" feeling
+"Noir" → dramatic B&W, isolation, artistic statement (use sparingly)
+"Fade" → muted editorial, understated, reflective calm
+"None" → the content's natural color is the right choice
+
+COLOR SHIFT PATTERNS that create emotional journeys:
+- Warm opener → TealOrange action → Warm close = "cozy → intense → cozy" (satisfaction loop)
+- MoodyCinematic build → Vibrant drop = tension → release (the color change IS the payoff)
+- VintageFilm flashback → CleanAiry present = nostalgia → now (time contrast)
+- Cool establishing → GoldenHour hero = detached → intimate (emotional deepening)
+Don't use one grade for everything. 2-3 intentional shifts across the tape = professional.
 
 ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
 Action clips → 1.03-1.05 (impactful pop). Emotional clips → 1.0-1.01 (gentle or none).
 
-CAPTIONS — optional text overlay for key moments (leave empty if the visual speaks for itself):
-Short, punchy text (2-5 words max). Only on moments that benefit from emphasis.
-captionStyle: "Bold" (impact), "Minimal" (clean), "Neon" (glow), "Classic" (elegant)
+CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes the moment HIT harder:
+2-5 words max. The text should add a layer the visual alone can't provide.
+- Emotional amplifier: "no way." / "that feeling." / "every. single. time."
+- Context that transforms meaning: "day 1 vs day 365" / "she had no idea" / "watch this"
+- Reaction trigger: "wait for it" / "the precision." / "obsessed"
+captionStyle should MATCH the moment:
+"Bold" → impact moments, exclamations, big energy (pop entrance animation)
+"Minimal" → understated, elegant, "the visual does the talking" (slide-up entrance)
+"Neon" → party, gaming, nightlife, stylistic accent (flicker-on animation)
+"Classic" → sentimental, timeless, wedding/travel (typewriter reveal)
+Use captions on 30-50% of clips max. Over-captioning = amateur. Strategic captions = editorial.
 
 KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
