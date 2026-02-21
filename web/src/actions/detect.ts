@@ -2,10 +2,7 @@
 
 import {
   MAX_FRAMES_PER_BATCH,
-  HIGHLIGHT_CONFIDENCE_THRESHOLD,
-  MIN_CLIP_DURATION,
   MAX_CLIP_DURATION,
-  TARGET_CLIP_COUNT,
   PHOTO_DISPLAY_DURATION,
 } from "@/lib/constants";
 
@@ -325,88 +322,78 @@ async function planHighlightTape(
   // Select diverse frames for the planner to actually SEE
   const plannerFrames = selectPlannerFrames(scores, allFrames);
 
-  const systemPrompt = `You are an expert video editor creating an Instagram Reels / TikTok highlight tape.
-You are being shown the ACTUAL FRAMES from the source footage so you can see what you're working with.
+  const sourceCount = sourceFiles.size;
 
-SOURCE FILES:
+  const systemPrompt = `You are a world-class Instagram Reels / TikTok editor whose content gets millions of views.
+You are being shown the ACTUAL FRAMES from the user's source footage. Study them carefully.
+
+SOURCE FILES (${sourceCount} total):
 ${sourceList}
 
 SCORED MOMENTS (from frame-by-frame analysis — higher score = more highlight-worthy):
 ${topScores}
 
-You must do FOUR things in order:
+CRITICAL RULE: The user uploaded ${sourceCount} files because they want ALL of them in the tape.
+You MUST include at least one clip from EVERY source file. No exceptions.
+- Star sources get longer, more prominent clips (5-15s depending on genre)
+- Weaker sources still appear but as shorter beats (2-4s) — a quick flash, a reaction shot, a transitional moment
+- The user should never wonder "why didn't it use my clip?"
 
-1. WATCH & UNDERSTAND — Look at every frame image carefully. Describe what's actually happening
-   across all the source clips. What's the story? What's the vibe? Who's in it? What are the
-   peak moments vs. the filler? Think like a cinematographer reviewing dailies before making cuts.
+You must do FOUR things. Use your creative judgment for all of them — YOU are the editor.
+
+1. WATCH & UNDERSTAND — Look at every frame image. What's the story across all the footage?
+   What's the vibe? Who's in it? What are the peak moments? What's filler?
+   Think like a cinematographer reviewing dailies before making cuts.
    Put this in a "contentSummary" field (2-3 sentences, vivid and specific).
 
-2. DETECT THE CONTENT THEME — based on what you actually SAW, pick the editing style.
+2. DETECT THE CONTENT THEME — based on what you SAW, pick the best editing style.
    Choose exactly one: sports, cooking, travel, gaming, party, fitness, pets, vlog, wedding, cinematic
-   - sports: athletic/competition content → fast cuts, flash transitions, zoom punches
+   - sports: athletic/competition → fast cuts, flash transitions, zoom punches
    - cooking: food preparation/plating → smooth dissolves, warm tones, gentle pacing
    - travel: scenic/adventure/landmarks → cinematic dissolves, light leaks, slow zooms
    - gaming: screen recordings/esports → glitch effects, neon flashes, rapid cuts
-   - party: celebrations/nightlife/events → colored strobes, beat-sync energy
+   - party: celebrations/nightlife/events → colored strobes, beat-sync energy, rapid cuts
    - fitness: workouts/gym/exercise → impact zooms, power flashes
    - pets: animals/pets → soft crossfades, warm glows, gentle pacing
    - vlog: daily life/talking head → clean jump cuts, minimal transitions
-   - wedding: ceremony/vows/reception/first dance/toasts → romantic dissolves, elegant slow reveals, warm tones
+   - wedding: ceremony/vows/reception/first dance → romantic dissolves, elegant slow reveals, warm tones
    - cinematic: general/mixed/artistic → film dissolves, subtle light leaks
 
-3. CREATE THE HIGHLIGHT TAPE — up to ${TARGET_CLIP_COUNT} segments. Think about what would make
-   someone stop scrolling, watch to the end, and hit share.
+3. CREATE THE HIGHLIGHT TAPE — You decide how many clips and how long each one is.
+   Think about what would make someone stop scrolling, watch to the end, and hit share.
+   The total reel should feel like 15-45 seconds of pure magic.
 
-   EDITORIAL THINKING (do this before picking clips):
-   - What's the single most visually striking moment? That's your hook.
-   - What moments CONTRAST with each other? Contrast creates rhythm (action/calm, wide/close, fast/slow).
-   - What's the emotional peak? Build toward it, don't blow it early.
-   - What ending would make someone want to watch again? (Loop potential)
+   YOUR EDITORIAL PROCESS (think through this):
+   - Which moment is the most visually striking? That's your hook — put it first.
+   - What moments create CONTRAST? Contrast is rhythm (action/calm, wide/close, fast/slow).
+   - How do you build toward an emotional peak without blowing it too early?
+   - What ending invites replay? (Ideally visually similar to the hook for loop potential)
+   - How does each source file fit into the story you're telling?
 
-   HOOK-FIRST ORDERING (critical for scroll-stopping):
-   - Clip #1 MUST be the most visually striking, high-motion, or emotionally compelling moment.
-     The viewer decides to keep watching within 1.5 seconds. Pick the frame that would
-     stop someone mid-scroll: dramatic action, beautiful composition, surprising moment,
-     or peak emotion. Do NOT start with a calm establishing shot.
-   - Clip #2 should sustain the energy — match or build on the hook's intensity.
-   - Middle clips: vary the energy (action → reaction → beauty → humor) for pattern interrupts.
-   - Final clip: end on a peak moment or satisfying conclusion — this frames loop potential.
-     Ideally pick something visually similar to the hook so the loop back feels seamless.
-
-   ADDITIONAL RULES:
-   - Mix source files for a montage feel
+   Use your judgment on clip duration:
+   - Hero moments deserve 5-15s to breathe
+   - Quick beats, reactions, B-roll can be 2-4s — just enough to register
+   - Match the pacing to the genre and energy (party = fast cuts, wedding = let moments breathe)
    - Photos work as transition beats or emotional pauses (${PHOTO_DISPLAY_DURATION}s each)
-   - Avoid consecutive clips from the same source file when possible (visual variety = pattern interrupt)
+   - Avoid consecutive clips from the same source when possible
 ${templateName ? `   - Style hint: ${templateName}` : ""}
 
-   GENRE-SPECIFIC CLIP DURATION (critical — pacing defines the genre):
-   - party/gaming: SHORT & PUNCHY clips (${MIN_CLIP_DURATION}-8s). Cut on every beat. Energy dies if clips exceed 10s.
-   - sports/fitness: MEDIUM clips (${MIN_CLIP_DURATION}-12s). Hit hard, recover, hit again.
-   - wedding: MIX of short ceremony hits (${MIN_CLIP_DURATION}-8s) and longer emotional moments (8-15s to let moments breathe).
-   - travel/cinematic: LONGER clips OK (${MIN_CLIP_DURATION}-15s). Let the viewer soak in the visuals.
-   - cooking/pets/vlog: MEDIUM clips (${MIN_CLIP_DURATION}-12s). Comfortable, not rushed.
-
-4. ASSIGN VELOCITY PRESETS — give each clip its own speed curve. Variety is critical.
-   NEVER give every clip the same preset — that kills the rhythm.
+4. ASSIGN VELOCITY PRESETS — Pick the speed curve that serves each moment best.
+   You have full creative control. Variety creates rhythm; monotony kills it.
 
    Available presets:
-   - "hero": fast approach → dramatic slow-mo at the peak → fast recovery. Best for: action peaks, emotional hits, hero moments.
-   - "bullet": snap into extreme slow-mo and hold. Best for: impact moments, surprising reveals, dramatic reactions.
-   - "montage": pulse between fast and slow on beats. Best for: dancing, rhythmic action, multi-beat sequences.
-   - "ramp_in": gradually build speed. Best for: approach shots, building tension, energy ramp-ups.
-   - "ramp_out": start fast then dramatic deceleration. Best for: cinematic reveals, landing moments, emotional arrivals.
-   - "normal": constant 1x speed. Best for: dialogue, calm moments, breathing room between intense clips.
+   - "hero": fast approach → dramatic slow-mo at the peak → fast recovery
+   - "bullet": snap into extreme slow-mo and hold
+   - "montage": pulse between fast and slow on beats
+   - "ramp_in": gradually build speed (tension builder)
+   - "ramp_out": start fast then dramatic deceleration (landing/reveal)
+   - "normal": constant 1x speed (breathing room, dialogue, calm moments)
 
-   PACING RULES (this is what separates pro edits from amateur):
-   - Clip #1 (hook): "hero" or "bullet" — stop the scroll with dramatic speed.
-   - Clip #2 (sustain): contrast with the hook — if hook was "hero", use "normal" or "ramp_in".
-   - Middle clips: alternate intensity. After a speed-ramped clip, use "normal" for breathing room.
-     After "normal", hit them with "hero" or "bullet". Never use the same preset twice in a row.
-   - Final clip: "hero" or "ramp_out" — end on a dramatic note.
-   - For photos: always use "normal".
-   - Maximum 2 clips with the same preset in the entire tape.
+   Think about the rhythm of the whole tape. A great edit has contrast — intense moments
+   followed by breathing room, speed followed by slowdown. You're the editor, you decide
+   what each clip needs based on what's actually in it.
 
-For video clips: startTime and endTime (${MIN_CLIP_DURATION}-${MAX_CLIP_DURATION}s each).
+For video clips: startTime and endTime (2-${MAX_CLIP_DURATION}s each — you decide the duration).
 For photos: startTime=0, endTime=${PHOTO_DISPLAY_DURATION}.
 
 Respond with ONLY a JSON object:
@@ -557,6 +544,7 @@ function fallbackVelocity(index: number, total: number, isPhoto: boolean): strin
 
 /**
  * Fallback clustering for multi-source clips.
+ * Always includes every source file — no clip count cap.
  */
 function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
   const bySource = new Map<string, MultiFrameScore[]>();
@@ -566,11 +554,10 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
   }
 
   const clips: DetectedClip[] = [];
+  const totalSources = bySource.size;
   let order = 0;
 
   for (const [sourceFileId, fileScores] of bySource) {
-    if (clips.length >= TARGET_CLIP_COUNT) break;
-
     const sorted = [...fileScores].sort((a, b) => b.score - a.score);
     const best = sorted[0];
     if (!best) continue;
@@ -587,17 +574,18 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
         order: order++,
       });
     } else {
+      // Cluster nearby high-scoring frames around the best moment
       const nearby = fileScores.filter(
-        (f) =>
-          Math.abs(f.timestamp - best.timestamp) <= MAX_CLIP_DURATION / 2 &&
-          f.score >= HIGHLIGHT_CONFIDENCE_THRESHOLD * 0.7
+        (f) => Math.abs(f.timestamp - best.timestamp) <= MAX_CLIP_DURATION / 2
       );
 
       const timestamps = nearby.map((f) => f.timestamp);
       const minT = Math.min(...timestamps);
       const maxT = Math.max(...timestamps);
       const center = (minT + maxT) / 2;
-      const halfDur = Math.max(MIN_CLIP_DURATION / 2, (maxT - minT) / 2);
+      // Shorter clip (2s min) for weaker sources, longer for strong ones
+      const minHalf = best.score >= 0.65 ? 2.5 : 1;
+      const halfDur = Math.max(minHalf, (maxT - minT) / 2);
 
       clips.push({
         id: crypto.randomUUID(),
@@ -606,25 +594,27 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
         endTime: Math.round(Math.min(center + halfDur, center + MAX_CLIP_DURATION / 2) * 10) / 10,
         confidenceScore: Math.round((nearby.reduce((s, f) => s + f.score, 0) / nearby.length) * 100) / 100,
         label: best.label,
-        velocityPreset: fallbackVelocity(order, TARGET_CLIP_COUNT, false),
+        velocityPreset: fallbackVelocity(order, totalSources, false),
         order: order++,
       });
     }
   }
 
-  return clips.sort((a, b) => a.order - b.order);
+  // Sort by confidence descending then re-number with hook-first ordering
+  clips.sort((a, b) => b.confidenceScore - a.confidenceScore);
+  clips.forEach((c, i) => { c.order = i; });
+  return clips;
 }
 
 /**
  * Simulated multi-clip detection when no API key is configured.
+ * Always includes every source file.
  */
 function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
   const sourceIds = [...new Set(frames.map((f) => f.sourceFileId))];
   const clips: DetectedClip[] = [];
 
   sourceIds.forEach((sourceId, i) => {
-    if (clips.length >= TARGET_CLIP_COUNT) return;
-
     const sourceFrames = frames.filter((f) => f.sourceFileId === sourceId);
     const isPhoto = sourceFrames[0]?.sourceType === "photo";
 
@@ -634,7 +624,7 @@ function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
         sourceFileId: sourceId,
         startTime: 0,
         endTime: PHOTO_DISPLAY_DURATION,
-        confidenceScore: Math.round((0.9 - i * 0.08) * 100) / 100,
+        confidenceScore: Math.round((0.9 - i * 0.04) * 100) / 100,
         label: "Photo moment",
         velocityPreset: "normal",
         order: i,
@@ -642,15 +632,15 @@ function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
     } else {
       const maxTime = sourceFrames[sourceFrames.length - 1]?.timestamp ?? 30;
       const center = maxTime / 2;
-      const halfDur = MIN_CLIP_DURATION / 2 + Math.random() * 5;
+      const halfDur = 1 + Math.random() * 5;
       clips.push({
         id: crypto.randomUUID(),
         sourceFileId: sourceId,
         startTime: Math.max(0, center - halfDur),
         endTime: Math.min(maxTime, center + halfDur),
-        confidenceScore: Math.round((0.95 - i * 0.1) * 100) / 100,
-        label: ["Opening hook", "Action moment", "Peak energy", "Key scene", "Closing shot"][i % 5],
-        velocityPreset: fallbackVelocity(i, Math.min(sourceIds.length, TARGET_CLIP_COUNT), false),
+        confidenceScore: Math.round((0.95 - i * 0.05) * 100) / 100,
+        label: "Highlight moment",
+        velocityPreset: fallbackVelocity(i, sourceIds.length, false),
         order: i,
       });
     }
