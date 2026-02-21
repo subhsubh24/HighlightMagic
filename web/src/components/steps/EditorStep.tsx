@@ -6,7 +6,7 @@ import { useApp } from "@/lib/store";
 import { ALL_FILTERS, VIDEO_FILTERS } from "@/lib/filters";
 import { getAvailableTracks, getSuggestedTrackForTemplate } from "@/lib/music";
 import { formatTime, haptic } from "@/lib/utils";
-import type { VideoFilter, CaptionStyle, MusicTrack } from "@/lib/types";
+import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip } from "@/lib/types";
 
 const CAPTION_STYLES: { value: CaptionStyle; label: string; css: string }[] = [
   { value: "Bold", label: "Bold", css: "text-2xl font-black uppercase tracking-wider" },
@@ -48,7 +48,7 @@ export default function EditorStep() {
   const filterCSS = VIDEO_FILTERS[clip.selectedFilter];
   const captionCSS = CAPTION_STYLES.find((s) => s.value === clip.captionStyle)?.css ?? "";
 
-  const updateClip = (updates: Parameters<typeof dispatch>[0] extends { type: "UPDATE_CLIP" } ? Parameters<typeof dispatch>[0]["updates"] : never) => {
+  const updateClip = (updates: Partial<EditedClip>) => {
     dispatch({ type: "UPDATE_CLIP", clipId: clip.id, updates });
   };
 
