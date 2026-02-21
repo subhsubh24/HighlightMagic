@@ -135,22 +135,33 @@ async function analyzeMultiBatch(
     .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
     .join("\n");
 
-  const systemPrompt = `You are an expert video editor AI creating a highlight tape / TikTok-style edit from multiple source clips and photos.
+  const systemPrompt = `You are a top-tier Instagram/TikTok editor whose reels get millions of views.
+You're reviewing raw footage to find the moments that belong in a viral highlight reel.
 
 SOURCE FILES:
 ${sourceList}
 
-Analyze each frame and score it from 0.0 to 1.0 for "highlight potential" — how worthy it is of being in a viral highlight reel.
+For each frame, score 0.0-1.0 by thinking like someone scrolling Instagram:
 
-Consider:
-- Visual excitement, motion, emotion, composition
-- How well this moment would flow in a montage
-- Variety — moments that add different energy (action, reaction, beauty, humor)
-- Photos can be great for transitions, intros, or emotional beats
+SCROLL-STOPPING (0.85-1.0): Would you stop mid-scroll for this? Peak action, raw emotion,
+stunning composition, dramatic lighting, unexpected moments, faces showing genuine emotion,
+confetti/particles in motion, first kiss, goal scored, dance floor peak.
+
+STRONG (0.65-0.84): Compelling but not jaw-dropping. Good motion, interesting composition,
+key narrative beats, establishing shots that set the scene.
+
+FILLER (0.35-0.64): Generic, flat, poorly lit, nothing happening, blurry, backs of heads,
+setting up equipment, waiting around. Every event has these — skip them.
+
+UNUSABLE (0.0-0.34): Black frames, extreme blur, obstructed lens, test footage.
+
+Your label should be SPECIFIC and VIVID — not "people dancing" but "group jumping in sync
+under pink strobe lights" or "bride turning with veil catching golden backlight."
+The label helps the planner understand what this moment FEELS like.
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
-[{"index": 0, "score": 0.85, "label": "brief description of moment"}]`;
+[{"index": 0, "score": 0.85, "label": "vivid description of the moment"}]`;
 
   const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
 
@@ -527,11 +538,21 @@ Respond with ONLY a JSON object:
   }
 }
 
-/** Fallback velocity assignment that varies by clip position (hook → build → peak → resolve). */
-const FALLBACK_VELOCITIES = ["hero", "normal", "bullet", "ramp_in", "ramp_out"];
-function fallbackVelocity(index: number, isPhoto: boolean): string {
+/**
+ * Fallback velocity assignment based on clip position in the tape arc.
+ * Used only when the AI planning call fails entirely.
+ * Position-aware: hook → build → peak → resolve.
+ */
+function fallbackVelocity(index: number, total: number, isPhoto: boolean): string {
   if (isPhoto) return "normal";
-  return FALLBACK_VELOCITIES[index % FALLBACK_VELOCITIES.length];
+  if (total <= 1) return "hero";
+
+  const position = index / (total - 1); // 0.0 = first, 1.0 = last
+  if (index === 0) return "hero";               // Hook: dramatic
+  if (position < 0.4) return "ramp_in";         // Build: tension
+  if (position < 0.7) return "bullet";          // Peak: impact
+  if (index === total - 1) return "ramp_out";   // Resolve: decelerate
+  return "montage";                              // Fill: rhythmic
 }
 
 /**
@@ -585,7 +606,7 @@ function clusterMultiIntoClips(scores: MultiFrameScore[]): DetectedClip[] {
         endTime: Math.round(Math.min(center + halfDur, center + MAX_CLIP_DURATION / 2) * 10) / 10,
         confidenceScore: Math.round((nearby.reduce((s, f) => s + f.score, 0) / nearby.length) * 100) / 100,
         label: best.label,
-        velocityPreset: fallbackVelocity(order, false),
+        velocityPreset: fallbackVelocity(order, TARGET_CLIP_COUNT, false),
         order: order++,
       });
     }
@@ -629,7 +650,7 @@ function simulateMultiDetection(frames: MultiFrameInput[]): DetectedClip[] {
         endTime: Math.min(maxTime, center + halfDur),
         confidenceScore: Math.round((0.95 - i * 0.1) * 100) / 100,
         label: ["Opening hook", "Action moment", "Peak energy", "Key scene", "Closing shot"][i % 5],
-        velocityPreset: fallbackVelocity(i, false),
+        velocityPreset: fallbackVelocity(i, Math.min(sourceIds.length, TARGET_CLIP_COUNT), false),
         order: i,
       });
     }

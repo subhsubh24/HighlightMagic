@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
@@ -37,6 +37,7 @@ export default function TapePreviewPlayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [playerState, setPlayerState] = useState<"idle" | "playing" | "paused">("idle");
   const [progress, setProgress] = useState(0);
+  const [isMuted, setIsMuted] = useState(true);
   const pbRef = useRef({ startWall: 0, elapsed: 0, raf: 0 });
   const mediaMapRef = useRef<Map<string, HTMLVideoElement | HTMLImageElement>>(new Map());
   const activeClipsRef = useRef<Set<string>>(new Set());
@@ -107,7 +108,7 @@ export default function TapePreviewPlayer() {
       if (entry.mediaType === "video") {
         const v = document.createElement("video");
         v.src = entry.mediaUrl;
-        v.muted = true;
+        v.muted = isMuted;
         v.playsInline = true;
         v.preload = "auto";
         map.set(entry.clip.id, v);
@@ -127,7 +128,16 @@ export default function TapePreviewPlayer() {
         }
       }
     };
-  }, [timeline]);
+  }, [timeline, isMuted]);
+
+  // Sync mute state to all active video elements
+  useEffect(() => {
+    for (const [, el] of mediaMapRef.current) {
+      if (el instanceof HTMLVideoElement) {
+        el.muted = isMuted;
+      }
+    }
+  }, [isMuted]);
 
   // Set canvas size
   useEffect(() => {
@@ -446,6 +456,19 @@ export default function TapePreviewPlayer() {
         <div className="absolute left-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
           {style.label} style
         </div>
+
+        {/* Audio toggle */}
+        <button
+          onClick={() => setIsMuted((m) => !m)}
+          className="absolute right-2 bottom-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm transition-opacity hover:bg-black/70"
+          aria-label={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? (
+            <VolumeX className="h-4 w-4 text-white/70" />
+          ) : (
+            <Volume2 className="h-4 w-4 text-white" />
+          )}
+        </button>
 
         {/* Beat sync indicator */}
         {beatGrid && (

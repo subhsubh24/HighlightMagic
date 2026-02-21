@@ -277,7 +277,6 @@ export default function EditorStep() {
                 src={`${mediaUrl}#t=${clip.trimStart}`}
                 className="h-full w-full object-cover"
                 style={{ filter: filterCSS }}
-                muted
                 playsInline
                 onClick={handlePlay}
                 onTimeUpdate={() => {
