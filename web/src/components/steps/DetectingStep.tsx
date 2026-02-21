@@ -101,12 +101,19 @@ export default function DetectingStep() {
           trimEnd: c.endTime,
           order: c.order ?? i,
           selectedMusicTrack: null,
-          captionText: "",
-          captionStyle: "Bold" as const,
-          selectedFilter: state.selectedTemplate?.suggestedFilter ?? ("None" as const),
+          // AI decides captions (fallback to empty if not provided)
+          captionText: c.captionText ?? "",
+          captionStyle: (c.captionStyle ?? "Bold") as "Bold" | "Minimal" | "Neon" | "Classic",
+          // AI decides color grade (fallback to template, then "None")
+          selectedFilter: (c.filter ?? state.selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
           velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
             ? (c.velocityPreset as VelocityPreset)
             : ("normal" as VelocityPreset),
+          // Per-clip visual style from AI
+          transitionType: c.transitionType,
+          transitionDuration: c.transitionDuration,
+          entryPunchScale: c.entryPunchScale,
+          kenBurnsIntensity: c.kenBurnsIntensity,
         }));
 
         setProgress(100);

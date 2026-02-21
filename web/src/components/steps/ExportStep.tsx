@@ -420,7 +420,8 @@ async function renderHighlightTape(
   const ctx = canvas.getContext("2d")!;
 
   const style = getEditingStyle(theme);
-  const transitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
+  // Fallback transitions from theme — used only when AI didn't specify per-clip
+  const themeTransitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
 
   // Beat grid for beat-sync
   let beatGrid: BeatGrid | null = null;
@@ -462,15 +463,26 @@ async function renderHighlightTape(
       clipDuration = beats * beatGrid.beatInterval;
     }
 
-    const transType = i > 0 ? transitions[i - 1] : null;
+    // Per-clip transition: AI-decided takes priority, then theme fallback
+    const transType = i > 0
+      ? ((instruction.clip.transitionType as TransitionType) ?? themeTransitions[i - 1])
+      : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
+    // Per-clip style overrides: merge AI decisions with theme defaults
+    const clipStyle = {
+      ...style,
+      transitionDuration: instruction.clip.transitionDuration ?? style.transitionDuration,
+      entryPunchScale: instruction.clip.entryPunchScale ?? style.entryPunchScale,
+      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? style.kenBurnsIntensity,
+    };
+
     if (instruction.mediaType === "photo") {
-      await renderPhotoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
+      await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
     } else {
-      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
+      await renderVideoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
     }

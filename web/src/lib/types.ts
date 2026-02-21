@@ -71,6 +71,12 @@ export interface EditedClip {
   captionStyle: CaptionStyle;
   selectedFilter: VideoFilter;
   velocityPreset: VelocityPreset;
+  // Per-clip style overrides (AI-decided, user-overridable)
+  // When present, these take priority over theme defaults in rendering
+  transitionType?: string;   // e.g. "flash", "zoom_punch", "crossfade"
+  transitionDuration?: number; // seconds (overrides theme default)
+  entryPunchScale?: number;    // 1.0 = no punch, 1.05 = pop (overrides theme default)
+  kenBurnsIntensity?: number;  // 0-0.08 for photos (overrides theme default)
 }
 
 export interface ViralExportOptions {

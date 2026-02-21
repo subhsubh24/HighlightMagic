@@ -51,6 +51,14 @@ export interface DetectedClip {
   label: string;
   velocityPreset: string;
   order: number;
+  // Per-clip visual style (AI-decided)
+  transitionType?: string;
+  transitionDuration?: number;
+  filter?: string;
+  captionText?: string;
+  captionStyle?: string;
+  entryPunchScale?: number;
+  kenBurnsIntensity?: number;
 }
 
 export interface DetectionResult {
@@ -525,26 +533,55 @@ YOU DECIDE EVERYTHING:
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
-STEP 4: ASSIGN VELOCITY PRESETS
-Speed ramping is what separates amateur edits from pro edits on Instagram.
-Each clip gets a speed curve — choose the one that serves the CONTENT of that specific moment:
+STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
+For each clip, you make EVERY visual decision. Think about what makes NFL player pages and
+top influencer reels look so polished — it's because every single cut, color grade, and
+effect is chosen intentionally for THAT specific moment.
 
-- "hero": fast approach → dramatic slow-mo at the peak → fast recovery
-- "bullet": snap into extreme slow-mo and hold — for impact moments, collisions, peak action
-- "montage": pulse between fast and slow — for rhythmic sequences, dancing, sports plays
-- "ramp_in": gradually accelerate — for building tension toward a climax
-- "ramp_out": fast then dramatic deceleration — for arrivals, reveals, landings
-- "normal": constant 1x speed — breathing room, dialogue, calm moments, emotional beats
+VELOCITY PRESETS — speed ramping separates amateur from pro:
+- "hero": fast approach → dramatic slow-mo at peak → fast recovery
+- "bullet": snap into extreme slow-mo and hold — impact moments, peak action
+- "montage": pulse between fast and slow — rhythmic sequences, dancing
+- "ramp_in": gradually accelerate — building tension toward climax
+- "ramp_out": fast then dramatic deceleration — arrivals, reveals, landings
+- "normal": constant 1x speed — breathing room, dialogue, calm moments
+Think about the velocity arc of the ENTIRE tape like a song: intro → build → drop → build → climax.
 
-VELOCITY STRATEGY: Think about the speed curve of the ENTIRE tape as one unified rhythm.
-Contrast creates impact — a slow-mo bullet hit feels 10x more powerful after a fast-paced
-montage sequence. A normal-speed emotional moment hits harder between two high-energy speed-ramped
-clips. Map out the velocity arc like a song: intro → build → drop → build → climax → resolution.
+TRANSITIONS — choose the SPECIFIC transition entering each clip (skip for clip 1):
+High-energy: "flash" (white flash), "zoom_punch" (zoom slam), "whip" (horizontal wipe),
+             "hard_flash" (darken→blast→reveal), "glitch" (RGB shift + scan lines)
+Smooth:      "crossfade" (dissolve), "light_leak" (warm golden overlay), "soft_zoom" (gentle zoom dissolve)
+Stylized:    "color_flash" (neon color flash), "strobe" (rapid on/off flash)
+Clean:       "hard_cut" (instant cut), "dip_to_black" (fade to black then up)
+Mix them strategically — a zoom_punch into an action shot, a crossfade into an emotional moment,
+a hard_cut for rhythm. Never repeat the same transition twice in a row (pattern interrupt).
+Also set transitionDuration per clip: 0.15s (instant) to 1.0s (cinematic dissolve).
 
-For each clip: provide sourceFileId, startTime, endTime, label, confidenceScore, and velocityPreset.
+COLOR GRADING — choose the filter for each clip:
+"TealOrange" (sports/cinematic), "GoldenHour" (warm/dreamy), "MoodyCinematic" (moody/dark),
+"Vibrant" (saturated/energetic), "Warm" (cozy/intimate), "Cool" (clean/modern),
+"CleanAiry" (bright/fresh), "VintageFilm" (nostalgic/retro), "Noir" (B&W dramatic),
+"Fade" (muted/editorial), "None" (natural)
+Pro editors DON'T use one grade for everything — they shift grades to create mood changes.
+A warm golden hero moment → cut to teal/orange action → back to warm for the close = emotional journey.
+
+ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
+Action clips → 1.03-1.05 (impactful pop). Emotional clips → 1.0-1.01 (gentle or none).
+
+CAPTIONS — optional text overlay for key moments (leave empty if the visual speaks for itself):
+Short, punchy text (2-5 words max). Only on moments that benefit from emphasis.
+captionStyle: "Bold" (impact), "Minimal" (clean), "Neon" (glow), "Classic" (elegant)
+
+KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
+0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
+
+For each clip, provide ALL of these fields:
+sourceFileId, startTime, endTime, label, confidenceScore, velocityPreset,
+transitionType (skip for first clip), transitionDuration, filter,
+captionText (optional), captionStyle (optional), entryPunchScale, kenBurnsIntensity (photos only)
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero"}]}`;
+{"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "", "captionStyle": "Bold", "kenBurnsIntensity": 0}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -632,6 +669,13 @@ Respond with ONLY a JSON object:
             label: string;
             confidenceScore: number;
             velocityPreset?: string;
+            transitionType?: string;
+            transitionDuration?: number;
+            filter?: string;
+            captionText?: string;
+            captionStyle?: string;
+            entryPunchScale?: number;
+            kenBurnsIntensity?: number;
           }>;
         };
 
@@ -643,6 +687,16 @@ Respond with ONLY a JSON object:
             : "cinematic";
 
         const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
+        const VALID_TRANSITIONS = [
+          "flash", "zoom_punch", "whip", "hard_flash", "glitch",
+          "crossfade", "light_leak", "soft_zoom",
+          "color_flash", "strobe", "hard_cut", "dip_to_black",
+        ];
+        const VALID_FILTERS = [
+          "None", "Vibrant", "Warm", "Cool", "Noir", "Fade",
+          "GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm",
+        ];
+        const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
 
         const clips = (parsed.clips ?? []).map((p, i) => ({
           id: crypto.randomUUID(),
@@ -655,6 +709,20 @@ Respond with ONLY a JSON object:
             ? p.velocityPreset
             : "normal",
           order: i,
+          // Per-clip visual style from AI
+          transitionType: (p.transitionType && VALID_TRANSITIONS.includes(p.transitionType))
+            ? p.transitionType : undefined,
+          transitionDuration: (typeof p.transitionDuration === "number" && p.transitionDuration >= 0.1 && p.transitionDuration <= 2.0)
+            ? p.transitionDuration : undefined,
+          filter: (p.filter && VALID_FILTERS.includes(p.filter))
+            ? p.filter : undefined,
+          captionText: p.captionText || undefined,
+          captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
+            ? p.captionStyle : undefined,
+          entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
+            ? p.entryPunchScale : undefined,
+          kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
+            ? p.kenBurnsIntensity : undefined,
         }));
 
         return { clips, detectedTheme: theme, contentSummary };

@@ -50,8 +50,8 @@ export default function TapePreviewPlayer() {
     [state.clips]
   );
 
-  // Theme-aware transitions
-  const transitions = useMemo<TransitionType[]>(
+  // Fallback transitions from theme — used when AI didn't specify per-clip
+  const themeTransitions = useMemo<TransitionType[]>(
     () => getThemeTransitions(state.detectedTheme, Math.max(0, sortedClips.length - 1)),
     [state.detectedTheme, sortedClips.length]
   );
@@ -93,7 +93,9 @@ export default function TapePreviewPlayer() {
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
-        t -= style.transitionDuration;
+        // Use next clip's per-clip transition duration, or theme default
+        const nextClip = sortedClips[i + 1];
+        t -= nextClip?.transitionDuration ?? style.transitionDuration;
       }
     }
     return entries;
@@ -273,29 +275,38 @@ export default function TapePreviewPlayer() {
         let alpha = 1;
         let transform: TransitionTransform = { scale: 1, offsetX: 0, offsetY: 0 };
 
+        // Per-clip style overrides
+        const clipTransDuration = e.clip.transitionDuration ?? style.transitionDuration;
+        const clipEntryPunch = e.clip.entryPunchScale ?? style.entryPunchScale;
+        const clipKenBurns = e.clip.kenBurnsIntensity ?? style.kenBurnsIntensity;
+
         // Incoming clip during transition
-        if (i > 0 && lt < style.transitionDuration) {
-          const transType = transitions[i - 1];
-          const progress = lt / style.transitionDuration;
+        if (i > 0 && lt < clipTransDuration) {
+          const transType = (e.clip.transitionType as TransitionType) ?? themeTransitions[i - 1];
+          const progress = lt / clipTransDuration;
           alpha = getClipAlpha(transType, progress, false);
           transform = getTransitionTransform(transType, progress, false, c.width);
           if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1 };
         }
 
         // Outgoing clip during transition
-        if (i < timeline.length - 1 && timeToEnd < style.transitionDuration) {
-          const transType = transitions[i];
-          const progress = 1 - timeToEnd / style.transitionDuration;
-          alpha = getClipAlpha(transType, progress, true);
-          transform = getTransitionTransform(transType, progress, true, c.width);
-          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i };
+        if (i < timeline.length - 1) {
+          const nextClip = timeline[i + 1];
+          const nextTransDuration = nextClip?.clip.transitionDuration ?? style.transitionDuration;
+          if (timeToEnd < nextTransDuration) {
+            const transType = (nextClip?.clip.transitionType as TransitionType) ?? themeTransitions[i];
+            const progress = 1 - timeToEnd / nextTransDuration;
+            alpha = getClipAlpha(transType, progress, true);
+            transform = getTransitionTransform(transType, progress, true, c.width);
+            if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i };
+          }
         }
 
-        // Entry punch (customizable per theme)
-        const entryScale = getClipEntryScale(lt, style.entryPunchScale, style.entryPunchDuration);
+        // Entry punch (per-clip or theme default)
+        const entryScale = getClipEntryScale(lt, clipEntryPunch, style.entryPunchDuration);
         transform = { ...transform, scale: transform.scale * entryScale };
 
-        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, style.kenBurnsIntensity, currentBeatIntensity);
+        drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, clipKenBurns, currentBeatIntensity);
       }
 
       // Transition overlay
@@ -345,7 +356,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, transitions, style, drawMediaFrame, beatGrid, state.detectedTheme]
+    [timeline, themeTransitions, style, drawMediaFrame, beatGrid, state.detectedTheme]
   );
 
   // Animation loop
