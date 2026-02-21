@@ -44,8 +44,6 @@
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
     </dict>
-    <key>NSFaceIDUsageDescription</key>
-    <string>Use Face ID to securely access your account.</string>
     <key>UIRequiredDeviceCapabilities</key>
     <array>
         <string>arm64</string>

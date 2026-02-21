@@ -10,6 +10,8 @@ struct ExportView: View {
     @State private var exportedURL: URL?
     @State private var showShareSheet = false
     @State private var showPaywall = false
+    @State private var showConfetti = false
+    @State private var addWatermark = true // Pro users can toggle off
 
     private var clip: EditedClip? {
         appState.generatedClips.first { $0.id == clipID }
@@ -37,6 +39,12 @@ struct ExportView: View {
                 Spacer()
             }
             .padding(Constants.Layout.padding)
+
+            // Confetti overlay
+            if showConfetti {
+                ConfettiView()
+                    .ignoresSafeArea()
+            }
         }
         .navigationTitle("Export")
         .navigationBarTitleDisplayMode(.inline)
@@ -66,18 +74,29 @@ struct ExportView: View {
             if let clip {
                 VStack(spacing: 6) {
                     InfoRow(label: "Duration", value: "\(Int(clip.duration))s")
-                    InfoRow(label: "Format", value: "MP4 • 1080×1920")
+                    InfoRow(label: "Format", value: "MP4 \u{2022} 1080\u{00D7}1920")
                     InfoRow(label: "Filter", value: clip.selectedFilter.rawValue)
                     if let music = clip.selectedMusicTrack {
                         InfoRow(label: "Music", value: music.name)
                     }
-                    if !appState.isProUser {
+
+                    // Watermark toggle
+                    if appState.isProUser {
+                        HStack {
+                            Text("Watermark")
+                                .font(Theme.caption)
+                                .foregroundStyle(Theme.textTertiary)
+                            Spacer()
+                            Toggle("", isOn: $addWatermark)
+                                .labelsHidden()
+                                .tint(Theme.accent)
+                        }
+                    } else {
                         InfoRow(label: "Watermark", value: "Included (Free tier)")
                     }
                 }
                 .padding()
-                .background(Theme.surfaceColor)
-                .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius))
+                .glassCard()
             }
 
             PrimaryButton(title: "Export Now", icon: "arrow.down.circle") {
@@ -139,7 +158,6 @@ struct ExportView: View {
                 }
                 .buttonStyle(ScaleButtonStyle())
 
-                // "Made with Highlight Magic" badge for social sharing
                 Text("Made with Highlight Magic")
                     .font(.caption2)
                     .foregroundStyle(Theme.textTertiary)
@@ -182,7 +200,11 @@ struct ExportView: View {
 
         exportState = .exporting
         exportProgress = 0
+        showConfetti = false
         let exportStartTime = Date.now
+
+        // Pro users can toggle watermark; free users always get watermark
+        let shouldWatermark = appState.isProUser ? addWatermark : true
 
         let config = ExportService.ExportConfig(
             sourceURL: video.sourceURL,
@@ -192,8 +214,14 @@ struct ExportView: View {
             captionText: clip.captionText,
             captionStyle: clip.captionStyle,
             musicTrack: clip.selectedMusicTrack,
-            addWatermark: !appState.isProUser,
+            addWatermark: shouldWatermark,
             outputSize: ExportService.ExportConfig.defaultSize
+        )
+
+        Analytics.exportStarted(
+            filter: clip.selectedFilter.rawValue,
+            hasMusic: clip.selectedMusicTrack != nil,
+            hasCaption: !clip.captionText.isEmpty
         )
 
         do {
@@ -206,6 +234,7 @@ struct ExportView: View {
             appState.incrementExportCount()
             exportState = .completed
             HapticFeedback.success()
+            showConfetti = true
             Analytics.exportCompleted(
                 durationMs: Int(Date.now.timeIntervalSince(exportStartTime) * 1000)
             )

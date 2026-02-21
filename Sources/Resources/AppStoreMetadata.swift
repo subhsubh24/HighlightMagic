@@ -3,7 +3,7 @@ import Foundation
 /// App Store Connect metadata — ASO-optimized for launch
 enum AppStoreMetadata {
     static let appName = "Highlight Magic"
-    static let subtitle = "AI Video Highlights Maker"
+    static let subtitle = "AI Video Highlights in Seconds"  // Action-oriented, includes "AI" + "Highlights"
     static let bundleID = "com.highlightmagic.app"
     static let sku = "HIGHLIGHT_MAGIC_001"
     static let primaryCategory = "Photo & Video"
@@ -41,16 +41,16 @@ enum AppStoreMetadata {
     • Unlimited exports
     • No watermark
     • 14+ premium music tracks
-    • Advanced multi-pass AI with Claude Vision refinement
+    • Advanced multi-pass AI detection
     • Premium cinematic effects & LUTs
     • iCloud project sync across devices
     • Priority processing
     """
 
-    // Max 100 chars, comma-separated — high-volume ASO keywords
-    static let keywords = "video highlights,AI video editor,Reels maker,TikTok editor,short clips,auto edit,highlight reel,vertical video,video trimmer,social media clips"
+    // Max 100 chars — high-volume, no spaces after commas to maximize keyword density
+    static let keywords = "video highlights,AI video editor,Reels maker,TikTok editor,short clips,auto edit,highlight reel,vertical video,clip maker,video trim"
 
-    static let promotionalText = "Now with 8 style templates, interactive trim editor, and premium cinematic effects!"
+    static let promotionalText = "Turn raw footage into viral Reels in seconds — now with 8 style templates and premium cinematic effects!"
 
     static let whatsNew = """
     v1.0.0 — Launch!
@@ -68,27 +68,88 @@ enum AppStoreMetadata {
     static let supportURL = "https://highlightmagic.app/support"
     static let marketingURL = "https://highlightmagic.app"
 
-    // Screenshot captions for App Store listing (5.5" and 6.7")
-    static let screenshotCaptions = [
-        "Pick a video and describe the highlights you want",
-        "AI analyzes motion, faces & scenes in real time",
-        "Choose from 8 curated style templates",
-        "Trim, add music, captions & professional filters",
-        "Export vertical clips ready for TikTok & Reels",
-        "Unlock Pro for unlimited exports & premium effects",
-        "Sync projects across devices with iCloud",
-        "Privacy-first: all processing stays on your device"
+    // MARK: - Screenshot Descriptions (Benefit-Focused, 8 Screens)
+    // Each has a headline + subtitle for the actual screenshot frame
+
+    static let screenshotDescriptions: [(headline: String, subtitle: String, screenContent: String)] = [
+        (
+            headline: "Turn Raw Hike Footage Into Viral Reels",
+            subtitle: "AI finds your best moments automatically",
+            screenContent: "Home screen → user taps 'Choose Video' → shows photo library picker with a hiking video selected"
+        ),
+        (
+            headline: "Tell It What To Look For",
+            subtitle: "Or skip and let AI decide",
+            screenContent: "Prompt screen → 'epic scenery' typed → suggestion chips shown → 'Find Highlights' button"
+        ),
+        (
+            headline: "7-Pass AI Analyzes Every Frame",
+            subtitle: "Motion, faces, scenes — nothing missed",
+            screenContent: "Processing screen → animated progress ring at 65% → 'Pass 4: AI video-text matching...' label"
+        ),
+        (
+            headline: "3 Highlights Found In 10 Seconds",
+            subtitle: "Ranked by confidence with one-tap templates",
+            screenContent: "Results screen → 3 ClipCards with confidence badges (92%, 78%, 71%) → Adventure template selected"
+        ),
+        (
+            headline: "Trim, Filter, Caption — All In One",
+            subtitle: "Professional editor, zero learning curve",
+            screenContent: "Editor screen → VideoTrimSlider with handles → 'Vibrant' filter active → caption 'Summit Moment'"
+        ),
+        (
+            headline: "14 Royalty-Free Tracks, 8 Styles",
+            subtitle: "Match the mood to your content",
+            screenContent: "Music picker → 'Golden Hour' selected → Adventure template card highlighted"
+        ),
+        (
+            headline: "Export Ready For TikTok & Reels",
+            subtitle: "1080×1920 MP4, one-tap share",
+            screenContent: "Export complete screen → green checkmark → 'Share' button → 'Made with Highlight Magic' badge"
+        ),
+        (
+            headline: "Your Videos Never Leave Your Phone",
+            subtitle: "100% on-device AI, privacy-first design",
+            screenContent: "Settings screen → Privacy Policy link → 'All processing stays on device' banner → lock icon"
+        )
     ]
 
-    // Review notes for App Store submission
+    // Legacy simple captions (for programmatic access)
+    static let screenshotCaptions: [String] = screenshotDescriptions.map(\.headline)
+
+    // MARK: - Review Notes
+
     static let reviewNotes = """
-    - This app uses on-device AI (Vision framework, Core ML) for video analysis. \
-    No video data is sent to external servers during detection.
-    - Claude Vision API is an optional enhancement for Pro users only, activated \
-    when confidence is low and the user has configured an API key.
-    - Subscription auto-renewal and cancellation follow standard StoreKit 2 patterns.
-    - The app does not collect any personally identifiable information. \
-    An anonymous UUID is generated locally for project sync.
-    - All music tracks are royalty-free and licensed for inclusion.
+    AI DISCLOSURE:
+    - This app uses Apple Vision framework and Core ML for on-device video analysis. \
+    All AI processing happens locally on the user's device.
+    - An optional third-party AI enhancement (Anthropic Claude Vision API) is available \
+    only when the user explicitly configures their own API key in Settings > AI Settings. \
+    This feature sends individual video frames (not full videos) to the Anthropic API \
+    for scoring only when on-device confidence is below 60%. No data is sent without \
+    user configuration, and the feature works fully without it.
+    - The app does NOT use generative AI to create synthetic content. \
+    AI is used solely to identify and rank existing video frames by highlight potential.
+
+    SUBSCRIPTION:
+    - Auto-renewable subscriptions: pro.monthly ($4.99/mo), pro.yearly ($39.99/yr).
+    - Subscription management and cancellation handled by iOS system Settings.
+    - Restore Purchases available on paywall and Settings screens.
+    - Privacy Policy and Terms of Use links on paywall screen per Guideline 3.1.2.
+
+    PRIVACY:
+    - No personally identifiable information collected.
+    - An anonymous UUID is generated locally via Keychain for project sync.
+    - NSPrivacyTracking is set to false. No ATT prompt is shown.
+    - PrivacyInfo.xcprivacy manifest is included.
+
+    ACCOUNT DELETION:
+    - Settings > Data > Delete Account & Data — deletes all saved projects, \
+    clears iCloud sync data, resets anonymous user ID per Guideline 5.1.1(v).
+
+    CONTENT:
+    - All music tracks are original royalty-free compositions licensed for in-app use.
+    - No user-generated content sharing between users.
+    - Content rating 4+: no objectionable content.
     """
 }

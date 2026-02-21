@@ -106,7 +106,7 @@ struct PaywallView: View {
                         Task { await purchase() }
                     }
 
-                    // Restore + Legal
+                    // Restore + Legal (Guideline 3.1.2 required links)
                     VStack(spacing: 8) {
                         Button("Restore Purchases") {
                             Task { await storeService.restorePurchases() }
@@ -114,10 +114,17 @@ struct PaywallView: View {
                         .font(Theme.caption)
                         .foregroundStyle(Theme.textTertiary)
 
-                        Text("Cancel anytime. Subscription auto-renews.")
+                        Text("Cancel anytime. Subscription auto-renews.\nPayment charged to Apple ID at confirmation.")
                             .font(.caption2)
                             .foregroundStyle(Theme.textTertiary)
                             .multilineTextAlignment(.center)
+
+                        HStack(spacing: 16) {
+                            Link("Privacy Policy", destination: URL(string: AppStoreMetadata.privacyPolicyURL)!)
+                            Link("Terms of Use", destination: URL(string: AppStoreMetadata.termsOfServiceURL)!)
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(Theme.accent)
                     }
                 }
                 .padding(Constants.Layout.padding)
