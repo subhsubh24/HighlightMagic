@@ -24,7 +24,7 @@ import {
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
-import { createMuxedStream } from "@/lib/audio-mux";
+import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
@@ -429,13 +429,13 @@ async function renderHighlightTape(
     if (track) beatGrid = buildBeatGrid(track.bpm, 300);
   }
 
-  // Audio muxing: combine canvas video with music track audio (if available)
+  // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack);
   const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
-  const { stream, cleanup: audioCleanup } = await createMuxedStream(canvasStream, musicTrack, totalDuration);
 
-  const recorder = new MediaRecorder(stream, {
+  const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,
     videoBitsPerSecond: EXPORT_BITRATE,
   });
@@ -470,7 +470,7 @@ async function renderHighlightTape(
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
     } else {
-      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
+      await renderVideoClip(ctx, canvas, instruction, watermarkText, style, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       });
     }
@@ -505,7 +505,7 @@ async function renderHighlightTape(
 
   return new Promise((resolve) => {
     recorder.onstop = () => {
-      audioCleanup();
+      audioPipeline.cleanup();
       onProgress(100);
       const blobType = mimeType.includes("mp4") ? "video/mp4" : "video/webm";
       resolve(new Blob(chunks, { type: blobType }));
@@ -575,14 +575,16 @@ function renderVideoClip(
   transitionSeed: number,
   beatGrid: BeatGrid | null,
   canvasDuration: number,
+  audioPipeline: AudioPipeline,
   onProgress: (pct: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
-    video.muted = true;
     video.src = instruction.mediaUrl;
     video.preload = "auto";
+    // Route original audio through the audio pipeline (not muted)
+    const disconnectAudio = audioPipeline.connectVideo(video);
 
     video.onloadeddata = () => {
       const va = video.videoWidth / video.videoHeight;
@@ -607,6 +609,7 @@ function renderVideoClip(
 
           if (canvasElapsedMs >= canvasDurationMs || video.paused) {
             video.pause();
+            disconnectAudio();
             resolve();
             return;
           }
@@ -619,6 +622,7 @@ function renderVideoClip(
               return;
             }
             video.pause();
+            disconnectAudio();
             resolve();
             return;
           }
@@ -678,7 +682,10 @@ function renderVideoClip(
       };
     };
 
-    video.onerror = () => reject(new Error("Failed to load video for rendering"));
+    video.onerror = () => {
+      disconnectAudio();
+      reject(new Error("Failed to load video for rendering"));
+    };
   });
 }
 

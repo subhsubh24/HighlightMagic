@@ -19,7 +19,7 @@ export const initialState: AppState = {
   activeClipId: null,
   isProUser: false,
   exportsUsed: 0,
-  viralOptions: { beatSync: true, seamlessLoop: true },
+  viralOptions: { beatSync: true, seamlessLoop: false },
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
