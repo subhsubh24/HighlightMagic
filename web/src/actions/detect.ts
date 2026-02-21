@@ -737,8 +737,7 @@ Respond with ONLY a JSON object:
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
-      console.error("Planning API error:", response.status, errorBody);
-      return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
+      throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
     }
 
     const data = await response.json();
@@ -752,8 +751,7 @@ Respond with ONLY a JSON object:
     // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
     const objMatch = text.match(/\{[\s\S]*\}/);
     if (objMatch) {
-      try {
-        const parsed = JSON.parse(objMatch[0]) as {
+      const parsed = JSON.parse(objMatch[0]) as {
           contentSummary?: string;
           theme?: string;
           clips?: Array<{
@@ -820,41 +818,12 @@ Respond with ONLY a JSON object:
         }));
 
         return { clips, detectedTheme: theme, contentSummary };
-      } catch {
-        // Fall through to legacy array parse
-      }
     }
 
-    // Legacy fallback: parse as plain array
-    const arrMatch = text.match(/\[[\s\S]*\]/);
-    if (!arrMatch) return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
-
-    const parsed = JSON.parse(arrMatch[0]) as Array<{
-      sourceFileId: string;
-      startTime: number;
-      endTime: number;
-      label: string;
-      confidenceScore: number;
-      velocityPreset?: string;
-    }>;
-
-    return {
-      clips: parsed.map((p, i) => ({
-        id: crypto.randomUUID(),
-        sourceFileId: p.sourceFileId,
-        startTime: Math.max(0, p.startTime),
-        endTime: p.endTime,
-        confidenceScore: Math.max(0, Math.min(1, p.confidenceScore)),
-        label: p.label || "Highlight",
-        velocityPreset: p.velocityPreset || "normal",
-        order: i,
-      })),
-      detectedTheme: "cinematic",
-      contentSummary: "",
-    };
+    throw new Error("Planner response could not be parsed as JSON");
   } catch (err) {
-    console.error("Planning error:", err);
-    return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
+    // Re-throw so the retry loop in detectMultiClipHighlights can handle it
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
