@@ -6,6 +6,69 @@ import {
   PHOTO_DISPLAY_DURATION,
 } from "@/lib/constants";
 
+// ── API helpers ──
+
+/** Max concurrent API calls to avoid rate limits */
+const MAX_CONCURRENCY = 2;
+
+/** Retry config for 429/529 responses */
+const MAX_RETRIES = 5;
+const INITIAL_BACKOFF_MS = 2000;
+
+/**
+ * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string
+): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(url, init);
+    if (response.ok) return response;
+
+    // Only retry on rate-limit (429) or overloaded (529)
+    if (response.status === 429 || response.status === 529) {
+      // Use Retry-After header if available, else exponential backoff
+      const retryAfter = response.headers.get("retry-after");
+      const waitMs = retryAfter
+        ? parseFloat(retryAfter) * 1000
+        : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+
+    // Non-retryable error — return as-is
+    return response;
+  }
+  // All retries exhausted — make one final attempt and return whatever we get
+  return fetch(url, init);
+}
+
+/**
+ * Run async tasks with a concurrency limit.
+ */
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < tasks.length) {
+      const idx = next++;
+      results[idx] = await tasks[idx]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 // ── Types ──
 
 interface FrameInput {
@@ -119,9 +182,10 @@ export async function detectMultiClipHighlights(
     }
   }
 
-  // Score all batches in parallel — no reason to wait for one batch before starting the next
-  const batchResults = await Promise.all(
-    batches.map((batch) => analyzeMultiBatch(apiKey, batch, sourceFiles, templateName))
+  // Score batches with concurrency limit to avoid 429 rate limits
+  const batchResults = await runWithConcurrency(
+    batches.map((batch) => () => analyzeMultiBatch(apiKey, batch, sourceFiles, templateName)),
+    MAX_CONCURRENCY
   );
   const allScores: MultiFrameScore[] = batchResults.flat();
 
@@ -231,27 +295,31 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
   });
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 16000,
-        thinking: {
-          type: "enabled",
-          budget_tokens: 10000,
+    const response = await fetchWithRetry(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
-        system: systemPrompt,
-        messages: [{ role: "user", content }],
-      }),
-    });
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 16000,
+          thinking: {
+            type: "enabled",
+            budget_tokens: 10000,
+          },
+          system: systemPrompt,
+          messages: [{ role: "user", content }],
+        }),
+      },
+      "Scoring batch"
+    );
 
     if (!response.ok) {
-      console.error("Claude API error:", response.status);
+      console.error("Claude API error (scoring):", response.status);
       return batch.map((f) => ({
         sourceFileId: f.sourceFileId,
         sourceType: f.sourceType,
@@ -623,24 +691,28 @@ Respond with ONLY a JSON object:
   });
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-6",
-        max_tokens: 64000,
-        thinking: {
-          type: "enabled",
-          budget_tokens: 50000,
+    const response = await fetchWithRetry(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
-        system: systemPrompt,
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
+        body: JSON.stringify({
+          model: "claude-opus-4-6",
+          max_tokens: 64000,
+          thinking: {
+            type: "enabled",
+            budget_tokens: 50000,
+          },
+          system: systemPrompt,
+          messages: [{ role: "user", content: userContent }],
+        }),
+      },
+      "Planner"
+    );
 
     if (!response.ok) {
       console.error("Planning API error:", response.status);
