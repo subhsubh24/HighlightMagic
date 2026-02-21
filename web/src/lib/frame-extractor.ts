@@ -25,7 +25,13 @@ async function extractAudioEnergy(
   try {
     const response = await fetch(videoUrl);
     const arrayBuffer = await response.arrayBuffer();
-    const audioCtx = new AudioContext();
+
+    // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume().catch(() => {});
+    }
 
     let audioBuffer: AudioBuffer;
     try {

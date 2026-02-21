@@ -55,7 +55,12 @@ export async function createAudioPipeline(
   canvasStream: MediaStream,
   track: MusicTrack | null,
 ): Promise<AudioPipeline> {
-  const audioCtx = new AudioContext();
+  // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
+  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const audioCtx = new AudioCtx();
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume().catch(() => {});
+  }
   const dest = audioCtx.createMediaStreamDestination();
 
   let musicSource: AudioBufferSourceNode | null = null;
