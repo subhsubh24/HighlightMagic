@@ -319,7 +319,8 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     );
 
     if (!response.ok) {
-      console.error("Claude API error (scoring):", response.status);
+      const errorBody = await response.text().catch(() => "");
+      console.error("Claude API error (scoring):", response.status, errorBody);
       return batch.map((f) => ({
         sourceFileId: f.sourceFileId,
         sourceType: f.sourceType,
@@ -392,6 +393,9 @@ const VALID_THEMES: DetectedTheme[] = [
  * understand the full footage. Sorted by score within each source,
  * with all sources represented first, then remaining frames by score.
  */
+/** Max images to send to the planner to stay within API payload limits */
+const MAX_PLANNER_FRAMES = 20;
+
 function selectPlannerFrames(
   scores: MultiFrameScore[],
   frames: MultiFrameInput[],
@@ -402,41 +406,41 @@ function selectPlannerFrames(
     frameLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f);
   }
 
-  // Group scores by source
+  // Group scores by source, sorted best-first
   const bySource = new Map<string, MultiFrameScore[]>();
   for (const s of scores) {
     if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
     bySource.get(s.sourceFileId)!.push(s);
   }
+  for (const [, fileScores] of bySource) {
+    fileScores.sort((a, b) => b.score - a.score);
+  }
 
   const selected: MultiFrameInput[] = [];
   const usedKeys = new Set<string>();
 
-  // ALL frames from every source, sorted best-first within each source
-  for (const [, fileScores] of bySource) {
-    const sorted = [...fileScores].sort((a, b) => b.score - a.score);
-    for (const score of sorted) {
-      const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
-      const frame = frameLookup.get(key);
-      if (frame && !usedKeys.has(key)) {
-        selected.push(frame);
-        usedKeys.add(key);
-      }
-    }
-  }
-
-  // Add any remaining frames not yet included
-  const remaining = [...scores]
-    .sort((a, b) => b.score - a.score)
-    .filter((s) => !usedKeys.has(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`));
-
-  for (const s of remaining) {
-    const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
+  function addFrame(score: MultiFrameScore): boolean {
+    const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
     const frame = frameLookup.get(key);
-    if (frame) {
+    if (frame && !usedKeys.has(key)) {
       selected.push(frame);
       usedKeys.add(key);
+      return true;
     }
+    return false;
+  }
+
+  // Phase 1: guarantee at least one frame per source (the best-scored one)
+  for (const [, fileScores] of bySource) {
+    if (selected.length >= MAX_PLANNER_FRAMES) break;
+    if (fileScores.length > 0) addFrame(fileScores[0]);
+  }
+
+  // Phase 2: fill remaining budget with globally highest-scored frames
+  const allSorted = [...scores].sort((a, b) => b.score - a.score);
+  for (const s of allSorted) {
+    if (selected.length >= MAX_PLANNER_FRAMES) break;
+    addFrame(s);
   }
 
   return selected;
@@ -715,7 +719,8 @@ Respond with ONLY a JSON object:
     );
 
     if (!response.ok) {
-      console.error("Planning API error:", response.status);
+      const errorBody = await response.text().catch(() => "");
+      console.error("Planning API error:", response.status, errorBody);
       return { clips: [], detectedTheme: "cinematic", contentSummary: "" };
     }
 
