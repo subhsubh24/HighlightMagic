@@ -14,7 +14,7 @@ const INITIAL_BACKOFF_MS = 2000;
 const MAX_RETRY_WAIT_MS = 30_000;
 
 /** Per-request timeouts — safety net against infinite API hangs */
-const SCORING_TIMEOUT_MS = 90_000; // 90s per scoring batch
+const SCORING_TIMEOUT_MS = 120_000; // 120s per scoring batch (50 images + thinking)
 const PLANNER_TIMEOUT_MS = 180_000; // 3 min for planner (heaviest call)
 
 /**
@@ -28,29 +28,40 @@ async function fetchWithRetry(
   timeoutMs?: number
 ): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const fetchInit = timeoutMs
-      ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
-      : init;
-    const response = await fetch(url, fetchInit);
-    if (response.ok) return response;
+    try {
+      const fetchInit = timeoutMs
+        ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
+        : init;
+      const response = await fetch(url, fetchInit);
+      if (response.ok) return response;
 
-    // Only retry on rate-limit (429) or overloaded (529)
-    if (response.status === 429 || response.status === 529) {
-      // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
-      const retryAfter = response.headers.get("retry-after");
-      const rawWaitMs = retryAfter
-        ? parseFloat(retryAfter) * 1000
-        : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-      const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
-      console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
-      await new Promise((r) => setTimeout(r, waitMs));
-      continue;
+      // Only retry on rate-limit (429) or overloaded (529)
+      if (response.status === 429 || response.status === 529) {
+        // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
+        const retryAfter = response.headers.get("retry-after");
+        const rawWaitMs = retryAfter
+          ? parseFloat(retryAfter) * 1000
+          : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
+        console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      // Non-retryable HTTP error — return as-is
+      return response;
+    } catch (err) {
+      // Retry on timeout and network errors (transient failures)
+      if (attempt < MAX_RETRIES) {
+        const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        console.warn(`${label}: ${err instanceof Error ? err.message : "network error"}, retry ${attempt + 1}/${MAX_RETRIES} in ${waitMs}ms`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      throw err;
     }
-
-    // Non-retryable error — return as-is
-    return response;
   }
-  // All retries exhausted — make one final attempt and return whatever we get
+  // All retries exhausted — make one final attempt (will throw on failure)
   const fetchInit = timeoutMs
     ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
     : init;
