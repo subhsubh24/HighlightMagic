@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Download, Type, Music, Palette } from "lucide-react";
-import { useApp } from "@/lib/store";
+import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, ChevronRight, Film, Image } from "lucide-react";
+import { useApp, getMediaFile } from "@/lib/store";
 import { ALL_FILTERS, VIDEO_FILTERS } from "@/lib/filters";
 import { getAvailableTracks, getSuggestedTrackForTemplate } from "@/lib/music";
 import { formatTime, haptic } from "@/lib/utils";
@@ -23,10 +23,17 @@ export default function EditorStep() {
   const [activeTab, setActiveTab] = useState<EditorTab>("trim");
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const clip = useMemo(
-    () => state.clips.find((c) => c.id === state.activeClipId),
-    [state.clips, state.activeClipId]
+  const sortedClips = useMemo(
+    () => [...state.clips].sort((a, b) => a.order - b.order),
+    [state.clips]
   );
+
+  const activeIndex = sortedClips.findIndex((c) => c.id === state.activeClipId);
+  const clip = activeIndex >= 0 ? sortedClips[activeIndex] : sortedClips[0];
+
+  const media = clip ? getMediaFile(state, clip.sourceFileId) : null;
+  const isPhoto = media?.type === "photo";
+  const mediaUrl = media?.url ?? null;
 
   // Auto-suggest music from template
   useEffect(() => {
@@ -47,12 +54,14 @@ export default function EditorStep() {
   const duration = clip.trimEnd - clip.trimStart;
   const filterCSS = VIDEO_FILTERS[clip.selectedFilter];
   const captionCSS = CAPTION_STYLES.find((s) => s.value === clip.captionStyle)?.css ?? "";
+  const totalTapeDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
 
   const updateClip = (updates: Partial<EditedClip>) => {
     dispatch({ type: "UPDATE_CLIP", clipId: clip.id, updates });
   };
 
   const handlePlay = () => {
+    if (isPhoto) return;
     const video = videoRef.current;
     if (!video) return;
     if (isPlaying) {
@@ -67,6 +76,26 @@ export default function EditorStep() {
   const handleExport = () => {
     haptic();
     dispatch({ type: "SET_STEP", step: "export" });
+  };
+
+  const handlePrevClip = () => {
+    if (activeIndex > 0) {
+      dispatch({ type: "SET_ACTIVE_CLIP", clipId: sortedClips[activeIndex - 1].id });
+      setIsPlaying(false);
+    }
+  };
+
+  const handleNextClip = () => {
+    if (activeIndex < sortedClips.length - 1) {
+      dispatch({ type: "SET_ACTIVE_CLIP", clipId: sortedClips[activeIndex + 1].id });
+      setIsPlaying(false);
+    }
+  };
+
+  const handleRemoveClip = () => {
+    if (sortedClips.length <= 1) return;
+    dispatch({ type: "REMOVE_CLIP", clipId: clip.id });
+    setIsPlaying(false);
   };
 
   const tabs: { id: EditorTab; icon: React.ReactNode; label: string }[] = [
@@ -87,19 +116,76 @@ export default function EditorStep() {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <h2 className="font-semibold text-white">Edit Clip</h2>
+        <h2 className="font-semibold text-white">Edit Highlight Tape</h2>
         <button onClick={handleExport} className="btn-primary !px-4 !py-2 text-sm flex items-center gap-1.5">
           <Download className="h-4 w-4" />
           Export
         </button>
       </div>
 
-      {/* Video preview with filter + caption overlay */}
+      {/* Clip navigator */}
+      <div className="flex items-center justify-between rounded-xl bg-white/5 p-2">
+        <button
+          onClick={handlePrevClip}
+          disabled={activeIndex <= 0}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)] transition-colors hover:bg-white/10 disabled:opacity-30"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        <div className="flex items-center gap-2">
+          {sortedClips.map((c, i) => {
+            const m = getMediaFile(state, c.sourceFileId);
+            return (
+              <button
+                key={c.id}
+                onClick={() => {
+                  dispatch({ type: "SET_ACTIVE_CLIP", clipId: c.id });
+                  setIsPlaying(false);
+                }}
+                className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all ${
+                  c.id === clip.id
+                    ? "bg-[var(--accent)] text-white"
+                    : "bg-white/5 text-[var(--text-tertiary)] hover:bg-white/10"
+                }`}
+              >
+                {m?.type === "photo" ? <Image className="h-3 w-3" /> : <Film className="h-3 w-3" />}
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={handleNextClip}
+          disabled={activeIndex >= sortedClips.length - 1}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)] transition-colors hover:bg-white/10 disabled:opacity-30"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Tape duration summary */}
+      <div className="text-center text-xs text-[var(--text-tertiary)]">
+        Clip {activeIndex + 1} of {sortedClips.length} · Total tape: ~{Math.round(totalTapeDuration)}s
+        {media && <span className="ml-1">· from: {media.name}</span>}
+      </div>
+
+      {/* Video/Photo preview with filter + caption overlay */}
       <div className="relative aspect-[9/16] w-full max-w-xs self-center overflow-hidden rounded-2xl bg-black">
-        {state.videoUrl && (
+        {isPhoto && mediaUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mediaUrl}
+            alt={clip.segment.label}
+            className="h-full w-full object-cover"
+            style={{ filter: filterCSS }}
+          />
+        )}
+        {!isPhoto && mediaUrl && (
           <video
             ref={videoRef}
-            src={`${state.videoUrl}#t=${clip.trimStart}`}
+            src={`${mediaUrl}#t=${clip.trimStart}`}
             className="h-full w-full object-cover"
             style={{ filter: filterCSS }}
             muted
@@ -125,8 +211,8 @@ export default function EditorStep() {
           </div>
         )}
 
-        {/* Play overlay */}
-        {!isPlaying && (
+        {/* Play overlay (video only) */}
+        {!isPhoto && !isPlaying && (
           <button
             onClick={handlePlay}
             className="absolute inset-0 flex items-center justify-center bg-black/20"
@@ -140,9 +226,26 @@ export default function EditorStep() {
 
         {/* Time badge */}
         <div className="absolute right-2 top-2 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
-          {Math.round(duration)}s
+          {isPhoto ? "Photo · 3s" : `${Math.round(duration)}s`}
+        </div>
+
+        {/* Type badge */}
+        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur-sm">
+          {isPhoto ? <Image className="h-3 w-3" /> : <Film className="h-3 w-3" />}
+          Clip {activeIndex + 1}
         </div>
       </div>
+
+      {/* Remove clip button */}
+      {sortedClips.length > 1 && (
+        <button
+          onClick={handleRemoveClip}
+          className="mx-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-red-400/70 transition-colors hover:bg-red-500/10 hover:text-red-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Remove this clip from tape
+        </button>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1 rounded-xl bg-white/5 p-1">
@@ -167,8 +270,16 @@ export default function EditorStep() {
 
       {/* Tab content */}
       <div className="glass-card flex-1 p-4">
-        {activeTab === "trim" && (
-          <TrimPanel clip={clip} maxDuration={state.videoDuration} onUpdate={updateClip} />
+        {activeTab === "trim" && !isPhoto && (
+          <TrimPanel clip={clip} maxDuration={media?.duration ?? 0} onUpdate={updateClip} />
+        )}
+        {activeTab === "trim" && isPhoto && (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-[var(--text-tertiary)]">
+            <Image className="h-8 w-8" />
+            Photos display for 3 seconds in the final tape.
+            <br />
+            No trimming needed.
+          </div>
         )}
         {activeTab === "music" && (
           <MusicPanel
@@ -222,7 +333,7 @@ function TrimPanel({
           value={clip.trimStart}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
-            if (v < clip.trimEnd - 5) onUpdate({ trimStart: v });
+            if (v < clip.trimEnd - 2) onUpdate({ trimStart: v });
           }}
           className="w-full"
         />
@@ -240,7 +351,7 @@ function TrimPanel({
           value={clip.trimEnd}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
-            if (v > clip.trimStart + 5) onUpdate({ trimEnd: v });
+            if (v > clip.trimStart + 2) onUpdate({ trimEnd: v });
           }}
           className="w-full"
         />
@@ -265,7 +376,6 @@ function MusicPanel({
 
   return (
     <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-      {/* None option */}
       <button
         onClick={() => onSelect(null)}
         className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${
@@ -372,7 +482,6 @@ function FilterPanel({
               : "border border-white/10 bg-white/5 hover:bg-white/10"
           }`}
         >
-          {/* Mini filter swatch */}
           <div
             className="h-10 w-full rounded-lg bg-gradient-to-br from-purple-500 to-pink-500"
             style={{ filter: VIDEO_FILTERS[filter] }}

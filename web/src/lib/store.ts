@@ -1,13 +1,14 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AppStep, EditedClip, HighlightSegment, HighlightTemplate, MusicTrack, VideoFilter, CaptionStyle } from "./types";
+import type { AppState, AppStep, EditedClip, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
 
 export const initialState: AppState = {
   step: "upload",
+  mediaFiles: [],
   videoFile: null,
   videoUrl: null,
   videoDuration: 0,
@@ -19,16 +20,32 @@ export const initialState: AppState = {
   exportsUsed: 0,
 };
 
+// ── Helper: derive legacy single-video fields from mediaFiles ──
+
+function deriveLegacyVideo(mediaFiles: MediaFile[]): Pick<AppState, "videoFile" | "videoUrl" | "videoDuration"> {
+  const firstVideo = mediaFiles.find((f) => f.type === "video");
+  if (firstVideo) {
+    return { videoFile: firstVideo.file, videoUrl: firstVideo.url, videoDuration: firstVideo.duration };
+  }
+  return { videoFile: null, videoUrl: null, videoDuration: 0 };
+}
+
 // ── Actions ──
 
 export type Action =
   | { type: "SET_STEP"; step: AppStep }
   | { type: "SET_VIDEO"; file: File; url: string; duration: number }
+  | { type: "ADD_MEDIA"; files: MediaFile[] }
+  | { type: "REMOVE_MEDIA"; fileId: string }
+  | { type: "REORDER_MEDIA"; fromIndex: number; toIndex: number }
+  | { type: "CLEAR_MEDIA" }
   | { type: "SET_TEMPLATE"; template: HighlightTemplate | null }
   | { type: "SET_HIGHLIGHTS"; highlights: HighlightSegment[] }
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
   | { type: "UPDATE_CLIP"; clipId: string; updates: Partial<EditedClip> }
+  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number }
+  | { type: "REMOVE_CLIP"; clipId: string }
   | { type: "INCREMENT_EXPORTS" }
   | { type: "RESET" };
 
@@ -38,6 +55,27 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, step: action.step };
     case "SET_VIDEO":
       return { ...state, videoFile: action.file, videoUrl: action.url, videoDuration: action.duration };
+    case "ADD_MEDIA": {
+      const updated = [...state.mediaFiles, ...action.files];
+      return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
+    }
+    case "REMOVE_MEDIA": {
+      const updated = state.mediaFiles.filter((f) => f.id !== action.fileId);
+      // Revoke the old URL
+      const removed = state.mediaFiles.find((f) => f.id === action.fileId);
+      if (removed) URL.revokeObjectURL(removed.url);
+      return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
+    }
+    case "REORDER_MEDIA": {
+      const arr = [...state.mediaFiles];
+      const [item] = arr.splice(action.fromIndex, 1);
+      arr.splice(action.toIndex, 0, item);
+      return { ...state, mediaFiles: arr };
+    }
+    case "CLEAR_MEDIA": {
+      state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
+      return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0 };
+    }
     case "SET_TEMPLATE":
       return { ...state, selectedTemplate: action.template };
     case "SET_HIGHLIGHTS":
@@ -53,9 +91,26 @@ export function reducer(state: AppState, action: Action): AppState {
           c.id === action.clipId ? { ...c, ...action.updates } : c
         ),
       };
+    case "REORDER_CLIPS": {
+      const arr = [...state.clips];
+      const [item] = arr.splice(action.fromIndex, 1);
+      arr.splice(action.toIndex, 0, item);
+      // Update order field
+      const reordered = arr.map((c, i) => ({ ...c, order: i }));
+      return { ...state, clips: reordered };
+    }
+    case "REMOVE_CLIP": {
+      const filtered = state.clips.filter((c) => c.id !== action.clipId).map((c, i) => ({ ...c, order: i }));
+      return {
+        ...state,
+        clips: filtered,
+        activeClipId: filtered[0]?.id ?? null,
+      };
+    }
     case "INCREMENT_EXPORTS":
       return { ...state, exportsUsed: state.exportsUsed + 1 };
     case "RESET":
+      state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed };
     default:
       return state;
@@ -64,6 +119,16 @@ export function reducer(state: AppState, action: Action): AppState {
 
 export function canExportFree(state: AppState): boolean {
   return state.exportsUsed < FREE_EXPORT_LIMIT;
+}
+
+// ── Helpers ──
+
+export function getMediaFile(state: AppState, fileId: string): MediaFile | undefined {
+  return state.mediaFiles.find((f) => f.id === fileId);
+}
+
+export function getTotalDuration(state: AppState): number {
+  return state.mediaFiles.reduce((sum, f) => sum + f.duration, 0);
 }
 
 // ── Context ──

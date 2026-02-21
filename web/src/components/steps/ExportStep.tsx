@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Check, Crown } from "lucide-react";
-import { useApp, canExportFree } from "@/lib/store";
+import { useState, useRef, useCallback } from "react";
+import { ArrowLeft, Download, Share2, RotateCcw, Check, Crown, Film } from "lucide-react";
+import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
-import { WATERMARK_TEXT, WATERMARK_OPACITY, FREE_EXPORT_LIMIT, IOS_APP_STORE_URL } from "@/lib/constants";
-import { formatTime, haptic } from "@/lib/utils";
+import { WATERMARK_TEXT, WATERMARK_OPACITY, FREE_EXPORT_LIMIT, IOS_APP_STORE_URL, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
+import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
+import type { EditedClip } from "@/lib/types";
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit";
 
@@ -16,10 +17,9 @@ export default function ExportStep() {
   const [progress, setProgress] = useState(0);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const clip = state.clips.find((c) => c.id === state.activeClipId);
-  if (!clip) return null;
+  const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
+  const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
 
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
@@ -35,13 +35,21 @@ export default function ExportStep() {
     haptic();
 
     try {
-      const blob = await renderClipToBlob(
-        state.videoUrl!,
-        clip.trimStart,
-        clip.trimEnd,
-        VIDEO_FILTERS[clip.selectedFilter],
+      // Build clip render instructions
+      const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
+        const media = getMediaFile(state, clip.sourceFileId);
+        return {
+          clip,
+          mediaUrl: media?.url ?? "",
+          mediaType: media?.type ?? "video",
+          filterCSS: VIDEO_FILTERS[clip.selectedFilter],
+          captionText: clip.captionText,
+        };
+      });
+
+      const blob = await renderHighlightTape(
+        renderClips,
         isFree ? WATERMARK_TEXT : null,
-        clip.captionText,
         (pct) => setProgress(pct)
       );
 
@@ -54,13 +62,13 @@ export default function ExportStep() {
       console.error("Export failed:", err);
       setPhase("preview");
     }
-  }, [canExport, state.videoUrl, state.isProUser, clip, isFree, dispatch]);
+  }, [canExport, sortedClips, state, isFree, dispatch]);
 
   const handleDownload = () => {
     if (!blobUrl) return;
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = `highlight-magic-${Date.now()}.webm`;
+    a.download = `highlight-tape-${Date.now()}.webm`;
     a.click();
     haptic();
   };
@@ -70,7 +78,7 @@ export default function ExportStep() {
     try {
       const response = await fetch(blobUrl);
       const blob = await response.blob();
-      const file = new File([blob], "highlight.webm", { type: "video/webm" });
+      const file = new File([blob], "highlight-tape.webm", { type: "video/webm" });
       if (navigator.share) {
         await navigator.share({ files: [file], title: "Made with Highlight Magic" });
       } else {
@@ -94,7 +102,7 @@ export default function ExportStep() {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <h2 className="font-semibold text-white">Export</h2>
+        <h2 className="font-semibold text-white">Export Highlight Tape</h2>
         <div className="w-9" />
       </div>
 
@@ -103,10 +111,9 @@ export default function ExportStep() {
         <>
           <div className="glass-card w-full p-4">
             <div className="flex flex-col gap-2 text-sm">
-              <Row label="Duration" value={`${Math.round(clip.trimEnd - clip.trimStart)}s`} />
+              <Row label="Clips" value={`${sortedClips.length} clips combined`} />
+              <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
               <Row label="Format" value="WebM · 1080×1920" />
-              <Row label="Filter" value={clip.selectedFilter} />
-              {clip.selectedMusicTrack && <Row label="Music" value={clip.selectedMusicTrack.name} />}
               {isFree && <Row label="Watermark" value="Included (Free tier)" />}
               {isFree && (
                 <Row
@@ -115,10 +122,27 @@ export default function ExportStep() {
                 />
               )}
             </div>
+
+            {/* Tape sequence preview */}
+            <div className="mt-4 flex gap-1 overflow-x-auto">
+              {sortedClips.map((clip, i) => {
+                const m = getMediaFile(state, clip.sourceFileId);
+                return (
+                  <div
+                    key={clip.id}
+                    className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-[10px] text-[var(--text-secondary)]"
+                  >
+                    <Film className="h-3 w-3" />
+                    {i + 1}. {Math.round(clip.trimEnd - clip.trimStart)}s
+                    {m && <span className="max-w-[60px] truncate text-[var(--text-tertiary)]">{m.name}</span>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
           <button onClick={handleExport} className="btn-primary flex w-full items-center justify-center gap-2">
             <Download className="h-5 w-5" />
-            Export Now
+            Export Highlight Tape
           </button>
         </>
       )}
@@ -135,7 +159,9 @@ export default function ExportStep() {
             </div>
           </div>
           <p className="text-lg font-semibold text-white">{Math.round(progress)}%</p>
-          <p className="text-sm text-[var(--text-secondary)]">Rendering your highlight...</p>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Rendering {sortedClips.length} clips into one highlight tape...
+          </p>
         </div>
       )}
 
@@ -146,8 +172,10 @@ export default function ExportStep() {
             <Check className="h-10 w-10 text-white" />
           </div>
           <div className="text-center">
-            <h3 className="text-2xl font-bold text-white">Export Complete!</h3>
-            <p className="mt-1 text-[var(--text-secondary)]">Your highlight is ready to share</p>
+            <h3 className="text-2xl font-bold text-white">Highlight Tape Ready!</h3>
+            <p className="mt-1 text-[var(--text-secondary)]">
+              {sortedClips.length} clips combined into one video — ready to share
+            </p>
           </div>
 
           <div className="flex w-full flex-col gap-3">
@@ -235,33 +263,99 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+// ── Multi-clip rendering ──
+
+interface RenderClipInstruction {
+  clip: EditedClip;
+  mediaUrl: string;
+  mediaType: "video" | "photo";
+  filterCSS: string;
+  captionText: string;
+}
+
 /**
- * Render a video clip segment to a downloadable WebM blob.
- * Uses MediaRecorder + Canvas for client-side composition.
+ * Render all clips sequentially into one combined WebM video.
+ * Plays each clip segment in order on a canvas, records with MediaRecorder.
  */
-async function renderClipToBlob(
-  videoUrl: string,
-  trimStart: number,
-  trimEnd: number,
-  filterCSS: string,
+async function renderHighlightTape(
+  clips: RenderClipInstruction[],
   watermarkText: string | null,
-  captionText: string,
   onProgress: (pct: number) => void
 ): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext("2d")!;
+
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, {
+    mimeType: "video/webm;codecs=vp9",
+    videoBitsPerSecond: 8_000_000,
+  });
+  const chunks: Blob[] = [];
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  const totalDuration = clips.reduce((sum, c) => sum + (c.clip.trimEnd - c.clip.trimStart), 0);
+  let elapsedTotal = 0;
+
+  recorder.start();
+
+  for (const instruction of clips) {
+    const clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+
+    if (instruction.mediaType === "photo") {
+      await renderPhotoClip(
+        ctx,
+        canvas,
+        instruction,
+        watermarkText,
+        (pct) => {
+          onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
+        }
+      );
+    } else {
+      await renderVideoClip(
+        ctx,
+        canvas,
+        instruction,
+        watermarkText,
+        (pct) => {
+          onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
+        }
+      );
+    }
+
+    elapsedTotal += clipDuration;
+  }
+
+  recorder.stop();
+
+  return new Promise((resolve) => {
+    recorder.onstop = () => {
+      onProgress(100);
+      resolve(new Blob(chunks, { type: "video/webm" }));
+    };
+  });
+}
+
+function renderVideoClip(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  instruction: RenderClipInstruction,
+  watermarkText: string | null,
+  onProgress: (pct: number) => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
     video.muted = true;
-    video.src = videoUrl;
+    video.src = instruction.mediaUrl;
     video.preload = "auto";
 
     video.onloadeddata = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1080;
-      canvas.height = 1920;
-      const ctx = canvas.getContext("2d")!;
-
-      // Scale video to fill vertical canvas
       const videoAspect = video.videoWidth / video.videoHeight;
       const canvasAspect = canvas.width / canvas.height;
       let drawW: number, drawH: number, drawX: number, drawY: number;
@@ -278,68 +372,28 @@ async function renderClipToBlob(
         drawY = (canvas.height - drawH) / 2;
       }
 
-      const stream = canvas.captureStream(30);
-      const recorder = new MediaRecorder(stream, {
-        mimeType: "video/webm;codecs=vp9",
-        videoBitsPerSecond: 8_000_000,
-      });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        resolve(new Blob(chunks, { type: "video/webm" }));
-      };
-
-      recorder.onerror = () => reject(new Error("Recording failed"));
-
+      const { trimStart, trimEnd } = instruction.clip;
       const duration = trimEnd - trimStart;
       video.currentTime = trimStart;
 
       video.onseeked = () => {
-        recorder.start();
         video.play();
 
         const drawFrame = () => {
           if (video.currentTime >= trimEnd || video.paused) {
             video.pause();
-            recorder.stop();
+            resolve();
             return;
           }
 
-          // Progress
           const elapsed = video.currentTime - trimStart;
           onProgress(Math.min(99, (elapsed / duration) * 100));
 
-          // Draw video frame
-          ctx.filter = filterCSS === "none" ? "none" : filterCSS;
+          ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
           ctx.drawImage(video, drawX, drawY, drawW, drawH);
           ctx.filter = "none";
 
-          // Watermark
-          if (watermarkText) {
-            ctx.save();
-            ctx.globalAlpha = WATERMARK_OPACITY;
-            ctx.font = "bold 28px -apple-system, sans-serif";
-            ctx.fillStyle = "white";
-            ctx.textAlign = "center";
-            ctx.fillText(watermarkText, canvas.width / 2, canvas.height - 60);
-            ctx.restore();
-          }
-
-          // Caption
-          if (captionText) {
-            ctx.save();
-            ctx.font = "bold 48px -apple-system, sans-serif";
-            ctx.fillStyle = "white";
-            ctx.textAlign = "center";
-            ctx.shadowColor = "rgba(0,0,0,0.7)";
-            ctx.shadowBlur = 8;
-            ctx.fillText(captionText, canvas.width / 2, canvas.height - 200);
-            ctx.restore();
-          }
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
 
           requestAnimationFrame(drawFrame);
         };
@@ -348,6 +402,103 @@ async function renderClipToBlob(
       };
     };
 
-    video.onerror = () => reject(new Error("Failed to load video"));
+    video.onerror = () => reject(new Error("Failed to load video for rendering"));
   });
+}
+
+function renderPhotoClip(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  instruction: RenderClipInstruction,
+  watermarkText: string | null,
+  onProgress: (pct: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      const imgAspect = img.width / img.height;
+      const canvasAspect = canvas.width / canvas.height;
+      let drawW: number, drawH: number, drawX: number, drawY: number;
+
+      if (imgAspect > canvasAspect) {
+        drawH = canvas.height;
+        drawW = drawH * imgAspect;
+        drawX = (canvas.width - drawW) / 2;
+        drawY = 0;
+      } else {
+        drawW = canvas.width;
+        drawH = drawW / imgAspect;
+        drawX = 0;
+        drawY = (canvas.height - drawH) / 2;
+      }
+
+      const durationMs = PHOTO_DISPLAY_DURATION * 1000;
+      const startTime = performance.now();
+
+      const drawFrame = () => {
+        const elapsed = performance.now() - startTime;
+
+        if (elapsed >= durationMs) {
+          onProgress(100);
+          resolve();
+          return;
+        }
+
+        onProgress((elapsed / durationMs) * 100);
+
+        // Subtle Ken Burns zoom effect
+        const zoomProgress = elapsed / durationMs;
+        const scale = 1 + zoomProgress * 0.05;
+        const scaledW = drawW * scale;
+        const scaledH = drawH * scale;
+        const scaledX = drawX - (scaledW - drawW) / 2;
+        const scaledY = drawY - (scaledH - drawH) / 2;
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+        ctx.drawImage(img, scaledX, scaledY, scaledW, scaledH);
+        ctx.filter = "none";
+
+        drawOverlays(ctx, canvas, watermarkText, instruction.captionText);
+
+        requestAnimationFrame(drawFrame);
+      };
+
+      requestAnimationFrame(drawFrame);
+    };
+
+    img.onerror = () => reject(new Error("Failed to load image for rendering"));
+    img.src = instruction.mediaUrl;
+  });
+}
+
+function drawOverlays(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  watermarkText: string | null,
+  captionText: string
+) {
+  if (watermarkText) {
+    ctx.save();
+    ctx.globalAlpha = WATERMARK_OPACITY;
+    ctx.font = "bold 28px -apple-system, sans-serif";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText(watermarkText, canvas.width / 2, canvas.height - 60);
+    ctx.restore();
+  }
+
+  if (captionText) {
+    ctx.save();
+    ctx.font = "bold 48px -apple-system, sans-serif";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0,0,0,0.7)";
+    ctx.shadowBlur = 8;
+    ctx.fillText(captionText, canvas.width / 2, canvas.height - 200);
+    ctx.restore();
+  }
 }

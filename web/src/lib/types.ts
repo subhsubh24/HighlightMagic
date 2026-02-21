@@ -30,9 +30,24 @@ export interface HighlightTemplate {
   colorAccent: string; // hex
 }
 
+// ── Multi-file support ──
+
+export type MediaType = "video" | "photo";
+
+export interface MediaFile {
+  id: string;
+  file: File;
+  url: string;
+  type: MediaType;
+  duration: number; // 0 for photos
+  name: string;
+  thumbnailUrl?: string;
+}
+
 export interface HighlightSegment {
   id: string;
-  startTime: number; // seconds
+  sourceFileId: string; // which uploaded file this came from
+  startTime: number; // seconds (0 for photos)
   endTime: number;
   confidenceScore: number;
   label: string;
@@ -41,9 +56,11 @@ export interface HighlightSegment {
 
 export interface EditedClip {
   id: string;
+  sourceFileId: string; // which uploaded file this came from
   segment: HighlightSegment;
   trimStart: number;
   trimEnd: number;
+  order: number; // position in the final highlight tape
   selectedMusicTrack: MusicTrack | null;
   captionText: string;
   captionStyle: CaptionStyle;
@@ -63,6 +80,9 @@ export type AppStep = "upload" | "detecting" | "results" | "editor" | "export";
 
 export interface AppState {
   step: AppStep;
+  // Multi-file upload
+  mediaFiles: MediaFile[];
+  // Legacy single-video compat (points to first video or null)
   videoFile: File | null;
   videoUrl: string | null;
   videoDuration: number;

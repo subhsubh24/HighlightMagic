@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
-import { extractFrames } from "@/lib/frame-extractor";
-import { detectHighlights } from "@/actions/detect";
+import { extractFramesFromMultiple } from "@/lib/frame-extractor";
+import { detectMultiClipHighlights } from "@/actions/detect";
 import { uuid } from "@/lib/utils";
 
 const DETECTION_PASSES = [
-  "Extracting video frames...",
+  "Extracting frames from all clips...",
   "Analyzing motion & composition...",
   "Scoring highlight potential...",
-  "Clustering best moments...",
-  "Ranking clips by confidence...",
+  "Planning your highlight tape...",
+  "Ordering clips for best flow...",
 ];
 
 export default function DetectingStep() {
@@ -21,6 +21,8 @@ export default function DetectingStep() {
   const [passIndex, setPassIndex] = useState(0);
   const hasStarted = useRef(false);
 
+  const fileCount = state.mediaFiles.length;
+
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
@@ -28,11 +30,10 @@ export default function DetectingStep() {
 
     async function runDetection() {
       try {
-        // Phase 1: Extract frames (0-40%)
+        // Phase 1: Extract frames from all media files (0-40%)
         setPassIndex(0);
-        const frames = await extractFrames(
-          state.videoUrl!,
-          state.videoDuration,
+        const frames = await extractFramesFromMultiple(
+          state.mediaFiles,
           (pct) => setProgress(pct * 0.4)
         );
 
@@ -48,7 +49,7 @@ export default function DetectingStep() {
           });
         }, 200);
 
-        const detectedClips = await detectHighlights(
+        const detectedClips = await detectMultiClipHighlights(
           frames,
           state.selectedTemplate?.name
         );
@@ -60,6 +61,7 @@ export default function DetectingStep() {
         // Convert to app types
         const highlights = detectedClips.map((c) => ({
           id: c.id,
+          sourceFileId: c.sourceFileId,
           startTime: c.startTime,
           endTime: c.endTime,
           confidenceScore: c.confidenceScore,
@@ -67,10 +69,12 @@ export default function DetectingStep() {
           detectionSources: ["Cloud AI"],
         }));
 
-        const clips = detectedClips.map((c) => ({
+        const clips = detectedClips.map((c, i) => ({
           id: uuid(),
+          sourceFileId: c.sourceFileId,
           segment: {
             id: c.id,
+            sourceFileId: c.sourceFileId,
             startTime: c.startTime,
             endTime: c.endTime,
             confidenceScore: c.confidenceScore,
@@ -79,6 +83,7 @@ export default function DetectingStep() {
           },
           trimStart: c.startTime,
           trimEnd: c.endTime,
+          order: c.order ?? i,
           selectedMusicTrack: null,
           captionText: "",
           captionStyle: "Bold" as const,
@@ -129,7 +134,7 @@ export default function DetectingStep() {
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
-        AI is analyzing your video for the best moments
+        AI is analyzing {fileCount} file{fileCount !== 1 ? "s" : ""} to create your highlight tape
       </p>
     </div>
   );
