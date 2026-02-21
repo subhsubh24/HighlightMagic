@@ -8,8 +8,8 @@ import {
 
 // ── API helpers ──
 
-/** Max concurrent API calls to avoid rate limits */
-const MAX_CONCURRENCY = 2;
+/** Max concurrent API calls to avoid rate limits (retry handles any 429s) */
+const MAX_CONCURRENCY = 3;
 
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
@@ -393,8 +393,16 @@ const VALID_THEMES: DetectedTheme[] = [
  * understand the full footage. Sorted by score within each source,
  * with all sources represented first, then remaining frames by score.
  */
-/** Max images to send to the planner to stay within API payload limits */
-const MAX_PLANNER_FRAMES = 20;
+/**
+ * Claude API hard limits (Messages API):
+ * - 100 images per request
+ * - 32 MB total payload
+ * - 5 MB per individual image
+ * We leave headroom for the system prompt + score text + JSON overhead.
+ */
+const API_MAX_IMAGES = 100;
+const API_IMAGE_PAYLOAD_BUDGET = 25 * 1024 * 1024; // 25 MB of base64 (leaves ~7 MB for text/JSON)
+const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
   scores: MultiFrameScore[],
@@ -418,31 +426,37 @@ function selectPlannerFrames(
 
   const selected: MultiFrameInput[] = [];
   const usedKeys = new Set<string>();
+  let totalBytes = 0;
 
   function addFrame(score: MultiFrameScore): boolean {
+    if (selected.length >= API_MAX_IMAGES) return false;
     const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
     const frame = frameLookup.get(key);
-    if (frame && !usedKeys.has(key)) {
-      selected.push(frame);
-      usedKeys.add(key);
-      return true;
-    }
-    return false;
+    if (!frame || usedKeys.has(key)) return false;
+
+    const frameBytes = frame.base64.length; // base64 string length ≈ bytes in JSON
+    if (frameBytes > API_MAX_IMAGE_BYTES) return false; // skip oversized images
+    if (totalBytes + frameBytes > API_IMAGE_PAYLOAD_BUDGET) return false; // would exceed budget
+
+    selected.push(frame);
+    usedKeys.add(key);
+    totalBytes += frameBytes;
+    return true;
   }
 
   // Phase 1: guarantee at least one frame per source (the best-scored one)
   for (const [, fileScores] of bySource) {
-    if (selected.length >= MAX_PLANNER_FRAMES) break;
     if (fileScores.length > 0) addFrame(fileScores[0]);
   }
 
   // Phase 2: fill remaining budget with globally highest-scored frames
   const allSorted = [...scores].sort((a, b) => b.score - a.score);
   for (const s of allSorted) {
-    if (selected.length >= MAX_PLANNER_FRAMES) break;
+    if (selected.length >= API_MAX_IMAGES || totalBytes >= API_IMAGE_PAYLOAD_BUDGET) break;
     addFrame(s);
   }
 
+  console.log(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
   return selected;
 }
 
