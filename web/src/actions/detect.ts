@@ -342,7 +342,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           max_tokens: 16384,
           thinking: {
             type: "enabled",
-            budget_tokens: 10000,
+            budget_tokens: 12000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -773,11 +773,11 @@ Respond with ONLY a JSON object:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 32000,
+          model: "claude-opus-4-6",
+          max_tokens: 40000,
           thinking: {
             type: "enabled",
-            budget_tokens: 20000,
+            budget_tokens: 30000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
