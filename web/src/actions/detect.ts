@@ -534,7 +534,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
-          output_config: { effort: "medium" },
+          output_config: { effort: "low" },
           system: [
             {
               type: "text",
