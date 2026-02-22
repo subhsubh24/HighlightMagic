@@ -740,7 +740,11 @@ function selectPlannerFrames(
   const usedKeys = new Set<string>();
   let totalBytes = 0;
 
-  function addFrame(score: ScoredFrame): boolean {
+  // Track selected timestamps per source to enforce temporal diversity
+  const selectedTimestamps = new Map<string, number[]>();
+  const MIN_TEMPORAL_GAP_S = 3; // Minimum seconds between selected frames from the same source
+
+  function addFrame(score: ScoredFrame, enforceGap: boolean): boolean {
     if (selected.length >= API_MAX_IMAGES) return false;
     const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
     const frame = frameLookup.get(key);
@@ -750,22 +754,43 @@ function selectPlannerFrames(
     if (frameBytes > API_MAX_IMAGE_BYTES) return false; // skip oversized images
     if (totalBytes + frameBytes > API_IMAGE_PAYLOAD_BUDGET) return false; // would exceed budget
 
+    // Temporal diversity: skip if too close to an already-selected frame from the same source
+    if (enforceGap) {
+      const sourceTimes = selectedTimestamps.get(score.sourceFileId);
+      if (sourceTimes?.some((t) => Math.abs(t - score.timestamp) < MIN_TEMPORAL_GAP_S)) {
+        return false;
+      }
+    }
+
     selected.push(frame);
     usedKeys.add(key);
     totalBytes += frameBytes;
+    if (!selectedTimestamps.has(score.sourceFileId)) selectedTimestamps.set(score.sourceFileId, []);
+    selectedTimestamps.get(score.sourceFileId)!.push(score.timestamp);
     return true;
   }
 
   // Phase 1: guarantee at least one frame per source (the best-scored one)
   for (const [, fileScores] of bySource) {
-    if (fileScores.length > 0) addFrame(fileScores[0]);
+    if (fileScores.length > 0) addFrame(fileScores[0], false);
   }
 
-  // Phase 2: fill remaining budget with globally highest-scored frames
   const allSorted = [...scores].sort((a, b) => b.score - a.score);
+
+  // Phase 2: fill with highest-scored frames, enforcing minimum temporal gap
+  // This prevents 5 frames from the same 5-second confetti moment eating 5 slots
   for (const s of allSorted) {
     if (selected.length >= API_MAX_IMAGES || totalBytes >= API_IMAGE_PAYLOAD_BUDGET) break;
-    addFrame(s);
+    addFrame(s, true);
+  }
+
+  // Phase 3: if still under budget, fill remaining WITHOUT gap enforcement
+  // Ensures we always get close to 80 frames even with dense scoring
+  if (selected.length < API_MAX_IMAGES && totalBytes < API_IMAGE_PAYLOAD_BUDGET) {
+    for (const s of allSorted) {
+      if (selected.length >= API_MAX_IMAGES || totalBytes >= API_IMAGE_PAYLOAD_BUDGET) break;
+      addFrame(s, false);
+    }
   }
 
   console.log(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
