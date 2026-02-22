@@ -395,8 +395,10 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           model: "claude-sonnet-4-6",
           max_tokens: 25000,
           thinking: {
-            type: "enabled",
-            budget_tokens: 20000,
+            type: "adaptive",
+          },
+          output_config: {
+            effort: "high",
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -507,8 +509,8 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 60; // Balances coverage vs. API latency (Opus + images + thinking is slow at 100)
-const API_IMAGE_PAYLOAD_BUDGET = 15 * 1024 * 1024; // 15 MB of base64 (proportional to 60-image cap)
+const API_MAX_IMAGES = 80; // Balances coverage vs. latency (adaptive thinking is faster than fixed budget)
+const API_IMAGE_PAYLOAD_BUDGET = 20 * 1024 * 1024; // 20 MB of base64 (proportional to 80-image cap)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
@@ -959,8 +961,10 @@ Respond with ONLY a JSON object:
           model: "claude-opus-4-6",
           max_tokens: 60000,
           thinking: {
-            type: "enabled",
-            budget_tokens: 40000,
+            type: "adaptive",
+          },
+          output_config: {
+            effort: "max",
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
