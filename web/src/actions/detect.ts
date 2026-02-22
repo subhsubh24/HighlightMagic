@@ -430,13 +430,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 25000,
-          thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "high",
-          },
+          max_tokens: 8000,
           system: systemPrompt,
           messages: [{ role: "user", content }],
         }),
@@ -546,8 +540,8 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 100; // API hard limit — send every frame we can
-const API_IMAGE_PAYLOAD_BUDGET = 25 * 1024 * 1024; // 25 MB of base64 (API limit is 32 MB, leaves headroom for text/JSON)
+const API_MAX_IMAGES = 40; // Enough for planner to see top moments; 100 was causing 300s+ inference
+const API_IMAGE_PAYLOAD_BUDGET = 10 * 1024 * 1024; // 10 MB budget (480p/0.7 frames are ~30-70KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
@@ -1014,20 +1008,18 @@ Respond with ONLY a JSON object:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-opus-4-6",
-          max_tokens: 100000,
+          model: "claude-sonnet-4-6",
+          max_tokens: 16000,
           thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "max",
+            type: "enabled",
+            budget_tokens: 8000,
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
         }),
       },
       "Planner",
-      360_000 // 6-minute timeout — effort:max on Opus + 100 images needs room
+      120_000 // 2-minute timeout — Sonnet + 40 images should complete well within this
     );
 
     if (!response.ok) {
