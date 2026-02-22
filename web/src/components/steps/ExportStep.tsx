@@ -13,7 +13,7 @@ import {
   EXPORT_BITRATE,
   LOOP_CROSSFADE_DURATION,
 } from "@/lib/constants";
-import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
+import { getEditingStyle } from "@/lib/editing-styles";
 import {
   getClipAlpha,
   getTransitionTransform,
@@ -23,7 +23,7 @@ import {
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid, type TimelineValidation } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
-import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
+import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
@@ -521,12 +521,7 @@ async function renderHighlightTape(
   const ctx = canvas.getContext("2d")!;
 
   const style = getEditingStyle(theme);
-  // Fallback transitions from theme — used only when AI didn't specify per-clip
-  const themeTransitions = getThemeTransitions(theme, Math.max(0, clips.length - 1));
-  const missingTransitions = clips.filter((c, i) => i > 0 && !c.clip.transitionType).length;
-  if (missingTransitions > 0) {
-    console.warn(`Export: ${missingTransitions}/${clips.length - 1} clips missing AI transition, using theme fallback`);
-  }
+  const fallbackTransition: TransitionType = "hard_cut";
 
   // Beat grid for beat-sync
   let beatGrid: BeatGrid | null = null;
@@ -601,7 +596,7 @@ async function renderHighlightTape(
 
     // Per-clip transition: AI-decided takes priority, then theme fallback
     const transType = i > 0
-      ? ((instruction.clip.transitionType as TransitionType) ?? themeTransitions[i - 1])
+      ? ((instruction.clip.transitionType as TransitionType) ?? fallbackTransition)
       : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
@@ -830,7 +825,7 @@ function renderVideoClip(
             ctx.filter = "none";
           }
 
-          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration);
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip));
           requestAnimationFrame(drawFrame);
         };
 
@@ -916,7 +911,7 @@ function renderPhotoClip(
           ctx.filter = "none";
         }
 
-        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || PHOTO_DISPLAY_DURATION);
+        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || PHOTO_DISPLAY_DURATION, buildCaptionCustom(instruction.clip));
         requestAnimationFrame(drawFrame);
       };
 
@@ -972,6 +967,21 @@ function renderTransitionFrame(
   drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed);
 }
 
+function buildCaptionCustom(clip: EditedClip): CustomCaptionParams | undefined {
+  if (!clip.customCaptionAnimation && !clip.customCaptionFontWeight && !clip.customCaptionColor && !clip.customCaptionGlowColor) {
+    return undefined;
+  }
+  return {
+    animation: clip.customCaptionAnimation,
+    fontWeight: clip.customCaptionFontWeight,
+    fontStyle: clip.customCaptionFontStyle,
+    fontFamily: clip.customCaptionFontFamily,
+    color: clip.customCaptionColor,
+    glowColor: clip.customCaptionGlowColor,
+    glowRadius: clip.customCaptionGlowRadius,
+  };
+}
+
 function drawOverlays(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -979,7 +989,8 @@ function drawOverlays(
   captionText: string,
   captionStyle: CaptionStyle,
   localTime: number,
-  clipDuration: number
+  clipDuration: number,
+  captionCustom?: CustomCaptionParams
 ) {
   if (watermarkText) {
     ctx.save();
@@ -993,7 +1004,7 @@ function drawOverlays(
 
   // Kinetic text instead of static caption
   if (captionText) {
-    const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height);
+    const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height, captionCustom);
     drawKineticCaption(
       ctx,
       captionText,
@@ -1001,7 +1012,8 @@ function drawOverlays(
       kTransform,
       canvas.width,
       canvas.height,
-      48
+      48,
+      captionCustom
     );
   }
 }

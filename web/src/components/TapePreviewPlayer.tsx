@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
-import { getEditingStyle, getThemeTransitions } from "@/lib/editing-styles";
+import { getEditingStyle } from "@/lib/editing-styles";
 import {
   getClipAlpha,
   getTransitionTransform,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
-import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
+import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import type { EditedClip } from "@/lib/types";
 
 // ── Adaptive resolution: lower on mobile for smoother playback ──
@@ -68,15 +68,8 @@ export default function TapePreviewPlayer() {
     [state.clips]
   );
 
-  // Fallback transitions from theme — used only when AI didn't specify per-clip
-  const themeTransitions = useMemo<TransitionType[]>(() => {
-    const fallbacks = getThemeTransitions(state.detectedTheme, Math.max(0, sortedClips.length - 1));
-    const missing = sortedClips.filter((c, i) => i > 0 && !c.transitionType).length;
-    if (missing > 0) {
-      console.warn(`Preview: ${missing}/${sortedClips.length - 1} clips missing AI transition, using theme fallback`);
-    }
-    return fallbacks;
-  }, [state.detectedTheme, sortedClips]);
+  // Fallback: "hard_cut" for any clip the AI didn't assign a transition to
+  const fallbackTransition: TransitionType = "hard_cut";
 
   // Beat grid from the first clip's selected music track (shared across tape)
   const beatGrid = useMemo<BeatGrid | null>(() => {
@@ -248,11 +241,24 @@ export default function TapePreviewPlayer() {
       // Kinetic text instead of static caption
       if (entry.captionText) {
         ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
+        const captionCustom: CustomCaptionParams | undefined =
+          (entry.clip.customCaptionAnimation || entry.clip.customCaptionFontWeight || entry.clip.customCaptionColor || entry.clip.customCaptionGlowColor)
+          ? {
+              animation: entry.clip.customCaptionAnimation,
+              fontWeight: entry.clip.customCaptionFontWeight,
+              fontStyle: entry.clip.customCaptionFontStyle,
+              fontFamily: entry.clip.customCaptionFontFamily,
+              color: entry.clip.customCaptionColor,
+              glowColor: entry.clip.customCaptionGlowColor,
+              glowRadius: entry.clip.customCaptionGlowRadius,
+            }
+          : undefined;
         const kTransform = getKineticTransform(
           entry.clip.captionStyle,
           localTime,
           entry.clipDuration,
-          h
+          h,
+          captionCustom
         );
         drawKineticCaption(
           ctx,
@@ -261,7 +267,8 @@ export default function TapePreviewPlayer() {
           kTransform,
           w,
           h,
-          Math.round(h * 0.025)
+          Math.round(h * 0.025),
+          captionCustom
         );
       }
 
@@ -305,7 +312,7 @@ export default function TapePreviewPlayer() {
 
         // Incoming clip during transition
         if (i > 0 && lt < clipTransDuration) {
-          const transType = (e.clip.transitionType as TransitionType) ?? themeTransitions[i - 1];
+          const transType = (e.clip.transitionType as TransitionType) ?? fallbackTransition;
           const progress = lt / clipTransDuration;
           alpha = getClipAlpha(transType, progress, false);
           transform = getTransitionTransform(transType, progress, false, c.width);
@@ -317,7 +324,7 @@ export default function TapePreviewPlayer() {
           const nextClip = timeline[i + 1];
           const nextTransDuration = nextClip?.clip.transitionDuration ?? style.transitionDuration;
           if (timeToEnd < nextTransDuration) {
-            const transType = (nextClip?.clip.transitionType as TransitionType) ?? themeTransitions[i];
+            const transType = (nextClip?.clip.transitionType as TransitionType) ?? fallbackTransition;
             const progress = 1 - timeToEnd / nextTransDuration;
             alpha = getClipAlpha(transType, progress, true);
             transform = getTransitionTransform(transType, progress, true, c.width);
@@ -387,7 +394,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, themeTransitions, style, drawMediaFrame, beatGrid, state.detectedTheme]
+    [timeline, fallbackTransition, style, drawMediaFrame, beatGrid, state.detectedTheme]
   );
 
   // Animation loop with adaptive frame skipping for mobile performance

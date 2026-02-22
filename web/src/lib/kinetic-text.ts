@@ -11,6 +11,17 @@
 
 import type { CaptionStyle } from "./types";
 
+/** AI-authored caption customizations. When present, override the named CaptionStyle defaults. */
+export interface CustomCaptionParams {
+  fontWeight?: number;       // 100-900
+  fontStyle?: string;        // 'normal' | 'italic'
+  fontFamily?: string;       // 'sans-serif' | 'serif' | 'mono'
+  color?: string;            // hex e.g. "#ffffff"
+  animation?: string;        // 'pop' | 'slide' | 'flicker' | 'typewriter' | 'fade' | 'none'
+  glowColor?: string;        // hex e.g. "#7c3aed"
+  glowRadius?: number;       // 0-30
+}
+
 export interface KineticTransform {
   /** Scale factor (1.0 = normal). */
   scale: number;
@@ -42,7 +53,8 @@ export function getKineticTransform(
   style: CaptionStyle,
   localTime: number,
   clipDuration: number,
-  canvasHeight: number
+  canvasHeight: number,
+  custom?: CustomCaptionParams
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -54,10 +66,13 @@ export function getKineticTransform(
     glowAlpha: 0,
   };
 
+  // Resolve animation type: custom overrides named style
+  const animation = custom?.animation ?? styleToAnimation(style);
+
   // Entrance animation (first 0.5s)
   if (localTime < ANIMATION_DURATION) {
     const t = localTime / ANIMATION_DURATION;
-    return getEntranceAnimation(style, t, canvasHeight);
+    return getEntranceAnimationByType(animation, t, canvasHeight, custom);
   }
 
   // Exit animation (last 0.3s) — gentle fade
@@ -68,22 +83,35 @@ export function getKineticTransform(
     return { ...base, alpha: t, offsetY: (1 - t) * -10 };
   }
 
-  // Steady state — apply style-specific idle effects
-  return getIdleAnimation(style, localTime);
+  // Steady state — apply idle effects based on animation type
+  return getIdleAnimationByType(animation, localTime, custom);
+}
+
+/** Map named caption styles to their default animation type. */
+function styleToAnimation(style: CaptionStyle): string {
+  switch (style) {
+    case "Bold": return "pop";
+    case "Minimal": return "slide";
+    case "Neon": return "flicker";
+    case "Classic": return "typewriter";
+    default: return "fade";
+  }
 }
 
 /**
- * Entrance animations per style.
+ * Entrance animations by animation type (decoupled from named CaptionStyle).
  * t goes from 0 (start) to 1 (fully entered).
  */
-function getEntranceAnimation(
-  style: CaptionStyle,
+function getEntranceAnimationByType(
+  animation: string,
   t: number,
-  canvasHeight: number
+  canvasHeight: number,
+  custom?: CustomCaptionParams
 ): KineticTransform {
-  switch (style) {
-    case "Bold": {
-      // Pop — scale from 0 → 1.15 → 1.0 with bounce
+  const glowR = custom?.glowRadius ?? 0;
+
+  switch (animation) {
+    case "pop": {
       const bounceT = easeOutBack(t);
       const scale = bounceT * 1.0;
       return {
@@ -92,27 +120,25 @@ function getEntranceAnimation(
         alpha: Math.min(1, t * 3),
         rotation: 0,
         letterSpacing: 1,
-        glowRadius: 0,
-        glowAlpha: 0,
+        glowRadius: glowR > 0 ? easeOutCubic(t) * glowR : 0,
+        glowAlpha: glowR > 0 ? easeOutCubic(t) * 0.8 : 0,
       };
     }
 
-    case "Minimal": {
-      // Slide up + fade in — elegant entrance
+    case "slide": {
       const eased = easeOutCubic(t);
       return {
         scale: 1,
         offsetY: (1 - eased) * (canvasHeight * 0.03),
         alpha: eased,
         rotation: 0,
-        letterSpacing: 1 + (1 - eased) * 0.5, // letters start spread, converge
-        glowRadius: 0,
-        glowAlpha: 0,
+        letterSpacing: 1 + (1 - eased) * 0.5,
+        glowRadius: glowR > 0 ? eased * glowR : 0,
+        glowAlpha: glowR > 0 ? eased * 0.8 : 0,
       };
     }
 
-    case "Neon": {
-      // Flicker on — simulates neon sign turning on
+    case "flicker": {
       const flickerPhase = t * 8;
       const flicker = t < 0.4
         ? (Math.sin(flickerPhase * Math.PI * 5) > 0 ? 0.8 : 0.1)
@@ -124,13 +150,12 @@ function getEntranceAnimation(
         alpha: flicker,
         rotation: 0,
         letterSpacing: 1,
-        glowRadius: glow * 20,
+        glowRadius: glow * (glowR > 0 ? glowR : 20),
         glowAlpha: glow * 0.8,
       };
     }
 
-    case "Classic": {
-      // Typewriter — characters appear left to right (simulated via alpha + clip)
+    case "typewriter": {
       const eased = easeOutQuad(t);
       return {
         scale: 1,
@@ -138,11 +163,18 @@ function getEntranceAnimation(
         alpha: eased,
         rotation: 0,
         letterSpacing: 1 + (1 - eased) * 0.2,
-        glowRadius: 0,
-        glowAlpha: 0,
+        glowRadius: glowR > 0 ? eased * glowR : 0,
+        glowAlpha: glowR > 0 ? eased * 0.8 : 0,
       };
     }
 
+    case "none":
+      return {
+        scale: 1, offsetY: 0, alpha: 1, rotation: 0, letterSpacing: 1,
+        glowRadius: glowR, glowAlpha: glowR > 0 ? 0.8 : 0,
+      };
+
+    case "fade":
     default:
       return {
         scale: 1,
@@ -150,16 +182,16 @@ function getEntranceAnimation(
         alpha: easeOutCubic(t),
         rotation: 0,
         letterSpacing: 1,
-        glowRadius: 0,
-        glowAlpha: 0,
+        glowRadius: glowR > 0 ? easeOutCubic(t) * glowR : 0,
+        glowAlpha: glowR > 0 ? easeOutCubic(t) * 0.8 : 0,
       };
   }
 }
 
 /**
- * Idle animations — subtle ongoing effects per style.
+ * Idle animations by animation type.
  */
-function getIdleAnimation(style: CaptionStyle, time: number): KineticTransform {
+function getIdleAnimationByType(animation: string, time: number, custom?: CustomCaptionParams): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
     offsetY: 0,
@@ -169,28 +201,20 @@ function getIdleAnimation(style: CaptionStyle, time: number): KineticTransform {
     glowRadius: 0,
     glowAlpha: 0,
   };
+  const glowR = custom?.glowRadius ?? 0;
 
-  switch (style) {
-    case "Neon": {
-      // Subtle glow pulse
+  switch (animation) {
+    case "flicker": {
       const pulse = 0.6 + Math.sin(time * 3) * 0.2;
-      return {
-        ...base,
-        glowRadius: 15 + Math.sin(time * 2) * 5,
-        glowAlpha: pulse,
-      };
+      const r = glowR > 0 ? glowR : 15;
+      return { ...base, glowRadius: r + Math.sin(time * 2) * (r / 3), glowAlpha: pulse };
     }
 
-    case "Bold": {
-      // Very subtle scale breathing
-      return {
-        ...base,
-        scale: 1 + Math.sin(time * 1.5) * 0.008,
-      };
-    }
+    case "pop":
+      return { ...base, scale: 1 + Math.sin(time * 1.5) * 0.008, glowRadius: glowR, glowAlpha: glowR > 0 ? 0.6 : 0 };
 
     default:
-      return base;
+      return glowR > 0 ? { ...base, glowRadius: glowR, glowAlpha: 0.6 + Math.sin(time * 2) * 0.15 } : base;
   }
 }
 
@@ -204,7 +228,8 @@ export function drawKineticCaption(
   transform: KineticTransform,
   canvasWidth: number,
   canvasHeight: number,
-  fontSize: number
+  fontSize: number,
+  custom?: CustomCaptionParams
 ) {
   if (!text || transform.alpha <= 0) return;
 
@@ -219,39 +244,57 @@ export function drawKineticCaption(
   ctx.scale(transform.scale, transform.scale);
   ctx.rotate((transform.rotation * Math.PI) / 180);
 
-  // Font setup per style
-  switch (style) {
-    case "Bold":
-      ctx.font = `900 ${fontSize * 1.2}px -apple-system, sans-serif`;
-      break;
-    case "Minimal":
-      ctx.font = `300 ${fontSize * 0.9}px -apple-system, sans-serif`;
-      break;
-    case "Neon":
-      ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
-      break;
-    case "Classic":
-      ctx.font = `italic ${fontSize}px Georgia, serif`;
-      break;
-    default:
-      ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+  // Font setup: custom params override named style defaults
+  if (custom?.fontWeight || custom?.fontStyle || custom?.fontFamily) {
+    const weight = custom.fontWeight ?? 700;
+    const fStyle = custom.fontStyle === "italic" ? "italic " : "";
+    const family = custom.fontFamily === "serif" ? "Georgia, serif"
+      : custom.fontFamily === "mono" ? "'Courier New', monospace"
+      : "-apple-system, sans-serif";
+    ctx.font = `${fStyle}${weight} ${fontSize}px ${family}`;
+  } else {
+    switch (style) {
+      case "Bold":
+        ctx.font = `900 ${fontSize * 1.2}px -apple-system, sans-serif`;
+        break;
+      case "Minimal":
+        ctx.font = `300 ${fontSize * 0.9}px -apple-system, sans-serif`;
+        break;
+      case "Neon":
+        ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+        break;
+      case "Classic":
+        ctx.font = `italic ${fontSize}px Georgia, serif`;
+        break;
+      default:
+        ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+    }
   }
 
   ctx.textAlign = "center";
 
+  // Resolve text color (default white)
+  const textColor = custom?.color ?? "white";
+
+  // Resolve glow colors
+  const glowColor1 = custom?.glowColor ?? "rgba(124, 58, 234, 1)";
+  const glowColor2 = custom?.glowColor
+    ? custom.glowColor  // Use same color for second layer with reduced alpha
+    : "rgba(236, 72, 153, 1)";
+
   // Letter spacing (applied by drawing characters individually if needed)
   if (transform.letterSpacing !== 1 && Math.abs(transform.letterSpacing - 1) > 0.05) {
-    drawSpacedText(ctx, text, 0, 0, transform.letterSpacing, style, transform);
+    drawSpacedText(ctx, text, 0, 0, transform.letterSpacing, transform, textColor, glowColor1);
   } else {
-    // Glow effect (for Neon)
+    // Glow effect
     if (transform.glowRadius > 0 && transform.glowAlpha > 0) {
-      ctx.shadowColor = `rgba(124, 58, 234, ${transform.glowAlpha})`;
+      ctx.shadowColor = hexToRgba(glowColor1, transform.glowAlpha);
       ctx.shadowBlur = transform.glowRadius;
-      ctx.fillStyle = "white";
+      ctx.fillStyle = textColor;
       ctx.fillText(text, 0, 0);
 
-      // Second glow layer (pink)
-      ctx.shadowColor = `rgba(236, 72, 153, ${transform.glowAlpha * 0.7})`;
+      // Second glow layer
+      ctx.shadowColor = hexToRgba(glowColor2, transform.glowAlpha * 0.7);
       ctx.shadowBlur = transform.glowRadius * 1.5;
       ctx.fillText(text, 0, 0);
 
@@ -261,11 +304,33 @@ export function drawKineticCaption(
     // Main text
     ctx.shadowColor = "rgba(0,0,0,0.7)";
     ctx.shadowBlur = 8;
-    ctx.fillStyle = "white";
+    ctx.fillStyle = textColor;
     ctx.fillText(text, 0, 0);
   }
 
   ctx.restore();
+}
+
+/** Convert a hex color or rgba string to rgba with specific alpha. */
+function hexToRgba(color: string, alpha: number): string {
+  // Already rgba/rgb format
+  if (color.startsWith("rgba(") || color.startsWith("rgb(")) {
+    const match = color.match(/[\d.]+/g);
+    if (match && match.length >= 3) {
+      return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${alpha})`;
+    }
+  }
+  // Hex format
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+  return `rgba(255, 255, 255, ${alpha})`;
 }
 
 function drawSpacedText(
@@ -274,8 +339,9 @@ function drawSpacedText(
   x: number,
   y: number,
   spacing: number,
-  style: CaptionStyle,
-  transform: KineticTransform
+  transform: KineticTransform,
+  textColor: string,
+  glowColor: string
 ) {
   const chars = text.split("");
   const baseWidths = chars.map((c) => ctx.measureText(c).width);
@@ -284,10 +350,10 @@ function drawSpacedText(
 
   ctx.shadowColor = "rgba(0,0,0,0.7)";
   ctx.shadowBlur = 8;
-  ctx.fillStyle = "white";
+  ctx.fillStyle = textColor;
 
-  if (style === "Neon" && transform.glowRadius > 0) {
-    ctx.shadowColor = `rgba(124, 58, 234, ${transform.glowAlpha})`;
+  if (transform.glowRadius > 0) {
+    ctx.shadowColor = hexToRgba(glowColor, transform.glowAlpha);
     ctx.shadowBlur = transform.glowRadius;
   }
 

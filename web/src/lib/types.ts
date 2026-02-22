@@ -82,6 +82,21 @@ export interface EditedClip {
   customVelocityKeyframes?: Array<{ position: number; speed: number }>;
   /** Custom CSS filter string from AI — e.g. "saturate(1.3) contrast(1.2) brightness(1.05)" */
   customFilterCSS?: string;
+  // Dynamic AI-authored caption styling
+  /** Custom caption font weight (100-900). Overrides style default. */
+  customCaptionFontWeight?: number;
+  /** Custom caption font style: 'normal' or 'italic'. */
+  customCaptionFontStyle?: string;
+  /** Custom caption font family: 'sans-serif', 'serif', or 'mono'. */
+  customCaptionFontFamily?: string;
+  /** Custom caption text color as hex (e.g. "#ffffff"). */
+  customCaptionColor?: string;
+  /** Custom caption entrance animation: 'pop', 'slide', 'flicker', 'typewriter', 'fade', 'none'. */
+  customCaptionAnimation?: string;
+  /** Custom caption glow color as hex (e.g. "#7c3aed"). Empty = no glow. */
+  customCaptionGlowColor?: string;
+  /** Custom caption glow radius in pixels (0-30). */
+  customCaptionGlowRadius?: number;
 }
 
 export interface ViralExportOptions {

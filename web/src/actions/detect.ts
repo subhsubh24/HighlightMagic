@@ -299,6 +299,14 @@ export interface DetectedClip {
   // Dynamic AI-authored styles
   customVelocityKeyframes?: Array<{ position: number; speed: number }>;
   customFilterCSS?: string;
+  // Dynamic AI-authored caption styling
+  customCaptionFontWeight?: number;
+  customCaptionFontStyle?: string;
+  customCaptionFontFamily?: string;
+  customCaptionColor?: string;
+  customCaptionAnimation?: string;
+  customCaptionGlowColor?: string;
+  customCaptionGlowRadius?: number;
 }
 
 export interface DetectionResult {
@@ -1053,22 +1061,10 @@ sources creates a sense of storytelling that single-source edits can't achieve.
 
 Put your understanding in a "contentSummary" field (2-3 vivid sentences).
 
-STEP 2: CHOOSE THE EDITING THEME
-Your theme choice controls the entire visual style of the reel — transitions, effects, and pacing.
-Pick the one that will make THIS specific content look its absolute best on Instagram:
-
-- "sports" → flash/zoom-punch/whip/glitch transitions, entry punch zooms — NFL highlight energy
-- "cooking" → crossfade/light-leak/soft-zoom dissolves — warm Bon Appétit / Tasty aesthetic
-- "travel" → cinematic dissolves, light leaks, dip-to-black — Sam Kolder drone-shot vibes
-- "gaming" → glitch/color-flash/strobe/zoom-punch — esports montage energy
-- "party" → color-flash/strobe/flash/glitch — nightlife/festival beat-sync energy
-- "fitness" → zoom-punch/flash/hard-flash/whip — motivational power edit
-- "pets" → crossfades, soft-zoom/light-leak — cute animal compilation warmth
-- "vlog" → hard-cuts, dip-to-black — clean modern YouTube style
-- "wedding" → crossfade/light-leak/soft-zoom/dip-to-black dissolves — romantic film elegance
-- "cinematic" → crossfade/dip-to-black/light-leak dissolves — professional default
-
-Think about: What theme makes this content MOST shareable on Instagram? Match the style to the CONTENT.
+STEP 2: LABEL THE THEME (for UI display only — does NOT control your creative decisions)
+Pick a theme label that best describes this content. This is ONLY used in the UI header — it does
+NOT restrict your transitions, filters, velocity, or any other editing choice. YOU control everything.
+Valid labels: "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "wedding", "cinematic"
 
 STEP 2.5: READ THE AUDIO — THREE SIGNAL LAYERS
 Each frame has audioEnergy (volume), audioOnset (beat detection), and frequency spectrum (bass/mid/treble).
@@ -1276,25 +1272,48 @@ CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes th
 - Emotional amplifier: "no way." / "that feeling." / "every. single. time."
 - Context that transforms meaning: "day 1 vs day 365" / "she had no idea" / "watch this"
 - Reaction trigger: "wait for it" / "the precision." / "obsessed"
-captionStyle should MATCH the moment:
-"Bold" → impact moments, exclamations, big energy (pop entrance animation)
-"Minimal" → understated, elegant, "the visual does the talking" (slide-up entrance)
-"Neon" → party, gaming, nightlife, stylistic accent (flicker-on animation)
-"Classic" → sentimental, timeless, wedding/travel (typewriter reveal)
 Use captions on 30-50% of clips max. Over-captioning = amateur. Strategic captions = editorial.
+
+CAPTION STYLING — You have FULL CREATIVE CONTROL over every caption's look:
+
+captionStyle is a fallback preset: "Bold", "Minimal", "Neon", or "Classic".
+But you can OVERRIDE everything with custom caption parameters:
+
+captionAnimation — entrance effect: "pop" (bounce scale), "slide" (slide up + fade),
+  "flicker" (neon sign turning on), "typewriter" (characters reveal), "fade" (simple fade), "none"
+captionFontWeight — 100 (thin) to 900 (black). 300=light, 700=bold, 900=heavy.
+captionFontStyle — "normal" or "italic"
+captionFontFamily — "sans-serif" (modern), "serif" (elegant), "mono" (technical)
+captionColor — hex color e.g. "#ffffff" (white), "#ffd700" (gold), "#ff3366" (hot pink)
+captionGlowColor — hex color for glow effect e.g. "#7c3aed" (purple), "#06b6d4" (teal). Omit for no glow.
+captionGlowRadius — 0-30 pixels. 10=subtle, 20=dramatic, 30=intense.
+
+Examples of custom caption looks:
+- Neon teal glow: {captionAnimation:"flicker", captionFontWeight:700, captionColor:"#ffffff", captionGlowColor:"#06b6d4", captionGlowRadius:20}
+- Elegant gold serif: {captionAnimation:"fade", captionFontWeight:300, captionFontStyle:"italic", captionFontFamily:"serif", captionColor:"#ffd700"}
+- Bold pink impact: {captionAnimation:"pop", captionFontWeight:900, captionColor:"#ff3366", captionGlowColor:"#ff3366", captionGlowRadius:15}
+- Clean minimal: {captionAnimation:"slide", captionFontWeight:300, captionColor:"#ffffff"}
+
+DESIGN UNIQUE CAPTION STYLES FOR EACH CLIP. Match the look to the moment's energy and emotion.
 
 KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
 
-For each clip, provide ALL of these fields:
+YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
 sourceFileId, startTime, endTime, label, confidenceScore,
-velocityPreset OR velocityKeyframes (custom keyframes preferred for unique moments),
-transitionType (skip for first clip), transitionDuration,
-filter OR filterCSS (custom CSS preferred for unique looks),
-captionText (optional), captionStyle (optional), entryPunchScale, kenBurnsIntensity (photos only)
+velocityPreset OR velocityKeyframes (custom keyframes preferred),
+transitionType (REQUIRED for every clip except the first — YOU choose, no theme fallback),
+transitionDuration (REQUIRED — YOU set the timing),
+filter OR filterCSS (custom CSS preferred),
+entryPunchScale (REQUIRED — YOU set the impact),
+kenBurnsIntensity (photos only),
+captionText (optional — only when it adds value),
+captionStyle (fallback preset),
+plus any custom caption params: captionAnimation, captionFontWeight, captionFontStyle,
+captionFontFamily, captionColor, captionGlowColor, captionGlowRadius
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "", "captionStyle": "Bold", "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "no way.", "captionStyle": "Bold", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1415,6 +1434,14 @@ Respond with ONLY a JSON object:
             // Dynamic AI-authored styles
             velocityKeyframes?: Array<{ position: number; speed: number }>;
             filterCSS?: string;
+            // Dynamic AI-authored caption styling
+            captionFontWeight?: number;
+            captionFontStyle?: string;
+            captionFontFamily?: string;
+            captionColor?: string;
+            captionAnimation?: string;
+            captionGlowColor?: string;
+            captionGlowRadius?: number;
           }>;
         };
 
@@ -1532,6 +1559,21 @@ Respond with ONLY a JSON object:
           // Dynamic AI-authored styles
           customVelocityKeyframes,
           customFilterCSS,
+          // Dynamic AI-authored caption styling
+          customCaptionFontWeight: (typeof p.captionFontWeight === "number" && p.captionFontWeight >= 100 && p.captionFontWeight <= 900)
+            ? p.captionFontWeight : undefined,
+          customCaptionFontStyle: (p.captionFontStyle === "italic" || p.captionFontStyle === "normal")
+            ? p.captionFontStyle : undefined,
+          customCaptionFontFamily: (p.captionFontFamily === "sans-serif" || p.captionFontFamily === "serif" || p.captionFontFamily === "mono")
+            ? p.captionFontFamily : undefined,
+          customCaptionColor: (typeof p.captionColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionColor))
+            ? p.captionColor : undefined,
+          customCaptionAnimation: (typeof p.captionAnimation === "string" && ["pop", "slide", "flicker", "typewriter", "fade", "none"].includes(p.captionAnimation))
+            ? p.captionAnimation : undefined,
+          customCaptionGlowColor: (typeof p.captionGlowColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionGlowColor))
+            ? p.captionGlowColor : undefined,
+          customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
+            ? p.captionGlowRadius : undefined,
         }; });
 
         // Deduplicate: drop clips with identical or overlapping time ranges from the same source

@@ -413,6 +413,14 @@ export default function DetectingStep() {
         // Dynamic AI-authored styles
         customVelocityKeyframes: c.customVelocityKeyframes,
         customFilterCSS: c.customFilterCSS,
+        // Dynamic AI-authored caption styling
+        customCaptionFontWeight: c.customCaptionFontWeight,
+        customCaptionFontStyle: c.customCaptionFontStyle,
+        customCaptionFontFamily: c.customCaptionFontFamily,
+        customCaptionColor: c.customCaptionColor,
+        customCaptionAnimation: c.customCaptionAnimation,
+        customCaptionGlowColor: c.customCaptionGlowColor,
+        customCaptionGlowRadius: c.customCaptionGlowRadius,
       }));
 
       setProgress(100);
