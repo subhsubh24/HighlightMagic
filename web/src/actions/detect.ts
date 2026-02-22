@@ -538,8 +538,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           messages: [{ role: "user", content }],
         }),
       },
-      "Scoring batch",
-      120_000 // 2-minute timeout per batch (20 frames should complete in ~30-45s)
+      "Scoring batch"
     );
 
     if (!response.ok) {

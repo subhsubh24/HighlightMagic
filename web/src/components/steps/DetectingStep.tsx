@@ -23,15 +23,30 @@ const REPLAN_PASSES = [
   "Applying editing style for best flow...",
 ];
 
+/** Threshold in seconds before showing "taking longer than expected". */
+const SLOW_THRESHOLD_S = 45;
+
 export default function DetectingStep() {
   const { state, dispatch } = useApp();
   const [progress, setProgress] = useState(0);
   const [passIndex, setPassIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isSlow, setIsSlow] = useState(false);
   const hasStarted = useRef(false);
+  const phaseStartRef = useRef(Date.now());
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const fileCount = state.mediaFiles.length;
   const isReplan = !!state.regenerateFeedback;
+
+  // Reset the slow timer whenever the pass/phase changes
+  useEffect(() => {
+    setIsSlow(false);
+    phaseStartRef.current = Date.now();
+    clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = setTimeout(() => setIsSlow(true), SLOW_THRESHOLD_S * 1000);
+    return () => clearTimeout(slowTimerRef.current);
+  }, [passIndex]);
 
   useEffect(() => {
     if (hasStarted.current) return;
@@ -305,6 +320,12 @@ export default function DetectingStep() {
           ? "Re-generating with your creative direction..."
           : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
       </p>
+
+      {isSlow && (
+        <p className="text-center text-xs text-amber-400/80 animate-fade-in">
+          Taking longer than expected — still working, hang tight...
+        </p>
+      )}
     </div>
   );
 }
