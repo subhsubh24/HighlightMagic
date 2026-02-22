@@ -432,8 +432,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
           thinking: {
-            type: "enabled",
-            budget_tokens: 10000,
+            type: "adaptive",
           },
           output_config: {
             effort: "high",
@@ -1018,18 +1017,17 @@ Respond with ONLY a JSON object:
           model: "claude-opus-4-6",
           max_tokens: 16000,
           thinking: {
-            type: "enabled",
-            budget_tokens: 10000,
+            type: "adaptive",
           },
           output_config: {
-            effort: "high",
+            effort: "max",
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
         }),
       },
       "Planner",
-      240_000 // 4-minute timeout — Opus + extended thinking + 50 images
+      300_000 // 5-minute timeout — Opus + adaptive thinking + effort:max + 50 images
     );
 
     if (!response.ok) {
