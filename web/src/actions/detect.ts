@@ -105,6 +105,9 @@ interface MultiFrameInput {
   base64: string;
   audioEnergy?: number; // 0.0-1.0 normalized RMS energy at this timestamp
   audioOnset?: number;  // 0.0-1.0 energy delta — transient/beat strength
+  audioBass?: number;   // 0.0-1.0 energy ratio in bass band (20-300 Hz)
+  audioMid?: number;    // 0.0-1.0 energy ratio in voice band (300-2000 Hz)
+  audioTreble?: number; // 0.0-1.0 energy ratio in treble band (2000-8000 Hz)
 }
 
 export interface ScoredFrame {
@@ -357,6 +360,17 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    Audio onset is what pro editors use to sync cuts to music. When you see a high onset, that's
    where a transition or speed change should land.
 
+   FREQUENCY BANDS — What KIND of audio is happening (when available):
+   audioBass (0.0-1.0): proportion of energy in bass (20-300 Hz) — drums, bass guitar, sub-bass
+   audioMid (0.0-1.0): proportion of energy in voice band (300-2000 Hz) — speech, vocals, melody
+   audioTreble (0.0-1.0): proportion of energy in treble (2000-8000 Hz) — cymbals, sibilants, brightness
+   These ratios sum to ~1.0. Use them to identify what's happening sonically:
+   - Mid-dominant (audioMid > 0.5): Likely SPEECH — someone talking, narrating, reacting
+   - Bass-dominant (audioBass > 0.4) + onset peaks: Likely MUSIC with strong beat / bass drop
+   - Broad spectrum (all bands 0.2-0.5): Full mix — music with vocals, rich soundscape
+   - Treble-heavy (audioTreble > 0.4): Bright sounds — cymbals, crowd hiss, sharp transients
+   Factor this into your label — note "speech detected" or "bass-heavy beat" when relevant.
+
 8. TEMPORAL DYNAMICS — Where does this frame sit in the moment's arc?
    This is what separates editors who find moments from editors who FEEL them.
    - Is this the PEAK of the action, or the wind-up just BEFORE impact?
@@ -412,9 +426,13 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     const onsetTag = frame.audioOnset != null && frame.audioOnset > 0.1
       ? `, audioOnset: ${frame.audioOnset.toFixed(2)}`
       : "";
+    // Include spectral bands when audio is present and loud enough to be meaningful
+    const specTag = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1)
+      ? `, spectrum: B${frame.audioBass!.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}`
+      : "";
     content.push({
       type: "text",
-      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}${onsetTag}`,
+      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}${onsetTag}${specTag}`,
     });
   });
 
@@ -631,10 +649,12 @@ async function planHighlightTape(
   // Build audio lookups from frames
   const audioLookup = new Map<string, number>();
   const onsetLookup = new Map<string, number>();
+  const specLookup = new Map<string, { bass: number; mid: number; treble: number }>();
   for (const f of allFrames) {
     const key = `${f.sourceFileId}::${f.timestamp.toFixed(1)}`;
     if (f.audioEnergy != null) audioLookup.set(key, f.audioEnergy);
     if (f.audioOnset != null) onsetLookup.set(key, f.audioOnset);
+    if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid!, treble: f.audioTreble! });
   }
 
   const allScoresSummary = Array.from(scoresBySource.entries())
@@ -650,7 +670,9 @@ async function planHighlightTape(
           const onsetVal = onsetLookup.get(key);
           const audioTag = audioVal != null ? `  audio:${audioVal.toFixed(2)}` : "";
           const onsetTag = onsetVal != null && onsetVal > 0.1 ? `  onset:${onsetVal.toFixed(2)}` : "";
-          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${roleTag}  "${s.label}"`;
+          const spec = specLookup.get(key);
+          const specTag = (spec && audioVal != null && audioVal > 0.1) ? `  spectrum:B${spec.bass.toFixed(2)}/M${spec.mid.toFixed(2)}/T${spec.treble.toFixed(2)}` : "";
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${specTag}${roleTag}  "${s.label}"`;
         }
       );
 
@@ -754,9 +776,9 @@ Pick the one that will make THIS specific content look its absolute best on Inst
 
 Think about: What theme makes this content MOST shareable on Instagram? Match the style to the CONTENT.
 
-STEP 2.5: READ THE AUDIO — TWO SIGNALS
-Each frame has audioEnergy (volume 0-1) and audioOnset (energy CHANGE 0-1).
-Each source has ASCII visualizations of both. This is how pro editors sync cuts to sound.
+STEP 2.5: READ THE AUDIO — THREE SIGNAL LAYERS
+Each frame has audioEnergy (volume), audioOnset (beat detection), and frequency spectrum (bass/mid/treble).
+Each source has ASCII visualizations of energy and onset. This is how pro editors sync cuts to sound.
 
 AUDIO ENERGY = volume at this moment:
 - High (0.7+) = loud (cheering, music peak, action). Low (0-0.3) = quiet (silence, calm).
@@ -765,6 +787,21 @@ AUDIO ONSET = the beat detector. How much energy CHANGED from the previous frame
 - High onset (0.5+) = TRANSIENT. Something just happened: beat hit, clap, impact, bass drop, voice starting.
 - The onset visualization shows you exactly where the rhythm of the footage lives.
 - Peaks in the onset graph = natural cut points. This is where transitions should land.
+
+FREQUENCY SPECTRUM = what KIND of audio (spectrum: B=bass / M=mid / T=treble, ratios sum to ~1.0):
+- Mid-dominant (M > 0.5): SPEECH — someone talking, narrating, reacting vocally
+- Bass-dominant (B > 0.4) + onset peaks: MUSIC with a beat — drums, bass drops, rhythmic music
+- Broad spectrum (all 0.2-0.5): Full mix — music with vocals, rich layered soundscape
+- Treble-heavy (T > 0.4): Bright transients — cymbals, crowd hiss, sibilant speech
+
+SPEECH vs MUSIC EDITING RULES:
+- SPEECH (mid-dominant): NEVER cut mid-sentence. Start/end clips at speech pauses (low energy gaps).
+  Keep "normal" velocity — slow-mo makes speech unintelligible and breaks immersion.
+  Use softer transitions (crossfade, dip_to_black) — punchy transitions feel jarring over dialog.
+- MUSIC (bass-dominant + onsets): Sync cuts to onset peaks. Speed ramps and velocity hits feel incredible.
+  Punchy transitions (flash, zoom_punch, whip) amplify beat drops. This is where you go hard.
+- MIXED (speech over music): Treat as speech — preserve dialog intelligibility above all.
+- SILENCE (low energy, no dominant band): Natural cut points. Perfect for dramatic pauses and breathing room.
 
 USE AUDIO FOR EVERY EDITING DECISION:
 - START clips at high-onset timestamps — cuts landing on sound hits feel intentional and "tight"
@@ -983,7 +1020,8 @@ Respond with ONLY a JSON object:
 
     const audioVal = frame.audioEnergy != null ? ` | AUDIO: ${frame.audioEnergy.toFixed(2)}` : "";
     const onsetVal = frame.audioOnset != null && frame.audioOnset > 0.1 ? ` | ONSET: ${frame.audioOnset.toFixed(2)}` : "";
-    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}`;
+    const specVal = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1) ? ` | SPECTRUM: B${frame.audioBass.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}` : "";
+    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}${specVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
       annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;

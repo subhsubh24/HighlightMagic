@@ -11,6 +11,9 @@ export interface ExtractedFrame {
   base64: string;
   audioEnergy?: number; // 0.0-1.0 normalized RMS energy at this timestamp
   audioOnset?: number;  // 0.0-1.0 energy delta — how much energy CHANGED (transient/beat detection)
+  audioBass?: number;   // 0.0-1.0 energy ratio in bass band (20-300 Hz) — drums, bass, sub
+  audioMid?: number;    // 0.0-1.0 energy ratio in voice band (300-2000 Hz) — speech, vocals, melody
+  audioTreble?: number; // 0.0-1.0 energy ratio in treble band (2000-8000 Hz) — cymbals, sibilants, brightness
 }
 
 /**
@@ -22,13 +25,71 @@ export interface ExtractedFrame {
 interface AudioAnalysis {
   energy: Map<number, number>;  // RMS energy per timestamp (0-1)
   onset: Map<number, number>;   // energy delta per timestamp (0-1) — transient/beat detection
+  spectral: Map<number, { bass: number; mid: number; treble: number }>; // frequency band ratios
+}
+
+/**
+ * Goertzel algorithm: compute energy at a single frequency bin in O(N).
+ * Much faster than FFT when you only need a handful of frequencies.
+ */
+function goertzelEnergy(samples: Float32Array, sampleRate: number, targetFreq: number): number {
+  const N = samples.length;
+  const k = Math.round(targetFreq * N / sampleRate);
+  if (k <= 0 || k >= N / 2) return 0;
+  const coeff = 2 * Math.cos((2 * Math.PI * k) / N);
+  let s1 = 0, s2 = 0;
+  for (let i = 0; i < N; i++) {
+    const s0 = samples[i] + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+}
+
+/**
+ * Compute spectral band energy ratios at a timestamp.
+ * Returns proportion of energy in bass (20-300 Hz), mid/voice (300-2000 Hz), treble (2000-8000 Hz).
+ * Used to help AI distinguish speech vs music vs silence.
+ */
+function computeSpectralBands(
+  mixedData: Float32Array,
+  sampleRate: number,
+  centerSample: number,
+  halfWindow: number
+): { bass: number; mid: number; treble: number } {
+  const start = Math.max(0, centerSample - halfWindow);
+  const end = Math.min(mixedData.length, centerSample + halfWindow);
+  if (end - start < 64) return { bass: 0, mid: 0, treble: 0 };
+
+  const samples = mixedData.subarray(start, end);
+
+  // Sample representative frequencies per band using Goertzel
+  const bassEnergy = goertzelEnergy(samples, sampleRate, 60)
+    + goertzelEnergy(samples, sampleRate, 120)
+    + goertzelEnergy(samples, sampleRate, 200);
+  const midEnergy = goertzelEnergy(samples, sampleRate, 400)
+    + goertzelEnergy(samples, sampleRate, 800)
+    + goertzelEnergy(samples, sampleRate, 1200)
+    + goertzelEnergy(samples, sampleRate, 2000);
+  const trebleEnergy = goertzelEnergy(samples, sampleRate, 3000)
+    + goertzelEnergy(samples, sampleRate, 5000)
+    + goertzelEnergy(samples, sampleRate, 7000);
+
+  const total = bassEnergy + midEnergy + trebleEnergy;
+  if (total === 0) return { bass: 0, mid: 0, treble: 0 };
+
+  return {
+    bass: Math.round((bassEnergy / total) * 100) / 100,
+    mid: Math.round((midEnergy / total) * 100) / 100,
+    treble: Math.round((trebleEnergy / total) * 100) / 100,
+  };
 }
 
 async function extractAudioAnalysis(
   videoUrl: string,
   timestamps: number[]
 ): Promise<AudioAnalysis> {
-  const empty: AudioAnalysis = { energy: new Map(), onset: new Map() };
+  const empty: AudioAnalysis = { energy: new Map(), onset: new Map(), spectral: new Map() };
   try {
     const response = await fetch(videoUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -63,11 +124,13 @@ async function extractAudioAnalysis(
     const windowSamples = Math.floor(sampleRate * 0.25); // 0.25s window — tighter for transient precision
 
     const energyMap = new Map<number, number>();
+    const spectralMap = new Map<number, { bass: number; mid: number; treble: number }>();
+    const halfWindow = Math.floor(windowSamples / 2);
 
     for (const ts of timestamps) {
       const centerSample = Math.floor(ts * sampleRate);
-      const start = Math.max(0, centerSample - Math.floor(windowSamples / 2));
-      const end = Math.min(length, centerSample + Math.floor(windowSamples / 2));
+      const start = Math.max(0, centerSample - halfWindow);
+      const end = Math.min(length, centerSample + halfWindow);
 
       if (end <= start) {
         energyMap.set(ts, 0);
@@ -79,6 +142,9 @@ async function extractAudioAnalysis(
         sumSquares += mixedData[i] * mixedData[i];
       }
       energyMap.set(ts, Math.sqrt(sumSquares / (end - start)));
+
+      // Spectral band analysis — reuses the same window
+      spectralMap.set(ts, computeSpectralBands(mixedData, sampleRate, centerSample, halfWindow));
     }
 
     // Normalize energy to 0-1
@@ -107,7 +173,7 @@ async function extractAudioAnalysis(
     }
 
     audioCtx.close();
-    return { energy: energyMap, onset: onsetMap };
+    return { energy: energyMap, onset: onsetMap, spectral: spectralMap };
   } catch {
     return empty;
   }
@@ -120,7 +186,7 @@ export async function extractFrames(
   videoUrl: string,
   duration: number,
   onProgress?: (pct: number) => void
-): Promise<{ timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number }[]> {
+): Promise<{ timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number; audioBass?: number; audioMid?: number; audioTreble?: number }[]> {
   const video = document.createElement("video");
   video.crossOrigin = "anonymous";
   video.muted = true;
@@ -138,7 +204,7 @@ export async function extractFrames(
   canvas.height = Math.round(video.videoHeight * scale);
   const ctx = canvas.getContext("2d")!;
 
-  const frames: { timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number }[] = [];
+  const frames: { timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number; audioBass?: number; audioMid?: number; audioTreble?: number }[] = [];
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
   const totalFrames = Math.floor(duration / interval);
 
@@ -167,6 +233,12 @@ export async function extractFrames(
     for (const frame of frames) {
       frame.audioEnergy = audio.energy.get(frame.timestamp);
       frame.audioOnset = audio.onset.get(frame.timestamp);
+      const bands = audio.spectral.get(frame.timestamp);
+      if (bands) {
+        frame.audioBass = bands.bass;
+        frame.audioMid = bands.mid;
+        frame.audioTreble = bands.treble;
+      }
     }
   }
 
@@ -216,6 +288,9 @@ export async function extractFramesFromMultiple(
           base64: frame.base64,
           audioEnergy: frame.audioEnergy,
           audioOnset: frame.audioOnset,
+          audioBass: frame.audioBass,
+          audioMid: frame.audioMid,
+          audioTreble: frame.audioTreble,
         });
       }
     }
