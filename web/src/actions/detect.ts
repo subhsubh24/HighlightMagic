@@ -435,7 +435,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
             type: "adaptive",
           },
           output_config: {
-            effort: "high",
+            effort: "medium",
           },
           system: systemPrompt,
           messages: [{ role: "user", content }],
@@ -1020,14 +1020,14 @@ Respond with ONLY a JSON object:
             type: "adaptive",
           },
           output_config: {
-            effort: "max",
+            effort: "high",
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
         }),
       },
       "Planner",
-      300_000 // 5-minute timeout — Opus + adaptive thinking + effort:max + 50 images
+      240_000 // 4-minute timeout — Opus + adaptive thinking + effort:high + 50 images
     );
 
     if (!response.ok) {
