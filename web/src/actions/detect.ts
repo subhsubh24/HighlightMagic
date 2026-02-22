@@ -7,11 +7,15 @@ import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 /** Max concurrent API calls — retry logic handles any 429s from the API */
 const MAX_CONCURRENCY = 3;
 
+/** Stagger delay between launching concurrent batches (ms).
+ *  Prevents all workers from hitting the API at t=0, which triggers 429s. */
+const BATCH_STAGGER_MS = 1500;
+
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
 const INITIAL_BACKOFF_MS = 2000;
-/** Cap Retry-After waits — a 78s wait is absurd when we can just retry sooner */
-const MAX_RETRY_WAIT_MS = 30_000;
+/** Cap Retry-After waits — staggered launches prevent most 429s now */
+const MAX_RETRY_WAIT_MS = 15_000;
 
 /**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
@@ -204,7 +208,11 @@ export async function scoreAllFrames(
   }
 
   const batchResults = await runWithConcurrency(
-    batches.map((batch) => () => analyzeMultiBatch(apiKey, batch, sourceFiles, templateName)),
+    batches.map((batch, i) => async () => {
+      // Stagger batch starts so we don't slam the API at t=0 and trigger 429s
+      if (i > 0) await new Promise((r) => setTimeout(r, i * BATCH_STAGGER_MS));
+      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
+    }),
     MAX_CONCURRENCY
   );
   return batchResults.flat();
