@@ -6,11 +6,11 @@ import type { SourceFileInfo } from "@/lib/frame-batching";
 // ── API helpers ──
 
 /** Max concurrent API calls — retry logic handles any 429s from the API */
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 5;
 
 /** Stagger delay between launching concurrent batches (ms).
  *  Prevents all workers from hitting the API at t=0, which triggers 429s. */
-const BATCH_STAGGER_MS = 1500;
+const BATCH_STAGGER_MS = 500;
 
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
@@ -453,8 +453,7 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
 
     const data = await response.json();
 
-    // With extended thinking, response has thinking blocks + text blocks.
-    // Safely extract the text block with a type guard.
+    // Extract the text block from the response content array.
     let text: string | null = null;
     if (Array.isArray(data.content)) {
       const textBlock = data.content.find((b: { type: string; text?: string }) => b.type === "text");
@@ -540,7 +539,7 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 50; // More visual context for planner; 480p frames keep payload manageable
+const API_MAX_IMAGES = 30; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
 const API_IMAGE_PAYLOAD_BUDGET = 12 * 1024 * 1024; // 12 MB budget (480p/0.7 frames are ~30-70KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 

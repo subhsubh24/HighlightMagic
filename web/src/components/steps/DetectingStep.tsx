@@ -47,23 +47,28 @@ export default function DetectingStep() {
 
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
-        const allScores: Awaited<ReturnType<typeof scoreSingleBatch>>  = [];
-        const STAGGER_MS = 1500;
+        const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
+        const SCORING_CONCURRENCY = 5;
+        const STAGGER_MS = 500;
+        let scoredBatches = 0;
 
-        for (let i = 0; i < batches.length; i++) {
-          // Stagger to avoid 429 rate limits
-          if (i > 0) await new Promise((r) => setTimeout(r, STAGGER_MS));
-
-          const batchScores = await scoreSingleBatch(
-            batches[i],
-            sourceFileList,
-            state.selectedTemplate?.name
+        // Fire batches concurrently in waves (staggered starts within each wave)
+        for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
+          const wave = batches.slice(w, w + SCORING_CONCURRENCY);
+          const waveResults = await Promise.all(
+            wave.map(async (batch, i) => {
+              if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
+              const scores = await scoreSingleBatch(
+                batch,
+                sourceFileList,
+                state.selectedTemplate?.name
+              );
+              scoredBatches++;
+              setProgress(Math.round(30 + (scoredBatches / batches.length) * 28));
+              return scores;
+            })
           );
-          allScores.push(...batchScores);
-
-          // Real per-batch progress: 30% → 60%
-          const pct = 30 + ((i + 1) / batches.length) * 28;
-          setProgress(Math.round(pct));
+          allScores.push(...waveResults.flat());
         }
 
         const scores = allScores;
