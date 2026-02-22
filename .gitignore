@@ -32,3 +32,6 @@ Pods/
 *.swp
 *.lock
 Thumbs.db
+
+# Next.js build output (from root-level builds)
+.next/
