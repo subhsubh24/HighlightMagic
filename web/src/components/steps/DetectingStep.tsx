@@ -6,11 +6,10 @@ import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple, type ExtractedFrame } from "@/lib/frame-extractor";
 import {
   scoreSingleBatch,
-  planFromScores,
   submitScoringBatch,
   pollScoringBatch,
   retrieveScoringResults,
-  type ScoringBatchManifestEntry,
+  type DetectionResult,
 } from "@/actions/detect";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
@@ -45,6 +44,66 @@ const REPLAN_PASSES = [
 
 /** Threshold in seconds before showing "taking longer than expected". */
 const SLOW_THRESHOLD_S = 45;
+
+/**
+ * Call the planner via SSE route handler (/api/plan).
+ * The route sends keepalive pings every 15s so the connection doesn't drop
+ * during the 2-5 minute Opus response.
+ */
+async function callPlannerSSE(
+  frames: unknown[],
+  scores: unknown[],
+  templateName?: string,
+  userFeedback?: string
+): Promise<DetectionResult> {
+  const response = await fetch("/api/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ frames, scores, templateName, userFeedback }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Planner request failed (HTTP ${response.status}): ${text.slice(0, 200)}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse complete SSE events (separated by double newlines)
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+
+    for (const part of parts) {
+      const lines = part.split("\n");
+      let eventType = "";
+      let data = "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) eventType = line.slice(7);
+        if (line.startsWith("data: ")) data = line.slice(6);
+      }
+
+      if (eventType === "result") {
+        return JSON.parse(data) as DetectionResult;
+      }
+      if (eventType === "error") {
+        const { message } = JSON.parse(data);
+        throw new Error(message);
+      }
+      // keepalive events — just ignore, they keep the connection alive
+    }
+  }
+
+  throw new Error("Planner stream ended without a result");
+}
 
 export default function DetectingStep() {
   const { state, dispatch } = useApp();
@@ -101,7 +160,7 @@ export default function DetectingStep() {
           });
         }, 200);
 
-        const result = await planFromScores(
+        const result = await callPlannerSSE(
           cached.frames,
           cached.scores,
           state.selectedTemplate?.name,
@@ -236,7 +295,7 @@ export default function DetectingStep() {
           });
         }, 200);
 
-        const result = await planFromScores(
+        const result = await callPlannerSSE(
           frames,
           scores,
           state.selectedTemplate?.name
@@ -249,7 +308,7 @@ export default function DetectingStep() {
       }
     }
 
-    function processResult(result: Awaited<ReturnType<typeof planFromScores>>) {
+    function processResult(result: DetectionResult) {
       setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
       setProgress(95);
 
