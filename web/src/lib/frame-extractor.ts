@@ -366,7 +366,7 @@ export async function extractFrames(
     }
     prevImageData = currentImageData;
 
-    const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    const base64 = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
     baseFrames.push({ timestamp: time, base64 });
 
     // Progress: base extraction = 0-60% of total
@@ -416,7 +416,7 @@ export async function extractFrames(
     await new Promise<void>((resolve) => { video.onseeked = () => resolve(); });
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    const base64 = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
     bonusFrames.push({ timestamp: time, base64 });
 
     // Progress: bonus extraction = 60-80% of total
@@ -531,7 +531,7 @@ async function imageFileToBase64(url: string): Promise<string> {
       }
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      const base64 = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
       resolve(base64);
     };
     img.onerror = () => reject(new Error("Failed to load image"));

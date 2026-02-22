@@ -778,8 +778,8 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 80; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
-const API_IMAGE_PAYLOAD_BUDGET = 12 * 1024 * 1024; // 12 MB budget (480p/0.7 frames are ~30-70KB each)
+const API_MAX_IMAGES = 60; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
+const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
@@ -1354,7 +1354,7 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 64000,
+          max_tokens: 32000,
           stream: true,
           thinking: {
             type: "adaptive",

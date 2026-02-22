@@ -33,7 +33,7 @@ const BATCH_DETECTION_PASSES = [
 ];
 
 /** Minimum batch count before Batch API mode kicks in (saves 50% on scoring cost). */
-const BATCH_MODE_THRESHOLD = 5;
+const BATCH_MODE_THRESHOLD = 3;
 /** Polling interval for Batch API status checks. */
 const BATCH_POLL_INTERVAL_MS = 5_000;
 
