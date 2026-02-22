@@ -387,31 +387,17 @@ export async function planFromScores(
 
   const sourceFiles = buildSourceFilesMap(frames);
 
-  let planResult: { clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string } | null = null;
-  let lastPlanError: string | null = null;
-  for (let planAttempt = 0; planAttempt < 3; planAttempt++) {
-    try {
-      const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName, userFeedback);
-      if (result.clips.length > 0) {
-        planResult = result;
-        break;
-      }
-      lastPlanError = `returned 0 valid clips (scores: ${scores.length} frames from ${sourceFiles.size} sources)`;
-      console.warn(`Planner ${lastPlanError} (attempt ${planAttempt + 1}/3), retrying...`);
-    } catch (err) {
-      lastPlanError = err instanceof Error ? err.message : String(err);
-      console.warn(`Planner threw (attempt ${planAttempt + 1}/3): ${lastPlanError}`);
-    }
-    if (planAttempt < 2) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, planAttempt)));
-    }
+  // Single attempt — Opus with effort:max can take 2-3+ minutes.
+  // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
+  const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName, userFeedback);
+
+  if (result.clips.length === 0) {
+    throw new Error(
+      `AI planner returned 0 clips (scores: ${scores.length} frames from ${sourceFiles.size} sources). Please try again.`
+    );
   }
 
-  if (planResult && planResult.clips.length > 0) {
-    return planResult;
-  }
-
-  throw new Error(`AI planner failed after 3 attempts: ${lastPlanError ?? "unknown error"}. Please try again.`);
+  return result;
 }
 
 // ── Multi-clip detection (convenience wrapper) ──
@@ -598,7 +584,7 @@ async function analyzeMultiBatch(
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
           thinking: { type: "adaptive" },
-          output_config: { effort: "medium" },
+          output_config: { effort: "high" },
           system: [
             {
               type: "text",
@@ -726,7 +712,7 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 30; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
+const API_MAX_IMAGES = 80; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
 const API_IMAGE_PAYLOAD_BUDGET = 12 * 1024 * 1024; // 12 MB budget (480p/0.7 frames are ~30-70KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
@@ -1428,7 +1414,7 @@ export async function submitScoringBatch(
       model: "claude-sonnet-4-6",
       max_tokens: 16000,
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
+      output_config: { effort: "high" },
       system: [
         {
           type: "text",
