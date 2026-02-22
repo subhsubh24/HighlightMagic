@@ -54,7 +54,8 @@ async function callPlannerSSE(
   frames: unknown[],
   scores: unknown[],
   templateName?: string,
-  userFeedback?: string
+  userFeedback?: string,
+  onPhase?: (phase: "thinking" | "generating") => void
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
@@ -97,6 +98,12 @@ async function callPlannerSSE(
       if (eventType === "error") {
         const { message } = JSON.parse(data);
         throw new Error(message);
+      }
+      if (eventType === "phase") {
+        try {
+          const { phase } = JSON.parse(data);
+          onPhase?.(phase);
+        } catch { /* ignore */ }
       }
       // keepalive events — just ignore, they keep the connection alive
     }
@@ -152,19 +159,28 @@ export default function DetectingStep() {
         setPassIndex(0); // "Re-planning with your direction..."
         setProgress(10);
 
+        // Slow fallback timer — only creeps if no phase events arrive
         const plannerTimer = setInterval(() => {
           setProgress((prev) => {
-            const remaining = 88 - prev;
-            const increment = Math.max(0.05, remaining * 0.02);
-            return Math.min(prev + increment, 88);
+            const remaining = 50 - prev;
+            const increment = Math.max(0.05, remaining * 0.01);
+            return Math.min(prev + increment, 50);
           });
-        }, 200);
+        }, 500);
 
         const result = await callPlannerSSE(
           cached.frames,
           cached.scores,
           state.selectedTemplate?.name,
-          state.regenerateFeedback ?? undefined
+          state.regenerateFeedback ?? undefined,
+          (phase) => {
+            clearInterval(plannerTimer);
+            if (phase === "thinking") {
+              setProgress((prev) => Math.max(prev, 45));
+            } else if (phase === "generating") {
+              setProgress(82);
+            }
+          }
         );
 
         clearInterval(plannerTimer);
@@ -190,20 +206,24 @@ export default function DetectingStep() {
       const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
       const SCORING_CONCURRENCY = 10;
       const STAGGER_MS = 500;
-      let scoredBatches = 0;
+      let completedBatches = 0;
+      let launchedBatches = 0;
 
       for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
         const wave = batches.slice(w, w + SCORING_CONCURRENCY);
         const waveResults = await Promise.all(
           wave.map(async (batch, i) => {
             if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
+            launchedBatches++;
+            // Show launch progress (30-40%) then completion progress (40-58%)
+            setProgress(Math.round(30 + (launchedBatches / batches.length) * 10));
             const scores = await scoreSingleBatch(
               batch,
               sourceFileList,
               state.selectedTemplate?.name
             );
-            scoredBatches++;
-            setProgress(Math.round(30 + (scoredBatches / batches.length) * 28));
+            completedBatches++;
+            setProgress(Math.round(40 + (completedBatches / batches.length) * 18));
             return scores;
           })
         );
@@ -226,19 +246,24 @@ export default function DetectingStep() {
         state.selectedTemplate?.name
       );
 
-      // Poll until complete
+      // Poll until complete — show real progress from batch counts
       setPassIndex(2);
       setProgress(35);
+      let pollCount = 0;
       let status: Awaited<ReturnType<typeof pollScoringBatch>>;
       do {
         await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
         status = await pollScoringBatch(batchId);
+        pollCount++;
         const total = status.counts.processing + status.counts.succeeded +
           status.counts.errored + status.counts.canceled + status.counts.expired;
         const done = status.counts.succeeded + status.counts.errored +
           status.counts.canceled + status.counts.expired;
-        if (total > 0) {
+        if (total > 0 && done > 0) {
           setProgress(Math.round(35 + (done / total) * 20));
+        } else {
+          // No batches done yet — creep slowly so user sees activity
+          setProgress((prev) => Math.min(prev + 0.5, 42));
         }
       } while (status.status === "in_progress");
 
@@ -283,22 +308,34 @@ export default function DetectingStep() {
         // Cache frames + scores for fast regeneration
         cacheDetectionData(frames, scores);
 
-        // Phase 3: Plan highlights via server action (60-90%)
+        // Phase 3: Plan highlights via server action (60-92%)
         setPassIndex(useBatchMode ? 3 : 2);
         setProgress(60);
 
+        // Slow fallback timer — only creeps if no phase events arrive
         const plannerTimer = setInterval(() => {
           setProgress((prev) => {
-            const remaining = 92 - prev;
-            const increment = Math.max(0.05, remaining * 0.02);
-            return Math.min(prev + increment, 92);
+            const remaining = 72 - prev;
+            const increment = Math.max(0.05, remaining * 0.01);
+            return Math.min(prev + increment, 72);
           });
-        }, 200);
+        }, 500);
 
         const result = await callPlannerSSE(
           frames,
           scores,
-          state.selectedTemplate?.name
+          state.selectedTemplate?.name,
+          undefined,
+          (phase) => {
+            clearInterval(plannerTimer);
+            if (phase === "thinking") {
+              // Model is thinking — jump to 68% and creep slowly
+              setProgress((prev) => Math.max(prev, 68));
+            } else if (phase === "generating") {
+              // Model is outputting text — we're nearly done
+              setProgress(88);
+            }
+          }
         );
 
         clearInterval(plannerTimer);

@@ -97,7 +97,17 @@ async function runWithConcurrency<T>(
  * Accumulates text content from text_delta events and captures the stop_reason.
  * Thinking blocks are silently skipped — we only need the final text output.
  */
-async function consumeSSEStream(response: Response): Promise<{ text: string; stopReason: string | null }> {
+/**
+ * SSE stream phase — used to report progress to callers.
+ * - "thinking": model is in extended thinking phase
+ * - "generating": model is producing text output (usually near the end)
+ */
+type SSEStreamPhase = "thinking" | "generating";
+
+async function consumeSSEStream(
+  response: Response,
+  onPhase?: (phase: SSEStreamPhase) => void
+): Promise<{ text: string; stopReason: string | null }> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let text = "";
@@ -121,7 +131,13 @@ async function consumeSSEStream(response: Response): Promise<{ text: string; sto
 
       try {
         const event = JSON.parse(dataStr);
-        if (event.type === "content_block_delta") {
+        if (event.type === "content_block_start") {
+          if (event.content_block?.type === "thinking") {
+            onPhase?.("thinking");
+          } else if (event.content_block?.type === "text") {
+            onPhase?.("generating");
+          }
+        } else if (event.type === "content_block_delta") {
           if (event.delta?.type === "text_delta") {
             text += event.delta.text;
           }
@@ -372,24 +388,73 @@ export async function scoreAllFrames(
   return batchResults.flat();
 }
 
+// ── Score normalization across batches ──
+
+/**
+ * Normalize scores so different scoring batches are comparable.
+ * Each batch may have a different mean/variance due to context differences.
+ * We z-score normalize within each batch-sized group (by source),
+ * then rescale to [0, 1].
+ */
+function normalizeScoresAcrossBatches(scores: ScoredFrame[]): ScoredFrame[] {
+  if (scores.length === 0) return scores;
+
+  // Group by source (each source was batched separately)
+  const bySource = new Map<string, ScoredFrame[]>();
+  for (const s of scores) {
+    if (!bySource.has(s.sourceFileId)) bySource.set(s.sourceFileId, []);
+    bySource.get(s.sourceFileId)!.push(s);
+  }
+
+  // Z-score normalize within each source group
+  const zScores = new Map<ScoredFrame, number>();
+  for (const [, group] of bySource) {
+    const mean = group.reduce((sum, s) => sum + s.score, 0) / group.length;
+    const variance = group.reduce((sum, s) => sum + (s.score - mean) ** 2, 0) / group.length;
+    const stdDev = Math.sqrt(variance);
+
+    for (const s of group) {
+      // If all scores are identical (stdDev=0), treat as average (z=0)
+      zScores.set(s, stdDev > 0.001 ? (s.score - mean) / stdDev : 0);
+    }
+  }
+
+  // Rescale z-scores to [0, 1] using min-max across all sources
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const z of zScores.values()) {
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const range = maxZ - minZ;
+
+  return scores.map((s) => ({
+    ...s,
+    score: range > 0.001 ? (zScores.get(s)! - minZ) / range : s.score,
+  }));
+}
+
 // ── Phase 2: Plan highlights from scores ──
 
 export async function planFromScores(
   frames: MultiFrameInput[],
   scores: ScoredFrame[],
   templateName?: string,
-  userFeedback?: string
+  userFeedback?: string,
+  onPhase?: (phase: "thinking" | "generating") => void
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
   }
 
+  // Normalize scores across batches so different batch contexts don't skew selection
+  const normalizedScores = normalizeScoresAcrossBatches(scores);
+
   const sourceFiles = buildSourceFilesMap(frames);
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName, userFeedback);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, onPhase);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -793,6 +858,52 @@ function selectPlannerFrames(
     }
   }
 
+  // Per-source cap: no single source should exceed 40% of selected frames.
+  // If a source dominates, shed its lowest-scored surplus frames.
+  const SOURCE_CAP_RATIO = 0.4;
+  const maxPerSource = Math.max(1, Math.ceil(selected.length * SOURCE_CAP_RATIO));
+  const countBySource = new Map<string, number>();
+  for (const f of selected) {
+    countBySource.set(f.sourceFileId, (countBySource.get(f.sourceFileId) ?? 0) + 1);
+  }
+  const overRepresented = new Set<string>();
+  for (const [src, count] of countBySource) {
+    if (count > maxPerSource) overRepresented.add(src);
+  }
+  if (overRepresented.size > 0) {
+    // Build per-source score lookup for shedding lowest-scored frames
+    const scoreLookup = new Map<string, number>();
+    for (const s of scores) {
+      scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s.score);
+    }
+    // Sort selected frames from that source by score ascending (shed worst first)
+    const toShed: number[] = [];
+    for (const src of overRepresented) {
+      const indices = selected
+        .map((f, i) => ({ i, score: scoreLookup.get(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`) ?? 0 }))
+        .filter((_, idx) => selected[idx].sourceFileId === src)
+        .sort((a, b) => a.score - b.score);
+      const excess = (countBySource.get(src) ?? 0) - maxPerSource;
+      for (let j = 0; j < excess && j < indices.length; j++) {
+        toShed.push(indices[j].i);
+      }
+    }
+    if (toShed.length > 0) {
+      const shedSet = new Set(toShed);
+      const before = selected.length;
+      const kept = selected.filter((_, i) => !shedSet.has(i));
+      selected.length = 0;
+      selected.push(...kept);
+      console.log(`Planner: shed ${before - selected.length} frames to enforce ${(SOURCE_CAP_RATIO * 100).toFixed(0)}% per-source cap`);
+    }
+  }
+
+  // Sort by (source, timestamp) so the planner sees a coherent temporal narrative
+  selected.sort((a, b) => {
+    if (a.sourceFileId !== b.sourceFileId) return a.sourceFileId.localeCompare(b.sourceFileId);
+    return a.timestamp - b.timestamp;
+  });
+
   console.log(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
   return selected;
 }
@@ -803,7 +914,8 @@ async function planHighlightTape(
   allFrames: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string,
-  userFeedback?: string
+  userFeedback?: string,
+  onPhase?: (phase: SSEStreamPhase) => void
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -1261,7 +1373,7 @@ Respond with ONLY a JSON object:
     }
 
     // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
-    const { text, stopReason } = await consumeSSEStream(response);
+    const { text, stopReason } = await consumeSSEStream(response, onPhase);
 
     if (stopReason === "max_tokens") {
       console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
@@ -1334,6 +1446,12 @@ Respond with ONLY a JSON object:
           // Validate time range
           if (p.startTime >= p.endTime) {
             console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
+            return false;
+          }
+          // Minimum clip duration guard — clips under 0.5s are unusable
+          const MIN_CLIP_DURATION_S = 0.5;
+          if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
+            console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
             return false;
           }
           return true;

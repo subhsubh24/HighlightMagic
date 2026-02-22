@@ -11,6 +11,8 @@ export const runtime = "nodejs";
  * ~60-120s, causing "Failed to fetch" on the client.
  *
  * This route streams keepalive pings every 15s so the connection stays alive.
+ * Phase progress events ("thinking", "generating") are forwarded so the client
+ * can show real progress instead of fake timers.
  * The final result (or error) is sent as an SSE event once the planner finishes.
  */
 export async function POST(req: Request) {
@@ -35,7 +37,16 @@ export async function POST(req: Request) {
           frames,
           scores,
           templateName ?? undefined,
-          userFeedback ?? undefined
+          userFeedback ?? undefined,
+          (phase) => {
+            try {
+              controller.enqueue(
+                encoder.encode(`event: phase\ndata: ${JSON.stringify({ phase })}\n\n`)
+              );
+            } catch {
+              // Controller closed — ignore
+            }
+          }
         );
         clearInterval(keepalive);
         controller.enqueue(
