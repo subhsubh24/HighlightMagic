@@ -535,7 +535,13 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
           output_config: { effort: "medium" },
-          system: systemPrompt,
+          system: [
+            {
+              type: "text",
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
           messages: [{ role: "user", content }],
         }),
       },
