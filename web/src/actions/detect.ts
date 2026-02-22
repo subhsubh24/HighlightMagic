@@ -90,6 +90,54 @@ async function runWithConcurrency<T>(
   return results;
 }
 
+// ── SSE stream consumer (for streaming API responses) ──
+
+/**
+ * Consume an SSE (Server-Sent Events) stream from the Anthropic Messages API.
+ * Accumulates text content from text_delta events and captures the stop_reason.
+ * Thinking blocks are silently skipped — we only need the final text output.
+ */
+async function consumeSSEStream(response: Response): Promise<{ text: string; stopReason: string | null }> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let stopReason: string | null = null;
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete lines
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? ""; // Keep incomplete last line in buffer
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const dataStr = line.slice(6).trim();
+      if (dataStr === "[DONE]") continue;
+
+      try {
+        const event = JSON.parse(dataStr);
+        if (event.type === "content_block_delta") {
+          if (event.delta?.type === "text_delta") {
+            text += event.delta.text;
+          }
+          // thinking_delta events are silently skipped
+        } else if (event.type === "message_delta") {
+          stopReason = event.delta?.stop_reason ?? null;
+        }
+      } catch {
+        // Ignore unparseable SSE events (e.g. event: prefixes)
+      }
+    }
+  }
+
+  return { text, stopReason };
+}
+
 // ── JSON parsing helpers ──
 
 /**
@@ -379,26 +427,19 @@ export async function detectMultiClipHighlights(
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
 const MAX_BATCH_RETRIES = 2;
 
+const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
+
 /**
  * Score frames across multiple source files.
  * Retries the entire batch on failure before falling back.
  */
-async function analyzeMultiBatch(
-  apiKey: string,
-  batch: MultiFrameInput[],
-  sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
-  templateName?: string,
-  attempt = 0
-): Promise<ScoredFrame[]> {
-  const sourceList = Array.from(sourceFiles.entries())
-    .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
-    .join("\n");
-
-  const systemPrompt = `You are a world-class Instagram Reels editor whose content averages 2M+ views.
+/** The raw scoring prompt text — extracted so it's shared between real-time and Batch API. */
+function buildScoringPromptBody(sourceList: string, sourceCount: number, templateName?: string): string {
+  return `You are a world-class Instagram Reels editor whose content averages 2M+ views.
 You understand the PSYCHOLOGY of scrolling — what makes a thumb stop, what makes someone save,
 what makes them share to their story, what makes them comment.
 
-You're reviewing raw footage from ${sourceFiles.size} source files. Your job: deeply analyze
+You're reviewing raw footage from ${sourceCount} source files. Your job: deeply analyze
 every single frame through the lens of INSTAGRAM VIRALITY.
 
 SOURCE FILES:
@@ -497,9 +538,24 @@ Respond with ONLY a JSON array:
 
 The "role" field must be one of: HOOK, HERO, REACTION, RHYTHM, CLOSER.
 Pick the BEST fit for each frame — what role would this moment play in a viral reel?`;
+}
 
+/** Build the scoring system prompt — shared between real-time and Batch API paths. */
+function buildScoringSystemPrompt(
+  sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
+  templateName?: string
+): string {
+  const sourceList = Array.from(sourceFiles.entries())
+    .map(([id, info]) => `- "${info.name}" (${info.type}, ID: ${id})`)
+    .join("\n");
+  return buildScoringPromptBody(sourceList, sourceFiles.size, templateName);
+}
+
+/** Build the user-content array for a scoring batch — shared between real-time and Batch API. */
+function buildScoringContent(
+  batch: MultiFrameInput[]
+): Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> {
   const content: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
-
   batch.forEach((frame, i) => {
     content.push({
       type: "image",
@@ -511,7 +567,6 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     const onsetTag = frame.audioOnset != null && frame.audioOnset > 0.1
       ? `, audioOnset: ${frame.audioOnset.toFixed(2)}`
       : "";
-    // Include spectral bands when audio is present and loud enough to be meaningful
     const specTag = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1)
       ? `, spectrum: B${frame.audioBass!.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}`
       : "";
@@ -520,6 +575,18 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}${onsetTag}${specTag}`,
     });
   });
+  return content;
+}
+
+async function analyzeMultiBatch(
+  apiKey: string,
+  batch: MultiFrameInput[],
+  sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
+  templateName?: string,
+  attempt = 0
+): Promise<ScoredFrame[]> {
+  const systemPrompt = buildScoringSystemPrompt(sourceFiles, templateName);
+  const content = buildScoringContent(batch);
 
   try {
     const response = await fetchWithRetry(
@@ -534,12 +601,13 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
-          output_config: { effort: "low" },
+          thinking: { type: "adaptive" },
+          output_config: { effort: "medium" },
           system: [
             {
               type: "text",
               text: systemPrompt,
-              cache_control: { type: "ephemeral" },
+              cache_control: { type: "ephemeral", ttl: "1h" },
             },
           ],
           messages: [{ role: "user", content }],
@@ -562,6 +630,11 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     }
 
     const data = await response.json();
+
+    // Warn on truncated response — still attempt to parse what we got
+    if (data.stop_reason === "max_tokens") {
+      console.warn("Scoring batch: response truncated (max_tokens reached) — parsing partial result");
+    }
 
     // Extract the text block from the response content array.
     let text: string | null = null;
@@ -591,7 +664,6 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
       throw new Error(`Scoring returned unparsable response after ${attempt + 1} attempts`);
     }
 
-    const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
     const parsed = safeParseJSONArray(jsonMatch[0]) as Array<{
       index: number;
       score: number;
@@ -1153,17 +1225,18 @@ Respond with ONLY a JSON object:
         body: JSON.stringify({
           model: "claude-opus-4-6",
           max_tokens: 64000,
+          stream: true,
           thinking: {
             type: "adaptive",
           },
           output_config: {
-            effort: "high",
+            effort: "max",
           },
           system: [
             {
               type: "text",
               text: systemPrompt,
-              cache_control: { type: "ephemeral" },
+              cache_control: { type: "ephemeral", ttl: "1h" },
             },
           ],
           messages: [{ role: "user", content: userContent }],
@@ -1177,20 +1250,16 @@ Respond with ONLY a JSON object:
       throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
     }
 
-    const data = await response.json();
+    // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
+    const { text, stopReason } = await consumeSSEStream(response);
 
-    // With extended thinking, response has thinking blocks + text blocks.
-    // Safely extract the text block with a type guard.
-    let text: string | null = null;
-    if (Array.isArray(data.content)) {
-      const textBlock = data.content.find((b: { type: string; text?: string }) => b.type === "text");
-      text = textBlock?.text ?? null;
+    if (stopReason === "max_tokens") {
+      console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
     }
 
     if (!text) {
-      const preview = JSON.stringify(data).slice(0, 300);
-      console.error(`Planner: no text block. stop_reason=${data.stop_reason}, usage=${JSON.stringify(data.usage)}, content_types=${Array.isArray(data.content) ? data.content.map((b: { type: string }) => b.type).join(",") : "N/A"}`);
-      throw new Error(`Planner: no text block (stop_reason=${data.stop_reason}): ${preview}`);
+      console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
+      throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
     }
 
     // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
@@ -1313,5 +1382,250 @@ Respond with ONLY a JSON object:
     // Re-throw so the retry loop in detectMultiClipHighlights can handle it
     throw err instanceof Error ? err : new Error(String(err));
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Batch API scoring (50% cost savings) ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Manifest entry — lightweight metadata (no base64) for mapping batch results
+ * back to ScoredFrame objects after retrieval.
+ */
+export interface ScoringBatchManifestEntry {
+  customId: string;
+  frames: Array<{
+    sourceFileId: string;
+    sourceType: "video" | "photo";
+    timestamp: number;
+  }>;
+}
+
+/**
+ * Submit ALL scoring batches to the Anthropic Batch API in a single request.
+ * Returns a batchId for polling and a manifest for result parsing.
+ *
+ * Cost: 50% off all input/output tokens vs real-time API.
+ * Tradeoff: async processing — most batches finish in <1 hour.
+ */
+export async function submitScoringBatch(
+  allBatches: MultiFrameInput[][],
+  sourceFileList: SourceFileInfo[],
+  templateName?: string
+): Promise<{ batchId: string; manifest: ScoringBatchManifestEntry[] }> {
+  "use server";
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured.");
+  }
+
+  const sourceFiles = new Map(
+    sourceFileList.map((s) => [s.id, { name: s.name, type: s.type, frameCount: s.frameCount }])
+  );
+  const systemPrompt = buildScoringSystemPrompt(sourceFiles, templateName);
+
+  // Build one Batch API request per scoring batch
+  const requests = allBatches.map((batch, i) => ({
+    custom_id: `score-batch-${i}`,
+    params: {
+      model: "claude-sonnet-4-6",
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral", ttl: "1h" },
+        },
+      ],
+      messages: [{ role: "user", content: buildScoringContent(batch) }],
+    },
+  }));
+
+  // Build lightweight manifest (no base64) for mapping results → ScoredFrame
+  const manifest: ScoringBatchManifestEntry[] = allBatches.map((batch, i) => ({
+    customId: `score-batch-${i}`,
+    frames: batch.map((f) => ({
+      sourceFileId: f.sourceFileId,
+      sourceType: f.sourceType,
+      timestamp: f.timestamp,
+    })),
+  }));
+
+  const response = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages/batches",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ requests }),
+    },
+    "Batch submit"
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Batch submit failed (HTTP ${response.status}): ${errorBody.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  return { batchId: data.id, manifest };
+}
+
+/**
+ * Poll a scoring batch for completion.
+ */
+export async function pollScoringBatch(batchId: string): Promise<{
+  status: "in_progress" | "ended" | "canceling" | "expired";
+  counts: {
+    processing: number;
+    succeeded: number;
+    errored: number;
+    canceled: number;
+    expired: number;
+  };
+  resultsUrl: string | null;
+}> {
+  "use server";
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+
+  const response = await fetch(`https://api.anthropic.com/v1/messages/batches/${batchId}`, {
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Batch poll failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return {
+    status: data.processing_status,
+    counts: data.request_counts ?? {
+      processing: 0,
+      succeeded: 0,
+      errored: 0,
+      canceled: 0,
+      expired: 0,
+    },
+    resultsUrl: data.results_url ?? null,
+  };
+}
+
+/**
+ * Retrieve and parse all results from a completed scoring batch.
+ * The manifest maps custom_ids back to frame metadata for ScoredFrame construction.
+ */
+export async function retrieveScoringResults(
+  batchId: string,
+  manifest: ScoringBatchManifestEntry[]
+): Promise<ScoredFrame[]> {
+  "use server";
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+
+  // Fetch JSONL results
+  const response = await fetch(
+    `https://api.anthropic.com/v1/messages/batches/${batchId}/results`,
+    {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Batch results fetch failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
+  }
+
+  // Parse JSONL — each line is a complete JSON object
+  const text = await response.text();
+  const lines = text.split("\n").filter((l) => l.trim());
+
+  const manifestMap = new Map(manifest.map((m) => [m.customId, m]));
+  const allScores: ScoredFrame[] = [];
+
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line) as {
+        custom_id: string;
+        result: {
+          type: "succeeded" | "errored" | "canceled" | "expired";
+          message?: { content: Array<{ type: string; text?: string }>; stop_reason?: string };
+          error?: { type: string; message: string };
+        };
+      };
+
+      if (entry.result.type !== "succeeded" || !entry.result.message) {
+        console.warn(`Batch result ${entry.custom_id}: ${entry.result.type}`, entry.result.error);
+        continue;
+      }
+
+      if (entry.result.message.stop_reason === "max_tokens") {
+        console.warn(`Batch result ${entry.custom_id}: truncated (max_tokens)`);
+      }
+
+      const manifestEntry = manifestMap.get(entry.custom_id);
+      if (!manifestEntry) {
+        console.warn(`Batch result ${entry.custom_id}: no manifest entry, skipping`);
+        continue;
+      }
+
+      // Extract text from response content
+      const textBlock = entry.result.message.content.find((b) => b.type === "text");
+      if (!textBlock?.text) {
+        console.warn(`Batch result ${entry.custom_id}: no text block`);
+        continue;
+      }
+
+      // Parse JSON array from text
+      const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        console.warn(`Batch result ${entry.custom_id}: unparsable response`);
+        continue;
+      }
+
+      const parsed = safeParseJSONArray(jsonMatch[0]) as Array<{
+        index: number;
+        score: number;
+        label: string;
+        role?: string;
+      }>;
+
+      if (!Array.isArray(parsed)) continue;
+
+      for (const p of parsed) {
+        if (!Number.isInteger(p.index) || p.index < 0 || p.index >= manifestEntry.frames.length) continue;
+        if (typeof p.score !== "number" || isNaN(p.score)) continue;
+
+        const frame = manifestEntry.frames[p.index];
+        allScores.push({
+          sourceFileId: frame.sourceFileId,
+          sourceType: frame.sourceType,
+          timestamp: frame.timestamp,
+          score: Math.max(0, Math.min(1, p.score)),
+          label: p.label || "highlight",
+          narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
+        });
+      }
+    } catch (err) {
+      console.warn("Batch result parse error:", err);
+    }
+  }
+
+  return allScores;
 }
 

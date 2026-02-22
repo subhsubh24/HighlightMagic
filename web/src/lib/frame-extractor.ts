@@ -12,6 +12,11 @@ const AUDIO_PRESCAN_INTERVAL_S = 0.1; // 10Hz — 100ms resolution
 const ONSET_PEAK_THRESHOLD = 0.45;
 /** Minimum pixel difference ratio to qualify as a visual scene change. */
 const SCENE_CHANGE_THRESHOLD = 0.12;
+/** Target max height for extracted frames — 480p balances quality with API cost.
+ * Well within Claude Vision's sweet spot (200px–1568px per edge). */
+const FRAME_TARGET_HEIGHT = 480;
+/** Minimum dimension — below this, Claude Vision accuracy degrades per API docs. */
+const FRAME_MIN_DIMENSION = 200;
 
 export interface ExtractedFrame {
   sourceFileId: string;
@@ -318,10 +323,18 @@ export async function extractFrames(
   });
 
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 480 / video.videoHeight);
+  const scale = Math.min(1, FRAME_TARGET_HEIGHT / video.videoHeight);
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
   const ctx = canvas.getContext("2d")!;
+
+  // Verify frame dimensions are in Claude Vision's optimal range
+  if (canvas.width < FRAME_MIN_DIMENSION || canvas.height < FRAME_MIN_DIMENSION) {
+    console.warn(
+      `Frame extraction: source resolution too low (${canvas.width}×${canvas.height}px). ` +
+      `Claude Vision accuracy may degrade below ${FRAME_MIN_DIMENSION}px.`
+    );
+  }
 
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
   const totalBaseFrames = Math.floor(duration / interval);
@@ -507,9 +520,15 @@ async function imageFileToBase64(url: string): Promise<string> {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const scale = Math.min(1, 480 / img.height);
+      const scale = Math.min(1, FRAME_TARGET_HEIGHT / img.height);
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
+      if (canvas.width < FRAME_MIN_DIMENSION || canvas.height < FRAME_MIN_DIMENSION) {
+        console.warn(
+          `Photo frame: source resolution too low (${canvas.width}×${canvas.height}px). ` +
+          `Claude Vision accuracy may degrade below ${FRAME_MIN_DIMENSION}px.`
+        );
+      }
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];

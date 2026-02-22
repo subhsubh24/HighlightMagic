@@ -33,14 +33,14 @@ describe("buildFrameBatches", () => {
   });
 
   it("splits large sources into MAX_FRAMES_PER_BATCH chunks", () => {
-    // MAX_FRAMES_PER_BATCH is 20 (updated from 40)
-    const frames = makeFrames("vid1", 45);
+    // MAX_FRAMES_PER_BATCH is 35
+    const frames = makeFrames("vid1", 80);
     const batches = buildFrameBatches(frames);
-    // 45 frames / 20 per batch = 3 batches (20 + 20 + 5)
+    // 80 frames / 35 per batch = 3 batches (35 + 35 + 10)
     expect(batches.length).toBe(3);
-    expect(batches[0].length).toBe(20);
-    expect(batches[1].length).toBe(20);
-    expect(batches[2].length).toBe(5);
+    expect(batches[0].length).toBe(35);
+    expect(batches[1].length).toBe(35);
+    expect(batches[2].length).toBe(10);
   });
 
   it("preserves frame order within batches", () => {

@@ -3,8 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
-import { extractFramesFromMultiple } from "@/lib/frame-extractor";
-import { scoreSingleBatch, planFromScores } from "@/actions/detect";
+import { extractFramesFromMultiple, type ExtractedFrame } from "@/lib/frame-extractor";
+import {
+  scoreSingleBatch,
+  planFromScores,
+  submitScoringBatch,
+  pollScoringBatch,
+  retrieveScoringResults,
+  type ScoringBatchManifestEntry,
+} from "@/actions/detect";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
@@ -17,6 +24,19 @@ const DETECTION_PASSES = [
   "Planning your highlight tape...",
   "Applying editing style for best flow...",
 ];
+
+const BATCH_DETECTION_PASSES = [
+  "Extracting frames from all clips...",
+  "Submitting frames to AI (economy mode)...",
+  "Waiting for batch results...",
+  "Planning your highlight tape...",
+  "Applying editing style for best flow...",
+];
+
+/** Minimum batch count before Batch API mode kicks in (saves 50% on scoring cost). */
+const BATCH_MODE_THRESHOLD = 5;
+/** Polling interval for Batch API status checks. */
+const BATCH_POLL_INTERVAL_MS = 5_000;
 
 const REPLAN_PASSES = [
   "Re-planning with your direction...",
@@ -32,6 +52,8 @@ export default function DetectingStep() {
   const [passIndex, setPassIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSlow, setIsSlow] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -98,6 +120,80 @@ export default function DetectingStep() {
       }
     }
 
+    /** Real-time scoring: fire batches concurrently in waves. */
+    async function runRealtimeScoring(
+      batches: ExtractedFrame[][],
+      sourceFileList: ReturnType<typeof buildSourceFileList>
+    ) {
+      setPassIndex(1);
+      setProgress(30);
+
+      const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
+      const SCORING_CONCURRENCY = 10;
+      const STAGGER_MS = 500;
+      let scoredBatches = 0;
+
+      for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
+        const wave = batches.slice(w, w + SCORING_CONCURRENCY);
+        const waveResults = await Promise.all(
+          wave.map(async (batch, i) => {
+            if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
+            const scores = await scoreSingleBatch(
+              batch,
+              sourceFileList,
+              state.selectedTemplate?.name
+            );
+            scoredBatches++;
+            setProgress(Math.round(30 + (scoredBatches / batches.length) * 28));
+            return scores;
+          })
+        );
+        allScores.push(...waveResults.flat());
+      }
+      return allScores;
+    }
+
+    /** Batch API scoring: submit all at once, poll, retrieve. 50% cheaper. */
+    async function runBatchScoring(
+      batches: ExtractedFrame[][],
+      sourceFileList: ReturnType<typeof buildSourceFileList>
+    ) {
+      // Submit
+      setPassIndex(1);
+      setProgress(32);
+      const { batchId, manifest } = await submitScoringBatch(
+        batches,
+        sourceFileList,
+        state.selectedTemplate?.name
+      );
+
+      // Poll until complete
+      setPassIndex(2);
+      setProgress(35);
+      let status: Awaited<ReturnType<typeof pollScoringBatch>>;
+      do {
+        await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
+        status = await pollScoringBatch(batchId);
+        const total = status.counts.processing + status.counts.succeeded +
+          status.counts.errored + status.counts.canceled + status.counts.expired;
+        const done = status.counts.succeeded + status.counts.errored +
+          status.counts.canceled + status.counts.expired;
+        if (total > 0) {
+          setProgress(Math.round(35 + (done / total) * 20));
+        }
+      } while (status.status === "in_progress");
+
+      if (status.counts.succeeded === 0) {
+        throw new Error(`Batch scoring failed: ${status.counts.errored} errored, ${status.counts.expired} expired`);
+      }
+
+      // Retrieve results
+      setProgress(56);
+      const scores = await retrieveScoringResults(batchId, manifest);
+      setProgress(58);
+      return scores;
+    }
+
     async function runDetection() {
       try {
         // Phase 1: Extract frames from all media files (0-30%)
@@ -107,44 +203,29 @@ export default function DetectingStep() {
           (pct) => setProgress(pct * 0.3)
         );
 
-        // Phase 2: Score frames via per-batch server action calls (30-60%)
-        // Each batch is a separate server action call (~30s each) to avoid timeout.
-        setPassIndex(1);
-        setProgress(30);
-
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
-        const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
-        const SCORING_CONCURRENCY = 10;
-        const STAGGER_MS = 500;
-        let scoredBatches = 0;
-
-        // Fire batches concurrently in waves (staggered starts within each wave)
-        for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
-          const wave = batches.slice(w, w + SCORING_CONCURRENCY);
-          const waveResults = await Promise.all(
-            wave.map(async (batch, i) => {
-              if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
-              const scores = await scoreSingleBatch(
-                batch,
-                sourceFileList,
-                state.selectedTemplate?.name
-              );
-              scoredBatches++;
-              setProgress(Math.round(30 + (scoredBatches / batches.length) * 28));
-              return scores;
-            })
-          );
-          allScores.push(...waveResults.flat());
+        const useBatchMode = batches.length >= BATCH_MODE_THRESHOLD;
+        if (useBatchMode) {
+          batchModeRef.current = true;
+          setBatchMode(true);
         }
 
-        const scores = allScores;
+        let scores: Awaited<ReturnType<typeof scoreSingleBatch>>;
+
+        if (useBatchMode) {
+          // ── Batch API scoring (50% cost savings) ──
+          scores = await runBatchScoring(batches, sourceFileList);
+        } else {
+          // ── Real-time scoring (low latency) ──
+          scores = await runRealtimeScoring(batches, sourceFileList);
+        }
 
         // Cache frames + scores for fast regeneration
         cacheDetectionData(frames, scores);
 
         // Phase 3: Plan highlights via server action (60-90%)
-        setPassIndex(2);
+        setPassIndex(useBatchMode ? 3 : 2);
         setProgress(60);
 
         const plannerTimer = setInterval(() => {
@@ -169,7 +250,7 @@ export default function DetectingStep() {
     }
 
     function processResult(result: Awaited<ReturnType<typeof planFromScores>>) {
-      setPassIndex(isReplan ? 1 : 3);
+      setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
       setProgress(95);
 
       // Set the detected theme (template override takes priority)
@@ -268,7 +349,7 @@ export default function DetectingStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const passes = isReplan ? REPLAN_PASSES : DETECTION_PASSES;
+  const passes = isReplan ? REPLAN_PASSES : batchMode ? BATCH_DETECTION_PASSES : DETECTION_PASSES;
 
   if (error) {
     return (
