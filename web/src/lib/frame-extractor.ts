@@ -3,6 +3,16 @@
 import { FRAME_SAMPLE_INTERVAL_SECONDS } from "./constants";
 import type { MediaFile } from "./types";
 
+/** Adaptive sampling: bonus frames within ±RADIUS of interest points at DENSITY intervals. */
+const ADAPTIVE_RADIUS_S = 0.5;    // sample ±0.5s around each interest point
+const ADAPTIVE_DENSITY_S = 0.25;  // 4fps in interest regions
+/** Audio pre-scan resolution for finding onset peaks. */
+const AUDIO_PRESCAN_INTERVAL_S = 0.1; // 10Hz — 100ms resolution
+/** Minimum onset value to qualify as an interest point (after normalization). */
+const ONSET_PEAK_THRESHOLD = 0.45;
+/** Minimum pixel difference ratio to qualify as a visual scene change. */
+const SCENE_CHANGE_THRESHOLD = 0.12;
+
 export interface ExtractedFrame {
   sourceFileId: string;
   sourceFileName: string;
@@ -180,13 +190,122 @@ async function extractAudioAnalysis(
 }
 
 /**
- * Extract frames from a single video at regular intervals as base64 JPEG.
+ * Lightweight audio pre-scan: decode audio once, compute onset at high resolution (100ms).
+ * Returns timestamps of onset peaks — moments where something sonically "happened".
+ * Runs in ~50ms for a 60s video (just math on the decoded buffer).
+ */
+async function prescanAudioOnsets(
+  videoUrl: string,
+  duration: number
+): Promise<number[]> {
+  try {
+    const response = await fetch(videoUrl);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    if (audioCtx.state === "suspended") await audioCtx.resume().catch(() => {});
+
+    let audioBuffer: AudioBuffer;
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    } catch {
+      audioCtx.close();
+      return [];
+    }
+
+    const numChannels = audioBuffer.numberOfChannels;
+    const length = audioBuffer.getChannelData(0).length;
+    const mixedData = new Float32Array(length);
+    for (let ch = 0; ch < numChannels; ch++) {
+      const channelData = audioBuffer.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        mixedData[i] += channelData[i] / numChannels;
+      }
+    }
+
+    const sampleRate = audioBuffer.sampleRate;
+    const windowSamples = Math.floor(sampleRate * 0.1); // 100ms window — matches pre-scan interval
+    const halfWindow = Math.floor(windowSamples / 2);
+
+    // Compute RMS energy at every 100ms
+    const energies: { ts: number; rms: number }[] = [];
+    const totalSteps = Math.floor(duration / AUDIO_PRESCAN_INTERVAL_S);
+    for (let i = 0; i <= totalSteps; i++) {
+      const ts = i * AUDIO_PRESCAN_INTERVAL_S;
+      const center = Math.floor(ts * sampleRate);
+      const start = Math.max(0, center - halfWindow);
+      const end = Math.min(length, center + halfWindow);
+      if (end <= start) { energies.push({ ts, rms: 0 }); continue; }
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += mixedData[j] * mixedData[j];
+      energies.push({ ts, rms: Math.sqrt(sum / (end - start)) });
+    }
+
+    // Normalize
+    const maxRms = Math.max(...energies.map((e) => e.rms), 0.001);
+    for (const e of energies) e.rms /= maxRms;
+
+    // Compute onset (positive energy delta) and normalize
+    const onsets: { ts: number; onset: number }[] = [];
+    for (let i = 0; i < energies.length; i++) {
+      const delta = i > 0 ? Math.max(0, energies[i].rms - energies[i - 1].rms) : 0;
+      onsets.push({ ts: energies[i].ts, onset: delta });
+    }
+    const maxOnset = Math.max(...onsets.map((o) => o.onset), 0.001);
+    for (const o of onsets) o.onset /= maxOnset;
+
+    audioCtx.close();
+
+    // Return timestamps of onset peaks above threshold
+    return onsets
+      .filter((o) => o.onset >= ONSET_PEAK_THRESHOLD)
+      .map((o) => o.ts);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compute average pixel difference between two ImageData arrays.
+ * Returns 0-1 ratio (0 = identical, 1 = completely different).
+ * Downsampled for speed — checks every 16th pixel.
+ */
+function frameDifference(a: ImageData, b: ImageData): number {
+  const data1 = a.data;
+  const data2 = b.data;
+  const len = Math.min(data1.length, data2.length);
+  let totalDiff = 0;
+  let sampled = 0;
+  // Sample every 16th pixel (every 64th byte in RGBA)
+  for (let i = 0; i < len; i += 64) {
+    totalDiff += Math.abs(data1[i] - data2[i]);       // R
+    totalDiff += Math.abs(data1[i + 1] - data2[i + 1]); // G
+    totalDiff += Math.abs(data1[i + 2] - data2[i + 2]); // B
+    sampled += 3;
+  }
+  return sampled > 0 ? totalDiff / (sampled * 255) : 0;
+}
+
+type FrameResult = { timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number; audioBass?: number; audioMid?: number; audioTreble?: number };
+
+/**
+ * Extract frames from a single video using adaptive sampling.
+ *
+ * Two-pass approach:
+ * 1. Pre-scan audio at 100ms resolution → find onset peaks (beats, impacts, speech starts)
+ * 2. Extract visual frames at 1fps + compute scene change scores between consecutive frames
+ * 3. Identify interest points: audio onset peaks ∪ visual scene changes
+ * 4. Go back and extract bonus frames at 4fps (250ms) around each interest point
+ * 5. Merge, deduplicate, and run full audio analysis on all final timestamps
+ *
+ * Result: peak moments get 4x sampling density while calm sections stay at 1fps.
  */
 export async function extractFrames(
   videoUrl: string,
   duration: number,
   onProgress?: (pct: number) => void
-): Promise<{ timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number; audioBass?: number; audioMid?: number; audioTreble?: number }[]> {
+): Promise<FrameResult[]> {
   const video = document.createElement("video");
   video.crossOrigin = "anonymous";
   video.muted = true;
@@ -199,38 +318,114 @@ export async function extractFrames(
   });
 
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 480 / video.videoHeight); // 480p — sufficient for highlight detection, halves payload vs 720p
+  const scale = Math.min(1, 480 / video.videoHeight);
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
   const ctx = canvas.getContext("2d")!;
 
-  const frames: { timestamp: number; base64: string; audioEnergy?: number; audioOnset?: number; audioBass?: number; audioMid?: number; audioTreble?: number }[] = [];
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
-  const totalFrames = Math.floor(duration / interval);
+  const totalBaseFrames = Math.floor(duration / interval);
 
-  // Build timestamps list and start audio analysis in parallel with visual extraction
-  const timestamps = Array.from({ length: totalFrames + 1 }, (_, i) => i * interval);
-  const audioPromise = extractAudioAnalysis(videoUrl, timestamps);
+  // ── Pass 1: Audio pre-scan (runs in parallel with visual extraction) ──
+  const onsetPeaksPromise = prescanAudioOnsets(videoUrl, duration);
 
-  for (let i = 0; i <= totalFrames; i++) {
+  // ── Pass 2: Extract base frames at 1fps + detect visual scene changes ──
+  const baseFrames: FrameResult[] = [];
+  const sceneChangeTimestamps: number[] = [];
+  let prevImageData: ImageData | null = null;
+
+  for (let i = 0; i <= totalBaseFrames; i++) {
     const time = i * interval;
     video.currentTime = time;
+    await new Promise<void>((resolve) => { video.onseeked = () => resolve(); });
 
-    await new Promise<void>((resolve) => {
-      video.onseeked = () => resolve();
-    });
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Scene change detection: compare with previous frame
+    const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (prevImageData) {
+      const diff = frameDifference(prevImageData, currentImageData);
+      if (diff >= SCENE_CHANGE_THRESHOLD) {
+        // Scene change detected between (time - interval) and time
+        // The actual change is somewhere in between — mark the midpoint
+        sceneChangeTimestamps.push(time - interval / 2);
+      }
+    }
+    prevImageData = currentImageData;
+
+    const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    baseFrames.push({ timestamp: time, base64 });
+
+    // Progress: base extraction = 0-60% of total
+    onProgress?.(((i + 1) / (totalBaseFrames + 1)) * 60);
+  }
+
+  // ── Collect interest points ──
+  const onsetPeaks = await onsetPeaksPromise;
+  const interestPoints = new Set<number>();
+
+  // Audio onset peaks
+  for (const ts of onsetPeaks) {
+    interestPoints.add(ts);
+  }
+  // Visual scene changes
+  for (const ts of sceneChangeTimestamps) {
+    interestPoints.add(ts);
+  }
+
+  // ── Pass 3: Extract bonus frames around interest points ──
+  // Compute bonus timestamps: ±0.5s at 250ms intervals, skip any that overlap with base frames
+  const baseTimestampSet = new Set(baseFrames.map((f) => Math.round(f.timestamp * 1000)));
+  const bonusTimestamps: number[] = [];
+
+  for (const peak of interestPoints) {
+    const start = Math.max(0, peak - ADAPTIVE_RADIUS_S);
+    const end = Math.min(duration, peak + ADAPTIVE_RADIUS_S);
+    for (let t = start; t <= end; t += ADAPTIVE_DENSITY_S) {
+      const rounded = Math.round(t * 1000);
+      // Skip if we already have a frame within 100ms of this timestamp
+      if (!baseTimestampSet.has(rounded)) {
+        const tooClose = bonusTimestamps.some((bt) => Math.abs(bt - t) < 0.1);
+        if (!tooClose) {
+          bonusTimestamps.push(Math.round(t * 1000) / 1000);
+        }
+      }
+    }
+  }
+
+  // Sort bonus timestamps chronologically for sequential seeking (faster)
+  bonusTimestamps.sort((a, b) => a - b);
+
+  const bonusFrames: FrameResult[] = [];
+  for (let i = 0; i < bonusTimestamps.length; i++) {
+    const time = bonusTimestamps[i];
+    video.currentTime = time;
+    await new Promise<void>((resolve) => { video.onseeked = () => resolve(); });
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-    frames.push({ timestamp: time, base64 });
+    bonusFrames.push({ timestamp: time, base64 });
 
-    onProgress?.(((i + 1) / (totalFrames + 1)) * 100);
+    // Progress: bonus extraction = 60-80% of total
+    onProgress?.(60 + ((i + 1) / Math.max(1, bonusTimestamps.length)) * 20);
   }
 
-  // Attach audio analysis to each frame
-  const audio = await audioPromise;
+  // ── Merge and deduplicate ──
+  const allFrames = [...baseFrames, ...bonusFrames].sort((a, b) => a.timestamp - b.timestamp);
+
+  if (bonusFrames.length > 0) {
+    console.log(`Adaptive sampling: ${baseFrames.length} base + ${bonusFrames.length} bonus frames (${onsetPeaks.length} audio peaks, ${sceneChangeTimestamps.length} scene changes)`);
+  }
+
+  // ── Full audio analysis on all final timestamps ──
+  const allTimestamps = allFrames.map((f) => f.timestamp);
+  const audio = await extractAudioAnalysis(videoUrl, allTimestamps);
+
+  // Progress: audio analysis = 80-100%
+  onProgress?.(90);
+
   if (audio.energy.size > 0) {
-    for (const frame of frames) {
+    for (const frame of allFrames) {
       frame.audioEnergy = audio.energy.get(frame.timestamp);
       frame.audioOnset = audio.onset.get(frame.timestamp);
       const bands = audio.spectral.get(frame.timestamp);
@@ -242,7 +437,8 @@ export async function extractFrames(
     }
   }
 
-  return frames;
+  onProgress?.(100);
+  return allFrames;
 }
 
 /**
