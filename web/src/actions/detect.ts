@@ -1353,14 +1353,14 @@ Respond with ONLY a JSON object:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-opus-4-6",
           max_tokens: 64000,
           stream: true,
           thinking: {
             type: "adaptive",
           },
           output_config: {
-            effort: "high",
+            effort: "medium",
           },
           system: [
             {
