@@ -649,7 +649,7 @@ async function analyzeMultiBatch(
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-haiku-4-5-20251001",
           max_tokens: 16000,
           thinking: { type: "adaptive" },
           output_config: { effort: "medium" },
@@ -657,7 +657,7 @@ async function analyzeMultiBatch(
             {
               type: "text",
               text: systemPrompt,
-              cache_control: { type: "ephemeral", ttl: "1h" },
+              cache_control: { type: "ephemeral" },
             },
           ],
           messages: [{ role: "user", content }],
@@ -1368,7 +1368,7 @@ Respond with ONLY a JSON object:
             {
               type: "text",
               text: systemPrompt,
-              cache_control: { type: "ephemeral", ttl: "1h" },
+              cache_control: { type: "ephemeral" },
             },
           ],
           messages: [{ role: "user", content: userContent }],
@@ -1637,7 +1637,7 @@ export async function submitScoringBatch(
   const requests = allBatches.map((batch, i) => ({
     custom_id: `score-batch-${i}`,
     params: {
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 16000,
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
@@ -1645,7 +1645,7 @@ export async function submitScoringBatch(
         {
           type: "text",
           text: systemPrompt,
-          cache_control: { type: "ephemeral", ttl: "1h" },
+          cache_control: { type: "ephemeral" },
         },
       ],
       messages: [{ role: "user", content: buildScoringContent(batch) }],
