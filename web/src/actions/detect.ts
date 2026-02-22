@@ -4,8 +4,8 @@ import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 
 // ── API helpers ──
 
-/** Max concurrent API calls to avoid rate limits (retry handles any 429s) */
-const MAX_CONCURRENCY = 2;
+/** Max concurrent API calls — retry logic handles any 429s from the API */
+const MAX_CONCURRENCY = 3;
 
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
@@ -509,8 +509,8 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 80; // Balances coverage vs. latency (adaptive thinking is faster than fixed budget)
-const API_IMAGE_PAYLOAD_BUDGET = 20 * 1024 * 1024; // 20 MB of base64 (proportional to 80-image cap)
+const API_MAX_IMAGES = 100; // API hard limit — send every frame we can
+const API_IMAGE_PAYLOAD_BUDGET = 25 * 1024 * 1024; // 25 MB of base64 (API limit is 32 MB, leaves headroom for text/JSON)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
@@ -959,7 +959,7 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 60000,
+          max_tokens: 100000,
           thinking: {
             type: "adaptive",
           },
@@ -971,7 +971,7 @@ Respond with ONLY a JSON object:
         }),
       },
       "Planner",
-      240_000 // 4-minute timeout — Opus + images is slow, but shouldn't exceed this
+      360_000 // 6-minute timeout — effort:max on Opus + 100 images needs room
     );
 
     if (!response.ok) {

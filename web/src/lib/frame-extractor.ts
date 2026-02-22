@@ -99,7 +99,7 @@ export async function extractFrames(
   });
 
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 480 / video.videoHeight);
+  const scale = Math.min(1, 720 / video.videoHeight); // 720p — higher detail for AI analysis
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
   const ctx = canvas.getContext("2d")!;
@@ -121,7 +121,7 @@ export async function extractFrames(
     });
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
     frames.push({ timestamp: time, base64 });
 
     onProgress?.(((i + 1) / (totalFrames + 1)) * 100);
@@ -200,13 +200,13 @@ async function imageFileToBase64(url: string): Promise<string> {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      // Scale down to 480p height for consistency
-      const scale = Math.min(1, 480 / img.height);
+      // Scale down to 720p height — higher detail for AI analysis
+      const scale = Math.min(1, 720 / img.height);
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+      const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
       resolve(base64);
     };
     img.onerror = () => reject(new Error("Failed to load image"));
