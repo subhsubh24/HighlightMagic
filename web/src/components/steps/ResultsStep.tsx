@@ -261,6 +261,30 @@ export default function ResultsStep() {
                   )}
                 </div>
 
+                {/* AI editing decisions */}
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {clip.velocityPreset && clip.velocityPreset !== "normal" && (
+                    <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+                      {clip.velocityPreset.replace("_", " ")}
+                    </span>
+                  )}
+                  {clip.transitionType && (
+                    <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
+                      {clip.transitionType.replace("_", " ")}
+                    </span>
+                  )}
+                  {clip.selectedFilter && clip.selectedFilter !== "None" && (
+                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                      {clip.selectedFilter}
+                    </span>
+                  )}
+                  {clip.captionText && (
+                    <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 truncate max-w-[120px]">
+                      &quot;{clip.captionText}&quot;
+                    </span>
+                  )}
+                </div>
+
                 {/* Confidence bar */}
                 <div className="mt-2">
                   <div className="flex items-center justify-between text-xs">

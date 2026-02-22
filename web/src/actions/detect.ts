@@ -1027,6 +1027,9 @@ YOU DECIDE EVERYTHING:
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
   If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
+- NEVER select visually similar moments. If two timestamps from the same source show the same
+  scene, subject, or composition (e.g., same sign, same angle, same action), pick ONLY the best
+  one. Viewers notice repetition instantly — it looks like a bug, not an edit choice.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
