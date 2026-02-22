@@ -430,7 +430,14 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 8000,
+          max_tokens: 16000,
+          thinking: {
+            type: "enabled",
+            budget_tokens: 10000,
+          },
+          output_config: {
+            effort: "high",
+          },
           system: systemPrompt,
           messages: [{ role: "user", content }],
         }),
@@ -1012,14 +1019,17 @@ Respond with ONLY a JSON object:
           max_tokens: 16000,
           thinking: {
             type: "enabled",
-            budget_tokens: 8000,
+            budget_tokens: 10000,
+          },
+          output_config: {
+            effort: "high",
           },
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }],
         }),
       },
       "Planner",
-      120_000 // 2-minute timeout — Sonnet + 40 images should complete well within this
+      180_000 // 3-minute timeout — Sonnet + extended thinking + 40 images
     );
 
     if (!response.ok) {
