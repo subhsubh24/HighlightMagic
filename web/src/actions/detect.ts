@@ -651,8 +651,6 @@ async function analyzeMultiBatch(
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 16000,
-          thinking: { type: "adaptive" },
-          output_config: { effort: "medium" },
           system: [
             {
               type: "text",
@@ -1639,8 +1637,6 @@ export async function submitScoringBatch(
     params: {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 16000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
       system: [
         {
           type: "text",
