@@ -410,6 +410,9 @@ export default function DetectingStep() {
         transitionDuration: c.transitionDuration,
         entryPunchScale: c.entryPunchScale,
         kenBurnsIntensity: c.kenBurnsIntensity,
+        // Dynamic AI-authored styles
+        customVelocityKeyframes: c.customVelocityKeyframes,
+        customFilterCSS: c.customFilterCSS,
       }));
 
       setProgress(100);

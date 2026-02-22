@@ -14,7 +14,7 @@ import {
   type TransitionTransform,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
 import type { EditedClip } from "@/lib/types";
 
@@ -107,7 +107,7 @@ export default function TapePreviewPlayer() {
         clip,
         mediaUrl: media.url,
         mediaType: media.type,
-        filterCSS: VIDEO_FILTERS[clip.selectedFilter],
+        filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
         captionText: clip.captionText,
         globalStart: t,
         globalEnd: t + dur,
@@ -351,9 +351,17 @@ export default function TapePreviewPlayer() {
         const e = timeline.find((x) => x.clip.id === id);
         const el = mediaMapRef.current.get(id);
         if (el instanceof HTMLVideoElement && e) {
-          // Apply velocity (playback rate)
+          // Apply velocity (playback rate) — custom keyframes take priority over presets
+          const customKf = e.clip.customVelocityKeyframes;
           const preset = e.clip.velocityPreset ?? "normal";
-          if (preset !== "normal") {
+          if (customKf && customKf.length >= 2) {
+            const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
+            const speed = getSpeedFromKeyframes(posInClip, customKf);
+            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
+              el.playbackRate = clampedSpeed;
+            }
+          } else if (preset !== "normal") {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
             const speed = getSpeedAtPosition(posInClip, preset);
             const clampedSpeed = Math.max(0.1, Math.min(4, speed));

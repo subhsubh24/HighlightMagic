@@ -77,6 +77,11 @@ export interface EditedClip {
   transitionDuration?: number; // seconds (overrides theme default)
   entryPunchScale?: number;    // 1.0 = no punch, 1.05 = pop (overrides theme default)
   kenBurnsIntensity?: number;  // 0-0.08 for photos (overrides theme default)
+  // Dynamic AI-authored styles — when present, override named presets/filters
+  /** Custom velocity keyframes from AI — [{position: 0-1, speed: 0.25-4.0}] */
+  customVelocityKeyframes?: Array<{ position: number; speed: number }>;
+  /** Custom CSS filter string from AI — e.g. "saturate(1.3) contrast(1.2) brightness(1.05)" */
+  customFilterCSS?: string;
 }
 
 export interface ViralExportOptions {

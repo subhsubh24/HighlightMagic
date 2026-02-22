@@ -89,11 +89,13 @@ export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
 };
 
 /**
- * Get the interpolated speed at a given position within a clip.
+ * Get the interpolated speed at a given position from raw keyframes.
  * Uses smooth cubic interpolation between keyframes.
  */
-export function getSpeedAtPosition(position: number, preset: VelocityPreset): number {
-  const keyframes = VELOCITY_PRESETS[preset];
+export function getSpeedFromKeyframes(position: number, keyframes: VelocityKeyframe[]): number {
+  if (!keyframes || keyframes.length === 0) return 1.0;
+  if (keyframes.length === 1) return keyframes[0].speed;
+
   const p = Math.max(0, Math.min(1, position));
 
   // Find surrounding keyframes
@@ -114,6 +116,14 @@ export function getSpeedAtPosition(position: number, preset: VelocityPreset): nu
   const t = (p - lower.position) / (upper.position - lower.position);
   const smoothT = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   return lower.speed + (upper.speed - lower.speed) * smoothT;
+}
+
+/**
+ * Get the interpolated speed at a given position within a clip.
+ * Uses smooth cubic interpolation between keyframes.
+ */
+export function getSpeedAtPosition(position: number, preset: VelocityPreset): number {
+  return getSpeedFromKeyframes(position, VELOCITY_PRESETS[preset]);
 }
 
 /**
@@ -152,14 +162,21 @@ export function getSourceTimeAtPosition(
  *
  * effectiveDuration = sourceClipDuration / averageSpeed
  */
-export function getEffectiveDuration(sourceDuration: number, preset: VelocityPreset): number {
-  if (preset === "normal") return sourceDuration;
+export function getEffectiveDuration(
+  sourceDuration: number,
+  preset: VelocityPreset,
+  customKeyframes?: VelocityKeyframe[]
+): number {
+  const kf = customKeyframes ?? VELOCITY_PRESETS[preset];
+  // Check if it's a flat 1x curve (no speed change)
+  if (!customKeyframes && preset === "normal") return sourceDuration;
+  if (kf.every((k) => Math.abs(k.speed - 1.0) < 0.01)) return sourceDuration;
 
   // Calculate average speed across the curve
   const steps = 100;
   let totalSpeed = 0;
   for (let i = 0; i < steps; i++) {
-    totalSpeed += getSpeedAtPosition(i / steps, preset);
+    totalSpeed += getSpeedFromKeyframes(i / steps, kf);
   }
   const avgSpeed = totalSpeed / steps;
 

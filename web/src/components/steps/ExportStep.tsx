@@ -22,7 +22,7 @@ import {
   type TransitionType,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid, type TimelineValidation } from "@/lib/beat-sync";
-import { getSpeedAtPosition } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
 import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
@@ -112,7 +112,7 @@ export default function ExportStep() {
           clip,
           mediaUrl: media?.url ?? "",
           mediaType: media?.type ?? "video",
-          filterCSS: VIDEO_FILTERS[clip.selectedFilter],
+          filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
         };
@@ -777,8 +777,16 @@ function renderVideoClip(
 
           onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
 
-          // Apply velocity
-          if (velocityPreset !== "normal") {
+          // Apply velocity — custom keyframes take priority over presets
+          const customKf = instruction.clip.customVelocityKeyframes;
+          if (customKf && customKf.length >= 2) {
+            const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
+            const speed = getSpeedFromKeyframes(posInClip, customKf);
+            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
+              video.playbackRate = clampedSpeed;
+            }
+          } else if (velocityPreset !== "normal") {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
             const speed = getSpeedAtPosition(posInClip, velocityPreset);
             const clampedSpeed = Math.max(0.1, Math.min(4, speed));

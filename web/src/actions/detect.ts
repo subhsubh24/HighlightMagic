@@ -296,6 +296,9 @@ export interface DetectedClip {
   captionStyle?: string;
   entryPunchScale?: number;
   kenBurnsIntensity?: number;
+  // Dynamic AI-authored styles
+  customVelocityKeyframes?: Array<{ position: number; speed: number }>;
+  customFilterCSS?: string;
 }
 
 export interface DetectionResult {
@@ -1174,39 +1177,37 @@ For each clip, you make EVERY visual decision. Think about what makes NFL player
 top influencer reels look so polished — it's because every single cut, color grade, and
 effect is chosen intentionally for THAT specific moment.
 
-VELOCITY PRESETS — speed ramping is what separates "nice edit" from "HOW did they do that":
+VELOCITY — You have TWO options for speed ramping each clip:
+
+OPTION A: Named presets (quick & reliable):
+Set "velocityPreset" to one of: "hero", "bullet", "ramp_out", "ramp_in", "montage", "normal".
+- "hero": slow-mo at 35-55%. Fast approach → DRAMATIC SLOW-MO → fast out.
+- "bullet": snap to 0.25x at 25%, hold until 65%. The clip IS the slow-mo moment.
+- "ramp_out": decelerates to 0.3x at end. Slow down INTO the payoff.
+- "ramp_in": accelerates 0.5x → 3x. Building toward something.
+- "montage": pulses 3x between fast/slow. Multi-beat rhythm.
+- "normal": constant 1x. Breathing room. Best for dialogue.
+
+OPTION B: Custom velocity keyframes (FULL CREATIVE CONTROL — preferred for unique moments):
+Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects.
+Position = where in the clip (0=start, 1=end). Speed = playback rate (0.25=slow-mo, 3.0=fast).
+The renderer smoothly interpolates between your keyframes with cubic easing.
+
+Examples of custom curves you can CREATE:
+- Late slow-mo hit: [{position:0,speed:1.5},{position:0.6,speed:1.5},{position:0.7,speed:0.3},{position:0.85,speed:0.3},{position:1,speed:2.0}]
+- Double pulse: [{position:0,speed:2.0},{position:0.2,speed:0.4},{position:0.35,speed:2.5},{position:0.6,speed:0.4},{position:0.75,speed:2.0},{position:1,speed:1.0}]
+- Freeze frame effect: [{position:0,speed:1.0},{position:0.45,speed:1.0},{position:0.5,speed:0.1},{position:0.55,speed:0.1},{position:0.6,speed:2.0},{position:1,speed:1.0}]
+- Smooth deceleration: [{position:0,speed:3.0},{position:0.5,speed:1.0},{position:1,speed:0.3}]
+
+DESIGN YOUR OWN CURVES. Place the slow-mo exactly where the peak moment is.
+When you use velocityKeyframes, velocityPreset is ignored for that clip.
 
 KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
-The velocity preset defines WHEN slow-mo happens. Your clip boundaries decide WHAT gets the slow-mo.
-
-- "hero": slow-mo lives at 35-55% through the clip. Fast approach → DRAMATIC SLOW-MO → fast out.
-  → Place startTime so the peak moment falls in the middle third of the clip.
-  → If the big moment is at t=12s in source, try startTime=9, endTime=16 (peak at ~43%).
-  → The fast lead-in BUILDS TENSION, the slow-mo lets the audience FEEL the moment, the fast exit maintains energy.
-
-- "bullet": snap to extreme slow-mo at 25%, holds until 65%. The clip IS the moment.
-  → Place the peak moment early. The entire middle is slow-mo — every frame matters.
-  → Best for: peak action (the dunk, the flip, the catch), moments where detail is the payoff.
-
-- "ramp_out": decelerates to 0.3x at the end. The moment IS the destination.
-  → The peak should be at the END of the clip. We slow down INTO it.
-  → Best for: landings, reveals, punchlines, "and then..." moments. The payoff lives at the end.
-
-- "ramp_in": accelerates from 0.5x to 3x. Building toward something.
-  → The peak is AFTER this clip (the next clip delivers). This clip is the build-up.
-  → Best for: approach shots, tension building, "watch what happens next" energy.
-
-- "montage": pulses 3 times between fast and slow. Multiple beats within one clip.
-  → Use for rhythmic sequences where several micro-moments deserve emphasis.
-  → Best for: dancing, cooking sequences, multi-action sports, rapid-fire montage sections.
-
-- "normal": constant 1x. Use deliberately as BREATHING ROOM between ramped clips.
-  → Pro editors ramp almost everything. "Normal" = a conscious choice to let the audience rest.
-  → Best for: dialogue, establishing context, emotional pauses, calm before the storm.
+Place clip boundaries so the moment you want emphasized lands in the slow part of your curve.
 
 VELOCITY ARC OF THE TAPE — the speed ramp pattern should feel like a song:
-Intro (ramp_in/normal) → Build (montage/ramp_in) → DROP (hero/bullet) →
-Recovery (normal) → Second build (montage) → Finale (hero/bullet) → Outro (ramp_out into loop)
+Intro (gentle/normal) → Build (accelerating) → DROP (slow-mo hit) →
+Recovery (normal) → Second build → Finale (slow-mo hero) → Outro (decelerate into loop)
 
 TRANSITIONS ARE NOT DECORATION — THEY CREATE MEANING.
 Every cut communicates RELATIONSHIP between the outgoing and incoming moment.
@@ -1242,24 +1243,31 @@ The transition PREPARES the viewer for what's coming. A zoom_punch into a calm s
 A crossfade into an explosion = underwhelming. The transition is the PROMISE, the next clip is the DELIVERY.
 Never repeat the same transition twice in a row. Set transitionDuration: 0.15s (snappy) to 1.0s (cinematic).
 
-COLOR GRADING — color is EMOTION made visible. Shift grades to create a mood journey:
-"TealOrange" → cinematic drama, sports intensity, blockbuster energy
-"GoldenHour" → warmth, beauty, nostalgia, "magic hour" dreaminess
-"MoodyCinematic" → dark, moody, tension, dramatic weight, nighttime
-"Vibrant" → joy, energy, celebration, maximum saturation pop
-"Warm" → intimacy, coziness, connection, soft emotional moments
-"Cool" → clean, modern, calm, distance, sophistication
-"CleanAiry" → bright, fresh, daytime, youthful, optimistic
-"VintageFilm" → memory, nostalgia, throwback, "remember when" feeling
-"Noir" → dramatic B&W, isolation, artistic statement (use sparingly)
-"Fade" → muted editorial, understated, reflective calm
-"None" → the content's natural color is the right choice
+COLOR GRADING — You have TWO options:
+
+OPTION A: Named filter presets:
+Set "filter" to: "TealOrange", "GoldenHour", "MoodyCinematic", "Vibrant", "Warm", "Cool",
+"CleanAiry", "VintageFilm", "Noir", "Fade", or "None".
+
+OPTION B: Custom CSS filter (FULL CREATIVE CONTROL — preferred for unique looks):
+Set "filterCSS" to a CSS filter string using any combination of:
+saturate(), contrast(), brightness(), sepia(), hue-rotate(), grayscale(), blur(), invert(), opacity()
+
+Examples of custom grades you can CREATE:
+- Intense teal-orange cinema: "saturate(1.4) contrast(1.3) brightness(0.95) hue-rotate(8deg)"
+- Dreamy pastel: "saturate(0.7) brightness(1.15) contrast(0.85) sepia(0.1)"
+- Dark moody with blue shadows: "saturate(0.8) contrast(1.4) brightness(0.85) hue-rotate(10deg)"
+- Warm film grain feel: "sepia(0.3) saturate(1.1) contrast(1.15) brightness(1.02)"
+- High-energy oversaturated: "saturate(1.8) contrast(1.2) brightness(1.05)"
+- Cool desaturated editorial: "saturate(0.6) contrast(1.1) brightness(1.08) hue-rotate(15deg)"
+
+When filterCSS is set, the "filter" field is ignored for that clip.
+DESIGN YOUR OWN COLOR GRADES. Each clip can have its own unique look.
 
 COLOR SHIFT PATTERNS that create emotional journeys:
-- Warm opener → TealOrange action → Warm close = "cozy → intense → cozy" (satisfaction loop)
-- MoodyCinematic build → Vibrant drop = tension → release (the color change IS the payoff)
-- VintageFilm flashback → CleanAiry present = nostalgia → now (time contrast)
-- Cool establishing → GoldenHour hero = detached → intimate (emotional deepening)
+- Warm opener → intense action → warm close = "cozy → intense → cozy" (satisfaction loop)
+- Dark moody build → vibrant drop = tension → release (the color change IS the payoff)
+- Desaturated past → bright present = nostalgia → now (time contrast)
 Don't use one grade for everything. 2-3 intentional shifts across the tape = professional.
 
 ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
@@ -1281,12 +1289,14 @@ KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
 
 For each clip, provide ALL of these fields:
-sourceFileId, startTime, endTime, label, confidenceScore, velocityPreset,
-transitionType (skip for first clip), transitionDuration, filter,
+sourceFileId, startTime, endTime, label, confidenceScore,
+velocityPreset OR velocityKeyframes (custom keyframes preferred for unique moments),
+transitionType (skip for first clip), transitionDuration,
+filter OR filterCSS (custom CSS preferred for unique looks),
 captionText (optional), captionStyle (optional), entryPunchScale, kenBurnsIntensity (photos only)
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "", "captionStyle": "Bold", "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "one_of_the_themes", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "", "captionStyle": "Bold", "kenBurnsIntensity": 0}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1404,6 +1414,9 @@ Respond with ONLY a JSON object:
             captionStyle?: string;
             entryPunchScale?: number;
             kenBurnsIntensity?: number;
+            // Dynamic AI-authored styles
+            velocityKeyframes?: Array<{ position: number; speed: number }>;
+            filterCSS?: string;
           }>;
         };
 
@@ -1462,6 +1475,37 @@ Respond with ONLY a JSON object:
           if (p.filter && !VALID_FILTERS.includes(p.filter)) {
             console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
           }
+
+          // Validate custom velocity keyframes from AI
+          let customVelocityKeyframes: Array<{ position: number; speed: number }> | undefined;
+          if (Array.isArray(p.velocityKeyframes) && p.velocityKeyframes.length >= 2) {
+            const valid = p.velocityKeyframes.every((kf: { position?: number; speed?: number }) =>
+              typeof kf.position === "number" && typeof kf.speed === "number" &&
+              kf.position >= 0 && kf.position <= 1 && kf.speed >= 0.1 && kf.speed <= 5.0
+            );
+            if (valid) {
+              customVelocityKeyframes = p.velocityKeyframes
+                .map((kf: { position: number; speed: number }) => ({
+                  position: kf.position,
+                  speed: Math.max(0.1, Math.min(5.0, kf.speed)),
+                }))
+                .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
+            } else {
+              console.warn(`Planner: clip ${i} invalid velocityKeyframes, ignoring`);
+            }
+          }
+
+          // Validate custom CSS filter string — allow only safe CSS filter functions
+          let customFilterCSS: string | undefined;
+          if (typeof p.filterCSS === "string" && p.filterCSS.trim()) {
+            const safeFilterPattern = /^(\s*(saturate|contrast|brightness|sepia|hue-rotate|grayscale|blur|invert|opacity)\([^)]+\)\s*)+$/i;
+            if (safeFilterPattern.test(p.filterCSS.trim())) {
+              customFilterCSS = p.filterCSS.trim();
+            } else {
+              console.warn(`Planner: clip ${i} unsafe filterCSS "${p.filterCSS.slice(0, 60)}", ignoring`);
+            }
+          }
+
           return {
           id: crypto.randomUUID(),
           sourceFileId: p.sourceFileId,
@@ -1487,6 +1531,9 @@ Respond with ONLY a JSON object:
             ? p.entryPunchScale : undefined,
           kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
             ? p.kenBurnsIntensity : undefined,
+          // Dynamic AI-authored styles
+          customVelocityKeyframes,
+          customFilterCSS,
         }; });
 
         // Deduplicate: drop clips with identical or overlapping time ranges from the same source
@@ -1512,7 +1559,30 @@ Respond with ONLY a JSON object:
           uniqueClips.push(clip);
         }
 
-        return { clips: uniqueClips, detectedTheme: theme, contentSummary };
+        // Enforce minimum temporal gap between clips from the same source.
+        // Clips that are too close (within 3s) to an already-accepted clip get dropped.
+        const MIN_CLIP_GAP_S = 3;
+        const spacedClips: typeof uniqueClips = [];
+        for (const clip of uniqueClips) {
+          const tooClose = spacedClips.some((existing) => {
+            if (existing.sourceFileId !== clip.sourceFileId) return false;
+            // Check gap between the clips (gap = space between one's end and other's start)
+            const gap = Math.min(
+              Math.abs(clip.startTime - existing.endTime),
+              Math.abs(existing.startTime - clip.endTime)
+            );
+            return gap < MIN_CLIP_GAP_S;
+          });
+          if (tooClose) {
+            console.warn(
+              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — too close to existing clip from same source (min gap: ${MIN_CLIP_GAP_S}s)`
+            );
+            continue;
+          }
+          spacedClips.push(clip);
+        }
+
+        return { clips: spacedClips, detectedTheme: theme, contentSummary };
     }
 
     throw new Error("Planner response could not be parsed as JSON");
