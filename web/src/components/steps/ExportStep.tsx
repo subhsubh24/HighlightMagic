@@ -90,10 +90,10 @@ export default function ExportStep() {
           transitionDuration: clip.transitionDuration,
         };
       }),
-      style.transitionDuration,
+      0.3,
       beatGrid
     );
-  }, [sortedClips, state, style.transitionDuration]);
+  }, [sortedClips, state]);
 
   const handleExport = useCallback(async () => {
     if (!canExport) {
@@ -538,7 +538,7 @@ async function renderHighlightTape(
       trimEnd: c.clip.trimEnd,
       transitionDuration: c.clip.transitionDuration,
     })),
-    style.transitionDuration,
+    0.3,
     beatGrid
   );
   if (renderValidation.issues.length > 0) {
@@ -563,7 +563,7 @@ async function renderHighlightTape(
     }
     totalDuration += clipDur;
     if (i < clips.length - 1) {
-      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? style.transitionDuration;
+      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? 0.3;
     }
   }
 
@@ -600,12 +600,13 @@ async function renderHighlightTape(
       : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
-    // Per-clip style overrides: merge AI decisions with theme defaults
+    // Per-clip style values (AI-specified, neutral defaults as last resort)
     const clipStyle = {
       ...style,
-      transitionDuration: instruction.clip.transitionDuration ?? style.transitionDuration,
-      entryPunchScale: instruction.clip.entryPunchScale ?? style.entryPunchScale,
-      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? style.kenBurnsIntensity,
+      transitionDuration: instruction.clip.transitionDuration ?? 0.3,
+      entryPunchScale: instruction.clip.entryPunchScale ?? 1.0,
+      entryPunchDuration: instruction.clip.entryPunchDuration ?? 0.15,
+      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? 0,
     };
 
     if (instruction.mediaType === "photo") {

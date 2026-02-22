@@ -409,6 +409,7 @@ export default function DetectingStep() {
         transitionType: c.transitionType,
         transitionDuration: c.transitionDuration,
         entryPunchScale: c.entryPunchScale,
+        entryPunchDuration: c.entryPunchDuration,
         kenBurnsIntensity: c.kenBurnsIntensity,
         // Dynamic AI-authored styles
         customVelocityKeyframes: c.customVelocityKeyframes,

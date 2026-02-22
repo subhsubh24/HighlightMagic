@@ -108,13 +108,13 @@ export default function TapePreviewPlayer() {
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
-        // Use next clip's per-clip transition duration, or theme default
+        // Use next clip's per-clip transition duration (neutral 0.3s default)
         const nextClip = sortedClips[i + 1];
-        t -= nextClip?.transitionDuration ?? style.transitionDuration;
+        t -= nextClip?.transitionDuration ?? 0.3;
       }
     }
     return entries;
-  }, [sortedClips, state, style.transitionDuration, beatGrid]);
+  }, [sortedClips, state, beatGrid]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -305,10 +305,11 @@ export default function TapePreviewPlayer() {
         let alpha = 1;
         let transform: TransitionTransform = { scale: 1, offsetX: 0, offsetY: 0 };
 
-        // Per-clip style overrides
-        const clipTransDuration = e.clip.transitionDuration ?? style.transitionDuration;
-        const clipEntryPunch = e.clip.entryPunchScale ?? style.entryPunchScale;
-        const clipKenBurns = e.clip.kenBurnsIntensity ?? style.kenBurnsIntensity;
+        // Per-clip style values (AI-specified, neutral defaults as last resort)
+        const clipTransDuration = e.clip.transitionDuration ?? 0.3;
+        const clipEntryPunch = e.clip.entryPunchScale ?? 1.0;
+        const clipEntryPunchDur = e.clip.entryPunchDuration ?? 0.15;
+        const clipKenBurns = e.clip.kenBurnsIntensity ?? 0;
 
         // Incoming clip during transition
         if (i > 0 && lt < clipTransDuration) {
@@ -322,7 +323,7 @@ export default function TapePreviewPlayer() {
         // Outgoing clip during transition
         if (i < timeline.length - 1) {
           const nextClip = timeline[i + 1];
-          const nextTransDuration = nextClip?.clip.transitionDuration ?? style.transitionDuration;
+          const nextTransDuration = nextClip?.clip.transitionDuration ?? 0.3;
           if (timeToEnd < nextTransDuration) {
             const transType = (nextClip?.clip.transitionType as TransitionType) ?? fallbackTransition;
             const progress = 1 - timeToEnd / nextTransDuration;
@@ -333,7 +334,7 @@ export default function TapePreviewPlayer() {
         }
 
         // Entry punch (per-clip or theme default)
-        const entryScale = getClipEntryScale(lt, clipEntryPunch, style.entryPunchDuration);
+        const entryScale = getClipEntryScale(lt, clipEntryPunch, clipEntryPunchDur);
         transform = { ...transform, scale: transform.scale * entryScale };
 
         drawMediaFrame(ctx, c.width, c.height, e, lt, alpha, transform, clipKenBurns, currentBeatIntensity);

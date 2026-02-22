@@ -295,6 +295,7 @@ export interface DetectedClip {
   captionText?: string;
   captionStyle?: string;
   entryPunchScale?: number;
+  entryPunchDuration?: number;
   kenBurnsIntensity?: number;
   // Dynamic AI-authored styles
   customVelocityKeyframes?: Array<{ position: number; speed: number }>;
@@ -1305,7 +1306,8 @@ velocityPreset OR velocityKeyframes (custom keyframes preferred),
 transitionType (REQUIRED for every clip except the first — YOU choose, no theme fallback),
 transitionDuration (REQUIRED — YOU set the timing),
 filter OR filterCSS (custom CSS preferred),
-entryPunchScale (REQUIRED — YOU set the impact),
+entryPunchScale (REQUIRED — YOU set the impact, 1.0 = none, up to 1.1),
+entryPunchDuration (REQUIRED — seconds for the punch animation, 0.1 = snappy, 0.3 = smooth),
 kenBurnsIntensity (photos only),
 captionText (optional — only when it adds value),
 captionStyle (fallback preset),
@@ -1313,7 +1315,7 @@ plus any custom caption params: captionAnimation, captionFontWeight, captionFont
 captionFontFamily, captionColor, captionGlowColor, captionGlowRadius
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "captionText": "no way.", "captionStyle": "Bold", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionStyle": "Bold", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1430,6 +1432,7 @@ Respond with ONLY a JSON object:
             captionText?: string;
             captionStyle?: string;
             entryPunchScale?: number;
+            entryPunchDuration?: number;
             kenBurnsIntensity?: number;
             // Dynamic AI-authored styles
             velocityKeyframes?: Array<{ position: number; speed: number }>;
@@ -1554,6 +1557,8 @@ Respond with ONLY a JSON object:
             ? p.captionStyle : undefined,
           entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
             ? p.entryPunchScale : undefined,
+          entryPunchDuration: (typeof p.entryPunchDuration === "number" && p.entryPunchDuration >= 0 && p.entryPunchDuration <= 0.5)
+            ? p.entryPunchDuration : undefined,
           kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
             ? p.kenBurnsIntensity : undefined,
           // Dynamic AI-authored styles

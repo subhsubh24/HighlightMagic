@@ -75,8 +75,9 @@ export interface EditedClip {
   // When present, these take priority over theme defaults in rendering
   transitionType?: string;   // e.g. "flash", "zoom_punch", "crossfade"
   transitionDuration?: number; // seconds (overrides theme default)
-  entryPunchScale?: number;    // 1.0 = no punch, 1.05 = pop (overrides theme default)
-  kenBurnsIntensity?: number;  // 0-0.08 for photos (overrides theme default)
+  entryPunchScale?: number;    // 1.0 = no punch, 1.05 = pop
+  entryPunchDuration?: number; // seconds for the punch animation (0.1-0.3)
+  kenBurnsIntensity?: number;  // 0-0.08 for photos
   // Dynamic AI-authored styles — when present, override named presets/filters
   /** Custom velocity keyframes from AI — [{position: 0-1, speed: 0.25-4.0}] */
   customVelocityKeyframes?: Array<{ position: number; speed: number }>;
