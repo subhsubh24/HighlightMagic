@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple } from "@/lib/frame-extractor";
-import { scoreAllFrames, planFromScores } from "@/actions/detect";
+import { scoreSingleBatch, planFromScores } from "@/actions/detect";
+import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
 import { uuid } from "@/lib/utils";
@@ -39,25 +40,33 @@ export default function DetectingStep() {
           (pct) => setProgress(pct * 0.3)
         );
 
-        // Phase 2: Score frames via server action (30-60%)
+        // Phase 2: Score frames via per-batch server action calls (30-60%)
+        // Each batch is a separate server action call (~30s each) to avoid timeout.
         setPassIndex(1);
         setProgress(30);
 
-        // Diminishing progress within scoring phase
-        const scoringTimer = setInterval(() => {
-          setProgress((prev) => {
-            const remaining = 58 - prev;
-            const increment = Math.max(0.05, remaining * 0.02);
-            return Math.min(prev + increment, 58);
-          });
-        }, 200);
+        const batches = buildFrameBatches(frames);
+        const sourceFileList = buildSourceFileList(frames);
+        const allScores: Awaited<ReturnType<typeof scoreSingleBatch>>  = [];
+        const STAGGER_MS = 1500;
 
-        const scores = await scoreAllFrames(
-          frames,
-          state.selectedTemplate?.name
-        );
+        for (let i = 0; i < batches.length; i++) {
+          // Stagger to avoid 429 rate limits
+          if (i > 0) await new Promise((r) => setTimeout(r, STAGGER_MS));
 
-        clearInterval(scoringTimer);
+          const batchScores = await scoreSingleBatch(
+            batches[i],
+            sourceFileList,
+            state.selectedTemplate?.name
+          );
+          allScores.push(...batchScores);
+
+          // Real per-batch progress: 30% → 60%
+          const pct = 30 + ((i + 1) / batches.length) * 28;
+          setProgress(Math.round(pct));
+        }
+
+        const scores = allScores;
 
         // Phase 3: Plan highlights via server action (60-90%)
         setPassIndex(2);

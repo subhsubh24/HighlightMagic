@@ -1,6 +1,7 @@
 "use server";
 
 import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
+import type { SourceFileInfo } from "@/lib/frame-batching";
 
 // ── API helpers ──
 
@@ -182,6 +183,24 @@ function buildSourceFilesMap(frames: MultiFrameInput[]): Map<string, { name: str
 
 // ── Phase 1: Score all frames ──
 
+/**
+ * Score a single batch of frames. Called from the client per-batch
+ * so each server action completes in <60s (well within timeout).
+ */
+export async function scoreSingleBatch(
+  batch: MultiFrameInput[],
+  sourceFileList: SourceFileInfo[],
+  templateName?: string
+): Promise<ScoredFrame[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
+  }
+  const sourceFiles = new Map(sourceFileList.map((s) => [s.id, { name: s.name, type: s.type, frameCount: s.frameCount }]));
+  return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
+}
+
+/** @deprecated Use buildFrameBatches + scoreSingleBatch from the client instead. */
 export async function scoreAllFrames(
   frames: MultiFrameInput[],
   templateName?: string
