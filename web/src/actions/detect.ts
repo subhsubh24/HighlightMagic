@@ -431,12 +431,6 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
-          thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "medium",
-          },
           system: systemPrompt,
           messages: [{ role: "user", content }],
         }),
@@ -1015,7 +1009,7 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 16000,
+          max_tokens: 64000,
           thinking: {
             type: "adaptive",
           },
@@ -1046,7 +1040,8 @@ Respond with ONLY a JSON object:
 
     if (!text) {
       const preview = JSON.stringify(data).slice(0, 300);
-      throw new Error(`Planner: no text block in response: ${preview}`);
+      console.error(`Planner: no text block. stop_reason=${data.stop_reason}, usage=${JSON.stringify(data.usage)}, content_types=${Array.isArray(data.content) ? data.content.map((b: { type: string }) => b.type).join(",") : "N/A"}`);
+      throw new Error(`Planner: no text block (stop_reason=${data.stop_reason}): ${preview}`);
     }
 
     // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
