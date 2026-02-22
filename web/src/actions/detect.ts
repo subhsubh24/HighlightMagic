@@ -429,10 +429,6 @@ const MAX_BATCH_RETRIES = 2;
 
 const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
 
-/**
- * Score frames across multiple source files.
- * Retries the entire batch on failure before falling back.
- */
 /** The raw scoring prompt text — extracted so it's shared between real-time and Batch API. */
 function buildScoringPromptBody(sourceList: string, sourceCount: number, templateName?: string): string {
   return `You are a world-class Instagram Reels editor whose content averages 2M+ views.
