@@ -90,6 +90,90 @@ async function runWithConcurrency<T>(
   return results;
 }
 
+// ── JSON parsing helpers ──
+
+/**
+ * Safely parse a JSON array string from an AI response.
+ * AI models sometimes produce invalid JSON with:
+ * - Trailing commas before ] or }
+ * - Unescaped control characters (newlines, tabs) inside strings
+ * - Unescaped quotes inside string values
+ *
+ * This function attempts progressively aggressive sanitization.
+ */
+function safeParseJSONArray(raw: string): unknown {
+  // Attempt 1: direct parse
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // fall through
+  }
+
+  // Attempt 2: fix trailing commas and control characters
+  let sanitized = raw
+    // Remove trailing commas before } or ]
+    .replace(/,\s*([}\]])/g, "$1")
+    // Replace unescaped newlines/tabs inside strings with spaces
+    .replace(/(?<=":[ ]*"[^"]*)\n/g, " ")
+    .replace(/(?<=":[ ]*"[^"]*)\t/g, " ");
+
+  try {
+    return JSON.parse(sanitized);
+  } catch {
+    // fall through
+  }
+
+  // Attempt 3: extract individual objects and rebuild array
+  // This handles cases where the label contains unescaped quotes
+  try {
+    const objects: unknown[] = [];
+    // Match each object boundary by looking for {"index": patterns
+    const objRegex = /\{\s*"index"\s*:\s*(\d+)\s*,\s*"score"\s*:\s*([\d.]+)\s*,\s*"role"\s*:\s*"([^"]*?)"\s*,\s*"label"\s*:\s*"([\s\S]*?)"\s*\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = objRegex.exec(sanitized)) !== null) {
+      objects.push({
+        index: parseInt(match[1]),
+        score: parseFloat(match[2]),
+        role: match[3],
+        label: match[4].replace(/"/g, "'").replace(/\n/g, " "),
+      });
+    }
+    // Try alternate key order: index, score, label, role
+    if (objects.length === 0) {
+      const altRegex = /\{\s*"index"\s*:\s*(\d+)\s*,\s*"score"\s*:\s*([\d.]+)\s*,\s*"label"\s*:\s*"([\s\S]*?)"\s*,\s*"role"\s*:\s*"([^"]*?)"\s*\}/g;
+      while ((match = altRegex.exec(sanitized)) !== null) {
+        objects.push({
+          index: parseInt(match[1]),
+          score: parseFloat(match[2]),
+          label: match[3].replace(/"/g, "'").replace(/\n/g, " "),
+          role: match[4],
+        });
+      }
+    }
+    if (objects.length > 0) {
+      console.warn(`Scoring: recovered ${objects.length} frames via regex extraction after JSON.parse failure`);
+      return objects;
+    }
+  } catch {
+    // fall through
+  }
+
+  // Final attempt: strip everything outside [] and retry
+  try {
+    const bracketMatch = sanitized.match(/\[[\s\S]*\]/);
+    if (bracketMatch) {
+      sanitized = bracketMatch[0]
+        .replace(/,\s*\]/g, "]")
+        .replace(/,\s*\}/g, "}");
+      return JSON.parse(sanitized);
+    }
+  } catch {
+    // fall through
+  }
+
+  throw new SyntaxError(`Failed to parse scoring JSON after all sanitization attempts: ${raw.slice(0, 200)}`);
+}
+
 // ── Types ──
 
 interface FrameInput {
@@ -454,7 +538,8 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
           messages: [{ role: "user", content }],
         }),
       },
-      "Scoring batch"
+      "Scoring batch",
+      120_000 // 2-minute timeout per batch (20 frames should complete in ~30-45s)
     );
 
     if (!response.ok) {
@@ -501,12 +586,21 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     }
 
     const VALID_ROLES = ["HOOK", "HERO", "REACTION", "RHYTHM", "CLOSER"];
-    const parsed = JSON.parse(jsonMatch[0]) as Array<{
+    const parsed = safeParseJSONArray(jsonMatch[0]) as Array<{
       index: number;
       score: number;
       label: string;
       role?: string;
     }>;
+
+    if (!Array.isArray(parsed)) {
+      console.warn(`Scoring: JSON parsed to non-array (attempt ${attempt + 1}):`, typeof parsed);
+      if (attempt < MAX_BATCH_RETRIES) {
+        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+      }
+      throw new Error(`Scoring returned non-array JSON after ${attempt + 1} attempts`);
+    }
 
     const results: ScoredFrame[] = [];
     for (const p of parsed) {

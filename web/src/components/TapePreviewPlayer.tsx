@@ -18,8 +18,23 @@ import { getSpeedAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
 import type { EditedClip } from "@/lib/types";
 
-const PREVIEW_WIDTH = 540;
-const PREVIEW_HEIGHT = 960;
+// ── Adaptive resolution: lower on mobile for smoother playback ──
+const DESKTOP_WIDTH = 540;
+const DESKTOP_HEIGHT = 960;
+const MOBILE_WIDTH = 360;
+const MOBILE_HEIGHT = 640;
+/** Target frame interval in ms. 60fps on desktop, 30fps on mobile. */
+const DESKTOP_FRAME_MS = 1000 / 60;
+const MOBILE_FRAME_MS = 1000 / 30;
+
+function isMobileDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  // Check touch support + screen width as a heuristic
+  return (
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0) &&
+    window.innerWidth < 768
+  );
+}
 
 interface TimelineEntry {
   clip: EditedClip;
@@ -41,6 +56,9 @@ export default function TapePreviewPlayer() {
   const pbRef = useRef({ startWall: 0, elapsed: 0, raf: 0 });
   const mediaMapRef = useRef<Map<string, HTMLVideoElement | HTMLImageElement>>(new Map());
   const activeClipsRef = useRef<Set<string>>(new Set());
+  /** Tracks the last frame draw timestamp for frame budget/skipping. */
+  const lastDrawRef = useRef(0);
+  const isMobileRef = useRef(false);
 
   // Get the editing style for the detected theme
   const style = useMemo(() => getEditingStyle(state.detectedTheme), [state.detectedTheme]);
@@ -145,13 +163,14 @@ export default function TapePreviewPlayer() {
     }
   }, [isMuted]);
 
-  // Set canvas size
+  // Set canvas size — lower resolution on mobile for smoother playback
   useEffect(() => {
     const c = canvasRef.current;
-    if (c) {
-      c.width = PREVIEW_WIDTH;
-      c.height = PREVIEW_HEIGHT;
-    }
+    if (!c) return;
+    const mobile = isMobileDevice();
+    isMobileRef.current = mobile;
+    c.width = mobile ? MOBILE_WIDTH : DESKTOP_WIDTH;
+    c.height = mobile ? MOBILE_HEIGHT : DESKTOP_HEIGHT;
   }, []);
 
   // Draw a single clip frame with transition transform, velocity, and kinetic text
@@ -363,10 +382,11 @@ export default function TapePreviewPlayer() {
     [timeline, themeTransitions, style, drawMediaFrame, beatGrid, state.detectedTheme]
   );
 
-  // Animation loop
+  // Animation loop with adaptive frame skipping for mobile performance
   const tick = useCallback(() => {
     const pb = pbRef.current;
-    const now = performance.now() / 1000;
+    const nowMs = performance.now();
+    const now = nowMs / 1000;
     const currentTime = pb.elapsed + (now - pb.startWall);
 
     if (currentTime >= totalDuration) {
@@ -380,8 +400,16 @@ export default function TapePreviewPlayer() {
       return;
     }
 
-    setProgress(currentTime / totalDuration);
-    drawAtTime(currentTime);
+    // Frame budget: skip draw if we're behind the target frame rate
+    const targetMs = isMobileRef.current ? MOBILE_FRAME_MS : DESKTOP_FRAME_MS;
+    const elapsed = nowMs - lastDrawRef.current;
+
+    if (elapsed >= targetMs) {
+      setProgress(currentTime / totalDuration);
+      drawAtTime(currentTime);
+      lastDrawRef.current = nowMs;
+    }
+
     pb.raf = requestAnimationFrame(tick);
   }, [totalDuration, drawAtTime]);
 
