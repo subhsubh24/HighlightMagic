@@ -115,7 +115,7 @@ export default function DetectingStep() {
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
         const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
-        const SCORING_CONCURRENCY = 5;
+        const SCORING_CONCURRENCY = 10;
         const STAGGER_MS = 500;
         let scoredBatches = 0;
 

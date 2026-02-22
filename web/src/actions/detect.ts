@@ -1159,7 +1159,13 @@ Respond with ONLY a JSON object:
           output_config: {
             effort: "high",
           },
-          system: systemPrompt,
+          system: [
+            {
+              type: "text",
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
           messages: [{ role: "user", content: userContent }],
         }),
       },
