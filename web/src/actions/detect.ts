@@ -1343,16 +1343,26 @@ Respond with ONLY a JSON object:
             ? p.kenBurnsIntensity : undefined,
         }; });
 
-        // Deduplicate: drop clips with overlapping time ranges from the same source
+        // Deduplicate: drop clips with identical or overlapping time ranges from the same source
         const uniqueClips: typeof clips = [];
-        const seen = new Set<string>();
         for (const clip of clips) {
-          const key = `${clip.sourceFileId}::${clip.startTime}::${clip.endTime}`;
-          if (seen.has(key)) {
-            console.warn(`Planner: dropping duplicate clip ${key}`);
+          // Check for overlap with already-accepted clips from the same source
+          const dominated = uniqueClips.some((existing) => {
+            if (existing.sourceFileId !== clip.sourceFileId) return false;
+            // Compute overlap between existing and candidate
+            const overlapStart = Math.max(existing.startTime, clip.startTime);
+            const overlapEnd = Math.min(existing.endTime, clip.endTime);
+            const overlap = Math.max(0, overlapEnd - overlapStart);
+            const candidateDuration = clip.endTime - clip.startTime;
+            // Drop if >50% of the candidate's duration overlaps an existing clip
+            return candidateDuration > 0 && overlap / candidateDuration > 0.5;
+          });
+          if (dominated) {
+            console.warn(
+              `Planner: dropping overlapping clip ${clip.sourceFileId} [${clip.startTime}-${clip.endTime}]`
+            );
             continue;
           }
-          seen.add(key);
           uniqueClips.push(clip);
         }
 
