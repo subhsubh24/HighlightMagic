@@ -1026,8 +1026,7 @@ Respond with ONLY a JSON object:
           messages: [{ role: "user", content: userContent }],
         }),
       },
-      "Planner",
-      240_000 // 4-minute timeout — Opus + adaptive thinking + effort:high + 50 images
+      "Planner"
     );
 
     if (!response.ok) {
