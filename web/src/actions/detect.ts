@@ -99,6 +99,7 @@ interface MultiFrameInput {
   timestamp: number;
   base64: string;
   audioEnergy?: number; // 0.0-1.0 normalized RMS energy at this timestamp
+  audioOnset?: number;  // 0.0-1.0 energy delta — transient/beat strength
 }
 
 export interface ScoredFrame {
@@ -314,14 +315,20 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    - RHYTHM: A transition beat, texture, pacing control
    - CLOSER: Could end the reel and trigger a replay/loop
 
-7. AUDIO ENERGY — Each frame is annotated with its audio energy level (0.0-1.0).
-   Use this to understand the SOUNDTRACK of the moment:
-   - High energy (0.7+) = loud/active (crowd cheering, bass drop, impact, laughter)
-   - Medium energy (0.3-0.7) = moderate activity (conversation, ambient music, movement)
-   - Low energy (0.0-0.3) = quiet (silence, calm, anticipation, whispers)
-   Audio energy tells you what the EARS experience while the eyes see the frame.
-   A visually calm frame with a sudden audio spike = something just happened (reaction moment).
-   Rising audio energy = building tension. Audio peak + visual peak = HERO moment.
+7. AUDIO INTELLIGENCE — Each frame has TWO audio signals:
+   audioEnergy (0.0-1.0) = volume/loudness at this moment:
+   - High (0.7+) = loud (crowd cheering, bass drop, impact, laughter)
+   - Medium (0.3-0.7) = moderate (conversation, ambient music, movement)
+   - Low (0.0-0.3) = quiet (silence, calm, anticipation, whispers)
+
+   audioOnset (0.0-1.0) = how much the audio CHANGED — transient/beat detection:
+   - High onset (0.5+) = something just HAPPENED (beat hit, impact, clap, sudden sound, bass drop)
+   - This is the most important audio signal for editing — onsets are natural CUT POINTS.
+   - High onset + high energy = definitive beat/impact moment (perfect for flash transitions, velocity hits)
+   - High onset + low energy = the start of something (voice beginning, subtle sound emerging)
+   - Low onset + high energy = sustained loudness (crowd noise, continuous music — not a cut point)
+   Audio onset is what pro editors use to sync cuts to music. When you see a high onset, that's
+   where a transition or speed change should land.
 
 8. TEMPORAL DYNAMICS — Where does this frame sit in the moment's arc?
    This is what separates editors who find moments from editors who FEEL them.
@@ -375,9 +382,12 @@ Pick the BEST fit for each frame — what role would this moment play in a viral
     const audioTag = frame.audioEnergy != null
       ? `, audioEnergy: ${frame.audioEnergy.toFixed(2)}`
       : "";
+    const onsetTag = frame.audioOnset != null && frame.audioOnset > 0.1
+      ? `, audioOnset: ${frame.audioOnset.toFixed(2)}`
+      : "";
     content.push({
       type: "text",
-      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}`,
+      text: `Frame ${i} — source: "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, timestamp: ${frame.timestamp.toFixed(1)}s${audioTag}${onsetTag}`,
     });
   });
 
@@ -598,12 +608,13 @@ async function planHighlightTape(
     scoresBySource.get(s.sourceFileId)!.push(s);
   }
 
-  // Build audio energy lookup from frames
+  // Build audio lookups from frames
   const audioLookup = new Map<string, number>();
+  const onsetLookup = new Map<string, number>();
   for (const f of allFrames) {
-    if (f.audioEnergy != null) {
-      audioLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f.audioEnergy);
-    }
+    const key = `${f.sourceFileId}::${f.timestamp.toFixed(1)}`;
+    if (f.audioEnergy != null) audioLookup.set(key, f.audioEnergy);
+    if (f.audioOnset != null) onsetLookup.set(key, f.audioOnset);
   }
 
   const allScoresSummary = Array.from(scoresBySource.entries())
@@ -614,19 +625,27 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
-          const audioVal = audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`);
+          const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
+          const audioVal = audioLookup.get(key);
+          const onsetVal = onsetLookup.get(key);
           const audioTag = audioVal != null ? `  audio:${audioVal.toFixed(2)}` : "";
-          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${roleTag}  "${s.label}"`;
+          const onsetTag = onsetVal != null && onsetVal > 0.1 ? `  onset:${onsetVal.toFixed(2)}` : "";
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${roleTag}  "${s.label}"`;
         }
       );
 
-      // Build ASCII audio energy visualization for this source
+      // Build ASCII audio visualizations for this source
+      const bars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
       const audioVals = sorted.map((s) => audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
+      const onsetVals = sorted.map((s) => onsetLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
       const audioViz = audioVals.length > 0
-        ? `  Audio energy: ${audioVals.map((v) => ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"][Math.min(7, Math.floor(v * 8))]).join("")}`
+        ? `  Audio energy:  ${audioVals.map((v) => bars[Math.min(7, Math.floor(v * 8))]).join("")}`
+        : "";
+      const onsetViz = onsetVals.length > 0
+        ? `  Audio onsets:  ${onsetVals.map((v) => bars[Math.min(7, Math.floor(v * 8))]).join("")}  (peaks = beat hits / impacts)`
         : "";
 
-      return `${header}${audioViz ? "\n" + audioViz : ""}\n${lines.join("\n")}`;
+      return `${header}${audioViz ? "\n" + audioViz : ""}${onsetViz ? "\n" + onsetViz : ""}\n${lines.join("\n")}`;
     })
     .join("\n\n");
 
@@ -715,18 +734,27 @@ Pick the one that will make THIS specific content look its absolute best on Inst
 
 Think about: What theme makes this content MOST shareable on Instagram? Match the style to the CONTENT.
 
-STEP 2.5: READ THE AUDIO
-Each frame and score has an AUDIO ENERGY value (0.0-1.0) and each source has an ASCII audio
-visualization. This is the SOUNDTRACK of the footage — what the ears hear at each moment.
-Use audio to make SMARTER editing decisions:
-- START clips at audio onsets (energy spikes) — cuts that land on sound hits feel intentional
-- END clips at natural audio drops or silence — clean exits
-- Match transition STYLE to audio: hard cut on a beat/impact, crossfade during quiet/ambient
-- Use velocity ramping with audio: slow-mo during audio peaks = dramatic emphasis
-- High audio + high visual score = absolute HERO moment — don't miss these
-- Rising audio energy = building tension — perfect for ramp_in velocity
-- Sudden audio spike with calm visual = something just happened off-screen (reaction opportunity)
-- Audio silence boundaries = natural clip boundaries — the content is telling you where to cut
+STEP 2.5: READ THE AUDIO — TWO SIGNALS
+Each frame has audioEnergy (volume 0-1) and audioOnset (energy CHANGE 0-1).
+Each source has ASCII visualizations of both. This is how pro editors sync cuts to sound.
+
+AUDIO ENERGY = volume at this moment:
+- High (0.7+) = loud (cheering, music peak, action). Low (0-0.3) = quiet (silence, calm).
+
+AUDIO ONSET = the beat detector. How much energy CHANGED from the previous frame:
+- High onset (0.5+) = TRANSIENT. Something just happened: beat hit, clap, impact, bass drop, voice starting.
+- The onset visualization shows you exactly where the rhythm of the footage lives.
+- Peaks in the onset graph = natural cut points. This is where transitions should land.
+
+USE AUDIO FOR EVERY EDITING DECISION:
+- START clips at high-onset timestamps — cuts landing on sound hits feel intentional and "tight"
+- END clips at low-energy, low-onset moments — natural silence boundaries = clean exits
+- Match transition TYPE to audio: flash/zoom_punch on high onset, crossfade on low onset
+- VELOCITY + audio: place the slow-mo zone where audio energy peaks (dramatic emphasis)
+- High onset + high visual score = absolute HERO moment — the audio and visual peak together
+- Rising energy, low onset = building tension — perfect for ramp_in velocity
+- High onset + calm visual = off-screen event (reaction opportunity, cut to source with the action)
+- Cluster of high onsets = rhythmic section — use montage velocity, rapid cuts, beat-sync energy
 
 STEP 3: CHOOSE YOUR REEL STRUCTURE
 Before placing a single clip, decide the ARCHITECTURE. Random clip order = amateur.
@@ -934,7 +962,8 @@ Respond with ONLY a JSON object:
       : "start";
 
     const audioVal = frame.audioEnergy != null ? ` | AUDIO: ${frame.audioEnergy.toFixed(2)}` : "";
-    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}`;
+    const onsetVal = frame.audioOnset != null && frame.audioOnset > 0.1 ? ` | ONSET: ${frame.audioOnset.toFixed(2)}` : "";
+    let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
       annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;
