@@ -1,17 +1,30 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
 import { useRef, useState } from "react";
+import { getCachedDetectionData } from "@/lib/detection-cache";
+
+const QUICK_PRESETS = [
+  { label: "Faster paced", feedback: "Make it faster paced with shorter clips and quicker cuts" },
+  { label: "More cinematic", feedback: "More cinematic and dramatic — slower, more breathing room, elegant transitions" },
+  { label: "Keep it short", feedback: "Keep it under 15 seconds — only the absolute best moments, rapid-fire" },
+  { label: "More faces", feedback: "Focus on faces, reactions, and human emotion — people connect with people" },
+];
 
 export default function ResultsStep() {
   const { state, dispatch } = useApp();
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragItemIndex = useRef<number | null>(null);
+  const [showRegenerate, setShowRegenerate] = useState(false);
+  const [customFeedback, setCustomFeedback] = useState("");
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+
+  // Check if regeneration is possible (cached data available)
+  const canRegenerate = getCachedDetectionData().frames !== null;
 
   const handleEditAll = () => {
     haptic();
@@ -19,6 +32,13 @@ export default function ResultsStep() {
       dispatch({ type: "SET_ACTIVE_CLIP", clipId: sortedClips[0].id });
     }
     dispatch({ type: "SET_STEP", step: "editor" });
+  };
+
+  const handleRegenerate = (feedback: string) => {
+    if (!feedback.trim()) return;
+    haptic();
+    dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: feedback.trim() });
+    dispatch({ type: "SET_STEP", step: "detecting" });
   };
 
   // Drag-to-reorder handlers
@@ -58,7 +78,63 @@ export default function ResultsStep() {
             {sortedClips.length} clips · ~{Math.round(totalDuration)}s total — drag to reorder
           </p>
         </div>
+        {/* Regenerate toggle */}
+        {canRegenerate && sortedClips.length > 0 && (
+          <button
+            onClick={() => setShowRegenerate(!showRegenerate)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              showRegenerate
+                ? "bg-[var(--accent)]/20 text-[var(--accent)]"
+                : "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10"
+            }`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Regenerate
+          </button>
+        )}
       </div>
+
+      {/* Regenerate panel */}
+      {showRegenerate && (
+        <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3 animate-fade-in">
+          <p className="text-sm font-medium text-white">
+            What should change?
+          </p>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            The AI will re-plan using the same footage analysis — no re-scoring needed, just a fresh creative direction.
+          </p>
+          {/* Quick presets */}
+          <div className="flex flex-wrap gap-2">
+            {QUICK_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => handleRegenerate(preset.feedback)}
+                className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--accent)]/20 hover:text-[var(--accent)]"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          {/* Custom input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={customFeedback}
+              onChange={(e) => setCustomFeedback(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleRegenerate(customFeedback)}
+              placeholder='e.g. "focus on the food shots" or "make it feel like a movie trailer"'
+              className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent)] focus:outline-none"
+            />
+            <button
+              onClick={() => handleRegenerate(customFeedback)}
+              disabled={!customFeedback.trim()}
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* AI content summary */}
       {state.contentSummary && sortedClips.length > 0 && (

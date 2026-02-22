@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music } from "lucide-react";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music, CheckCircle, AlertTriangle } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -21,7 +21,7 @@ import {
   getClipEntryScale,
   type TransitionType,
 } from "@/lib/transitions";
-import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
+import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid, type TimelineValidation } from "@/lib/beat-sync";
 import { getSpeedAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption } from "@/lib/kinetic-text";
 import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
@@ -69,6 +69,31 @@ export default function ExportStep() {
 
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
+
+  // Pre-export validation: beat-sync alignment + timeline integrity
+  const validation = useMemo<TimelineValidation | null>(() => {
+    if (sortedClips.length === 0) return null;
+    const beatGrid = state.viralOptions.beatSync
+      ? (() => {
+          const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
+          return track ? buildBeatGrid(track.bpm, 300) : null;
+        })()
+      : null;
+    return validateTimeline(
+      sortedClips.map((clip) => {
+        const media = getMediaFile(state, clip.sourceFileId);
+        return {
+          sourceFileId: clip.sourceFileId,
+          trimStart: clip.trimStart,
+          trimEnd: clip.trimEnd,
+          sourceDuration: media?.duration ?? 0,
+          transitionDuration: clip.transitionDuration,
+        };
+      }),
+      style.transitionDuration,
+      beatGrid
+    );
+  }, [sortedClips, state, style.transitionDuration]);
 
   const handleExport = useCallback(async () => {
     if (!canExport) {
@@ -244,6 +269,76 @@ export default function ExportStep() {
               </label>
             </div>
           </div>
+
+          {/* Pre-export validation report */}
+          {validation && (
+            <div className="glass-card w-full p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                Rendering Validation
+              </p>
+              <div className="flex flex-col gap-2">
+                {/* Timeline validity */}
+                <div className="flex items-center gap-2">
+                  {validation.valid ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  )}
+                  <span className="text-sm text-white">
+                    {validation.valid ? "Timeline OK" : `${validation.issues.length} issue${validation.issues.length !== 1 ? "s" : ""} found`}
+                  </span>
+                  <span className="ml-auto text-xs text-[var(--text-tertiary)]">
+                    ~{Math.round(validation.totalDuration)}s rendered
+                  </span>
+                </div>
+                {/* Timeline issues */}
+                {validation.issues.length > 0 && (
+                  <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                    {validation.issues.map((issue, i) => (
+                      <p key={i}>{issue.message}</p>
+                    ))}
+                  </div>
+                )}
+                {/* Beat-sync quality */}
+                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Music className="h-4 w-4 text-emerald-400" />
+                    <span className="text-sm text-white">Beat Sync</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className={`h-full rounded-full ${
+                            validation.beatSync.quality >= 0.85
+                              ? "bg-emerald-400"
+                              : validation.beatSync.quality >= 0.65
+                                ? "bg-yellow-400"
+                                : "bg-red-400"
+                          }`}
+                          style={{ width: `${validation.beatSync.quality * 100}%` }}
+                        />
+                      </div>
+                      <span className={`text-xs font-medium ${
+                        validation.beatSync.quality >= 0.85
+                          ? "text-emerald-400"
+                          : validation.beatSync.quality >= 0.65
+                            ? "text-yellow-400"
+                            : "text-red-400"
+                      }`}>
+                        {validation.beatSync.label}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
+                  <p className="text-[11px] text-[var(--text-tertiary)]">
+                    {validation.beatSync.tightCount}/{validation.beatSync.totalTransitions} cuts within 1 frame
+                    {" · "}avg offset {validation.beatSync.avgOffsetMs.toFixed(0)}ms
+                    {" · "}max {validation.beatSync.maxOffsetMs.toFixed(0)}ms
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <button onClick={handleExport} className="btn-primary flex w-full items-center justify-center gap-2">
             <Download className="h-5 w-5" />
@@ -438,6 +533,25 @@ async function renderHighlightTape(
   if (viralOptions.beatSync) {
     const track = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack;
     if (track) beatGrid = buildBeatGrid(track.bpm, 300);
+  }
+
+  // Pre-render validation: log beat-sync quality and timeline issues
+  const renderValidation = validateTimeline(
+    clips.map((c) => ({
+      sourceFileId: c.clip.sourceFileId,
+      trimStart: c.clip.trimStart,
+      trimEnd: c.clip.trimEnd,
+      transitionDuration: c.clip.transitionDuration,
+    })),
+    style.transitionDuration,
+    beatGrid
+  );
+  if (renderValidation.issues.length > 0) {
+    console.warn("Export validation issues:", renderValidation.issues);
+  }
+  if (renderValidation.beatSync) {
+    const bs = renderValidation.beatSync;
+    console.log(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
   }
 
   // Audio pipeline: captures original clip audio + optional background music

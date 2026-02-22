@@ -245,7 +245,8 @@ export async function scoreAllFrames(
 export async function planFromScores(
   frames: MultiFrameInput[],
   scores: ScoredFrame[],
-  templateName?: string
+  templateName?: string,
+  userFeedback?: string
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -258,7 +259,7 @@ export async function planFromScores(
   let lastPlanError: string | null = null;
   for (let planAttempt = 0; planAttempt < 3; planAttempt++) {
     try {
-      const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName);
+      const result = await planHighlightTape(apiKey, scores, frames, sourceFiles, templateName, userFeedback);
       if (result.clips.length > 0) {
         planResult = result;
         break;
@@ -622,7 +623,8 @@ async function planHighlightTape(
   scores: ScoredFrame[],
   allFrames: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
-  templateName?: string
+  templateName?: string,
+  userFeedback?: string
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -1031,7 +1033,11 @@ Respond with ONLY a JSON object:
 
   userContent.push({
     type: "text",
-    text: `\nYou've now seen ALL the footage. Think deeply:\n- What's the story across these ${sourceCount} sources?\n- What are the cross-source connections? (cause→effect, before→after, matching energy)\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?\n\nNow create the highlight tape.`,
+    text: `\nYou've now seen ALL the footage. Think deeply:\n- What's the story across these ${sourceCount} sources?\n- What are the cross-source connections? (cause→effect, before→after, matching energy)\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?${
+      userFeedback
+        ? `\n\nDIRECTOR'S NOTE — The user has specific creative direction that takes PRIORITY:\n"${userFeedback}"\nHonor this direction in every creative decision. This is a regeneration — make a DIFFERENT edit than before.`
+        : ""
+    }\n\nNow create the highlight tape.`,
   });
 
   try {

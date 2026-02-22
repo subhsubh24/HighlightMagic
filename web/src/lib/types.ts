@@ -129,4 +129,6 @@ export interface AppState {
   exportsUsed: number;
   // Viral export options
   viralOptions: ViralExportOptions;
+  // Regeneration — when set, detecting step skips scoring and re-runs planner with this feedback
+  regenerateFeedback: string | null;
 }
