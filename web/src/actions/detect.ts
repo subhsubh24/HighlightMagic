@@ -584,7 +584,7 @@ async function analyzeMultiBatch(
           model: "claude-sonnet-4-6",
           max_tokens: 16000,
           thinking: { type: "adaptive" },
-          output_config: { effort: "high" },
+          output_config: { effort: "medium" },
           system: [
             {
               type: "text",
@@ -1212,7 +1212,7 @@ Respond with ONLY a JSON object:
             type: "adaptive",
           },
           output_config: {
-            effort: "max",
+            effort: "high",
           },
           system: [
             {
@@ -1414,7 +1414,7 @@ export async function submitScoringBatch(
       model: "claude-sonnet-4-6",
       max_tokens: 16000,
       thinking: { type: "adaptive" },
-      output_config: { effort: "high" },
+      output_config: { effort: "medium" },
       system: [
         {
           type: "text",
