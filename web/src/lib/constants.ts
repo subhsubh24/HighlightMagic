@@ -15,7 +15,7 @@ export const WATERMARK_TEXT = "Highlight Magic";
 export const WATERMARK_OPACITY = 0.4;
 
 export const FRAME_SAMPLE_INTERVAL_SECONDS = 1; // Extract 1 frame per second — miss nothing
-export const MAX_FRAMES_PER_BATCH = 25; // 25 frames/batch — each batch completes in ~30-50s (was 50 → 93-175s)
+export const MAX_FRAMES_PER_BATCH = 30; // 30 frames/batch — balances temporal context with per-batch latency
 
 // ── Viral features ──
 export const LOOP_CROSSFADE_DURATION = 0.5; // seconds of crossfade for seamless loop

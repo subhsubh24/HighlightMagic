@@ -547,8 +547,8 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
-const API_MAX_IMAGES = 40; // Enough for planner to see top moments; 100 was causing 300s+ inference
-const API_IMAGE_PAYLOAD_BUDGET = 10 * 1024 * 1024; // 10 MB budget (480p/0.7 frames are ~30-70KB each)
+const API_MAX_IMAGES = 50; // More visual context for planner; 480p frames keep payload manageable
+const API_IMAGE_PAYLOAD_BUDGET = 12 * 1024 * 1024; // 12 MB budget (480p/0.7 frames are ~30-70KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
 function selectPlannerFrames(
@@ -1015,7 +1015,7 @@ Respond with ONLY a JSON object:
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-opus-4-6",
           max_tokens: 16000,
           thinking: {
             type: "enabled",
@@ -1029,7 +1029,7 @@ Respond with ONLY a JSON object:
         }),
       },
       "Planner",
-      180_000 // 3-minute timeout — Sonnet + extended thinking + 40 images
+      240_000 // 4-minute timeout — Opus + extended thinking + 50 images
     );
 
     if (!response.ok) {
