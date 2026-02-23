@@ -10,7 +10,6 @@
  */
 
 import type { EditedClip, MusicTrack } from "./types";
-import type { EditingStyle } from "./editing-styles";
 
 export interface BeatGrid {
   bpm: number;
@@ -81,7 +80,7 @@ export interface BeatSyncedTimeline {
 /**
  * Determine how many beats each clip should span, based on theme energy.
  */
-function beatsPerClip(style: EditingStyle, clipDuration: number, beatInterval: number): number {
+function beatsPerClip(clipDuration: number, beatInterval: number): number {
   const naturalBeats = clipDuration / beatInterval;
   // Round to nearest whole number of beats (minimum 2 beats per clip)
   return Math.max(2, Math.round(naturalBeats));
@@ -90,7 +89,6 @@ function beatsPerClip(style: EditingStyle, clipDuration: number, beatInterval: n
 export function buildBeatSyncedTimeline(
   clips: EditedClip[],
   musicTrack: MusicTrack | null,
-  style: EditingStyle
 ): BeatSyncedTimeline | null {
   if (!musicTrack || !musicTrack.bpm) return null;
 
@@ -104,7 +102,7 @@ export function buildBeatSyncedTimeline(
   for (let i = 0; i < clips.length; i++) {
     const clip = clips[i];
     const rawDuration = clip.trimEnd - clip.trimStart;
-    const beats = beatsPerClip(style, rawDuration, grid.beatInterval);
+    const beats = beatsPerClip(rawDuration, grid.beatInterval);
     const syncedDuration = beats * grid.beatInterval;
 
     // Snap start to nearest beat
@@ -113,8 +111,10 @@ export function buildBeatSyncedTimeline(
     clipDurations.push(syncedDuration);
 
     // Find beats that fall during the transition zone at the end of this clip
+    // Use per-clip transition duration (AI-specified), with 0.3s neutral default
+    const clipTransDuration = clip.transitionDuration ?? 0.3;
     if (i < clips.length - 1) {
-      const transStart = snappedStart + syncedDuration - style.transitionDuration;
+      const transStart = snappedStart + syncedDuration - clipTransDuration;
       const transEnd = snappedStart + syncedDuration;
       const tBeats = grid.beats.filter((b) => b >= transStart && b <= transEnd);
       transitionBeats.push(tBeats);
@@ -123,7 +123,7 @@ export function buildBeatSyncedTimeline(
     // Next clip starts at (this clip end) minus transition overlap
     currentTime = snappedStart + syncedDuration;
     if (i < clips.length - 1) {
-      currentTime -= style.transitionDuration;
+      currentTime -= clipTransDuration;
     }
   }
 

@@ -1162,9 +1162,13 @@ YOU DECIDE EVERYTHING:
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
   If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
-- NEVER select visually similar moments. If two timestamps from the same source show the same
-  scene, subject, or composition (e.g., same sign, same angle, same action), pick ONLY the best
-  one. Viewers notice repetition instantly — it looks like a bug, not an edit choice.
+- NEVER select visually similar moments from the same source. If two timestamps show the same
+  scene, subject, or composition (e.g., same sign, same angle, same action, same background),
+  pick ONLY the single best one. Viewers notice repetition INSTANTLY — it looks like a bug.
+  Even moments 5-10 seconds apart can look identical if the camera barely moved. When in doubt,
+  use ONE clip from that source and make it longer instead of picking multiple similar sections.
+- MAXIMUM 2 clips from any single source file (unless it's a very long video with truly distinct scenes).
+  Spread selections across ALL available source files — each source should get at most ~2-3 clips.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
@@ -1605,10 +1609,20 @@ Respond with ONLY a JSON object:
         }
 
         // Enforce minimum temporal gap between clips from the same source.
-        // Clips that are too close (within 3s) to an already-accepted clip get dropped.
-        const MIN_CLIP_GAP_S = 3;
+        // Clips that are too close (within 5s) to an already-accepted clip get dropped.
+        const MIN_CLIP_GAP_S = 5;
+        const MAX_CLIPS_PER_SOURCE = 3;
         const spacedClips: typeof uniqueClips = [];
+        const sourceClipCount = new Map<string, number>();
         for (const clip of uniqueClips) {
+          // Cap clips per source to prevent visual repetition
+          const srcCount = sourceClipCount.get(clip.sourceFileId) ?? 0;
+          if (srcCount >= MAX_CLIPS_PER_SOURCE) {
+            console.warn(
+              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — max ${MAX_CLIPS_PER_SOURCE} clips per source reached`
+            );
+            continue;
+          }
           const tooClose = spacedClips.some((existing) => {
             if (existing.sourceFileId !== clip.sourceFileId) return false;
             // Check gap between the clips (gap = space between one's end and other's start)
@@ -1625,6 +1639,7 @@ Respond with ONLY a JSON object:
             continue;
           }
           spacedClips.push(clip);
+          sourceClipCount.set(clip.sourceFileId, srcCount + 1);
         }
 
         return { clips: spacedClips, detectedTheme: theme, contentSummary };

@@ -11,7 +11,6 @@ import {
   type BeatGrid,
 } from "./beat-sync";
 import type { EditedClip, MusicTrack } from "./types";
-import type { EditingStyle } from "./editing-styles";
 
 // ── buildBeatGrid ──
 
@@ -206,17 +205,6 @@ describe("validateBeatSync", () => {
 // ── buildBeatSyncedTimeline ──
 
 describe("buildBeatSyncedTimeline", () => {
-  const mockStyle: EditingStyle = {
-    theme: "sports",
-    label: "Sports",
-    description: "test",
-    transitionDuration: 0.3,
-    transitions: ["flash"],
-    kenBurnsIntensity: 0.03,
-    entryPunchScale: 1.04,
-    entryPunchDuration: 0.12,
-  };
-
   const mockTrack: MusicTrack = {
     id: "test",
     name: "Test",
@@ -246,13 +234,13 @@ describe("buildBeatSyncedTimeline", () => {
   }
 
   it("returns null when no music track", () => {
-    const result = buildBeatSyncedTimeline([makeClip(0, 3)], null, mockStyle);
+    const result = buildBeatSyncedTimeline([makeClip(0, 3)], null);
     expect(result).toBeNull();
   });
 
   it("snaps clip durations to whole number of beats", () => {
     const clips = [makeClip(0, 2.3), makeClip(0, 1.7)];
-    const result = buildBeatSyncedTimeline(clips, mockTrack, mockStyle);
+    const result = buildBeatSyncedTimeline(clips, mockTrack);
     expect(result).not.toBeNull();
     // At 120 BPM, beatInterval = 0.5s
     // 2.3s / 0.5 = 4.6 → rounds to 5 beats = 2.5s
@@ -263,14 +251,14 @@ describe("buildBeatSyncedTimeline", () => {
 
   it("enforces minimum 2 beats per clip", () => {
     const clips = [makeClip(0, 0.3)]; // 0.3s → 0.6 beats → rounds to 1 → clamped to 2
-    const result = buildBeatSyncedTimeline(clips, mockTrack, mockStyle);
+    const result = buildBeatSyncedTimeline(clips, mockTrack);
     expect(result).not.toBeNull();
     expect(result!.clipDurations[0]).toBe(1.0); // 2 beats × 0.5s
   });
 
   it("accounts for transition overlap with beat snapping", () => {
     const clips = [makeClip(0, 2), makeClip(0, 2)];
-    const result = buildBeatSyncedTimeline(clips, mockTrack, mockStyle);
+    const result = buildBeatSyncedTimeline(clips, mockTrack);
     expect(result).not.toBeNull();
     // The raw second start would be (clipEnd - transitionDuration) = 2.0 - 0.3 = 1.7
     // But buildBeatSyncedTimeline snaps to nearest beat: snapToBeat(1.7) → 1.5
@@ -286,7 +274,7 @@ describe("buildBeatSyncedTimeline", () => {
 
   it("total duration reflects overlap subtraction", () => {
     const clips = [makeClip(0, 2), makeClip(0, 2)];
-    const result = buildBeatSyncedTimeline(clips, mockTrack, mockStyle);
+    const result = buildBeatSyncedTimeline(clips, mockTrack);
     expect(result).not.toBeNull();
     const lastStart = result!.clipStarts[result!.clipStarts.length - 1];
     const lastDur = result!.clipDurations[result!.clipDurations.length - 1];
