@@ -1003,8 +1003,8 @@ async function planHighlightTape(
 you understand Instagram's algorithm AND human psychology at a deep level.
 
 You are being shown the ACTUAL FRAMES from the user's footage. Study every single one deeply.
-You have ZERO constraints on your creative decisions. No limits on clip count, clip duration,
-total reel length, or how you structure the tape. YOU are the editor. Make something incredible.
+You have full creative control. No limits on clip count, total reel length, or how you structure
+the tape. Each clip must be at least 2 seconds (let moments breathe). YOU are the editor. Make something incredible.
 
 SOURCE FILES (${sourceCount} total):
 ${sourceList}
@@ -1155,9 +1155,11 @@ THE CLOSE (Last clip): Must serve TWO purposes simultaneously:
 
 YOU DECIDE EVERYTHING:
 - How many clips to use (as many as the content needs)
-- How long each clip is (as short or as long as the moment deserves)
-- How long the total reel is (as long as it needs to be to tell the story)
-- How long photos display (whatever serves the edit best)
+- How long each clip is — but MINIMUM 2 seconds per clip. Most clips should be 3-6 seconds.
+  1-second clips feel like errors, not edits. Let moments BREATHE. The viewer needs time to
+  register what they're seeing before the next cut. If a clip isn't worth 2+ seconds, don't use it.
+- Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
+- How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
@@ -1493,8 +1495,8 @@ Respond with ONLY a JSON object:
             console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
             return false;
           }
-          // Minimum clip duration guard — clips under 0.5s are unusable
-          const MIN_CLIP_DURATION_S = 0.5;
+          // Minimum clip duration guard — clips under 2s feel like errors
+          const MIN_CLIP_DURATION_S = 2.0;
           if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
             console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
             return false;
