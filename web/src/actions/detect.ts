@@ -868,9 +868,9 @@ function selectPlannerFrames(
     }
   }
 
-  // Per-source cap: no single source should exceed 40% of selected frames.
+  // Per-source cap: no single source should exceed 70% of selected frames.
   // If a source dominates, shed its lowest-scored surplus frames.
-  const SOURCE_CAP_RATIO = 0.4;
+  const SOURCE_CAP_RATIO = 0.7;
   const maxPerSource = Math.max(1, Math.ceil(selected.length * SOURCE_CAP_RATIO));
   const countBySource = new Map<string, number>();
   for (const f of selected) {
@@ -1169,8 +1169,8 @@ YOU DECIDE EVERYTHING:
   pick ONLY the single best one. Viewers notice repetition INSTANTLY — it looks like a bug.
   Even moments 5-10 seconds apart can look identical if the camera barely moved. When in doubt,
   use ONE clip from that source and make it longer instead of picking multiple similar sections.
-- MAXIMUM 2 clips from any single source file (unless it's a very long video with truly distinct scenes).
-  Spread selections across ALL available source files — each source should get at most ~2-3 clips.
+- Spread selections across source files when possible, but if one source has the best moments, use it.
+  Quality over equal distribution — never pad with weak clips just to balance sources.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
@@ -1599,7 +1599,7 @@ Respond with ONLY a JSON object:
         // Enforce minimum temporal gap between clips from the same source.
         // Clips that are too close (within 5s) to an already-accepted clip get dropped.
         const MIN_CLIP_GAP_S = 5;
-        const MAX_CLIPS_PER_SOURCE = 3;
+        const MAX_CLIPS_PER_SOURCE = 6;
         const spacedClips: typeof uniqueClips = [];
         const sourceClipCount = new Map<string, number>();
         for (const clip of uniqueClips) {
