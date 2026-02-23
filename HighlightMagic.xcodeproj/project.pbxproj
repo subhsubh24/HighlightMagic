@@ -1,0 +1,119 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXGroup section */
+		MainGroup = {
+			isa = PBXGroup;
+			children = (
+				SourcesGroup,
+				ProductsGroup,
+			);
+			sourceTree = "<group>";
+		};
+		SourcesGroup = {
+			isa = PBXGroup;
+			name = Sources;
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		ProductsGroup = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		RootProject = {
+			isa = PBXProject;
+			buildConfigurationList = ProjectConfigList;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = MainGroup;
+			minimizedProjectReferenceProxies = 1;
+			productRefGroup = ProductsGroup;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = ();
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		DebugConfig = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.highlightmagic.app;
+				PRODUCT_NAME = "Highlight Magic";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				CODE_SIGN_ENTITLEMENTS = Sources/HighlightMagic.entitlements;
+				DEVELOPMENT_TEAM = REPLACE_WITH_YOUR_TEAM_ID;
+			};
+			name = Debug;
+		};
+		ReleaseConfig = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.highlightmagic.app;
+				PRODUCT_NAME = "Highlight Magic";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				CODE_SIGN_ENTITLEMENTS = Sources/HighlightMagic.entitlements;
+				DEVELOPMENT_TEAM = REPLACE_WITH_YOUR_TEAM_ID;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		ProjectConfigList = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DebugConfig,
+				ReleaseConfig,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = RootProject;
+}
