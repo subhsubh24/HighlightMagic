@@ -1178,30 +1178,21 @@ For each clip, you make EVERY visual decision. Think about what makes NFL player
 top influencer reels look so polished — it's because every single cut, color grade, and
 effect is chosen intentionally for THAT specific moment.
 
-VELOCITY — You have TWO options for speed ramping each clip:
-
-OPTION A: Named presets (quick & reliable):
-Set "velocityPreset" to one of: "hero", "bullet", "ramp_out", "ramp_in", "montage", "normal".
-- "hero": slow-mo at 35-55%. Fast approach → DRAMATIC SLOW-MO → fast out.
-- "bullet": snap to 0.25x at 25%, hold until 65%. The clip IS the slow-mo moment.
-- "ramp_out": decelerates to 0.3x at end. Slow down INTO the payoff.
-- "ramp_in": accelerates 0.5x → 3x. Building toward something.
-- "montage": pulses 3x between fast/slow. Multi-beat rhythm.
-- "normal": constant 1x. Breathing room. Best for dialogue.
-
-OPTION B: Custom velocity keyframes (FULL CREATIVE CONTROL — preferred for unique moments):
-Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects.
+VELOCITY — Design a UNIQUE speed curve for each clip using "velocityKeyframes":
+Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects (minimum 2 keyframes).
 Position = where in the clip (0=start, 1=end). Speed = playback rate (0.25=slow-mo, 3.0=fast).
 The renderer smoothly interpolates between your keyframes with cubic easing.
 
-Examples of custom curves you can CREATE:
+Examples — but DESIGN YOUR OWN for each clip:
 - Late slow-mo hit: [{position:0,speed:1.5},{position:0.6,speed:1.5},{position:0.7,speed:0.3},{position:0.85,speed:0.3},{position:1,speed:2.0}]
 - Double pulse: [{position:0,speed:2.0},{position:0.2,speed:0.4},{position:0.35,speed:2.5},{position:0.6,speed:0.4},{position:0.75,speed:2.0},{position:1,speed:1.0}]
 - Freeze frame effect: [{position:0,speed:1.0},{position:0.45,speed:1.0},{position:0.5,speed:0.1},{position:0.55,speed:0.1},{position:0.6,speed:2.0},{position:1,speed:1.0}]
 - Smooth deceleration: [{position:0,speed:3.0},{position:0.5,speed:1.0},{position:1,speed:0.3}]
+- Constant speed: [{position:0,speed:1.0},{position:1,speed:1.0}]
 
-DESIGN YOUR OWN CURVES. Place the slow-mo exactly where the peak moment is.
-When you use velocityKeyframes, velocityPreset is ignored for that clip.
+Place the slow-mo exactly where the peak moment is. Each clip should have a DIFFERENT curve.
+If you must, you can set "velocityPreset" instead: "hero","bullet","ramp_out","ramp_in","montage","normal"
+— but custom keyframes are STRONGLY preferred. Using the same preset on multiple clips looks lazy.
 
 KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
 Place clip boundaries so the moment you want emphasized lands in the slow part of your curve.
@@ -1244,26 +1235,23 @@ The transition PREPARES the viewer for what's coming. A zoom_punch into a calm s
 A crossfade into an explosion = underwhelming. The transition is the PROMISE, the next clip is the DELIVERY.
 Never repeat the same transition twice in a row. Set transitionDuration: 0.15s (snappy) to 1.0s (cinematic).
 
-COLOR GRADING — You have TWO options:
-
-OPTION A: Named filter presets:
-Set "filter" to: "TealOrange", "GoldenHour", "MoodyCinematic", "Vibrant", "Warm", "Cool",
-"CleanAiry", "VintageFilm", "Noir", "Fade", or "None".
-
-OPTION B: Custom CSS filter (FULL CREATIVE CONTROL — preferred for unique looks):
+COLOR GRADING — Design a UNIQUE color grade for each clip using "filterCSS":
 Set "filterCSS" to a CSS filter string using any combination of:
 saturate(), contrast(), brightness(), sepia(), hue-rotate(), grayscale(), blur(), invert(), opacity()
 
-Examples of custom grades you can CREATE:
+Examples — but DESIGN YOUR OWN for each clip:
 - Intense teal-orange cinema: "saturate(1.4) contrast(1.3) brightness(0.95) hue-rotate(8deg)"
 - Dreamy pastel: "saturate(0.7) brightness(1.15) contrast(0.85) sepia(0.1)"
-- Dark moody with blue shadows: "saturate(0.8) contrast(1.4) brightness(0.85) hue-rotate(10deg)"
-- Warm film grain feel: "sepia(0.3) saturate(1.1) contrast(1.15) brightness(1.02)"
-- High-energy oversaturated: "saturate(1.8) contrast(1.2) brightness(1.05)"
-- Cool desaturated editorial: "saturate(0.6) contrast(1.1) brightness(1.08) hue-rotate(15deg)"
+- Dark moody: "saturate(0.8) contrast(1.4) brightness(0.85) hue-rotate(10deg)"
+- Warm film grain: "sepia(0.3) saturate(1.1) contrast(1.15) brightness(1.02)"
+- High-energy pop: "saturate(1.8) contrast(1.2) brightness(1.05)"
+- Cool editorial: "saturate(0.6) contrast(1.1) brightness(1.08) hue-rotate(15deg)"
+- Natural clean: "saturate(1.05) contrast(1.05) brightness(1.0)"
 
-When filterCSS is set, the "filter" field is ignored for that clip.
-DESIGN YOUR OWN COLOR GRADES. Each clip can have its own unique look.
+Each clip should get its OWN custom grade — never use the same filterCSS on two clips.
+If you must, you can set "filter" to a named preset ("TealOrange","GoldenHour","MoodyCinematic",
+"Vibrant","Warm","Cool","CleanAiry","VintageFilm","Noir","Fade","None") — but custom CSS is
+STRONGLY preferred. Reusing the same named preset looks generic.
 
 COLOR SHIFT PATTERNS that create emotional journeys:
 - Warm opener → intense action → warm close = "cozy → intense → cozy" (satisfaction loop)
@@ -1307,21 +1295,19 @@ KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
 
 YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
-sourceFileId, startTime, endTime, label, confidenceScore,
-velocityPreset OR velocityKeyframes (custom keyframes preferred),
-transitionType (REQUIRED for every clip except the first — YOU choose, no theme fallback),
-transitionDuration (REQUIRED — YOU set the timing),
-filter OR filterCSS (custom CSS preferred),
-entryPunchScale (REQUIRED — YOU set the impact, 1.0 = none, up to 1.1),
-entryPunchDuration (REQUIRED — seconds for the punch animation, 0.1 = snappy, 0.3 = smooth),
-kenBurnsIntensity (photos only),
-captionText (optional — only when it adds value),
-captionStyle (fallback preset),
-plus any custom caption params: captionAnimation, captionFontWeight, captionFontStyle,
-captionFontFamily, captionColor, captionGlowColor, captionGlowRadius
+sourceFileId, startTime, endTime (MUST be 2+ seconds apart), label, confidenceScore,
+velocityKeyframes (REQUIRED — custom speed curve for this clip),
+transitionType (REQUIRED for every clip except the first),
+transitionDuration (REQUIRED — 0.15-1.0s),
+filterCSS (REQUIRED — custom CSS color grade for this clip),
+entryPunchScale (REQUIRED — 1.0 = none, up to 1.1),
+entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
+kenBurnsIntensity (photos only, 0-0.08),
+captionText (optional — only 30-50% of clips),
+captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 8, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "velocityPreset": "hero", "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "filter": "TealOrange", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionStyle": "Bold", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
