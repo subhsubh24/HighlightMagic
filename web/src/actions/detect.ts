@@ -1161,6 +1161,9 @@ YOU DECIDE EVERYTHING:
 - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
 - How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
+- TEMPORAL LOGIC: If the content has a natural time progression (day → sunset → night, sober → party,
+  arrival → event → afterparty), your clip order should respect that. Daylight clips belong early,
+  nightlife clips belong late. Viewers notice when the timeline jumps backwards — it feels like a mistake.
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
   If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
