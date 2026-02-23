@@ -1155,10 +1155,12 @@ THE CLOSE (Last clip): Must serve TWO purposes simultaneously:
 
 YOU DECIDE EVERYTHING:
 - How many clips to use (as many as the content needs)
-- How long each clip is — MINIMUM 2 seconds. But vary your durations like a song:
-  Hero moments (the best 1-2 clips) should be 4-6 seconds — let the viewer soak them in.
-  Supporting clips can be 2-3 seconds — quick energy, keep things moving.
-  If every clip is the same length, the reel feels metronomic. Mix long and short for rhythm.
+- How long each clip is — MINIMUM 2 seconds, but VARY YOUR DURATIONS. This is critical:
+  DO NOT make every clip the same length. If most clips are 3s, the reel feels robotic.
+  REQUIRED MIX: At least 1-2 "hero" clips must be 5-6 seconds (your best moments — let them breathe).
+  At least 2-3 "quick" clips should be 2s (punchy energy hits).
+  The rest can be 3-4s. You MUST have at least 3 different durations in the final cut.
+  Think of it like music: long notes, short notes, rests — never a metronome.
 - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
 - How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
