@@ -39,11 +39,6 @@ actor HighlightDetectionService {
             logger.info("Long video detected (\(Int(totalSeconds))s) — using chunked processing")
         }
 
-        // Low battery check — reduce quality gracefully
-        if await CrashReporting.isLowBattery {
-            logger.warning("Low battery — using reduced analysis quality")
-        }
-
         // Pass 1: Vision — Motion analysis (0-20%)
         progressHandler(0.02)
         let motionScores = await analyzeMotion(asset: asset, totalSeconds: totalSeconds) { phase in
@@ -100,15 +95,10 @@ actor HighlightDetectionService {
         )
         progressHandler(0.85)
 
-        // Pass 7: Claude Vision refinement for low-confidence segments (85-98%)
-        // Only use Cloud AI on Wi-Fi and when not low battery
-        let avgConfidenceBefore = segments.isEmpty ? 0 : segments.map(\.confidenceScore).reduce(0, +) / Double(segments.count)
-        let shouldUseCloudAI = await NetworkMonitor.shared.shouldUseCloudAI
-        let isLowBattery = await CrashReporting.isLowBattery
-        if avgConfidenceBefore < Constants.claudeAPIConfidenceThreshold,
-           await ClaudeVisionService.shared.isAvailable,
-           shouldUseCloudAI,
-           !isLowBattery {
+        // Pass 7: Claude Vision refinement (85-98%)
+        // Claude is the creative director — always refine when API is available.
+        // Wi-Fi connectivity is assumed (user-confirmed), so no network/battery gating.
+        if await ClaudeVisionService.shared.isAvailable {
             segments = await refineWithClaudeVision(
                 segments: segments,
                 asset: asset,

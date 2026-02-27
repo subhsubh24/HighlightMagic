@@ -40,8 +40,9 @@ final class NetworkMonitor {
         monitor.cancel()
     }
 
-    /// Check if Claude Vision API should be used (prefer Wi-Fi for large uploads)
+    /// Check if Claude API should be used.
+    /// Wi-Fi is assumed to be always available, so only check basic connectivity.
     var shouldUseCloudAI: Bool {
-        isConnected && !isExpensive
+        isConnected
     }
 }
