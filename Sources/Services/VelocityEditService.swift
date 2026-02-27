@@ -135,18 +135,6 @@ actor VelocityEditService {
                 beats: relevantBeats,
                 beatInterval: beatMap.beatInterval
             )
-        case .none:
-            return VelocityMap(
-                segments: [VelocitySegment(
-                    sourceStart: 0,
-                    sourceEnd: clipDuration,
-                    speed: 1.0,
-                    easeIn: false,
-                    easeOut: false
-                )],
-                originalDuration: clipDuration,
-                outputDuration: clipDuration
-            )
         }
     }
 
@@ -193,14 +181,16 @@ actor VelocityEditService {
                 ))
             }
 
-            // Slow-mo on the beat
-            segments.append(VelocitySegment(
-                sourceStart: slowStart,
-                sourceEnd: slowEnd,
-                speed: 0.3,
-                easeIn: true,
-                easeOut: true
-            ))
+            // Slow-mo on the beat (skip if zero-duration)
+            if slowEnd > slowStart {
+                segments.append(VelocitySegment(
+                    sourceStart: slowStart,
+                    sourceEnd: slowEnd,
+                    speed: 0.3,
+                    easeIn: true,
+                    easeOut: true
+                ))
+            }
 
             currentTime = slowEnd
         }
@@ -287,7 +277,7 @@ actor VelocityEditService {
         var currentTime = 0.0
 
         for (index, beat) in beats.enumerated() {
-            guard beat > currentTime && beat < clipDuration else { continue }
+            guard beat >= currentTime && beat < clipDuration else { continue }
 
             let segmentEnd = min(
                 clipDuration,
@@ -305,6 +295,12 @@ actor VelocityEditService {
                     easeIn: true,
                     easeOut: true
                 ))
+            }
+
+            // Skip zero-duration segments (beat at clip boundary)
+            guard segmentEnd > beat else {
+                currentTime = segmentEnd
+                continue
             }
 
             segments.append(VelocitySegment(

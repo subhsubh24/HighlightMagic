@@ -324,10 +324,12 @@ actor ExportService {
             throw ExportError.noVideoTrack
         }
 
-        let compositionVideoTrack = composition.addMutableTrack(
+        guard let compositionVideoTrack = composition.addMutableTrack(
             withMediaType: .video,
             preferredTrackID: kCMPersistentTrackID_Invalid
-        )!
+        ) else {
+            throw ExportError.exportFailed("Could not create video composition track")
+        }
 
         if let velMap = velocityMap {
             try insertVelocityMappedVideo(
@@ -346,12 +348,11 @@ actor ExportService {
         progressHandler(0.18)
 
         // 4. Add original audio track
-        if let sourceAudioTrack = try await asset.loadTracks(withMediaType: .audio).first {
-            let compositionAudioTrack = composition.addMutableTrack(
-                withMediaType: .audio,
-                preferredTrackID: kCMPersistentTrackID_Invalid
-            )!
-
+        if let sourceAudioTrack = try await asset.loadTracks(withMediaType: .audio).first,
+           let compositionAudioTrack = composition.addMutableTrack(
+               withMediaType: .audio,
+               preferredTrackID: kCMPersistentTrackID_Invalid
+           ) {
             if velocityMap != nil {
                 try? compositionAudioTrack.insertTimeRange(
                     timeRange,
@@ -386,12 +387,11 @@ actor ExportService {
 
         if let musicTrack = config.musicTrack, let musicURL = musicTrack.bundleURL {
             let musicAsset = AVURLAsset(url: musicURL)
-            if let musicAudioTrack = try? await musicAsset.loadTracks(withMediaType: .audio).first {
-                let musicCompositionTrack = composition.addMutableTrack(
-                    withMediaType: .audio,
-                    preferredTrackID: kCMPersistentTrackID_Invalid
-                )!
-
+            if let musicAudioTrack = try? await musicAsset.loadTracks(withMediaType: .audio).first,
+               let musicCompositionTrack = composition.addMutableTrack(
+                   withMediaType: .audio,
+                   preferredTrackID: kCMPersistentTrackID_Invalid
+               ) {
                 let musicDuration = try await musicAsset.load(.duration)
                 let musicRange = CMTimeRange(
                     start: .zero,
@@ -404,12 +404,6 @@ actor ExportService {
                     at: .zero
                 )
             }
-        }
-        progressHandler(0.30)
-
-        // 6. Apply seamless loop if enabled
-        if config.viralConfig.seamlessLoopEnabled {
-            applySeamlessLoop(to: composition, clipDuration: effectiveClipDuration)
         }
         progressHandler(0.35)
 
@@ -445,12 +439,13 @@ actor ExportService {
         )
         progressHandler(0.65)
 
-        // 8. Build audio mix
+        // 8. Build audio mix (including seamless loop fade if enabled)
+        let seamlessLoopFade = config.viralConfig.seamlessLoopEnabled ? effectiveClipDuration : nil
         let audioMix: AVMutableAudioMix
         if config.needsCIFilterProcessing {
-            audioMix = buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil)
+            audioMix = buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
         } else {
-            audioMix = buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil)
+            audioMix = buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
         }
 
         // 9. Final export
@@ -713,30 +708,15 @@ actor ExportService {
         }
     }
 
-    // MARK: - Seamless Loop
-
-    private func applySeamlessLoop(
-        to composition: AVMutableComposition,
-        clipDuration: CMTime
-    ) {
-        let fadeDuration = CMTime(seconds: 0.4, preferredTimescale: 600)
-
-        for audioTrack in composition.tracks(withMediaType: .audio) {
-            let params = AVMutableAudioMixInputParameters(track: audioTrack)
-            let fadeStart = CMTimeSubtract(clipDuration, fadeDuration)
-            params.setVolumeRamp(
-                fromStartVolume: 1.0,
-                toEndVolume: 0.0,
-                timeRange: CMTimeRange(start: fadeStart, duration: fadeDuration)
-            )
-        }
-    }
-
     // MARK: - Audio Mix
 
+    /// Builds audio mix with volume levels and optional seamless loop fade-out.
+    /// The old `applySeamlessLoop` was a no-op — it created AVMutableAudioMixInputParameters
+    /// but never attached them to any AVMutableAudioMix. Now the fade is integrated here.
     private func buildAudioMix(
         asset: AVAsset,
-        hasMusicTrack: Bool
+        hasMusicTrack: Bool,
+        seamlessLoopFade: CMTime? = nil
     ) -> AVMutableAudioMix {
         let audioMix = AVMutableAudioMix()
         var inputParams: [AVMutableAudioMixInputParameters] = []
@@ -746,14 +726,23 @@ actor ExportService {
         for (index, track) in audioTracks.enumerated() {
             let params = AVMutableAudioMixInputParameters(track: track)
 
+            let volume: Float
             if hasMusicTrack {
-                if index == 0 {
-                    params.setVolume(0.15, at: .zero)
-                } else {
-                    params.setVolume(0.85, at: .zero)
-                }
+                volume = index == 0 ? 0.15 : 0.85
             } else {
-                params.setVolume(1.0, at: .zero)
+                volume = 1.0
+            }
+            params.setVolume(volume, at: .zero)
+
+            // Apply seamless loop audio fade-out at the end of the clip
+            if let clipDuration = seamlessLoopFade {
+                let fadeDuration = CMTime(seconds: 0.4, preferredTimescale: 600)
+                let fadeStart = CMTimeSubtract(clipDuration, fadeDuration)
+                params.setVolumeRamp(
+                    fromStartVolume: volume,
+                    toEndVolume: 0.0,
+                    timeRange: CMTimeRange(start: fadeStart, duration: fadeDuration)
+                )
             }
 
             inputParams.append(params)

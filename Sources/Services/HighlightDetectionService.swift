@@ -8,6 +8,8 @@ actor HighlightDetectionService {
     static let shared = HighlightDetectionService()
 
     private let logger = Logger(subsystem: "com.highlightmagic.app", category: "Detection")
+    // Reuse a single CIContext instead of creating one per frame — CIContext is expensive to create.
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private init() {}
 
@@ -214,9 +216,8 @@ actor HighlightDetectionService {
             }
 
             let ciImage = CIImage(cgImage: cgImage)
-            let context = CIContext()
 
-            guard let pixelBuffer = context.createPixelBuffer(from: ciImage) else {
+            guard let pixelBuffer = ciContext.createPixelBuffer(from: ciImage) else {
                 continue
             }
 

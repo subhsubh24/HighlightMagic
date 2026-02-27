@@ -25,6 +25,17 @@ struct HighlightSegment: Identifiable, Hashable, Sendable {
         self.detectionSources = detectionSources
     }
 
+    // Explicit Hashable based on id only — mutable vars (confidenceScore, label,
+    // detectionSources) must not participate in hashing or equality, otherwise
+    // mutating a segment after inserting it into a Set/Dictionary corrupts the collection.
+    static func == (lhs: HighlightSegment, rhs: HighlightSegment) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
     var duration: TimeInterval {
         CMTimeGetSeconds(endTime) - CMTimeGetSeconds(startTime)
     }

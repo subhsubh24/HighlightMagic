@@ -12,7 +12,7 @@ enum Constants {
     static let exportBitRate: Int = 8_000_000
     static let exportFrameRate: Int = 30
     static let highlightConfidenceThreshold: Double = 0.6
-    static let claudeAPIConfidenceThreshold: Double = 0.6
+    static let claudeAPIConfidenceThreshold: Double = 0.85
 
     static let watermarkText = "Highlight Magic"
     static let watermarkOpacity: Double = 0.4

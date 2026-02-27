@@ -101,12 +101,19 @@ actor ClaudeVisionService {
             guard !frames.isEmpty else { continue }
 
             // Build API request with retry
-            let scored = try await callClaudeVisionWithRetry(
-                frames: frames,
-                prompt: prompt,
-                apiKey: apiKey
-            )
-            allScored.append(contentsOf: scored)
+            do {
+                let scored = try await callClaudeVisionWithRetry(
+                    frames: frames,
+                    prompt: prompt,
+                    apiKey: apiKey
+                )
+                allScored.append(contentsOf: scored)
+            } catch {
+                // Re-throw after updating lastRequestTime so the next batch
+                // respects the rate limit even after a failure.
+                lastRequestTime = .now
+                throw error
+            }
             lastRequestTime = .now
 
             let progress = Double(batchEnd) / Double(candidateTimestamps.count)
@@ -151,11 +158,15 @@ actor ClaudeVisionService {
 
         let instruction = """
         Analyze these video frames and score each for highlight potential.
-        User wants: "\(prompt.isEmpty ? "best moments" : prompt)"
         For each frame, respond with JSON array: [{"time": <seconds>, "score": 0.0-1.0, "reason": "brief"}]
-        Score based on: visual interest, action/emotion, relevance to prompt, shareability.
+        Score based on: visual interest, action/emotion, relevance to the user's stated intent, shareability.
         """
         contentBlocks.append(["type": "text", "text": instruction])
+
+        // User prompt in a separate content block to prevent prompt injection.
+        // Never interpolate user input directly into instruction text.
+        let userIntent = prompt.isEmpty ? "best moments" : prompt
+        contentBlocks.append(["type": "text", "text": "User's search criteria: \(userIntent)"])
 
         for frame in frames {
             contentBlocks.append([
@@ -223,23 +234,58 @@ actor ClaudeVisionService {
             return frameTimes.map { ScoredTimestamp(seconds: $0, score: 0.5, reason: "Parse failed") }
         }
 
-        guard let jsonStart = text.firstIndex(of: "["),
-              let jsonEnd = text.lastIndex(of: "]") else {
+        // Use balanced bracket matching to extract the JSON array, avoiding
+        // the first-[ to last-] approach which breaks with conversational text.
+        guard let jsonString = Self.extractBalancedJSON(from: text, open: "[", close: "]") else {
             return frameTimes.map { ScoredTimestamp(seconds: $0, score: 0.5, reason: "No JSON") }
         }
-
-        let jsonString = String(text[jsonStart...jsonEnd])
         guard let jsonData = jsonString.data(using: .utf8),
               let results = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] else {
             return frameTimes.map { ScoredTimestamp(seconds: $0, score: 0.5, reason: "Invalid JSON") }
         }
 
         return results.compactMap { item in
-            guard let time = item["time"] as? Double,
-                  let score = item["score"] as? Double else { return nil }
+            // Accept both Double and Int from JSON — JSONSerialization deserializes
+            // integer JSON numbers as Int, not Double, so `as? Double` alone drops them.
+            let time: Double
+            if let t = item["time"] as? Double {
+                time = t
+            } else if let t = item["time"] as? Int {
+                time = Double(t)
+            } else {
+                return nil
+            }
+
+            let score: Double
+            if let s = item["score"] as? Double {
+                score = s
+            } else if let s = item["score"] as? Int {
+                score = Double(s)
+            } else {
+                return nil
+            }
+
             let reason = item["reason"] as? String ?? ""
             return ScoredTimestamp(seconds: time, score: min(max(score, 0), 1), reason: reason)
         }
+    }
+
+    // MARK: - JSON Extraction
+
+    /// Extracts the first balanced JSON structure from text using bracket depth tracking.
+    /// Prevents the bug where first-open to last-close grabs conversational text between
+    /// multiple JSON fragments.
+    private static func extractBalancedJSON(from text: String, open: Character, close: Character) -> String? {
+        guard let startIdx = text.firstIndex(of: open) else { return nil }
+        var depth = 0
+        for i in text[startIdx...].indices {
+            if text[i] == open { depth += 1 }
+            else if text[i] == close { depth -= 1 }
+            if depth == 0 {
+                return String(text[startIdx...i])
+            }
+        }
+        return nil
     }
 }
 
