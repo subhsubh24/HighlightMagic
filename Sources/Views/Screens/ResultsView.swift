@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct ResultsView: View {
     @Environment(AppState.self) private var appState
@@ -125,15 +126,110 @@ struct ResultsView: View {
         .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.cornerRadius))
     }
 
+    /// Re-runs AI effect recommendations with the template as context,
+    /// merging template preferences with per-clip AI analysis.
     private func applyTemplateToAllClips(_ template: HighlightTemplate) {
-        for i in appState.generatedClips.indices {
-            appState.generatedClips[i].selectedFilter = template.suggestedFilter
-            appState.generatedClips[i].captionStyle = template.suggestedCaptionStyle
-            appState.generatedClips[i].viralConfig.velocityStyle = template.suggestedVelocityStyle
-            appState.generatedClips[i].viralConfig.kineticCaptionStyle = template.suggestedKineticCaption
-            if let track = MusicLibrary.suggestedTrackForTemplate(template) {
-                appState.generatedClips[i].selectedMusicTrack = track
+        Task {
+            guard let video = appState.selectedVideo else { return }
+            let asset = AVURLAsset(url: video.sourceURL)
+
+            for i in appState.generatedClips.indices {
+                let clip = appState.generatedClips[i]
+                let timeRange = CMTimeRange(start: clip.trimStart, end: clip.trimEnd)
+
+                // Re-run AI with template context — AI sees both the video and template intent
+                let aiConfig = await AIEffectRecommendationService.shared.recommendEffects(
+                    for: asset,
+                    timeRange: timeRange,
+                    userPrompt: appState.userPrompt,
+                    template: template
+                )
+
+                await MainActor.run {
+                    applyAIConfig(aiConfig, to: i, fallbackTemplate: template)
+                }
             }
+        }
+    }
+
+    @MainActor
+    private func applyAIConfig(
+        _ aiConfig: CustomEffectConfig,
+        to index: Int,
+        fallbackTemplate template: HighlightTemplate
+    ) {
+        appState.generatedClips[index].aiEffectConfig = aiConfig
+
+        // Filter
+        if let name = aiConfig.recommendedFilter,
+           let filter = VideoFilter.allCases.first(where: { $0.rawValue == name }) {
+            appState.generatedClips[index].selectedFilter = filter
+        } else {
+            appState.generatedClips[index].selectedFilter = template.suggestedFilter
+        }
+
+        // Caption style
+        if let name = aiConfig.recommendedCaptionStyle,
+           let style = CaptionStyle.allCases.first(where: { $0.rawValue == name }) {
+            appState.generatedClips[index].captionStyle = style
+        } else {
+            appState.generatedClips[index].captionStyle = template.suggestedCaptionStyle
+        }
+
+        // Velocity
+        if let name = aiConfig.recommendedVelocityStyle,
+           let style = VelocityEditService.VelocityStyle.allCases.first(where: { $0.rawValue == name }) {
+            appState.generatedClips[index].viralConfig.velocityStyle = style
+        } else {
+            appState.generatedClips[index].viralConfig.velocityStyle = template.suggestedVelocityStyle
+        }
+
+        // Kinetic caption
+        if let name = aiConfig.recommendedKineticCaption,
+           let style = KineticCaptionStyle.allCases.first(where: { $0.rawValue == name }) {
+            appState.generatedClips[index].viralConfig.kineticCaptionStyle = style
+        } else {
+            appState.generatedClips[index].viralConfig.kineticCaptionStyle = template.suggestedKineticCaption
+        }
+
+        // Music
+        if let name = aiConfig.recommendedMusicMood,
+           let mood = TrackMood.allCases.first(where: { $0.rawValue == name }),
+           let track = MusicLibrary.tracksForMood(mood).first {
+            appState.generatedClips[index].selectedMusicTrack = track
+        } else if let track = MusicLibrary.suggestedTrackForTemplate(template) {
+            appState.generatedClips[index].selectedMusicTrack = track
+        }
+
+        // Premium effects
+        var effects: [PremiumEffect] = []
+        if let name = aiConfig.recommendedLUT,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+        if let name = aiConfig.recommendedParticle,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+        if let name = aiConfig.recommendedTransition,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+        if let overlayNames = aiConfig.recommendedOverlays {
+            for name in overlayNames {
+                if let effect = PremiumEffectLibrary.effect(named: name) {
+                    effects.append(effect)
+                }
+            }
+        }
+        if !effects.isEmpty {
+            appState.generatedClips[index].selectedPremiumEffects = effects
+        }
+
+        // Cinematic grade
+        if let name = aiConfig.recommendedGrade,
+           let grade = CinematicGrade.allCases.first(where: { $0.rawValue == name }) {
+            appState.generatedClips[index].cinematicGrade = grade
         }
     }
 

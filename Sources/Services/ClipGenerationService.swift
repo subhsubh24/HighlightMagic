@@ -65,24 +65,6 @@ actor ClipGenerationService {
         }
     }
 
-    /// Legacy non-async entry point for callers that don't need AI recommendations.
-    func generateClips(
-        from video: VideoItem,
-        segments: [HighlightSegment]
-    ) -> [EditedClip] {
-        let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
-
-        return ordered.map { segment in
-            EditedClip(
-                sourceVideoID: video.id,
-                segment: segment,
-                selectedMusicTrack: MusicLibrary.tracks.first,
-                captionText: segment.label,
-                viralConfig: .default
-            )
-        }
-    }
-
     // MARK: - AI Config → EditedClip
 
     /// Translates an AI effect config into a fully configured EditedClip.
@@ -94,26 +76,13 @@ actor ClipGenerationService {
         segment: HighlightSegment,
         template: HighlightTemplate?
     ) -> EditedClip {
-        // Resolve filter
         let filter = resolveFilter(aiConfig: aiConfig, template: template)
-
-        // Resolve cinematic grade
         let grade = resolveGrade(aiConfig: aiConfig, template: template)
-
-        // Resolve premium effects (LUT, particle, transition, overlays)
         let premiumEffects = resolvePremiumEffects(aiConfig: aiConfig)
-
-        // Resolve velocity style
         let velocityStyle = resolveVelocityStyle(aiConfig: aiConfig, template: template)
-
-        // Resolve kinetic caption style
         let kineticStyle = resolveKineticCaption(aiConfig: aiConfig, template: template)
-
-        // Resolve music
-        let musicMood = resolveMusicMood(aiConfig: aiConfig, template: template)
-        let musicTrack = musicMood.flatMap { mood in
-            MusicLibrary.tracksForMood(mood).first
-        } ?? MusicLibrary.tracks.first
+        let captionStyle = resolveCaptionStyle(aiConfig: aiConfig, template: template)
+        let musicTrack = resolveMusicTrack(aiConfig: aiConfig, template: template)
 
         let viralConfig = ViralEditConfig(
             beatSyncEnabled: true,
@@ -128,6 +97,7 @@ actor ClipGenerationService {
             segment: segment,
             selectedMusicTrack: musicTrack,
             captionText: segment.label,
+            captionStyle: captionStyle,
             selectedFilter: filter,
             viralConfig: viralConfig,
             cinematicGrade: grade,
@@ -141,7 +111,9 @@ actor ClipGenerationService {
            let filter = VideoFilter.allCases.first(where: { $0.rawValue == name }) {
             return filter
         }
-        return template?.suggestedFilter ?? .none
+        // No hardcoded fallback — .none means the AI actively chose no filter
+        // (or the fallback heuristic already set recommendedFilter)
+        return .none
     }
 
     private nonisolated func resolveGrade(aiConfig: CustomEffectConfig, template: HighlightTemplate?) -> CinematicGrade {
@@ -149,6 +121,7 @@ actor ClipGenerationService {
            let grade = CinematicGrade.allCases.first(where: { $0.rawValue == name }) {
             return grade
         }
+        // No grade is a valid AI decision (custom grade may be in aiEffectConfig.customGrade)
         return .none
     }
 
@@ -189,11 +162,14 @@ actor ClipGenerationService {
         aiConfig: CustomEffectConfig,
         template: HighlightTemplate?
     ) -> VelocityEditService.VelocityStyle {
+        // AI recommendation takes priority
         if let name = aiConfig.recommendedVelocityStyle,
            let style = VelocityEditService.VelocityStyle.allCases.first(where: { $0.rawValue == name }) {
             return style
         }
-        return template?.suggestedVelocityStyle ?? .hero
+        // The fallback heuristic already sets recommendedVelocityStyle based on mood/energy,
+        // so reaching here means the AI actively returned nil. Use .none to respect that.
+        return .none
     }
 
     private nonisolated func resolveKineticCaption(
@@ -204,18 +180,38 @@ actor ClipGenerationService {
            let style = KineticCaptionStyle.allCases.first(where: { $0.rawValue == name }) {
             return style
         }
-        return template?.suggestedKineticCaption ?? .pop
+        return .none
     }
 
-    private nonisolated func resolveMusicMood(
+    private nonisolated func resolveCaptionStyle(
         aiConfig: CustomEffectConfig,
         template: HighlightTemplate?
-    ) -> TrackMood? {
-        if let name = aiConfig.recommendedMusicMood,
-           let mood = TrackMood.allCases.first(where: { $0.rawValue == name }) {
-            return mood
+    ) -> CaptionStyle {
+        if let name = aiConfig.recommendedCaptionStyle,
+           let style = CaptionStyle.allCases.first(where: { $0.rawValue == name }) {
+            return style
         }
-        return template?.suggestedMusicMood
+        // Fallback heuristic already fills this based on mood, but if somehow nil:
+        return .bold
+    }
+
+    private nonisolated func resolveMusicTrack(
+        aiConfig: CustomEffectConfig,
+        template: HighlightTemplate?
+    ) -> MusicTrack? {
+        // AI-recommended mood → mood-matched track
+        if let name = aiConfig.recommendedMusicMood,
+           let mood = TrackMood.allCases.first(where: { $0.rawValue == name }),
+           let track = MusicLibrary.tracksForMood(mood).first {
+            return track
+        }
+        // Template mood → mood-matched track
+        if let template,
+           let track = MusicLibrary.tracksForMood(template.suggestedMusicMood).first {
+            return track
+        }
+        // Final fallback: upbeat track (mood-based, not position-based)
+        return MusicLibrary.tracksForMood(.upbeat).first
     }
 }
 

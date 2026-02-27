@@ -24,6 +24,7 @@ struct CustomEffectConfig: Codable, Hashable, Sendable {
     var recommendedTransition: String?
     var recommendedVelocityStyle: String?
     var recommendedKineticCaption: String?
+    var recommendedCaptionStyle: String?
     var recommendedMusicMood: String?
 
     // MARK: - Custom Parameters (AI generates novel values when no preset fits)

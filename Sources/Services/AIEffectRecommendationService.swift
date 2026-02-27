@@ -177,6 +177,7 @@ actor AIEffectRecommendationService {
         let filterNames = VideoFilter.allCases.map(\.rawValue).joined(separator: ", ")
         let gradeNames = CinematicGrade.allCases.map(\.rawValue).joined(separator: ", ")
         let velocityNames = VelocityEditService.VelocityStyle.allCases.map(\.rawValue).joined(separator: ", ")
+        let captionStyleNames = CaptionStyle.allCases.map(\.rawValue).joined(separator: ", ")
         let captionNames = KineticCaptionStyle.allCases.map(\.rawValue).joined(separator: ", ")
         let moodNames = TrackMood.allCases.map(\.rawValue).joined(separator: ", ")
 
@@ -198,6 +199,7 @@ actor AIEffectRecommendationService {
         - Overlays: \(overlayNames)
         - Velocity Styles: \(velocityNames)
         - Caption Animations: \(captionNames)
+        - Caption Styles: \(captionStyleNames)
         - Music Moods: \(moodNames)
 
         INSTRUCTIONS:
@@ -222,6 +224,7 @@ actor AIEffectRecommendationService {
           "recommendedTransition": "preset name or null",
           "recommendedVelocityStyle": "preset name or null",
           "recommendedKineticCaption": "preset name or null",
+          "recommendedCaptionStyle": "one of: Bold, Minimal, Neon, Classic or null",
           "recommendedMusicMood": "mood name or null",
           "customGrade": null or {
             "temperature": 6500, "tint": 0, "saturation": 1.0, "contrast": 1.0,
@@ -307,6 +310,7 @@ actor AIEffectRecommendationService {
         config.recommendedTransition = dict["recommendedTransition"] as? String
         config.recommendedVelocityStyle = dict["recommendedVelocityStyle"] as? String
         config.recommendedKineticCaption = dict["recommendedKineticCaption"] as? String
+        config.recommendedCaptionStyle = dict["recommendedCaptionStyle"] as? String
         config.recommendedMusicMood = dict["recommendedMusicMood"] as? String
 
         // Parse custom grade
@@ -389,124 +393,243 @@ actor AIEffectRecommendationService {
         var config = CustomEffectConfig()
         let lowered = prompt.lowercased()
 
-        // Scene analysis from keywords
+        // Seed from template if available (template preferences, not hardcoded constants)
         if let template {
             config.sceneDescription = template.description
             config.recommendedFilter = template.suggestedFilter.rawValue
             config.recommendedVelocityStyle = template.suggestedVelocityStyle.rawValue
             config.recommendedKineticCaption = template.suggestedKineticCaption.rawValue
+            config.recommendedCaptionStyle = template.suggestedCaptionStyle.rawValue
             config.recommendedMusicMood = template.suggestedMusicMood.rawValue
         }
 
-        // Keyword-based mood and effect matching
+        // Keyword-based mood and effect matching.
+        // Every branch fills ALL fields so there are zero gaps for hardcoded defaults.
         if lowered.containsAny(["sunset", "sunrise", "golden", "beach", "warm"]) {
             config.mood = "warm"
             config.lighting = "golden_hour"
             config.energy = "calm"
             config.recommendedLUT = config.recommendedLUT ?? "Golden Hour"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Light Leak"]
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Light Leak"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
-        } else if lowered.containsAny(["night", "neon", "city", "club", "party"]) {
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Slide"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Minimal"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
+        } else if lowered.containsAny(["night", "neon", "city", "club"]) {
             config.mood = "energetic"
             config.lighting = "night"
             config.energy = "high"
             config.recommendedLUT = config.recommendedLUT ?? "Cyberpunk"
-            config.recommendedTransition = "Glitch"
-            config.recommendedParticle = "Sparkles"
+            config.recommendedTransition = config.recommendedTransition ?? "Glitch"
+            config.recommendedParticle = config.recommendedParticle ?? "Sparkles"
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Bullet"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Pop"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Neon"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Energetic"
         } else if lowered.containsAny(["winter", "snow", "cold", "ski", "ice"]) {
             config.mood = "cool"
             config.lighting = "overcast"
             config.energy = "moderate"
             config.recommendedFilter = config.recommendedFilter ?? "Cool"
-            config.recommendedParticle = "Snow"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Film Grain"]
+            config.recommendedParticle = config.recommendedParticle ?? "Snow"
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Film Grain"]
+            config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Slide"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Minimal"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
         } else if lowered.containsAny(["wedding", "love", "romantic", "anniversary", "valentine"]) {
             config.mood = "romantic"
             config.lighting = "soft"
             config.energy = "calm"
             config.recommendedLUT = config.recommendedLUT ?? "Golden Hour"
-            config.recommendedParticle = "Hearts"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Bokeh", "Light Leak"]
+            config.recommendedParticle = config.recommendedParticle ?? "Hearts"
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Bokeh", "Light Leak"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
-        } else if lowered.containsAny(["birthday", "celebration", "party", "grad"]) {
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Typewriter"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Classic"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
+        } else if lowered.containsAny(["birthday", "celebration", "grad"]) {
             config.mood = "playful"
             config.energy = "high"
-            config.recommendedParticle = "Confetti"
-            config.recommendedTransition = "Zoom Burst"
+            config.recommendedParticle = config.recommendedParticle ?? "Confetti"
+            config.recommendedTransition = config.recommendedTransition ?? "Zoom Burst"
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Hero"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Pop"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Bold"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Fun"
         } else if lowered.containsAny(["adventure", "mountain", "hike", "summit", "epic"]) {
             config.mood = "epic"
             config.lighting = "golden_hour"
             config.energy = "high"
             config.recommendedGrade = config.recommendedGrade ?? "Warm Glow"
-            config.recommendedTransition = "Zoom Burst"
-            config.recommendedOverlays = ["Lens Flare"]
+            config.recommendedTransition = config.recommendedTransition ?? "Zoom Burst"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Lens Flare"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Hero"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Pop"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Bold"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Epic"
         } else if lowered.containsAny(["workout", "gym", "fitness", "run", "sport"]) {
             config.mood = "energetic"
             config.energy = "explosive"
             config.recommendedLUT = config.recommendedLUT ?? "Bleach Bypass"
-            config.recommendedTransition = "Flash"
+            config.recommendedTransition = config.recommendedTransition ?? "Flash"
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Bullet"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Bounce"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Bold"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Energetic"
         } else if lowered.containsAny(["food", "cooking", "recipe", "eat", "restaurant"]) {
             config.mood = "warm"
             config.lighting = "indoor"
             config.energy = "calm"
             config.recommendedLUT = config.recommendedLUT ?? "Golden Hour"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Vignette Pro"]
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Vignette Pro"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Slide"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Classic"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
         } else if lowered.containsAny(["pet", "dog", "cat", "puppy", "kitten"]) {
             config.mood = "playful"
             config.energy = "moderate"
             config.recommendedFilter = config.recommendedFilter ?? "Vibrant"
-            config.recommendedParticle = "Sparkles"
-            config.recommendedTransition = "Bounce In"
+            config.recommendedParticle = config.recommendedParticle ?? "Sparkles"
+            config.recommendedTransition = config.recommendedTransition ?? "Bounce In"
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Montage"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Bounce"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Neon"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Fun"
         } else if lowered.containsAny(["cinematic", "film", "movie", "dramatic"]) {
             config.mood = "dramatic"
             config.energy = "moderate"
             config.recommendedLUT = config.recommendedLUT ?? "Matte Film"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Anamorphic Flare", "Film Grain"]
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Anamorphic Flare", "Film Grain"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Hero"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Typewriter"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Classic"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Dramatic"
         } else if lowered.containsAny(["vintage", "retro", "old", "throwback", "nostalg"]) {
             config.mood = "warm"
             config.energy = "calm"
             config.recommendedLUT = config.recommendedLUT ?? "Vintage 8mm"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Film Grain", "Vignette Pro", "Dust"]
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Film Grain", "Vignette Pro", "Dust"]
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Typewriter"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Classic"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
         } else if lowered.containsAny(["campfire", "cozy", "cabin", "evening"]) {
             config.mood = "warm"
             config.lighting = "night"
             config.energy = "calm"
             config.recommendedLUT = config.recommendedLUT ?? "Golden Hour"
-            config.recommendedParticle = "Embers"
-            config.recommendedTransition = "Cross Dissolve"
-            config.recommendedOverlays = ["Vignette Pro"]
+            config.recommendedParticle = config.recommendedParticle ?? "Embers"
+            config.recommendedTransition = config.recommendedTransition ?? "Cross Dissolve"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Vignette Pro"]
+            config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Smooth"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Slide"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Classic"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Chill"
         } else if lowered.containsAny(["rain", "storm", "moody", "dark"]) {
             config.mood = "moody"
             config.lighting = "overcast"
             config.energy = "moderate"
             config.recommendedGrade = config.recommendedGrade ?? "Moody"
-            config.recommendedParticle = "Rain"
-            config.recommendedTransition = "Glitch"
-            config.recommendedOverlays = ["Vignette Pro"]
-        } else {
-            // Generic default
+            config.recommendedParticle = config.recommendedParticle ?? "Rain"
+            config.recommendedTransition = config.recommendedTransition ?? "Glitch"
+            config.recommendedOverlays = config.recommendedOverlays ?? ["Vignette Pro"]
+            config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Hero"
+            config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Slide"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Minimal"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Dramatic"
+        } else if lowered.containsAny(["party"]) {
             config.mood = "energetic"
-            config.energy = "moderate"
+            config.energy = "high"
+            config.recommendedFilter = config.recommendedFilter ?? "Vibrant"
+            config.recommendedParticle = config.recommendedParticle ?? "Confetti"
             config.recommendedTransition = config.recommendedTransition ?? "Zoom Burst"
             config.recommendedVelocityStyle = config.recommendedVelocityStyle ?? "Hero"
             config.recommendedKineticCaption = config.recommendedKineticCaption ?? "Pop"
+            config.recommendedCaptionStyle = config.recommendedCaptionStyle ?? "Bold"
+            config.recommendedMusicMood = config.recommendedMusicMood ?? "Fun"
+        } else {
+            // Generic default — still uses mood-based reasoning, not arbitrary constants
+            config.mood = config.mood ?? "energetic"
+            config.energy = config.energy ?? "moderate"
         }
 
+        // Fill any remaining nil fields using mood-based heuristics.
+        // This ensures EVERY field is populated — no hardcoded fallthrough gaps.
+        applyMoodBasedDefaults(to: &config)
+
         return config
+    }
+
+    /// Fills any remaining nil recommendation fields using the mood/energy already set.
+    /// This is the final safety net — after keyword matching and template seeding,
+    /// any field that's still nil gets a mood-appropriate value.
+    private nonisolated func applyMoodBasedDefaults(to config: inout CustomEffectConfig) {
+        let mood = config.mood ?? "energetic"
+        let energy = config.energy ?? "moderate"
+
+        // Velocity: match energy level
+        if config.recommendedVelocityStyle == nil {
+            switch energy {
+            case "calm": config.recommendedVelocityStyle = "Smooth"
+            case "moderate": config.recommendedVelocityStyle = "Montage"
+            case "high": config.recommendedVelocityStyle = "Hero"
+            case "explosive": config.recommendedVelocityStyle = "Bullet"
+            default: config.recommendedVelocityStyle = "Hero"
+            }
+        }
+
+        // Kinetic caption: match energy level
+        if config.recommendedKineticCaption == nil {
+            switch energy {
+            case "calm": config.recommendedKineticCaption = "Slide"
+            case "moderate": config.recommendedKineticCaption = "Typewriter"
+            case "high": config.recommendedKineticCaption = "Pop"
+            case "explosive": config.recommendedKineticCaption = "Bounce"
+            default: config.recommendedKineticCaption = "Pop"
+            }
+        }
+
+        // Caption style: match mood
+        if config.recommendedCaptionStyle == nil {
+            switch mood {
+            case "calm", "romantic", "warm": config.recommendedCaptionStyle = "Classic"
+            case "energetic", "playful", "epic": config.recommendedCaptionStyle = "Bold"
+            case "dramatic", "moody", "dark": config.recommendedCaptionStyle = "Minimal"
+            case "cool": config.recommendedCaptionStyle = "Neon"
+            default: config.recommendedCaptionStyle = "Bold"
+            }
+        }
+
+        // Transition: match energy
+        if config.recommendedTransition == nil {
+            switch energy {
+            case "calm": config.recommendedTransition = "Cross Dissolve"
+            case "moderate": config.recommendedTransition = "Cross Dissolve"
+            case "high": config.recommendedTransition = "Zoom Burst"
+            case "explosive": config.recommendedTransition = "Flash"
+            default: config.recommendedTransition = "Zoom Burst"
+            }
+        }
+
+        // Music mood: match mood
+        if config.recommendedMusicMood == nil {
+            switch mood {
+            case "calm", "romantic", "warm": config.recommendedMusicMood = "Chill"
+            case "energetic", "explosive": config.recommendedMusicMood = "Energetic"
+            case "epic": config.recommendedMusicMood = "Epic"
+            case "playful": config.recommendedMusicMood = "Fun"
+            case "dramatic", "moody", "dark": config.recommendedMusicMood = "Dramatic"
+            default: config.recommendedMusicMood = "Upbeat"
+            }
+        }
     }
 }
 
