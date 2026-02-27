@@ -83,9 +83,10 @@ struct ConstantsTests {
     @Test("Video limits are reasonable")
     func testVideoLimits() {
         #expect(Constants.maxVideoDurationSeconds == 600) // 10 min
-        #expect(Constants.minClipDuration == 15)
+        #expect(Constants.minClipDuration == 2)   // Matches web — allows punchy rhythm cuts
         #expect(Constants.maxClipDuration == 60)
-        #expect(Constants.targetClipCount == 3)
+        #expect(Constants.targetClipCount == 8)   // Soft ceiling — AI decides actual count
+        #expect(Constants.exportBitRate == 12_000_000) // Matches web — 12 Mbps
     }
 
     @Test("Export settings are vertical format")

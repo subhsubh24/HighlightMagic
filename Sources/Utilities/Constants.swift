@@ -4,12 +4,12 @@ import CoreMedia
 enum Constants {
     static let maxVideoDurationSeconds: TimeInterval = 600 // 10 minutes
     static let freeExportLimit = 5
-    static let minClipDuration: TimeInterval = 15
+    static let minClipDuration: TimeInterval = 2    // Matches web — allows punchy rhythm cuts
     static let maxClipDuration: TimeInterval = 60
-    static let targetClipCount = 3
+    static let targetClipCount = 8                  // Soft ceiling — AI decides actual count (web: unlimited)
     static let exportWidth: Int = 1080
     static let exportHeight: Int = 1920
-    static let exportBitRate: Int = 8_000_000
+    static let exportBitRate: Int = 12_000_000      // Matches web — 12 Mbps preserves detail through platform recompression
     static let exportFrameRate: Int = 30
     static let highlightConfidenceThreshold: Double = 0.6
 
