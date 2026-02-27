@@ -130,7 +130,18 @@ struct EditorView: View {
             TemplatePickerSheet(clipBinding: clipBinding)
         }
         .sheet(isPresented: $showPremiumEffects) {
-            PremiumEffectsSheet()
+            PremiumEffectsSheet(
+                selectedEffects: Binding(
+                    get: {
+                        appState.generatedClips.first(where: { $0.id == clipID })?.selectedPremiumEffects ?? []
+                    },
+                    set: { newValue in
+                        if let index = appState.generatedClips.firstIndex(where: { $0.id == clipID }) {
+                            appState.generatedClips[index].selectedPremiumEffects = newValue
+                        }
+                    }
+                )
+            )
         }
         .task { await loadTimelineThumbnails() }
     }
@@ -374,6 +385,15 @@ struct EditorView: View {
                 Text("Premium Effects")
                     .font(Theme.headline)
                     .foregroundStyle(.white)
+                if let clip, !clip.selectedPremiumEffects.isEmpty {
+                    Text("\(clip.selectedPremiumEffects.count)")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Theme.accent)
+                        .clipShape(Capsule())
+                }
                 Spacer()
                 if !appState.isProUser {
                     Text("PRO")

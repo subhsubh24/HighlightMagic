@@ -82,6 +82,9 @@ final class StoreKitService {
 
         purchasedProductIDs = purchased
         isProUser = !purchased.isEmpty
+
+        // Propagate Pro status to services that gate features on it
+        UserAccountService.shared.updateProStatus(isProUser)
     }
 
     // MARK: - Helpers

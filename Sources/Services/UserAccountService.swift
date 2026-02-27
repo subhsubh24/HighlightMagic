@@ -7,6 +7,7 @@ final class UserAccountService {
 
     var userID: String
     var savedProjects: [SavedProject] = []
+    var isProUser: Bool = false
 
     private let iCloudStore = NSUbiquitousKeyValueStore.default
     private let projectsDirectory: URL
@@ -30,7 +31,6 @@ final class UserAccountService {
         )
 
         loadProjects()
-        syncFromiCloud()
     }
 
     // MARK: - Project Management
@@ -84,15 +84,26 @@ final class UserAccountService {
         savedProjects = projects
     }
 
-    // MARK: - iCloud Sync
+    // MARK: - iCloud Sync (Pro only)
+
+    /// Call when Pro subscription status changes to enable/disable sync.
+    func updateProStatus(_ isPro: Bool) {
+        isProUser = isPro
+        if isPro {
+            syncFromiCloud()
+            startObservingCloudChanges()
+        }
+    }
 
     private func syncToiCloud() {
+        guard isProUser else { return }
         guard let data = try? JSONEncoder().encode(savedProjects) else { return }
         iCloudStore.set(data, forKey: "saved_projects")
         iCloudStore.synchronize()
     }
 
     private func syncFromiCloud() {
+        guard isProUser else { return }
         guard let data = iCloudStore.data(forKey: "saved_projects"),
               let cloudProjects = try? JSONDecoder().decode([SavedProject].self, from: data) else {
             return
@@ -137,13 +148,14 @@ final class UserAccountService {
         userID = newID
     }
 
-    func startObservingCloudChanges() {
+    private func startObservingCloudChanges() {
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: iCloudStore,
             queue: .main
         ) { [weak self] _ in
-            self?.syncFromiCloud()
+            guard let self, self.isProUser else { return }
+            self.syncFromiCloud()
         }
     }
 }
