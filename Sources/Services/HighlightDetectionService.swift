@@ -480,6 +480,19 @@ actor HighlightDetectionService {
 
             let startSec = max(0, peakTimeSec - halfClip)
             let endSec = min(totalSeconds, peakTimeSec + halfClip)
+            let candidateDuration = endSec - startSec
+
+            // Drop if >50% of this clip overlaps an existing segment.
+            // usedIndices only prevents peaks *inside* existing clips, but the
+            // ±halfClip expansion can still produce near-duplicate clips from
+            // peaks just outside the used range.
+            let overlapsExisting = candidateDuration > 0 && segments.contains { existing in
+                let overlapStart = max(existing.startSeconds, startSec)
+                let overlapEnd = min(existing.startSeconds + existing.duration, endSec)
+                let overlap = max(0, overlapEnd - overlapStart)
+                return overlap / candidateDuration > 0.5
+            }
+            guard !overlapsExisting else { continue }
 
             // Mark used indices
             let startIdx = Int(startSec / interval)
