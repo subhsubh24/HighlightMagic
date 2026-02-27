@@ -40,9 +40,6 @@ final class NetworkMonitor {
         monitor.cancel()
     }
 
-    /// Check if Claude API should be used.
-    /// Wi-Fi is assumed to be always available, so only check basic connectivity.
-    var shouldUseCloudAI: Bool {
-        isConnected
-    }
+    /// Always use Claude API — connectivity (Wi-Fi or cellular) is assumed available.
+    var shouldUseCloudAI: Bool { true }
 }
