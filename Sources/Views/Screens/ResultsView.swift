@@ -133,11 +133,12 @@ struct ResultsView: View {
             guard let video = appState.selectedVideo else { return }
             let asset = AVURLAsset(url: video.sourceURL)
 
-            for i in appState.generatedClips.indices {
-                let clip = appState.generatedClips[i]
-                let timeRange = CMTimeRange(start: clip.trimStart, end: clip.trimEnd)
+            // Snapshot clip IDs to iterate — the array may be mutated during awaits.
+            let clipSnapshots = appState.generatedClips.map { (id: $0.id, trimStart: $0.trimStart, trimEnd: $0.trimEnd) }
 
-                // Re-run AI with template context — AI sees both the video and template intent
+            for snapshot in clipSnapshots {
+                let timeRange = CMTimeRange(start: snapshot.trimStart, end: snapshot.trimEnd)
+
                 let aiConfig = await AIEffectRecommendationService.shared.recommendEffects(
                     for: asset,
                     timeRange: timeRange,
@@ -146,7 +147,9 @@ struct ResultsView: View {
                 )
 
                 await MainActor.run {
-                    applyAIConfig(aiConfig, to: i, fallbackTemplate: template)
+                    // Find current index by ID to avoid stale index crash
+                    guard let index = appState.generatedClips.firstIndex(where: { $0.id == snapshot.id }) else { return }
+                    applyAIConfig(aiConfig, to: index, fallbackTemplate: template)
                 }
             }
         }

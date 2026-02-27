@@ -11,7 +11,7 @@ struct ExportView: View {
     @State private var showShareSheet = false
     @State private var showPaywall = false
     @State private var showConfetti = false
-    @State private var addWatermark = true // Pro users can toggle off
+    @State private var addWatermark = true
 
     private var clip: EditedClip? {
         appState.generatedClips.first { $0.id == clipID }
@@ -68,6 +68,12 @@ struct ExportView: View {
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView()
+        }
+        .onAppear {
+            // Pro users get watermark off by default; free users always get it
+            if appState.isProUser {
+                addWatermark = false
+            }
         }
     }
 

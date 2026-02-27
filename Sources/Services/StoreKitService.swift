@@ -1,7 +1,7 @@
 import Foundation
 import StoreKit
 
-@Observable
+@Observable @MainActor
 final class StoreKitService {
     static let shared = StoreKitService()
 

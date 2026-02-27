@@ -108,18 +108,20 @@ struct VideoPreviewPlayer: View {
         guard let player else { return }
         if isPlaying {
             player.pause()
+            isPlaying = false
         } else {
             let currentTime = player.currentTime()
             if CMTimeCompare(currentTime, trimEnd) >= 0 {
                 Task {
                     await player.seek(to: trimStart, toleranceBefore: .zero, toleranceAfter: .zero)
                     player.play()
+                    isPlaying = true
                 }
             } else {
                 player.play()
+                isPlaying = true
             }
         }
-        isPlaying.toggle()
     }
 
     private func seekTo(_ time: CMTime) async {

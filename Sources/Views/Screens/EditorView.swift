@@ -124,7 +124,7 @@ struct EditorView: View {
             }
         }
         .sheet(isPresented: $showMusicPicker) {
-            MusicPickerSheet(selectedTrack: musicBinding)
+            MusicPickerSheet(selectedTrack: musicBinding, isProUser: appState.isProUser)
         }
         .sheet(isPresented: $showTemplatePicker) {
             TemplatePickerSheet(clipBinding: clipBinding)

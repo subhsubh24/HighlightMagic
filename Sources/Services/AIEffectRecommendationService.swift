@@ -350,16 +350,16 @@ actor AIEffectRecommendationService {
         // Parse custom grade
         if let gradeDict = dict["customGrade"] as? [String: Any] {
             var grade = CustomColorGrade()
-            grade.temperature = gradeDict["temperature"] as? Double ?? 6500
-            grade.tint = gradeDict["tint"] as? Double ?? 0
-            grade.saturation = gradeDict["saturation"] as? Double ?? 1.0
-            grade.contrast = gradeDict["contrast"] as? Double ?? 1.0
-            grade.brightness = gradeDict["brightness"] as? Double ?? 0
-            grade.vibrance = gradeDict["vibrance"] as? Double ?? 0
-            grade.exposure = gradeDict["exposure"] as? Double ?? 0
-            grade.hueShift = gradeDict["hueShift"] as? Double ?? 0
-            grade.fadeAmount = gradeDict["fadeAmount"] as? Double ?? 0
-            grade.sharpen = gradeDict["sharpen"] as? Double ?? 0
+            grade.temperature = Self.jsonDouble(gradeDict, "temperature", default: 6500)
+            grade.tint = Self.jsonDouble(gradeDict, "tint", default: 0)
+            grade.saturation = Self.jsonDouble(gradeDict, "saturation", default: 1.0)
+            grade.contrast = Self.jsonDouble(gradeDict, "contrast", default: 1.0)
+            grade.brightness = Self.jsonDouble(gradeDict, "brightness", default: 0)
+            grade.vibrance = Self.jsonDouble(gradeDict, "vibrance", default: 0)
+            grade.exposure = Self.jsonDouble(gradeDict, "exposure", default: 0)
+            grade.hueShift = Self.jsonDouble(gradeDict, "hueShift", default: 0)
+            grade.fadeAmount = Self.jsonDouble(gradeDict, "fadeAmount", default: 0)
+            grade.sharpen = Self.jsonDouble(gradeDict, "sharpen", default: 0)
             config.customGrade = grade
         }
 
@@ -370,10 +370,10 @@ actor AIEffectRecommendationService {
                 particle.shape = CustomParticle.ParticleShape(rawValue: shape) ?? .circle
             }
             particle.colors = particleDict["colors"] as? [String] ?? ["FFFFFF"]
-            particle.birthRate = particleDict["birthRate"] as? Double ?? 5.0
-            particle.velocity = particleDict["velocity"] as? Double ?? 30.0
-            particle.scale = particleDict["scale"] as? Double ?? 0.04
-            particle.lifetime = particleDict["lifetime"] as? Double ?? 3.0
+            particle.birthRate = Self.jsonDouble(particleDict, "birthRate", default: 5.0)
+            particle.velocity = Self.jsonDouble(particleDict, "velocity", default: 30.0)
+            particle.scale = Self.jsonDouble(particleDict, "scale", default: 0.04)
+            particle.lifetime = Self.jsonDouble(particleDict, "lifetime", default: 3.0)
             if let dir = particleDict["direction"] as? String {
                 particle.direction = CustomParticle.ParticleDirection(rawValue: dir) ?? .random
             }
@@ -390,11 +390,11 @@ actor AIEffectRecommendationService {
                 overlay.type = CustomOverlay.OverlayType(rawValue: type) ?? .colorWash
             }
             overlay.color = overlayDict["color"] as? String ?? "FF8C42"
-            overlay.opacity = overlayDict["opacity"] as? Double ?? 0.15
+            overlay.opacity = Self.jsonDouble(overlayDict, "opacity", default: 0.15)
             if let blend = overlayDict["blendMode"] as? String {
                 overlay.blendMode = CustomOverlay.BlendMode(rawValue: blend) ?? .screen
             }
-            overlay.intensity = overlayDict["intensity"] as? Double ?? 1.0
+            overlay.intensity = Self.jsonDouble(overlayDict, "intensity", default: 1.0)
             config.customOverlay = overlay
         }
 
@@ -404,8 +404,8 @@ actor AIEffectRecommendationService {
             if let type = transDict["type"] as? String {
                 trans.type = CustomTransition.TransitionType(rawValue: type) ?? .fade
             }
-            trans.duration = transDict["duration"] as? Double ?? 0.35
-            trans.intensity = transDict["intensity"] as? Double ?? 1.0
+            trans.duration = Self.jsonDouble(transDict, "duration", default: 0.35)
+            trans.intensity = Self.jsonDouble(transDict, "intensity", default: 1.0)
             if let dir = transDict["direction"] as? String {
                 trans.direction = CustomTransition.TransitionDirection(rawValue: dir) ?? .left
             }
@@ -413,6 +413,14 @@ actor AIEffectRecommendationService {
         }
 
         return config
+    }
+
+    /// Extracts a Double from a JSON dictionary value that may be Int or Double.
+    /// JSONSerialization deserializes integer JSON numbers as Int, not Double.
+    private static func jsonDouble(_ dict: [String: Any], _ key: String, default defaultValue: Double) -> Double {
+        if let d = dict[key] as? Double { return d }
+        if let i = dict[key] as? Int { return Double(i) }
+        return defaultValue
     }
 
     // MARK: - JSON Extraction

@@ -443,9 +443,9 @@ actor ExportService {
         let seamlessLoopFade = config.viralConfig.seamlessLoopEnabled ? effectiveClipDuration : nil
         let audioMix: AVMutableAudioMix
         if config.needsCIFilterProcessing {
-            audioMix = buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
+            audioMix = await buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
         } else {
-            audioMix = buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
+            audioMix = await buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
         }
 
         // 9. Final export
@@ -567,7 +567,7 @@ actor ExportService {
             .appendingPathComponent("intermediate_\(UUID().uuidString)")
             .appendingPathExtension("mp4")
 
-        let audioMix = buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil)
+        let audioMix = await buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil)
 
         guard let exportSession = AVAssetExportSession(
             asset: composition,
@@ -717,11 +717,11 @@ actor ExportService {
         asset: AVAsset,
         hasMusicTrack: Bool,
         seamlessLoopFade: CMTime? = nil
-    ) -> AVMutableAudioMix {
+    ) async -> AVMutableAudioMix {
         let audioMix = AVMutableAudioMix()
         var inputParams: [AVMutableAudioMixInputParameters] = []
 
-        let audioTracks = asset.tracks(withMediaType: .audio)
+        let audioTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
 
         for (index, track) in audioTracks.enumerated() {
             let params = AVMutableAudioMixInputParameters(track: track)

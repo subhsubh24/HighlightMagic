@@ -45,7 +45,7 @@ actor BeatSyncService {
         let asset = AVURLAsset(url: audioURL)
         let duration = try await CMTimeGetSeconds(asset.load(.duration))
 
-        guard duration > 0 else {
+        guard duration > 0, duration.isFinite else {
             throw BeatSyncError.invalidAudio
         }
 
@@ -278,11 +278,14 @@ actor BeatSyncService {
         // Guard against zero/negative BPM which would produce infinite interval
         // or negative interval causing an infinite loop.
         let safeBPM = bpm > 0 ? bpm : 120.0
+        // Guard against non-finite or non-positive duration which would cause
+        // an infinite loop (infinity) or empty/degenerate result (NaN/negative).
+        let safeDuration = duration.isFinite && duration > 0 ? duration : 60.0
         let interval = 60.0 / safeBPM
         var beats: [Double] = []
         var time = 0.0
 
-        while time < duration {
+        while time < safeDuration {
             beats.append(time)
             time += interval
         }

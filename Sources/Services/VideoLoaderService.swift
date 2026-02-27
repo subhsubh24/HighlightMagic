@@ -48,15 +48,18 @@ actor VideoLoaderService {
                             .appendingPathComponent(UUID().uuidString)
                             .appendingPathExtension("mov")
 
-                        let exportSession = AVAssetExportSession(
+                        guard let exportSession = AVAssetExportSession(
                             asset: avAsset,
                             presetName: AVAssetExportPresetHighestQuality
-                        )
-                        exportSession?.outputURL = tempURL
-                        exportSession?.outputFileType = .mov
+                        ) else {
+                            continuation.resume(throwing: VideoLoaderError.exportFailed)
+                            return
+                        }
+                        exportSession.outputURL = tempURL
+                        exportSession.outputFileType = .mov
 
-                        exportSession?.exportAsynchronously {
-                            if exportSession?.status == .completed {
+                        exportSession.exportAsynchronously {
+                            if exportSession.status == .completed {
                                 continuation.resume(returning: tempURL)
                             } else {
                                 continuation.resume(

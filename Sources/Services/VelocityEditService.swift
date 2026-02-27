@@ -135,6 +135,19 @@ actor VelocityEditService {
                 beats: relevantBeats,
                 beatInterval: beatMap.beatInterval
             )
+        case .none:
+            // Unreachable due to guard above, but required for exhaustive switch
+            return VelocityMap(
+                segments: [VelocitySegment(
+                    sourceStart: 0,
+                    sourceEnd: clipDuration,
+                    speed: 1.0,
+                    easeIn: false,
+                    easeOut: false
+                )],
+                originalDuration: clipDuration,
+                outputDuration: clipDuration
+            )
         }
     }
 

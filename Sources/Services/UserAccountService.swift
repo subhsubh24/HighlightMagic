@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-@Observable
+@Observable @MainActor
 final class UserAccountService {
     static let shared = UserAccountService()
 
@@ -11,6 +11,7 @@ final class UserAccountService {
 
     private let iCloudStore = NSUbiquitousKeyValueStore.default
     private let projectsDirectory: URL
+    private var isObservingCloudChanges = false
 
     init() {
         // Load or create anonymous user ID from Keychain
@@ -149,6 +150,8 @@ final class UserAccountService {
     }
 
     private func startObservingCloudChanges() {
+        guard !isObservingCloudChanges else { return }
+        isObservingCloudChanges = true
         NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: iCloudStore,
