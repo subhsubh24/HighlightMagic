@@ -82,6 +82,272 @@ actor AIEffectRecommendationService {
         }
     }
 
+    // MARK: - Unified Tape Planner
+
+    /// Plan the entire highlight tape at once — Claude sees ALL segments and designs
+    /// per-clip creative decisions for a cohesive tape. This matches the web platform's
+    /// Opus planner approach: custom velocity keyframes, custom color grades, per-clip
+    /// caption styling, and transition choices per clip.
+    ///
+    /// Returns one CustomEffectConfig per segment, in the same order as the input.
+    func planTapeEffects(
+        for asset: AVURLAsset,
+        segments: [HighlightSegment],
+        userPrompt: String,
+        template: HighlightTemplate? = nil
+    ) async -> [CustomEffectConfig] {
+        guard let apiKey else {
+            logger.info("No API key — falling back to per-segment heuristics")
+            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+        }
+
+        do {
+            // Extract 3 frames per segment (start, mid, end) — like Claude Vision refinement
+            var allFrames: [(segmentIndex: Int, time: Double, base64: String)] = []
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 512, height: 512)
+
+            for (idx, segment) in segments.enumerated() {
+                let start = segment.startSeconds
+                let end = segment.endSeconds
+                let mid = (start + end) / 2
+                for sampleTime in [start, mid, end] {
+                    let time = CMTime(seconds: sampleTime, preferredTimescale: 600)
+                    guard let cgImage = try? await generator.image(at: time).image else { continue }
+                    let uiImage = UIImage(cgImage: cgImage)
+                    guard let jpegData = uiImage.jpegData(compressionQuality: 0.5) else { continue }
+                    allFrames.append((idx, sampleTime, jpegData.base64EncodedString()))
+                }
+            }
+
+            guard !allFrames.isEmpty else {
+                return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+            }
+
+            // Rate limiting
+            let elapsed = Date.now.timeIntervalSince(lastRequestTime)
+            if elapsed < minRequestInterval {
+                try? await Task.sleep(for: .seconds(minRequestInterval - elapsed))
+            }
+
+            let configs = try await callTapePlanner(
+                frames: allFrames,
+                segments: segments,
+                userPrompt: userPrompt,
+                template: template,
+                apiKey: apiKey
+            )
+            lastRequestTime = .now
+            return configs
+        } catch {
+            lastRequestTime = .now
+            logger.warning("Tape planner failed: \(error.localizedDescription), using fallback")
+            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+        }
+    }
+
+    // MARK: - Tape Planner API Call
+
+    private func callTapePlanner(
+        frames: [(segmentIndex: Int, time: Double, base64: String)],
+        segments: [HighlightSegment],
+        userPrompt: String,
+        template: HighlightTemplate?,
+        apiKey: String
+    ) async throws -> [CustomEffectConfig] {
+        var contentBlocks: [[String: Any]] = []
+
+        let prompt = buildTapePlannerPrompt(segments: segments, userPrompt: userPrompt, template: template)
+        contentBlocks.append(["type": "text", "text": prompt])
+
+        let userIntent = userPrompt.isEmpty ? "create a great highlight reel" : userPrompt
+        contentBlocks.append(["type": "text", "text": "User's intent: \(userIntent)"])
+
+        // Send all frames grouped by segment
+        for frame in frames {
+            contentBlocks.append([
+                "type": "text",
+                "text": "Clip \(frame.segmentIndex + 1) — frame at \(String(format: "%.1f", frame.time))s:"
+            ])
+            contentBlocks.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": frame.base64
+                ] as [String: Any]
+            ])
+        }
+
+        let requestBody: [String: Any] = [
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 4096,
+            "messages": [
+                ["role": "user", "content": contentBlocks]
+            ]
+        ]
+
+        guard let url = URL(string: endpoint) else {
+            throw ClaudeVisionError.invalidEndpoint
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        request.timeoutInterval = 60
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw ClaudeVisionError.requestFailed
+        }
+
+        return parseTapePlannerResponse(data: data, segmentCount: segments.count, template: template, prompt: userPrompt)
+    }
+
+    private func buildTapePlannerPrompt(
+        segments: [HighlightSegment],
+        userPrompt: String,
+        template: HighlightTemplate?
+    ) -> String {
+        let segmentList = segments.enumerated().map { idx, seg in
+            "  Clip \(idx + 1): \(String(format: "%.1f", seg.startSeconds))s–\(String(format: "%.1f", seg.endSeconds))s (\(String(format: "%.0f", seg.duration))s) — \"\(seg.label)\" (confidence: \(String(format: "%.2f", seg.confidenceScore)))"
+        }.joined(separator: "\n")
+
+        let templateContext = template.map { "Style context: '\($0.name)' template (\($0.description))." } ?? ""
+
+        return """
+        You are an elite video editor creating a viral highlight reel for mobile. You have FULL creative control.
+        You're seeing frames from \(segments.count) clips. Design a cohesive tape where each clip has its own unique style.
+
+        \(templateContext)
+
+        CLIPS:
+        \(segmentList)
+
+        For EACH clip, design ALL creative decisions. Think about what makes the TAPE work as a whole:
+        - Vary styles between clips — never use the same velocity curve or color grade twice
+        - Build an emotional arc across the tape (warm opener → intense middle → satisfying close)
+        - Match transitions to what FOLLOWS, not what precedes
+        - Custom velocity keyframes are STRONGLY preferred over named presets
+
+        For each clip, provide a JSON object with:
+        - "velocityKeyframes": [{position: 0-1, speed: 0.1-5.0}] — custom speed curve (minimum 2 keyframes)
+          Design UNIQUE curves. Place slow-mo where the peak moment is. Examples:
+          Hero: [{position:0,speed:2.0},{position:0.35,speed:0.3},{position:0.55,speed:0.3},{position:0.7,speed:2.0},{position:1,speed:1.5}]
+          Bullet: [{position:0,speed:3.0},{position:0.25,speed:0.25},{position:0.65,speed:0.25},{position:0.8,speed:3.0},{position:1,speed:2.0}]
+        - "customGrade": {temperature, tint, saturation, contrast, brightness, vibrance, exposure, hueShift, fadeAmount, sharpen}
+          Design a UNIQUE color grade per clip. Temperature: 2000-10000, saturation: 0-2, contrast: 0.5-2, etc.
+        - "transitionType": "flash"|"zoom_punch"|"crossfade"|"light_leak"|"dip_to_black"|"hard_cut"|"whip"|"glitch"
+        - "transitionDuration": 0.15-1.0 seconds
+        - "entryPunchScale": 1.0-1.05 (zoom pop when clip appears, 1.0=none)
+        - "entryPunchDuration": 0.1-0.3 seconds
+        - "captionText": short viral text (2-5 words) or empty — use on 30-50% of clips only
+        - "captionStyle": "Bold"|"Minimal"|"Neon"|"Classic"
+        - "captionAnimation": "pop"|"slide"|"flicker"|"typewriter"|"fade"|"none"
+        - "captionFontWeight": 100-900
+        - "captionColor": hex color e.g. "#ffffff"
+        - "captionGlowColor": hex or null (for glow effect)
+        - "captionGlowRadius": 0-30 (0 = no glow)
+        - "mood": scene mood
+        - "energy": "calm"|"moderate"|"high"|"explosive"
+        - "beatSyncEnabled": true/false
+        - "seamlessLoopEnabled": true/false
+        - "musicVolume": 0.0-1.0
+        - "originalAudioVolume": 0.0-1.0
+        - "fadeDuration": 0.2-0.8
+        - "velocityIntensity": 0.0-1.0 (fallback if no custom keyframes)
+        - "recommendedMusicMood": "Chill"|"Epic"|"Energetic"|"Fun"|"Dramatic"|"Upbeat"|"Funny"
+        - "sceneDescription": brief description
+
+        Respond with ONLY a JSON array of \(segments.count) objects (one per clip, in order):
+        [{"velocityKeyframes": [...], "customGrade": {...}, "transitionType": "...", ...}, ...]
+        """
+    }
+
+    private func parseTapePlannerResponse(
+        data: Data,
+        segmentCount: Int,
+        template: HighlightTemplate?,
+        prompt: String
+    ) -> [CustomEffectConfig] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? [[String: Any]],
+              let textBlock = content.first(where: { $0["type"] as? String == "text" }),
+              let text = textBlock["text"] as? String else {
+            logger.warning("Tape planner: failed to parse response structure")
+            return (0..<segmentCount).map { _ in fallbackRecommendation(template: template, prompt: prompt) }
+        }
+
+        // Extract JSON array from response
+        guard let jsonString = ClaudeVisionService.extractBalancedJSON(from: text, open: "[", close: "]"),
+              let jsonData = jsonString.data(using: .utf8),
+              let results = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] else {
+            logger.warning("Tape planner: no JSON array found in response")
+            return (0..<segmentCount).map { _ in fallbackRecommendation(template: template, prompt: prompt) }
+        }
+
+        var configs: [CustomEffectConfig] = []
+        for (i, dict) in results.enumerated() {
+            guard i < segmentCount else { break }
+            var config = parseManually(jsonData: try! JSONSerialization.data(withJSONObject: dict))
+
+            // Parse custom velocity keyframes
+            if let kfArray = dict["velocityKeyframes"] as? [[String: Any]] {
+                config.customVelocityKeyframes = kfArray.compactMap { kf in
+                    guard let pos = Self.jsonDouble(kf, "position", default: -1),
+                          let spd = Self.jsonDouble(kf, "speed", default: -1),
+                          pos >= 0, pos <= 1, spd > 0 else { return nil }
+                    return VelocityKeyframe(position: pos, speed: min(spd, 5.0))
+                }
+                if (config.customVelocityKeyframes?.count ?? 0) < 2 {
+                    config.customVelocityKeyframes = nil
+                }
+            }
+
+            // Parse per-clip creative overrides
+            config.customTransitionType = dict["transitionType"] as? String
+            if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
+                config.customTransitionDuration = min(max(td, 0.1), 1.5)
+            }
+            if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
+                config.entryPunchScale = min(max(eps, 1.0), 1.1)
+            }
+            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd > 0 {
+                config.entryPunchDuration = min(max(epd, 0.05), 0.5)
+            }
+            config.customCaptionAnimation = dict["captionAnimation"] as? String
+            if let fw = dict["captionFontWeight"] as? Int, fw >= 100, fw <= 900 {
+                config.customCaptionFontWeight = fw
+            }
+            config.customCaptionFontStyle = dict["captionFontStyle"] as? String
+            config.customCaptionFontFamily = dict["captionFontFamily"] as? String
+            config.customCaptionColor = dict["captionColor"] as? String
+            config.customCaptionGlowColor = dict["captionGlowColor"] as? String
+            if let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
+                config.customCaptionGlowRadius = min(gr, 30)
+            }
+
+            // Fill gaps with mood-based defaults
+            applyMoodBasedDefaults(to: &config)
+
+            configs.append(config)
+        }
+
+        // If Claude returned fewer configs than segments, fill with fallbacks
+        while configs.count < segmentCount {
+            configs.append(fallbackRecommendation(template: template, prompt: prompt))
+        }
+
+        logger.info("Tape planner: designed \(configs.count) unique per-clip creative briefs")
+        return configs
+    }
+
     // MARK: - Frame Extraction
 
     private func extractFrames(

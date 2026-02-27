@@ -129,6 +129,58 @@ struct HighlightDetectionTests {
         #expect(actionConfig.velocityIntensity! >= 0.8)
     }
 
+    @Test("VelocityKeyframe model stores position and speed")
+    func testVelocityKeyframe() {
+        let keyframes = [
+            VelocityKeyframe(position: 0.0, speed: 2.0),
+            VelocityKeyframe(position: 0.35, speed: 0.3),
+            VelocityKeyframe(position: 0.6, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 1.5)
+        ]
+
+        #expect(keyframes.count == 4)
+        #expect(keyframes[0].position == 0.0)
+        #expect(keyframes[0].speed == 2.0)
+        #expect(keyframes[1].speed == 0.3) // Slow-mo zone
+        #expect(keyframes[3].position == 1.0)
+    }
+
+    @Test("CustomEffectConfig carries per-clip creative fields")
+    func testPerClipCreativeFields() {
+        var config = CustomEffectConfig()
+        config.customVelocityKeyframes = [
+            VelocityKeyframe(position: 0, speed: 1.5),
+            VelocityKeyframe(position: 0.5, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 2.0)
+        ]
+        config.customTransitionType = "zoom_punch"
+        config.customTransitionDuration = 0.3
+        config.entryPunchScale = 1.03
+        config.customCaptionAnimation = "pop"
+        config.customCaptionColor = "#ff3366"
+        config.customCaptionGlowColor = "#7c3aed"
+        config.customCaptionGlowRadius = 15
+
+        #expect(config.customVelocityKeyframes?.count == 3)
+        #expect(config.customTransitionType == "zoom_punch")
+        #expect(config.entryPunchScale == 1.03)
+        #expect(config.customCaptionColor == "#ff3366")
+        #expect(config.customCaptionGlowRadius == 15)
+    }
+
+    @Test("VelocityKeyframe is Codable for serialization")
+    func testVelocityKeyframeCodable() throws {
+        let keyframes = [
+            VelocityKeyframe(position: 0.0, speed: 2.0),
+            VelocityKeyframe(position: 0.5, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 1.5)
+        ]
+        let data = try JSONEncoder().encode(keyframes)
+        let decoded = try JSONDecoder().decode([VelocityKeyframe].self, from: data)
+        #expect(decoded.count == 3)
+        #expect(decoded[1].speed == 0.3)
+    }
+
     @Test("Confidence badge threshold mapping")
     func testConfidenceThresholds() {
         let highConfidence = 0.85

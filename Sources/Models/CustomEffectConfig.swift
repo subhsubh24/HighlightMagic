@@ -42,7 +42,31 @@ struct CustomEffectConfig: Codable, Hashable, Sendable {
     /// Velocity speed intensity: 0.0 = no speed change, 1.0 = max drama. Scales all speed ramp values.
     var velocityIntensity: Double?
 
-    // MARK: - Custom Parameters (AI generates novel values when no preset fits)
+    // MARK: - Custom Per-Clip Creative Parameters (AI generates unique values per clip)
+
+    /// Custom velocity keyframes — AI-designed speed curve for this specific clip.
+    /// Each keyframe is (position: 0-1, speed: 0.1-5.0). When present, overrides
+    /// the named velocity preset. Matches the web platform's per-clip speed curves.
+    var customVelocityKeyframes: [VelocityKeyframe]?
+
+    /// Custom per-clip caption styling overrides (matches web platform)
+    var customCaptionFontWeight: Int?
+    var customCaptionFontStyle: String?     // "normal" or "italic"
+    var customCaptionFontFamily: String?    // "sans-serif", "serif", "mono"
+    var customCaptionColor: String?         // hex e.g. "#ffffff"
+    var customCaptionAnimation: String?     // "pop", "slide", "flicker", "typewriter", "fade", "none"
+    var customCaptionGlowColor: String?     // hex e.g. "#7c3aed"
+    var customCaptionGlowRadius: Double?    // 0-30
+
+    /// Custom per-clip transition override
+    var customTransitionType: String?       // "flash", "zoom_punch", "crossfade", etc.
+    var customTransitionDuration: Double?   // 0.15-1.0 seconds
+
+    /// Entry punch scale when clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic)
+    var entryPunchScale: Double?
+    var entryPunchDuration: Double?
+
+    // MARK: - Custom Visual Parameters (AI generates novel values when no preset fits)
 
     var customGrade: CustomColorGrade?
     var customOverlay: CustomOverlay?
@@ -54,6 +78,16 @@ struct CustomEffectConfig: Codable, Hashable, Sendable {
         customGrade != nil || customOverlay != nil
             || customParticle != nil || customTransition != nil
     }
+}
+
+// MARK: - Velocity Keyframe
+
+/// A single point on a custom velocity curve. Position 0-1 within the clip,
+/// speed is the playback rate (0.25 = slow-mo, 4.0 = 4x fast).
+/// Matches the web platform's VelocityKeyframe exactly.
+struct VelocityKeyframe: Codable, Hashable, Sendable {
+    let position: Double  // 0.0–1.0, where in the clip
+    let speed: Double     // 0.1–5.0, playback rate
 }
 
 // MARK: - Custom Color Grade

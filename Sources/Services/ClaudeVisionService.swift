@@ -321,7 +321,7 @@ actor ClaudeVisionService {
     /// Extracts the first balanced JSON structure from text using bracket depth tracking.
     /// Prevents the bug where first-open to last-close grabs conversational text between
     /// multiple JSON fragments.
-    private static func extractBalancedJSON(from text: String, open: Character, close: Character) -> String? {
+    static func extractBalancedJSON(from text: String, open: Character, close: Character) -> String? {
         guard let startIdx = text.firstIndex(of: open) else { return nil }
         var depth = 0
         for i in text[startIdx...].indices {

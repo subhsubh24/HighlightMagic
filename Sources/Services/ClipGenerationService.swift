@@ -8,9 +8,10 @@ actor ClipGenerationService {
 
     private init() {}
 
-    /// Generate clips with AI-powered effect recommendations.
-    /// For each highlight segment, the AI analyzes the actual video content and recommends
-    /// the best effects, or generates custom parameters when no preset is ideal.
+    /// Generate clips with AI-powered creative direction.
+    /// Uses the unified tape planner: Claude sees ALL segments at once and designs
+    /// per-clip creative decisions for a cohesive tape (custom velocity curves,
+    /// custom color grades, per-clip caption styling, transitions).
     func generateClips(
         from video: VideoItem,
         segments: [HighlightSegment],
@@ -21,33 +22,25 @@ actor ClipGenerationService {
         // Hook-first ordering: put the highest-confidence segment first
         let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
 
-        // If we have a source URL, try AI recommendations for each clip
         if let sourceURL {
             let asset = AVURLAsset(url: sourceURL)
-            var clips: [EditedClip] = []
 
-            for segment in ordered {
-                let timeRange = CMTimeRange(start: segment.startTime, end: segment.endTime)
+            // Unified tape planner: Claude sees ALL clips at once for cohesive creative direction
+            let perClipConfigs = await AIEffectRecommendationService.shared.planTapeEffects(
+                for: asset,
+                segments: ordered,
+                userPrompt: userPrompt,
+                template: template
+            )
 
-                // Get AI recommendation for this specific clip
-                let aiConfig = await AIEffectRecommendationService.shared.recommendEffects(
-                    for: asset,
-                    timeRange: timeRange,
-                    userPrompt: userPrompt,
-                    template: template
-                )
-
-                // Build the clip with AI-recommended settings applied
-                let clip = buildClipFromAIConfig(
+            return zip(ordered, perClipConfigs).map { segment, aiConfig in
+                buildClipFromAIConfig(
                     aiConfig: aiConfig,
                     sourceVideoID: video.id,
                     segment: segment,
                     template: template
                 )
-                clips.append(clip)
             }
-
-            return clips
         }
 
         // Fallback: no source URL available, use heuristic recommendations
@@ -326,11 +319,18 @@ actor ExportService {
         }
         progressHandler(0.08)
 
-        // 2. Compute velocity map if velocity editing is enabled
+        // 2. Compute velocity map — prefer custom AI keyframes, fall back to preset style
         let clipDuration = CMTimeGetSeconds(config.trimEnd) - CMTimeGetSeconds(config.trimStart)
         var velocityMap: VelocityEditService.VelocityMap?
-        if config.viralConfig.velocityStyle != .none, let beats = beatMap {
-            // AI-driven velocity intensity — scales speed ramp drama
+        if let customKeyframes = config.aiEffectConfig?.customVelocityKeyframes,
+           customKeyframes.count >= 2 {
+            // AI-designed custom speed curve (matches web platform's per-clip approach)
+            velocityMap = await VelocityEditService.shared.generateVelocityMapFromKeyframes(
+                clipDuration: clipDuration,
+                keyframes: customKeyframes
+            )
+        } else if config.viralConfig.velocityStyle != .none, let beats = beatMap {
+            // Fallback: preset velocity style with AI-driven intensity
             let velocityIntensity = config.aiEffectConfig?.velocityIntensity ?? 1.0
             velocityMap = await VelocityEditService.shared.generateVelocityMap(
                 clipDuration: clipDuration,

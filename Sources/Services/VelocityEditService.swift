@@ -79,12 +79,83 @@ actor VelocityEditService {
         }
     }
 
-    // MARK: - Generate Velocity Map
+    // MARK: - Generate Velocity Map from Custom Keyframes
 
-    /// Generates a velocity map for a clip.
+    /// Generates a velocity map from AI-designed custom keyframes.
+    /// This is the primary path when Claude provides per-clip speed curves
+    /// (matching the web platform's approach). Cubic interpolation between keyframes.
+    func generateVelocityMapFromKeyframes(
+        clipDuration: Double,
+        keyframes: [VelocityKeyframe]
+    ) -> VelocityMap {
+        guard keyframes.count >= 2, clipDuration > 0 else {
+            return VelocityMap(
+                segments: [VelocitySegment(
+                    sourceStart: 0, sourceEnd: clipDuration,
+                    speed: 1.0, easeIn: false, easeOut: false
+                )],
+                originalDuration: clipDuration,
+                outputDuration: clipDuration
+            )
+        }
+
+        let sorted = keyframes.sorted { $0.position < $1.position }
+        // Subdivide into small segments for smooth interpolation (100 steps)
+        let steps = 100
+        var segments: [VelocitySegment] = []
+        let dt = clipDuration / Double(steps)
+
+        for i in 0..<steps {
+            let start = Double(i) * dt
+            let end = min(Double(i + 1) * dt, clipDuration)
+            let position = (start + end) / 2.0 / clipDuration // midpoint position
+            let speed = max(0.1, interpolateSpeed(at: position, keyframes: sorted))
+
+            segments.append(VelocitySegment(
+                sourceStart: start,
+                sourceEnd: end,
+                speed: speed,
+                easeIn: true,
+                easeOut: true
+            ))
+        }
+
+        let outputDuration = segments.reduce(0.0) { $0 + $1.outputDuration }
+        return VelocityMap(segments: segments, originalDuration: clipDuration, outputDuration: outputDuration)
+    }
+
+    /// Cubic ease-in-out interpolation between keyframe speed values.
+    private func interpolateSpeed(at position: Double, keyframes: [VelocityKeyframe]) -> Double {
+        let p = min(max(position, 0), 1)
+
+        guard let first = keyframes.first, let last = keyframes.last else { return 1.0 }
+        if p <= first.position { return first.speed }
+        if p >= last.position { return last.speed }
+
+        // Find surrounding keyframes
+        var lower = first
+        var upper = last
+        for i in 0..<(keyframes.count - 1) {
+            if p >= keyframes[i].position && p <= keyframes[i + 1].position {
+                lower = keyframes[i]
+                upper = keyframes[i + 1]
+                break
+            }
+        }
+
+        guard upper.position > lower.position else { return lower.speed }
+
+        // Smooth cubic ease-in-out
+        let t = (p - lower.position) / (upper.position - lower.position)
+        let smoothT = t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
+        return lower.speed + (upper.speed - lower.speed) * smoothT
+    }
+
+    // MARK: - Generate Velocity Map from Preset
+
+    /// Generates a velocity map for a clip using a named preset style.
+    /// Fallback path when custom keyframes aren't provided.
     /// - Parameter intensity: 0.0–1.0 — scales all speed ramp values.
-    ///   At 0.0, all speeds collapse to 1.0x (no change). At 1.0, full drama.
-    ///   Driven by AI content analysis (calm scene → low intensity, action → high).
     func generateVelocityMap(
         clipDuration: Double,
         beatMap: BeatSyncService.BeatMap,
