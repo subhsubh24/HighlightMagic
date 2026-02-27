@@ -27,6 +27,21 @@ struct CustomEffectConfig: Codable, Hashable, Sendable {
     var recommendedCaptionStyle: String?
     var recommendedMusicMood: String?
 
+    // MARK: - AI-Driven Edit Parameters (replaces hardcoded constants)
+
+    /// Whether beat sync should be enabled for this clip. nil = use energy-based default.
+    var beatSyncEnabled: Bool?
+    /// Whether seamless loop fade should be enabled. nil = use energy-based default.
+    var seamlessLoopEnabled: Bool?
+    /// Music volume relative to original audio: 0.0 = muted, 1.0 = full. nil = 0.85 default.
+    var musicVolume: Double?
+    /// Original audio volume when music is present: 0.0 = muted, 1.0 = full. nil = 0.15 default.
+    var originalAudioVolume: Double?
+    /// Seamless loop fade-out duration in seconds. nil = energy-based default.
+    var fadeDuration: Double?
+    /// Velocity speed intensity: 0.0 = no speed change, 1.0 = max drama. Scales all speed ramp values.
+    var velocityIntensity: Double?
+
     // MARK: - Custom Parameters (AI generates novel values when no preset fits)
 
     var customGrade: CustomColorGrade?

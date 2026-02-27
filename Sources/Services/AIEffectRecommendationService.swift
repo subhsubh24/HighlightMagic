@@ -243,6 +243,12 @@ actor AIEffectRecommendationService {
         3. Not every clip needs particles or overlays — only recommend them when they genuinely enhance the content
         4. Match the energy: calm scenes → smooth transitions, high-energy → snappy transitions
         5. Color grade should complement the existing lighting, not fight it
+        6. Decide editing parameters based on content:
+           - beatSyncEnabled: should the video cut to the beat? (false for calm/scenic, true for energetic/action)
+           - seamlessLoopEnabled: should the clip loop smoothly? (true for most social content, false for narrative moments)
+           - musicVolume/originalAudioVolume: balance the audio mix. If the original audio is important (speech, crowd, nature sounds), keep it higher. If it's background noise, favor music.
+           - velocityIntensity: how dramatic should speed ramps be? 0.0 = subtle, 1.0 = extreme. Match the scene energy.
+           - fadeDuration: how long should the loop fade be? Faster music/energy → shorter fades.
 
         Respond with a single JSON object (no markdown, no explanation outside JSON):
         {
@@ -251,6 +257,12 @@ actor AIEffectRecommendationService {
           "dominantColors": ["hex1", "hex2"],
           "lighting": "one of: golden_hour, overcast, night, indoor, harsh, soft",
           "energy": "one of: calm, moderate, high, explosive",
+          "beatSyncEnabled": true or false,
+          "seamlessLoopEnabled": true or false,
+          "musicVolume": 0.0-1.0,
+          "originalAudioVolume": 0.0-1.0,
+          "fadeDuration": 0.2-0.8,
+          "velocityIntensity": 0.0-1.0,
           "recommendedFilter": "preset name or null",
           "recommendedGrade": "preset name or null",
           "recommendedLUT": "preset name or null",
@@ -346,6 +358,22 @@ actor AIEffectRecommendationService {
         config.recommendedKineticCaption = dict["recommendedKineticCaption"] as? String
         config.recommendedCaptionStyle = dict["recommendedCaptionStyle"] as? String
         config.recommendedMusicMood = dict["recommendedMusicMood"] as? String
+
+        // Parse AI-driven edit parameters
+        config.beatSyncEnabled = dict["beatSyncEnabled"] as? Bool
+        config.seamlessLoopEnabled = dict["seamlessLoopEnabled"] as? Bool
+        if let mv = Self.jsonDouble(dict, "musicVolume", default: -1), mv >= 0 {
+            config.musicVolume = min(max(mv, 0), 1)
+        }
+        if let ov = Self.jsonDouble(dict, "originalAudioVolume", default: -1), ov >= 0 {
+            config.originalAudioVolume = min(max(ov, 0), 1)
+        }
+        if let fd = Self.jsonDouble(dict, "fadeDuration", default: -1), fd >= 0 {
+            config.fadeDuration = min(max(fd, 0.1), 1.0)
+        }
+        if let vi = Self.jsonDouble(dict, "velocityIntensity", default: -1), vi >= 0 {
+            config.velocityIntensity = min(max(vi, 0), 1)
+        }
 
         // Parse custom grade
         if let gradeDict = dict["customGrade"] as? [String: Any] {
@@ -632,6 +660,63 @@ actor AIEffectRecommendationService {
     private nonisolated func applyMoodBasedDefaults(to config: inout CustomEffectConfig) {
         let mood = config.mood ?? "energetic"
         let energy = config.energy ?? "moderate"
+
+        // Beat sync: driven by energy — calm content shouldn't be beat-synced
+        if config.beatSyncEnabled == nil {
+            switch energy {
+            case "calm": config.beatSyncEnabled = false
+            case "moderate": config.beatSyncEnabled = true
+            case "high", "explosive": config.beatSyncEnabled = true
+            default: config.beatSyncEnabled = true
+            }
+        }
+
+        // Seamless loop: on for most social content, off for narrative/calm
+        if config.seamlessLoopEnabled == nil {
+            config.seamlessLoopEnabled = energy != "calm"
+        }
+
+        // Audio mix: favor original audio for calm/dramatic, favor music for energetic
+        if config.musicVolume == nil {
+            switch energy {
+            case "calm": config.musicVolume = 0.6
+            case "moderate": config.musicVolume = 0.75
+            case "high": config.musicVolume = 0.85
+            case "explosive": config.musicVolume = 0.9
+            default: config.musicVolume = 0.8
+            }
+        }
+        if config.originalAudioVolume == nil {
+            switch energy {
+            case "calm": config.originalAudioVolume = 0.5
+            case "moderate": config.originalAudioVolume = 0.25
+            case "high": config.originalAudioVolume = 0.15
+            case "explosive": config.originalAudioVolume = 0.1
+            default: config.originalAudioVolume = 0.2
+            }
+        }
+
+        // Fade duration: faster energy → shorter fades
+        if config.fadeDuration == nil {
+            switch energy {
+            case "calm": config.fadeDuration = 0.6
+            case "moderate": config.fadeDuration = 0.4
+            case "high": config.fadeDuration = 0.3
+            case "explosive": config.fadeDuration = 0.2
+            default: config.fadeDuration = 0.35
+            }
+        }
+
+        // Velocity intensity: how dramatic the speed ramps are
+        if config.velocityIntensity == nil {
+            switch energy {
+            case "calm": config.velocityIntensity = 0.3
+            case "moderate": config.velocityIntensity = 0.6
+            case "high": config.velocityIntensity = 0.8
+            case "explosive": config.velocityIntensity = 1.0
+            default: config.velocityIntensity = 0.7
+            }
+        }
 
         // Velocity: match energy level
         if config.recommendedVelocityStyle == nil {

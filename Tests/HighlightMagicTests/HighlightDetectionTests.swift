@@ -94,6 +94,41 @@ struct HighlightDetectionTests {
         #expect(clip.duration == 20.0)
     }
 
+    @Test("Effective duration uses AI trim when both set")
+    func testEffectiveDurationWithAI() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 0, preferredTimescale: 600),
+            endTime: CMTime(seconds: 60, preferredTimescale: 600),
+            confidenceScore: 0.95,
+            label: "Full",
+            aiSuggestedStart: CMTime(seconds: 5, preferredTimescale: 600),
+            aiSuggestedEnd: CMTime(seconds: 45, preferredTimescale: 600)
+        )
+
+        #expect(segment.duration == 60.0) // Raw detection boundaries
+        #expect(segment.effectiveDuration == 40.0) // AI-refined boundaries
+        #expect(CMTimeGetSeconds(segment.effectiveStartTime) == 5.0)
+        #expect(CMTimeGetSeconds(segment.effectiveEndTime) == 45.0)
+    }
+
+    @Test("AI creative config fields are populated by energy-based defaults")
+    func testAICreativeConfigDefaults() {
+        let service = AIEffectRecommendationService.shared
+
+        // Calm content
+        let calmConfig = service.fallbackRecommendation(prompt: "relaxing sunset view")
+        #expect(calmConfig.beatSyncEnabled == false)
+        #expect(calmConfig.seamlessLoopEnabled == false)
+        #expect(calmConfig.velocityIntensity != nil)
+        #expect(calmConfig.velocityIntensity! <= 0.5)
+        #expect(calmConfig.musicVolume != nil)
+
+        // Action content
+        let actionConfig = service.fallbackRecommendation(prompt: "extreme workout gym")
+        #expect(actionConfig.beatSyncEnabled == true)
+        #expect(actionConfig.velocityIntensity! >= 0.8)
+    }
+
     @Test("Confidence badge threshold mapping")
     func testConfidenceThresholds() {
         let highConfidence = 0.85

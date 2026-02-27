@@ -423,6 +423,15 @@ actor HighlightDetectionService {
         let motion: Double
         let face: Double
         let scene: Double
+
+        /// Content-aware continuation threshold ratio (0.0–1.0).
+        /// Scenic content → lower threshold = wider clips to capture slow pans.
+        /// Action content → higher threshold = tighter clips around the burst.
+        var continuationRatio: Double {
+            if scene >= 0.5 { return 0.3 }     // Scenic: expand more (30% of peak)
+            if motion >= 0.45 { return 0.5 }    // Action: stay tight (50% of peak)
+            return 0.4                           // Balanced: 40% of peak
+        }
     }
 
     private func promptBasedWeights(for prompt: String) -> DetectionWeights {
@@ -457,6 +466,8 @@ actor HighlightDetectionService {
         guard !scores.isEmpty else { return [] }
 
         let interval = totalSeconds / Double(scores.count)
+        let weights = promptBasedWeights(for: prompt)
+        let continuationRatio = weights.continuationRatio
 
         // Find peaks above threshold
         let threshold = scores.sorted().dropLast(scores.count / 3).last ?? 0.3
@@ -495,7 +506,7 @@ actor HighlightDetectionService {
             // both directions while the score stays above a continuation threshold.
             // This produces clips whose duration naturally matches the content —
             // high-action stretches get longer clips, brief moments get shorter ones.
-            let continuationThreshold = peak.score * 0.4
+            let continuationThreshold = peak.score * continuationRatio
 
             var leftIdx = peak.index
             while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
@@ -566,7 +577,7 @@ actor HighlightDetectionService {
         if segments.isEmpty {
             let bestIdx = scores.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
             // Use score-based expansion for the fallback too
-            let continuationThreshold = scores[bestIdx] * 0.4
+            let continuationThreshold = scores[bestIdx] * continuationRatio
             var leftIdx = bestIdx
             while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
                 leftIdx -= 1
@@ -599,8 +610,24 @@ actor HighlightDetectionService {
     }
 
     private func generateLabel(score: Double, prompt: String) -> String {
+        // When Claude Vision is available, it will override this with a
+        // content-specific label via scoredItem.reason. This is the fallback
+        // for on-device-only detection.
         if !prompt.isEmpty {
-            return prompt.prefix(30).capitalized
+            let weights = promptBasedWeights(for: prompt)
+            let prefix: String
+            if weights.motion >= 0.45 {
+                prefix = score >= 0.8 ? "Peak Action" : "Action"
+            } else if weights.face >= 0.45 {
+                prefix = score >= 0.8 ? "Best Reaction" : "Key Moment"
+            } else if weights.scene >= 0.5 {
+                prefix = score >= 0.8 ? "Stunning View" : "Scenic"
+            } else {
+                prefix = score >= 0.8 ? "Top Highlight" : "Highlight"
+            }
+            // Append user intent if it adds context
+            let shortPrompt = String(prompt.prefix(20)).capitalized
+            return "\(prefix) — \(shortPrompt)"
         }
 
         switch score {

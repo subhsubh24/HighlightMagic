@@ -81,11 +81,16 @@ actor VelocityEditService {
 
     // MARK: - Generate Velocity Map
 
+    /// Generates a velocity map for a clip.
+    /// - Parameter intensity: 0.0–1.0 — scales all speed ramp values.
+    ///   At 0.0, all speeds collapse to 1.0x (no change). At 1.0, full drama.
+    ///   Driven by AI content analysis (calm scene → low intensity, action → high).
     func generateVelocityMap(
         clipDuration: Double,
         beatMap: BeatSyncService.BeatMap,
         style: VelocityStyle,
-        clipStartInMusic: Double = 0
+        clipStartInMusic: Double = 0,
+        intensity: Double = 1.0
     ) -> VelocityMap {
         guard style != .none else {
             return VelocityMap(
@@ -108,32 +113,38 @@ actor VelocityEditService {
         let relevantStrongBeats = beatMap.strongBeats(in: clipStartInMusic...clipEndInMusic)
             .map { $0 - clipStartInMusic }
 
+        let clampedIntensity = min(max(intensity, 0), 1)
+
         switch style {
         case .hero:
             return buildHeroVelocity(
                 clipDuration: clipDuration,
                 beats: relevantBeats,
                 strongBeats: relevantStrongBeats,
-                beatInterval: beatMap.beatInterval
+                beatInterval: beatMap.beatInterval,
+                intensity: clampedIntensity
             )
         case .bullet:
             return buildBulletVelocity(
                 clipDuration: clipDuration,
                 beats: relevantBeats,
                 strongBeats: relevantStrongBeats,
-                beatInterval: beatMap.beatInterval
+                beatInterval: beatMap.beatInterval,
+                intensity: clampedIntensity
             )
         case .montage:
             return buildMontageVelocity(
                 clipDuration: clipDuration,
                 beats: relevantBeats,
-                beatInterval: beatMap.beatInterval
+                beatInterval: beatMap.beatInterval,
+                intensity: clampedIntensity
             )
         case .smooth:
             return buildSmoothVelocity(
                 clipDuration: clipDuration,
                 beats: relevantBeats,
-                beatInterval: beatMap.beatInterval
+                beatInterval: beatMap.beatInterval,
+                intensity: clampedIntensity
             )
         case .none:
             // Unreachable due to guard above, but required for exhaustive switch
@@ -151,13 +162,20 @@ actor VelocityEditService {
         }
     }
 
+    /// Scales a raw speed toward 1.0 based on intensity.
+    /// intensity=1.0 → raw speed unchanged. intensity=0.0 → always 1.0x.
+    private func scaled(_ rawSpeed: Double, intensity: Double) -> Double {
+        1.0 + (rawSpeed - 1.0) * intensity
+    }
+
     // MARK: - Hero Style: Fast buildup -> dramatic slow-mo on strong beats -> fast recovery
 
     private func buildHeroVelocity(
         clipDuration: Double,
         beats: [Double],
         strongBeats: [Double],
-        beatInterval: Double
+        beatInterval: Double,
+        intensity: Double
     ) -> VelocityMap {
         var segments: [VelocitySegment] = []
         let slowMoDuration = beatInterval * 0.6  // Slow-mo lasts ~60% of a beat
@@ -177,7 +195,7 @@ actor VelocityEditService {
                 segments.append(VelocitySegment(
                     sourceStart: currentTime,
                     sourceEnd: rampStart,
-                    speed: 2.5,
+                    speed: scaled(2.5, intensity: intensity),
                     easeIn: false,
                     easeOut: true
                 ))
@@ -188,7 +206,7 @@ actor VelocityEditService {
                 segments.append(VelocitySegment(
                     sourceStart: rampStart,
                     sourceEnd: slowStart,
-                    speed: 1.5,
+                    speed: scaled(1.5, intensity: intensity),
                     easeIn: true,
                     easeOut: true
                 ))
@@ -199,7 +217,7 @@ actor VelocityEditService {
                 segments.append(VelocitySegment(
                     sourceStart: slowStart,
                     sourceEnd: slowEnd,
-                    speed: 0.3,
+                    speed: scaled(0.3, intensity: intensity),
                     easeIn: true,
                     easeOut: true
                 ))
@@ -213,7 +231,7 @@ actor VelocityEditService {
             segments.append(VelocitySegment(
                 sourceStart: currentTime,
                 sourceEnd: clipDuration,
-                speed: 1.5,
+                speed: scaled(1.5, intensity: intensity),
                 easeIn: true,
                 easeOut: false
             ))
@@ -229,7 +247,8 @@ actor VelocityEditService {
         clipDuration: Double,
         beats: [Double],
         strongBeats: [Double],
-        beatInterval: Double
+        beatInterval: Double,
+        intensity: Double
     ) -> VelocityMap {
         var segments: [VelocitySegment] = []
         let snapDuration = beatInterval * 0.35
@@ -247,7 +266,7 @@ actor VelocityEditService {
                 segments.append(VelocitySegment(
                     sourceStart: currentTime,
                     sourceEnd: snapStart,
-                    speed: 3.5,
+                    speed: scaled(3.5, intensity: intensity),
                     easeIn: false,
                     easeOut: false
                 ))
@@ -257,7 +276,7 @@ actor VelocityEditService {
             segments.append(VelocitySegment(
                 sourceStart: snapStart,
                 sourceEnd: snapEnd,
-                speed: 0.2,
+                speed: scaled(0.2, intensity: intensity),
                 easeIn: false,
                 easeOut: false
             ))
@@ -269,7 +288,7 @@ actor VelocityEditService {
             segments.append(VelocitySegment(
                 sourceStart: currentTime,
                 sourceEnd: clipDuration,
-                speed: 2.0,
+                speed: scaled(2.0, intensity: intensity),
                 easeIn: false,
                 easeOut: false
             ))
@@ -284,7 +303,8 @@ actor VelocityEditService {
     private func buildMontageVelocity(
         clipDuration: Double,
         beats: [Double],
-        beatInterval: Double
+        beatInterval: Double,
+        intensity: Double
     ) -> VelocityMap {
         var segments: [VelocitySegment] = []
         var currentTime = 0.0
@@ -297,8 +317,8 @@ actor VelocityEditService {
                 index + 1 < beats.count ? beats[index + 1] : clipDuration
             )
 
-            // Alternate between slightly fast and slightly slow
-            let speed: Double = index % 2 == 0 ? 1.3 : 0.8
+            // Alternate between slightly fast and slightly slow, scaled by intensity
+            let speed: Double = index % 2 == 0 ? scaled(1.3, intensity: intensity) : scaled(0.8, intensity: intensity)
 
             if beat > currentTime {
                 segments.append(VelocitySegment(
@@ -346,7 +366,8 @@ actor VelocityEditService {
     private func buildSmoothVelocity(
         clipDuration: Double,
         beats: [Double],
-        beatInterval: Double
+        beatInterval: Double,
+        intensity: Double
     ) -> VelocityMap {
         // Divide clip into beat-aligned segments with gentle speed variation
         let segmentCount = max(Int(clipDuration / beatInterval), 2)
@@ -357,9 +378,9 @@ actor VelocityEditService {
         for i in 0..<segmentCount {
             let start = Double(i) * segmentDuration
             let end = min(Double(i + 1) * segmentDuration, clipDuration)
-            // Sine-wave speed: oscillates between 0.7x and 1.3x
+            // Sine-wave speed: amplitude scaled by intensity (0.0 → flat 1.0x, 1.0 → 0.7x–1.3x)
             let phase = Double(i) / Double(segmentCount) * .pi * 2
-            let speed = 1.0 + 0.3 * sin(phase)
+            let speed = 1.0 + 0.3 * intensity * sin(phase)
 
             segments.append(VelocitySegment(
                 sourceStart: start,

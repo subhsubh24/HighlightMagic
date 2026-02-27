@@ -84,10 +84,14 @@ actor ClipGenerationService {
         let captionStyle = resolveCaptionStyle(aiConfig: aiConfig, template: template)
         let musicTrack = resolveMusicTrack(aiConfig: aiConfig, template: template)
 
+        // AI decides beat sync and loop based on content energy, not hardcoded
+        let beatSync = aiConfig.beatSyncEnabled ?? (aiConfig.energy != "calm")
+        let seamlessLoop = aiConfig.seamlessLoopEnabled ?? (aiConfig.energy != "calm")
+
         let viralConfig = ViralEditConfig(
-            beatSyncEnabled: true,
+            beatSyncEnabled: beatSync,
             velocityStyle: velocityStyle,
-            seamlessLoopEnabled: true,
+            seamlessLoopEnabled: seamlessLoop,
             kineticCaptionStyle: kineticStyle,
             hookFirstOrdering: true
         )
@@ -191,8 +195,13 @@ actor ClipGenerationService {
            let style = CaptionStyle.allCases.first(where: { $0.rawValue == name }) {
             return style
         }
-        // Fallback heuristic already fills this based on mood, but if somehow nil:
-        return .bold
+        // Mood-based fallback instead of hardcoded .bold
+        switch aiConfig.mood {
+        case "calm", "romantic", "warm": return .classic
+        case "dramatic", "moody", "dark": return .minimal
+        case "cool": return .neon
+        default: return .bold
+        }
     }
 
     private nonisolated func resolveMusicTrack(
@@ -210,8 +219,20 @@ actor ClipGenerationService {
            let track = MusicLibrary.tracksForMood(template.suggestedMusicMood).first {
             return track
         }
-        // Final fallback: upbeat track (mood-based, not position-based)
-        return MusicLibrary.tracksForMood(.upbeat).first
+        // Energy/mood-based fallback instead of hardcoded .upbeat
+        let fallbackMood: TrackMood
+        switch aiConfig.energy {
+        case "calm": fallbackMood = .chill
+        case "explosive": fallbackMood = .energetic
+        default:
+            switch aiConfig.mood {
+            case "dramatic", "moody", "dark": fallbackMood = .dramatic
+            case "epic": fallbackMood = .epic
+            case "playful": fallbackMood = .fun
+            default: fallbackMood = .upbeat
+            }
+        }
+        return MusicLibrary.tracksForMood(fallbackMood).first
     }
 }
 
@@ -309,10 +330,13 @@ actor ExportService {
         let clipDuration = CMTimeGetSeconds(config.trimEnd) - CMTimeGetSeconds(config.trimStart)
         var velocityMap: VelocityEditService.VelocityMap?
         if config.viralConfig.velocityStyle != .none, let beats = beatMap {
+            // AI-driven velocity intensity — scales speed ramp drama
+            let velocityIntensity = config.aiEffectConfig?.velocityIntensity ?? 1.0
             velocityMap = await VelocityEditService.shared.generateVelocityMap(
                 clipDuration: clipDuration,
                 beatMap: beats,
-                style: config.viralConfig.velocityStyle
+                style: config.viralConfig.velocityStyle,
+                intensity: velocityIntensity
             )
         }
         progressHandler(0.12)
@@ -435,7 +459,8 @@ actor ExportService {
             config: config,
             velocityMap: config.needsCIFilterProcessing ? nil : velocityMap,
             beatMap: beatMap,
-            effectiveDuration: effectiveClipDuration
+            effectiveDuration: effectiveClipDuration,
+            aiConfig: config.aiEffectConfig
         )
         progressHandler(0.65)
 
@@ -443,9 +468,9 @@ actor ExportService {
         let seamlessLoopFade = config.viralConfig.seamlessLoopEnabled ? effectiveClipDuration : nil
         let audioMix: AVMutableAudioMix
         if config.needsCIFilterProcessing {
-            audioMix = await buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
+            audioMix = await buildAudioMix(asset: sourceForOverlays, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade, aiConfig: config.aiEffectConfig)
         } else {
-            audioMix = await buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade)
+            audioMix = await buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil, seamlessLoopFade: seamlessLoopFade, aiConfig: config.aiEffectConfig)
         }
 
         // 9. Final export
@@ -608,7 +633,8 @@ actor ExportService {
         config: ExportConfig,
         velocityMap: VelocityEditService.VelocityMap?,
         beatMap: BeatSyncService.BeatMap?,
-        effectiveDuration: CMTime
+        effectiveDuration: CMTime,
+        aiConfig: CustomEffectConfig? = nil
     ) async throws -> AVMutableVideoComposition {
         let targetSize = config.outputSize
         let videoComposition = AVMutableVideoComposition()
@@ -654,11 +680,15 @@ actor ExportService {
         layerInstruction.setTransform(transform, at: .zero)
 
         if config.viralConfig.seamlessLoopEnabled {
-            let fadeDuration = CMTime(seconds: 0.3, preferredTimescale: 600)
+            // AI-driven fade duration and end opacity
+            let fadeSeconds = aiConfig?.fadeDuration ?? config.aiEffectConfig?.fadeDuration ?? 0.35
+            let fadeDuration = CMTime(seconds: fadeSeconds, preferredTimescale: 600)
             let fadeStart = CMTimeSubtract(duration, fadeDuration)
+            // Higher energy → sharper cut (lower end opacity), calmer → gentler fade
+            let endOpacity: Float = aiConfig?.energy == "explosive" ? 0.7 : (aiConfig?.energy == "calm" ? 0.92 : 0.85)
             layerInstruction.setOpacityRamp(
                 fromStartOpacity: 1.0,
-                toEndOpacity: 0.85,
+                toEndOpacity: endOpacity,
                 timeRange: CMTimeRange(start: fadeStart, duration: fadeDuration)
             )
         }
@@ -710,16 +740,21 @@ actor ExportService {
 
     // MARK: - Audio Mix
 
-    /// Builds audio mix with volume levels and optional seamless loop fade-out.
-    /// The old `applySeamlessLoop` was a no-op — it created AVMutableAudioMixInputParameters
-    /// but never attached them to any AVMutableAudioMix. Now the fade is integrated here.
+    /// Builds audio mix with AI-driven volume levels and optional seamless loop fade-out.
     private func buildAudioMix(
         asset: AVAsset,
         hasMusicTrack: Bool,
-        seamlessLoopFade: CMTime? = nil
+        seamlessLoopFade: CMTime? = nil,
+        aiConfig: CustomEffectConfig? = nil
     ) async -> AVMutableAudioMix {
         let audioMix = AVMutableAudioMix()
         var inputParams: [AVMutableAudioMixInputParameters] = []
+
+        // AI-driven audio mix: original audio volume and music volume
+        let originalVolume = Float(aiConfig?.originalAudioVolume ?? 0.15)
+        let musicVolume = Float(aiConfig?.musicVolume ?? 0.85)
+        // AI-driven fade duration
+        let fadeSeconds = aiConfig?.fadeDuration ?? 0.35
 
         let audioTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
 
@@ -728,7 +763,7 @@ actor ExportService {
 
             let volume: Float
             if hasMusicTrack {
-                volume = index == 0 ? 0.15 : 0.85
+                volume = index == 0 ? originalVolume : musicVolume
             } else {
                 volume = 1.0
             }
@@ -736,7 +771,7 @@ actor ExportService {
 
             // Apply seamless loop audio fade-out at the end of the clip
             if let clipDuration = seamlessLoopFade {
-                let fadeDuration = CMTime(seconds: 0.4, preferredTimescale: 600)
+                let fadeDuration = CMTime(seconds: fadeSeconds, preferredTimescale: 600)
                 let fadeStart = CMTimeSubtract(clipDuration, fadeDuration)
                 params.setVolumeRamp(
                     fromStartVolume: volume,
