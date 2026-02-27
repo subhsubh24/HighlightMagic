@@ -15,6 +15,7 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var viralConfig: ViralEditConfig
     var cinematicGrade: CinematicGrade
     var selectedPremiumEffects: [PremiumEffect]
+    var aiEffectConfig: CustomEffectConfig?
     var exportURL: URL?
 
     init(
@@ -29,7 +30,8 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         selectedFilter: VideoFilter = .none,
         viralConfig: ViralEditConfig = .default,
         cinematicGrade: CinematicGrade = .none,
-        selectedPremiumEffects: [PremiumEffect] = []
+        selectedPremiumEffects: [PremiumEffect] = [],
+        aiEffectConfig: CustomEffectConfig? = nil
     ) {
         self.id = id
         self.sourceVideoID = sourceVideoID
@@ -43,6 +45,7 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         self.viralConfig = viralConfig
         self.cinematicGrade = cinematicGrade
         self.selectedPremiumEffects = selectedPremiumEffects
+        self.aiEffectConfig = aiEffectConfig
     }
 
     var duration: TimeInterval {

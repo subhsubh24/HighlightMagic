@@ -122,10 +122,12 @@ struct ProcessingView: View {
 
             appState.detectedHighlights = result.segments
 
-            // Generate clips from segments
+            // Generate clips with AI-powered effect recommendations
             let clips = await ClipGenerationService.shared.generateClips(
                 from: video,
-                segments: result.segments
+                segments: result.segments,
+                userPrompt: appState.userPrompt,
+                sourceURL: video.sourceURL
             )
             appState.generatedClips = clips
 

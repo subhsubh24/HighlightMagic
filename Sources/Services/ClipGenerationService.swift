@@ -8,12 +8,68 @@ actor ClipGenerationService {
 
     private init() {}
 
+    /// Generate clips with AI-powered effect recommendations.
+    /// For each highlight segment, the AI analyzes the actual video content and recommends
+    /// the best effects, or generates custom parameters when no preset is ideal.
+    func generateClips(
+        from video: VideoItem,
+        segments: [HighlightSegment],
+        userPrompt: String = "",
+        template: HighlightTemplate? = nil,
+        sourceURL: URL? = nil
+    ) async -> [EditedClip] {
+        // Hook-first ordering: put the highest-confidence segment first
+        let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
+
+        // If we have a source URL, try AI recommendations for each clip
+        if let sourceURL {
+            let asset = AVURLAsset(url: sourceURL)
+            var clips: [EditedClip] = []
+
+            for segment in ordered {
+                let timeRange = CMTimeRange(start: segment.startTime, end: segment.endTime)
+
+                // Get AI recommendation for this specific clip
+                let aiConfig = await AIEffectRecommendationService.shared.recommendEffects(
+                    for: asset,
+                    timeRange: timeRange,
+                    userPrompt: userPrompt,
+                    template: template
+                )
+
+                // Build the clip with AI-recommended settings applied
+                let clip = buildClipFromAIConfig(
+                    aiConfig: aiConfig,
+                    sourceVideoID: video.id,
+                    segment: segment,
+                    template: template
+                )
+                clips.append(clip)
+            }
+
+            return clips
+        }
+
+        // Fallback: no source URL available, use heuristic recommendations
+        return ordered.map { segment in
+            let aiConfig = AIEffectRecommendationService.shared.fallbackRecommendation(
+                template: template,
+                prompt: userPrompt
+            )
+            return buildClipFromAIConfig(
+                aiConfig: aiConfig,
+                sourceVideoID: video.id,
+                segment: segment,
+                template: template
+            )
+        }
+    }
+
+    /// Legacy non-async entry point for callers that don't need AI recommendations.
     func generateClips(
         from video: VideoItem,
         segments: [HighlightSegment]
     ) -> [EditedClip] {
-        // Hook-first ordering: put the highest-confidence segment first
-        // (most visually striking clip as frame 1 for scroll-stopping hook)
         let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
 
         return ordered.map { segment in
@@ -25,6 +81,141 @@ actor ClipGenerationService {
                 viralConfig: .default
             )
         }
+    }
+
+    // MARK: - AI Config → EditedClip
+
+    /// Translates an AI effect config into a fully configured EditedClip.
+    /// Maps recommended preset names to actual enum values, and carries through
+    /// custom parameters for the renderer.
+    private nonisolated func buildClipFromAIConfig(
+        aiConfig: CustomEffectConfig,
+        sourceVideoID: UUID,
+        segment: HighlightSegment,
+        template: HighlightTemplate?
+    ) -> EditedClip {
+        // Resolve filter
+        let filter = resolveFilter(aiConfig: aiConfig, template: template)
+
+        // Resolve cinematic grade
+        let grade = resolveGrade(aiConfig: aiConfig, template: template)
+
+        // Resolve premium effects (LUT, particle, transition, overlays)
+        let premiumEffects = resolvePremiumEffects(aiConfig: aiConfig)
+
+        // Resolve velocity style
+        let velocityStyle = resolveVelocityStyle(aiConfig: aiConfig, template: template)
+
+        // Resolve kinetic caption style
+        let kineticStyle = resolveKineticCaption(aiConfig: aiConfig, template: template)
+
+        // Resolve music
+        let musicMood = resolveMusicMood(aiConfig: aiConfig, template: template)
+        let musicTrack = musicMood.flatMap { mood in
+            MusicLibrary.tracksForMood(mood).first
+        } ?? MusicLibrary.tracks.first
+
+        let viralConfig = ViralEditConfig(
+            beatSyncEnabled: true,
+            velocityStyle: velocityStyle,
+            seamlessLoopEnabled: true,
+            kineticCaptionStyle: kineticStyle,
+            hookFirstOrdering: true
+        )
+
+        return EditedClip(
+            sourceVideoID: sourceVideoID,
+            segment: segment,
+            selectedMusicTrack: musicTrack,
+            captionText: segment.label,
+            selectedFilter: filter,
+            viralConfig: viralConfig,
+            cinematicGrade: grade,
+            selectedPremiumEffects: premiumEffects,
+            aiEffectConfig: aiConfig
+        )
+    }
+
+    private nonisolated func resolveFilter(aiConfig: CustomEffectConfig, template: HighlightTemplate?) -> VideoFilter {
+        if let name = aiConfig.recommendedFilter,
+           let filter = VideoFilter.allCases.first(where: { $0.rawValue == name }) {
+            return filter
+        }
+        return template?.suggestedFilter ?? .none
+    }
+
+    private nonisolated func resolveGrade(aiConfig: CustomEffectConfig, template: HighlightTemplate?) -> CinematicGrade {
+        if let name = aiConfig.recommendedGrade,
+           let grade = CinematicGrade.allCases.first(where: { $0.rawValue == name }) {
+            return grade
+        }
+        return .none
+    }
+
+    private nonisolated func resolvePremiumEffects(aiConfig: CustomEffectConfig) -> [PremiumEffect] {
+        var effects: [PremiumEffect] = []
+
+        // LUT
+        if let name = aiConfig.recommendedLUT,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+
+        // Particle
+        if let name = aiConfig.recommendedParticle,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+
+        // Transition
+        if let name = aiConfig.recommendedTransition,
+           let effect = PremiumEffectLibrary.effect(named: name) {
+            effects.append(effect)
+        }
+
+        // Overlays
+        if let overlayNames = aiConfig.recommendedOverlays {
+            for name in overlayNames {
+                if let effect = PremiumEffectLibrary.effect(named: name) {
+                    effects.append(effect)
+                }
+            }
+        }
+
+        return effects
+    }
+
+    private nonisolated func resolveVelocityStyle(
+        aiConfig: CustomEffectConfig,
+        template: HighlightTemplate?
+    ) -> VelocityEditService.VelocityStyle {
+        if let name = aiConfig.recommendedVelocityStyle,
+           let style = VelocityEditService.VelocityStyle.allCases.first(where: { $0.rawValue == name }) {
+            return style
+        }
+        return template?.suggestedVelocityStyle ?? .hero
+    }
+
+    private nonisolated func resolveKineticCaption(
+        aiConfig: CustomEffectConfig,
+        template: HighlightTemplate?
+    ) -> KineticCaptionStyle {
+        if let name = aiConfig.recommendedKineticCaption,
+           let style = KineticCaptionStyle.allCases.first(where: { $0.rawValue == name }) {
+            return style
+        }
+        return template?.suggestedKineticCaption ?? .pop
+    }
+
+    private nonisolated func resolveMusicMood(
+        aiConfig: CustomEffectConfig,
+        template: HighlightTemplate?
+    ) -> TrackMood? {
+        if let name = aiConfig.recommendedMusicMood,
+           let mood = TrackMood.allCases.first(where: { $0.rawValue == name }) {
+            return mood
+        }
+        return template?.suggestedMusicMood
     }
 }
 
@@ -48,6 +239,7 @@ actor ExportService {
         let viralConfig: ViralEditConfig
         let cinematicGrade: CinematicGrade
         let premiumEffects: [PremiumEffect]
+        let aiEffectConfig: CustomEffectConfig?
 
         init(
             sourceURL: URL,
@@ -61,7 +253,8 @@ actor ExportService {
             outputSize: CGSize,
             viralConfig: ViralEditConfig = .off,
             cinematicGrade: CinematicGrade = .none,
-            premiumEffects: [PremiumEffect] = []
+            premiumEffects: [PremiumEffect] = [],
+            aiEffectConfig: CustomEffectConfig? = nil
         ) {
             self.sourceURL = sourceURL
             self.trimStart = trimStart
@@ -75,6 +268,7 @@ actor ExportService {
             self.viralConfig = viralConfig
             self.cinematicGrade = cinematicGrade
             self.premiumEffects = premiumEffects
+            self.aiEffectConfig = aiEffectConfig
         }
 
         static var defaultSize: CGSize {
@@ -89,6 +283,8 @@ actor ExportService {
             filter != .none
                 || cinematicGrade != .none
                 || premiumEffects.contains(where: { $0.category == .overlay || $0.category == .lut })
+                || aiEffectConfig?.customGrade != nil
+                || aiEffectConfig?.customOverlay != nil
         }
     }
 
@@ -105,7 +301,6 @@ actor ExportService {
             do {
                 beatMap = try await BeatSyncService.shared.detectBeats(from: track)
             } catch {
-                // Fallback: use synthetic beats from BPM metadata
                 beatMap = BeatSyncService.shared.syntheticBeatMap(
                     bpm: Double(track.bpm),
                     duration: track.durationSeconds
@@ -228,14 +423,13 @@ actor ExportService {
 
         let sourceForOverlays: AVAsset
         if config.needsCIFilterProcessing {
-            // Pass 1: Render composition with CIFilter pipeline to intermediate file
             let intermediateURL = try await renderWithCIFilters(
                 composition: composition,
                 sourceTrack: sourceVideoTrack,
                 config: config,
                 velocityMap: velocityMap,
                 progressHandler: { p in
-                    progressHandler(0.35 + p * 0.25) // 0.35 -> 0.60
+                    progressHandler(0.35 + p * 0.25)
                 }
             )
             sourceForOverlays = AVURLAsset(url: intermediateURL)
@@ -310,8 +504,6 @@ actor ExportService {
 
     // MARK: - Pass 1: CIFilter Rendering
 
-    /// Renders the composition through the CIFilter pipeline (video filter, cinematic grade,
-    /// premium LUTs, overlay effects) to an intermediate file using AVAssetReader/Writer.
     private func renderWithCIFilters(
         composition: AVMutableComposition,
         sourceTrack: AVAssetTrack,
@@ -323,7 +515,6 @@ actor ExportService {
         let preferredTransform = try await sourceTrack.load(.preferredTransform)
         let targetSize = config.outputSize
 
-        // Build the CIFilter video composition using applyingCIFiltersWithHandler
         let filterComposition = try AVMutableVideoComposition.videoComposition(
             with: composition,
             applyingCIFiltersWithHandler: { [config, targetSize] request in
@@ -350,7 +541,7 @@ actor ExportService {
                     image = PremiumEffectRenderer.applyPremiumLUT(to: image, effect: effect)
                 }
 
-                // 4. Apply overlay effects (light leak, film grain, vignette, lens flare)
+                // 4. Apply overlay effects (preset overlays)
                 let overlayEffects = config.premiumEffects.filter { $0.category == .overlay }
                 if !overlayEffects.isEmpty {
                     image = PremiumEffectRenderer.applyOverlayEffects(
@@ -360,7 +551,20 @@ actor ExportService {
                     )
                 }
 
-                // Crop back to render size
+                // 5. Apply AI custom color grade (when no preset fit the scene)
+                if let customGrade = config.aiEffectConfig?.customGrade {
+                    image = PremiumEffectRenderer.applyCustomGrade(to: image, config: customGrade)
+                }
+
+                // 6. Apply AI custom overlay (when no preset fit the scene)
+                if let customOverlay = config.aiEffectConfig?.customOverlay {
+                    image = PremiumEffectRenderer.applyCustomOverlay(
+                        to: image,
+                        config: customOverlay,
+                        videoSize: targetSize
+                    )
+                }
+
                 let cropped = image.cropped(to: request.sourceImage.extent)
                 request.finish(with: cropped, context: nil)
             }
@@ -368,12 +572,10 @@ actor ExportService {
         filterComposition.renderSize = targetSize
         filterComposition.frameDuration = CMTime(value: 1, timescale: Int32(Constants.exportFrameRate))
 
-        // Export to intermediate file
         let intermediateURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("intermediate_\(UUID().uuidString)")
             .appendingPathExtension("mp4")
 
-        // Build audio mix for intermediate
         let audioMix = buildAudioMix(asset: composition, hasMusicTrack: config.musicTrack != nil)
 
         guard let exportSession = AVAssetExportSession(
@@ -388,7 +590,6 @@ actor ExportService {
         exportSession.videoComposition = filterComposition
         exportSession.audioMix = audioMix
 
-        // Progress polling for Pass 1
         let progressTask = Task { @Sendable in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
@@ -410,8 +611,6 @@ actor ExportService {
 
     // MARK: - Pass 2: Overlay Composition
 
-    /// Builds the video composition for CALayer-based overlays
-    /// (particles, transitions, captions, watermark).
     private func buildOverlayComposition(
         asset: AVAsset,
         sourceTrack: AVAssetTrack,
@@ -425,7 +624,6 @@ actor ExportService {
         videoComposition.renderSize = targetSize
         videoComposition.frameDuration = CMTime(value: 1, timescale: Int32(Constants.exportFrameRate))
 
-        // Get the video track from the asset (could be intermediate or original composition)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw ExportError.noVideoTrack
         }
@@ -439,7 +637,6 @@ actor ExportService {
 
         let duration: CMTime
         if config.needsCIFilterProcessing {
-            // For intermediate files, use their actual duration
             duration = try await asset.load(.duration)
         } else {
             duration = effectiveDuration
@@ -465,7 +662,6 @@ actor ExportService {
 
         layerInstruction.setTransform(transform, at: .zero)
 
-        // Seamless loop: fade opacity at end
         if config.viralConfig.seamlessLoopEnabled {
             let fadeDuration = CMTime(seconds: 0.3, preferredTimescale: 600)
             let fadeStart = CMTimeSubtract(duration, fadeDuration)
@@ -479,7 +675,6 @@ actor ExportService {
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
-        // Add CALayer overlays
         addOverlayLayers(
             to: videoComposition,
             size: targetSize,
@@ -489,7 +684,8 @@ actor ExportService {
             addWatermark: config.addWatermark,
             clipDuration: CMTimeGetSeconds(duration),
             beatTimes: beatMap?.beatTimes,
-            premiumEffects: config.premiumEffects
+            premiumEffects: config.premiumEffects,
+            aiEffectConfig: config.aiEffectConfig
         )
 
         return videoComposition
@@ -582,7 +778,8 @@ actor ExportService {
         addWatermark: Bool,
         clipDuration: Double,
         beatTimes: [Double]?,
-        premiumEffects: [PremiumEffect] = []
+        premiumEffects: [PremiumEffect] = [],
+        aiEffectConfig: CustomEffectConfig? = nil
     ) {
         let parentLayer = CALayer()
         parentLayer.frame = CGRect(origin: .zero, size: size)
@@ -591,7 +788,7 @@ actor ExportService {
         videoLayer.frame = CGRect(origin: .zero, size: size)
         parentLayer.addSublayer(videoLayer)
 
-        // Transition effects (intro/outro animations on the video layer)
+        // Preset transition effects
         let transitionEffects = premiumEffects.filter { $0.category == .transition }
         if !transitionEffects.isEmpty {
             PremiumEffectRenderer.addTransitionEffects(
@@ -601,14 +798,31 @@ actor ExportService {
                 videoSize: size,
                 clipDuration: clipDuration
             )
+        } else if let customTransition = aiEffectConfig?.customTransition {
+            // AI-generated custom transition (only if no preset transition was selected)
+            PremiumEffectRenderer.addCustomTransition(
+                to: parentLayer,
+                videoLayer: videoLayer,
+                config: customTransition,
+                videoSize: size,
+                clipDuration: clipDuration
+            )
         }
 
-        // Particle effects (sparkles, confetti, snow, fireflies)
+        // Preset particle effects
         let particleEffects = premiumEffects.filter { $0.category == .particle }
         if !particleEffects.isEmpty {
             PremiumEffectRenderer.addParticleEffects(
                 to: parentLayer,
                 effects: particleEffects,
+                videoSize: size,
+                clipDuration: clipDuration
+            )
+        } else if let customParticle = aiEffectConfig?.customParticle {
+            // AI-generated custom particle (only if no preset particle was selected)
+            PremiumEffectRenderer.addCustomParticle(
+                to: parentLayer,
+                config: customParticle,
                 videoSize: size,
                 clipDuration: clipDuration
             )

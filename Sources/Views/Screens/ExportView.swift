@@ -260,7 +260,8 @@ struct ExportView: View {
             outputSize: ExportService.ExportConfig.defaultSize,
             viralConfig: clip.viralConfig,
             cinematicGrade: clip.cinematicGrade,
-            premiumEffects: clip.selectedPremiumEffects
+            premiumEffects: clip.selectedPremiumEffects,
+            aiEffectConfig: clip.aiEffectConfig
         )
 
         Analytics.exportStarted(
