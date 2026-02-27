@@ -149,12 +149,16 @@ struct SettingsView: View {
                         Label("Replay Onboarding", systemImage: "arrow.counterclockwise")
                     }
 
-                    Link(destination: URL(string: AppStoreMetadata.privacyPolicyURL)!) {
-                        Label("Privacy Policy", systemImage: "hand.raised")
+                    if let url = URL(string: AppStoreMetadata.privacyPolicyURL) {
+                        Link(destination: url) {
+                            Label("Privacy Policy", systemImage: "hand.raised")
+                        }
                     }
 
-                    Link(destination: URL(string: AppStoreMetadata.termsOfServiceURL)!) {
-                        Label("Terms of Service", systemImage: "doc.text")
+                    if let url = URL(string: AppStoreMetadata.termsOfServiceURL) {
+                        Link(destination: url) {
+                            Label("Terms of Service", systemImage: "doc.text")
+                        }
                     }
                 } header: {
                     Text("About")
