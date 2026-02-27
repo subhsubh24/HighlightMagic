@@ -133,6 +133,7 @@ actor HighlightDetectionService {
         totalSeconds: Double,
         progressHandler: @Sendable (Double) -> Void
     ) async -> [HighlightSegment] {
+        // candidateTimestamps[i] corresponds exactly to segments[i]
         let candidateTimestamps = segments.map { $0.startSeconds + $0.duration / 2 }
 
         do {
@@ -144,25 +145,43 @@ actor HighlightDetectionService {
                 progressHandler(phase)
             }
 
-            // Merge Claude scores with existing segments
+            // Merge Claude scores with 1:1 matching — each score maps to exactly
+            // one segment, matched by closest candidate timestamp. This prevents
+            // a single segment from absorbing multiple labels when segments are
+            // close together in time.
             var refined = segments
+            var matchedIndices: Set<Int> = []
+
             for scoredItem in scored {
-                if let idx = refined.firstIndex(where: {
-                    abs($0.startSeconds + $0.duration / 2 - scoredItem.seconds) < 5
-                }) {
-                    // Blend: 60% Claude score + 40% original
-                    let blended = scoredItem.score * 0.6 + refined[idx].confidenceScore * 0.4
-                    refined[idx].confidenceScore = blended
-                    if !refined[idx].detectionSources.contains(.claudeVision) {
-                        refined[idx].detectionSources.append(.claudeVision)
+                // Find the closest unmatched candidate timestamp
+                var bestIdx: Int?
+                var bestDist = Double.infinity
+                for (i, ts) in candidateTimestamps.enumerated() where !matchedIndices.contains(i) {
+                    let dist = abs(ts - scoredItem.seconds)
+                    if dist < bestDist && dist < 5 {
+                        bestDist = dist
+                        bestIdx = i
                     }
-                    if !scoredItem.reason.isEmpty {
-                        refined[idx].label = scoredItem.reason
-                    }
+                }
+
+                guard let idx = bestIdx else { continue }
+                matchedIndices.insert(idx)
+
+                // Blend: 60% Claude score + 40% original
+                let blended = scoredItem.score * 0.6 + refined[idx].confidenceScore * 0.4
+                refined[idx].confidenceScore = blended
+                if !refined[idx].detectionSources.contains(.claudeVision) {
+                    refined[idx].detectionSources.append(.claudeVision)
+                }
+                if !scoredItem.reason.isEmpty {
+                    refined[idx].label = scoredItem.reason
                 }
             }
 
-            return refined.sorted { $0.confidenceScore > $1.confidenceScore }
+            // Preserve chronological order — ClipGenerationService sorts by
+            // confidence when building clips, so re-sorting here would only
+            // decouple labels from their segments.
+            return refined
         } catch {
             return segments
         }
