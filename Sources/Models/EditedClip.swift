@@ -36,8 +36,9 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         self.id = id
         self.sourceVideoID = sourceVideoID
         self.segment = segment
-        self.trimStart = trimStart ?? segment.startTime
-        self.trimEnd = trimEnd ?? segment.endTime
+        // Use AI-suggested trim points when available, falling back to detection boundaries
+        self.trimStart = trimStart ?? segment.effectiveStartTime
+        self.trimEnd = trimEnd ?? segment.effectiveEndTime
         self.selectedMusicTrack = selectedMusicTrack
         self.captionText = captionText
         self.captionStyle = captionStyle

@@ -137,30 +137,37 @@ actor HighlightDetectionService {
         totalSeconds: Double,
         progressHandler: @Sendable (Double) -> Void
     ) async -> [HighlightSegment] {
-        // candidateTimestamps[i] corresponds exactly to segments[i]
-        let candidateTimestamps = segments.map { $0.startSeconds + $0.duration / 2 }
+        // Build candidate context with full segment boundaries for Claude
+        let candidates = segments.map {
+            ClaudeVisionService.CandidateSegment(
+                midpoint: $0.startSeconds + $0.duration / 2,
+                start: $0.startSeconds,
+                end: $0.endSeconds
+            )
+        }
 
         do {
             let scored = try await ClaudeVisionService.shared.scoreHighlights(
                 asset: asset,
                 prompt: prompt,
-                candidateTimestamps: candidateTimestamps
+                candidates: candidates
             ) { phase in
                 progressHandler(phase)
             }
 
             // Merge Claude scores with 1:1 matching — each score maps to exactly
-            // one segment, matched by closest candidate timestamp. This prevents
+            // one segment, matched by closest candidate midpoint. This prevents
             // a single segment from absorbing multiple labels when segments are
             // close together in time.
             var refined = segments
+            let candidateMidpoints = candidates.map(\.midpoint)
             var matchedIndices: Set<Int> = []
 
             for scoredItem in scored {
-                // Find the closest unmatched candidate timestamp
+                // Find the closest unmatched candidate midpoint
                 var bestIdx: Int?
                 var bestDist = Double.infinity
-                for (i, ts) in candidateTimestamps.enumerated() where !matchedIndices.contains(i) {
+                for (i, ts) in candidateMidpoints.enumerated() where !matchedIndices.contains(i) {
                     let dist = abs(ts - scoredItem.seconds)
                     if dist < bestDist && dist < 5 {
                         bestDist = dist
@@ -180,11 +187,22 @@ actor HighlightDetectionService {
                 if !scoredItem.reason.isEmpty {
                     refined[idx].label = scoredItem.reason
                 }
+
+                // Apply AI-suggested trim points if provided and valid
+                if let sugStart = scoredItem.suggestedStart,
+                   let sugEnd = scoredItem.suggestedEnd,
+                   sugEnd > sugStart,
+                   sugStart >= 0,
+                   sugEnd <= totalSeconds {
+                    let sugDuration = sugEnd - sugStart
+                    // Only accept if within allowed duration range
+                    if sugDuration >= Constants.minClipDuration && sugDuration <= Constants.maxClipDuration {
+                        refined[idx].aiSuggestedStart = CMTime(seconds: sugStart, preferredTimescale: 600)
+                        refined[idx].aiSuggestedEnd = CMTime(seconds: sugEnd, preferredTimescale: 600)
+                    }
+                }
             }
 
-            // Preserve chronological order — ClipGenerationService sorts by
-            // confidence when building clips, so re-sorting here would only
-            // decouple labels from their segments.
             return refined
         } catch {
             return segments
@@ -473,22 +491,44 @@ actor HighlightDetectionService {
         for peak in peaks.prefix(Constants.targetClipCount * 2) {
             guard !usedIndices.contains(peak.index) else { continue }
 
-            // Expand around peak to form a clip
-            let peakTimeSec = Double(peak.index) * interval
-            let clipDuration = min(
-                max(Constants.minClipDuration, 30.0),
-                Constants.maxClipDuration
-            )
-            let halfClip = clipDuration / 2.0
+            // Score-based boundary expansion: walk outward from the peak in
+            // both directions while the score stays above a continuation threshold.
+            // This produces clips whose duration naturally matches the content —
+            // high-action stretches get longer clips, brief moments get shorter ones.
+            let continuationThreshold = peak.score * 0.4
 
-            let startSec = max(0, peakTimeSec - halfClip)
-            let endSec = min(totalSeconds, peakTimeSec + halfClip)
+            var leftIdx = peak.index
+            while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
+                leftIdx -= 1
+            }
+            var rightIdx = peak.index
+            while rightIdx < scores.count - 1 && scores[rightIdx + 1] >= continuationThreshold {
+                rightIdx += 1
+            }
+
+            var startSec = Double(leftIdx) * interval
+            var endSec = Double(rightIdx + 1) * interval
+            var rawDuration = endSec - startSec
+
+            // Enforce min/max clip duration
+            if rawDuration < Constants.minClipDuration {
+                // Center-expand to minimum
+                let deficit = Constants.minClipDuration - rawDuration
+                startSec = max(0, startSec - deficit / 2)
+                endSec = min(totalSeconds, endSec + deficit / 2)
+            } else if rawDuration > Constants.maxClipDuration {
+                // Shrink to max, keeping the peak centered
+                let peakTimeSec = Double(peak.index) * interval
+                startSec = max(0, peakTimeSec - Constants.maxClipDuration / 2)
+                endSec = min(totalSeconds, peakTimeSec + Constants.maxClipDuration / 2)
+            }
+
+            // Clamp to video bounds
+            startSec = max(0, startSec)
+            endSec = min(totalSeconds, endSec)
             let candidateDuration = endSec - startSec
 
             // Drop if >50% of this clip overlaps an existing segment.
-            // usedIndices only prevents peaks *inside* existing clips, but the
-            // ±halfClip expansion can still produce near-duplicate clips from
-            // peaks just outside the used range.
             let overlapsExisting = candidateDuration > 0 && segments.contains { existing in
                 let overlapStart = max(existing.startSeconds, startSec)
                 let overlapEnd = min(existing.startSeconds + existing.duration, endSec)
@@ -498,10 +538,12 @@ actor HighlightDetectionService {
             guard !overlapsExisting else { continue }
 
             // Mark used indices
-            let startIdx = Int(startSec / interval)
+            let startIdx = max(0, Int(startSec / interval))
             let endIdx = min(Int(endSec / interval), scores.count - 1)
-            for idx in startIdx...endIdx {
-                usedIndices.insert(idx)
+            if startIdx <= endIdx {
+                for idx in startIdx...endIdx {
+                    usedIndices.insert(idx)
+                }
             }
 
             let label = generateLabel(score: peak.score, prompt: prompt)
@@ -523,9 +565,26 @@ actor HighlightDetectionService {
         // If no segments found, create one from the best overall section
         if segments.isEmpty {
             let bestIdx = scores.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
-            let peakTime = Double(bestIdx) * interval
-            let startSec = max(0, peakTime - 15)
-            let endSec = min(totalSeconds, peakTime + 15)
+            // Use score-based expansion for the fallback too
+            let continuationThreshold = scores[bestIdx] * 0.4
+            var leftIdx = bestIdx
+            while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
+                leftIdx -= 1
+            }
+            var rightIdx = bestIdx
+            while rightIdx < scores.count - 1 && scores[rightIdx + 1] >= continuationThreshold {
+                rightIdx += 1
+            }
+
+            var startSec = Double(leftIdx) * interval
+            var endSec = Double(rightIdx + 1) * interval
+
+            // Enforce minimum duration
+            if endSec - startSec < Constants.minClipDuration {
+                let deficit = Constants.minClipDuration - (endSec - startSec)
+                startSec = max(0, startSec - deficit / 2)
+                endSec = min(totalSeconds, endSec + deficit / 2)
+            }
 
             segments.append(HighlightSegment(
                 startTime: CMTime(seconds: startSec, preferredTimescale: 600),

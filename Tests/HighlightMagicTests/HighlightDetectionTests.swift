@@ -46,7 +46,7 @@ struct HighlightDetectionTests {
     func testClipDurationLimits() {
         let segment = HighlightSegment(
             startTime: CMTime(seconds: 0, preferredTimescale: 600),
-            endTime: CMTime(seconds: 30, preferredTimescale: 600),
+            endTime: CMTime(seconds: 25, preferredTimescale: 600),
             confidenceScore: 0.8,
             label: "Test"
         )
@@ -56,8 +56,42 @@ struct HighlightDetectionTests {
             segment: segment
         )
 
-        #expect(clip.duration >= Constants.minClipDuration || clip.duration <= Constants.maxClipDuration)
-        #expect(clip.duration == 30.0)
+        #expect(clip.duration >= Constants.minClipDuration)
+        #expect(clip.duration <= Constants.maxClipDuration)
+        #expect(clip.duration == 25.0) // Duration is now content-driven, not hardcoded
+    }
+
+    @Test("Clip uses AI-suggested trim when available")
+    func testAISuggestedTrim() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 10, preferredTimescale: 600),
+            endTime: CMTime(seconds: 40, preferredTimescale: 600),
+            confidenceScore: 0.9,
+            label: "AI Refined",
+            aiSuggestedStart: CMTime(seconds: 12, preferredTimescale: 600),
+            aiSuggestedEnd: CMTime(seconds: 35, preferredTimescale: 600)
+        )
+
+        // Clip should use AI-suggested trim points
+        let clip = EditedClip(sourceVideoID: UUID(), segment: segment)
+        #expect(CMTimeGetSeconds(clip.trimStart) == 12.0)
+        #expect(CMTimeGetSeconds(clip.trimEnd) == 35.0)
+        #expect(clip.duration == 23.0)
+    }
+
+    @Test("Clip falls back to detection boundaries when no AI suggestion")
+    func testFallbackTrim() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 5, preferredTimescale: 600),
+            endTime: CMTime(seconds: 25, preferredTimescale: 600),
+            confidenceScore: 0.7,
+            label: "No AI"
+        )
+
+        let clip = EditedClip(sourceVideoID: UUID(), segment: segment)
+        #expect(CMTimeGetSeconds(clip.trimStart) == 5.0)
+        #expect(CMTimeGetSeconds(clip.trimEnd) == 25.0)
+        #expect(clip.duration == 20.0)
     }
 
     @Test("Confidence badge threshold mapping")

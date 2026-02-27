@@ -3,11 +3,17 @@ import CoreMedia
 
 struct HighlightSegment: Identifiable, Hashable, Sendable {
     let id: UUID
-    let startTime: CMTime
-    let endTime: CMTime
+    var startTime: CMTime
+    var endTime: CMTime
     var confidenceScore: Double
     var label: String
     var detectionSources: [DetectionSource]
+
+    /// AI-suggested optimal trim points (from Claude Vision).
+    /// When present, these refine the raw detection boundaries
+    /// to better frame the actual highlight content.
+    var aiSuggestedStart: CMTime?
+    var aiSuggestedEnd: CMTime?
 
     init(
         id: UUID = UUID(),
@@ -15,7 +21,9 @@ struct HighlightSegment: Identifiable, Hashable, Sendable {
         endTime: CMTime,
         confidenceScore: Double,
         label: String = "",
-        detectionSources: [DetectionSource] = []
+        detectionSources: [DetectionSource] = [],
+        aiSuggestedStart: CMTime? = nil,
+        aiSuggestedEnd: CMTime? = nil
     ) {
         self.id = id
         self.startTime = startTime
@@ -23,6 +31,23 @@ struct HighlightSegment: Identifiable, Hashable, Sendable {
         self.confidenceScore = confidenceScore
         self.label = label
         self.detectionSources = detectionSources
+        self.aiSuggestedStart = aiSuggestedStart
+        self.aiSuggestedEnd = aiSuggestedEnd
+    }
+
+    /// The best available start time: AI-suggested if available, otherwise raw detection boundary.
+    var effectiveStartTime: CMTime {
+        aiSuggestedStart ?? startTime
+    }
+
+    /// The best available end time: AI-suggested if available, otherwise raw detection boundary.
+    var effectiveEndTime: CMTime {
+        aiSuggestedEnd ?? endTime
+    }
+
+    /// Duration using the best available trim points.
+    var effectiveDuration: TimeInterval {
+        CMTimeGetSeconds(effectiveEndTime) - CMTimeGetSeconds(effectiveStartTime)
     }
 
     // Explicit Hashable based on id only — mutable vars (confidenceScore, label,
