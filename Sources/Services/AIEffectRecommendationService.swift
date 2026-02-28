@@ -82,14 +82,90 @@ actor AIEffectRecommendationService {
         }
     }
 
-    // MARK: - Unified Tape Planner
+    // MARK: - Unified Tape Planner (Opus 4.6 — identical to web)
 
-    /// Plan the entire highlight tape at once — Claude sees ALL segments and designs
-    /// per-clip creative decisions for a cohesive tape. This matches the web platform's
-    /// Opus planner approach: custom velocity keyframes, custom color grades, per-clip
-    /// caption styling, and transition choices per clip.
+    /// Plan the entire highlight tape at once using Claude Opus 4.6 with extended thinking.
+    /// This matches the web platform's planner exactly: same model, same prompt, same parameters.
+    /// Claude sees ALL scored frames, audio features, and top frames, then designs per-clip
+    /// creative decisions for a cohesive tape.
     ///
     /// Returns one CustomEffectConfig per segment, in the same order as the input.
+    func planTapeEffects(
+        for asset: AVURLAsset,
+        segments: [HighlightSegment],
+        scoredFrames: [CloudScoringService.ScoredFrame],
+        audioFeatures: [AudioFeatureService.AudioFeatures],
+        userPrompt: String,
+        template: HighlightTemplate? = nil,
+        progressHandler: (@Sendable (Double) -> Void)? = nil
+    ) async -> [CustomEffectConfig] {
+        guard let apiKey else {
+            logger.info("No API key — falling back to per-segment heuristics")
+            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+        }
+
+        do {
+            // Select top-scored frames to send as images to the planner (matches web selectPlannerFrames)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 512, height: 512)
+
+            // Sort by score, select top 60 with temporal diversity
+            let sortedScores = scoredFrames.sorted { $0.score > $1.score }
+            var selectedTimestamps: [Double] = []
+            var plannerFrames: [(timestamp: Double, base64: String)] = []
+            let maxPlannerFrames = 60
+            let minTemporalGap = 3.0  // seconds between selected frames
+
+            for scored in sortedScores {
+                guard plannerFrames.count < maxPlannerFrames else { break }
+                // Temporal diversity: skip if too close to an already-selected frame
+                if selectedTimestamps.contains(where: { abs($0 - scored.timestamp) < minTemporalGap }) {
+                    continue
+                }
+                let time = CMTime(seconds: scored.timestamp, preferredTimescale: 600)
+                guard let cgImage = try? await generator.image(at: time).image else { continue }
+                let uiImage = UIImage(cgImage: cgImage)
+                guard let jpegData = uiImage.jpegData(compressionQuality: 0.6) else { continue }
+                plannerFrames.append((scored.timestamp, jpegData.base64EncodedString()))
+                selectedTimestamps.append(scored.timestamp)
+            }
+
+            // Sort plannerFrames by timestamp for coherent temporal narrative
+            plannerFrames.sort { $0.timestamp < $1.timestamp }
+
+            guard !plannerFrames.isEmpty else {
+                return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+            }
+
+            // Rate limiting
+            let elapsed = Date.now.timeIntervalSince(lastRequestTime)
+            if elapsed < minRequestInterval {
+                try? await Task.sleep(for: .seconds(minRequestInterval - elapsed))
+            }
+
+            progressHandler?(0.80)
+
+            let configs = try await callTapePlannerOpus(
+                plannerFrames: plannerFrames,
+                scoredFrames: scoredFrames,
+                audioFeatures: audioFeatures,
+                segments: segments,
+                userPrompt: userPrompt,
+                template: template,
+                apiKey: apiKey,
+                progressHandler: progressHandler
+            )
+            lastRequestTime = .now
+            return configs
+        } catch {
+            lastRequestTime = .now
+            logger.warning("Tape planner failed: \(error.localizedDescription), using fallback")
+            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+        }
+    }
+
+    /// Legacy tape planner for offline use (no scored frames/audio)
     func planTapeEffects(
         for asset: AVURLAsset,
         segments: [HighlightSegment],
@@ -102,7 +178,7 @@ actor AIEffectRecommendationService {
         }
 
         do {
-            // Extract 3 frames per segment (start, mid, end) — like Claude Vision refinement
+            // Extract 3 frames per segment (start, mid, end)
             var allFrames: [(segmentIndex: Int, time: Double, base64: String)] = []
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
@@ -208,6 +284,475 @@ actor AIEffectRecommendationService {
         }
 
         return parseTapePlannerResponse(data: data, segmentCount: segments.count, template: template, prompt: userPrompt)
+    }
+
+    // MARK: - Opus 4.6 Tape Planner (identical to web)
+
+    /// Call the Opus 4.6 planner with SSE streaming, extended thinking, and the web's exact prompt.
+    /// This is the primary planner when scored frames are available (cloud-first path).
+    private func callTapePlannerOpus(
+        plannerFrames: [(timestamp: Double, base64: String)],
+        scoredFrames: [CloudScoringService.ScoredFrame],
+        audioFeatures: [AudioFeatureService.AudioFeatures],
+        segments: [HighlightSegment],
+        userPrompt: String,
+        template: HighlightTemplate?,
+        apiKey: String,
+        progressHandler: (@Sendable (Double) -> Void)?
+    ) async throws -> [CustomEffectConfig] {
+        // Build audio lookups
+        let audioLookup = Dictionary(audioFeatures.map { (Int($0.timestamp), $0) },
+                                      uniquingKeysWith: { first, _ in first })
+
+        // Build score lookup
+        let scoreLookup = Dictionary(scoredFrames.map { (String(format: "%.1f", $0.timestamp), $0) },
+                                      uniquingKeysWith: { first, _ in first })
+
+        // Build all scores summary (matches web allScoresSummary)
+        let sortedScores = scoredFrames.sorted { $0.timestamp < $1.timestamp }
+
+        // ASCII bar visualization (matches web)
+        let bars: [Character] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+        let audioVals = sortedScores.compactMap { audioLookup[Int($0.timestamp)]?.audioEnergy }
+        let onsetVals = sortedScores.compactMap { audioLookup[Int($0.timestamp)]?.audioOnset }
+
+        let audioViz = audioVals.isEmpty ? "" :
+            "  Audio energy:  " + audioVals.map { String(bars[min(7, Int($0 * 8))]) }.joined()
+        let onsetViz = onsetVals.isEmpty ? "" :
+            "  Audio onsets:  " + onsetVals.map { String(bars[min(7, Int($0 * 8))]) }.joined() + "  (peaks = beat hits / impacts)"
+
+        let scoreLines = sortedScores.map { s -> String in
+            let roleTag = s.narrativeRole.map { " [\($0)]" } ?? ""
+            let audio = audioLookup[Int(s.timestamp)]
+            let audioTag = audio.map { "  audio:\(String(format: "%.2f", $0.audioEnergy))" } ?? ""
+            let onsetTag = (audio?.audioOnset ?? 0) > 0.1 ? "  onset:\(String(format: "%.2f", audio!.audioOnset))" : ""
+            let specTag: String
+            if let a = audio, a.audioEnergy > 0.1 {
+                specTag = "  spectrum:B\(String(format: "%.2f", a.audioBass))/M\(String(format: "%.2f", a.audioMid))/T\(String(format: "%.2f", a.audioTreble))"
+            } else {
+                specTag = ""
+            }
+            return "  t:\(String(format: "%.1f", s.timestamp))s  score:\(String(format: "%.2f", s.score))\(audioTag)\(onsetTag)\(specTag)\(roleTag)  \"\(s.label)\""
+        }.joined(separator: "\n")
+
+        let allScoresSummary = "── video (video) ──" +
+            (audioViz.isEmpty ? "" : "\n" + audioViz) +
+            (onsetViz.isEmpty ? "" : "\n" + onsetViz) +
+            "\n" + scoreLines
+
+        let totalDuration = sortedScores.last.map { $0.timestamp + 2 } ?? 60.0
+
+        // Build system prompt (identical to web planHighlightTape systemPrompt)
+        let templateLine = template.map { "- Style context: \($0.name) template" } ?? ""
+        let systemPrompt = buildOpusPlannerSystemPrompt(
+            allScoresSummary: allScoresSummary,
+            totalDuration: totalDuration,
+            templateName: templateLine
+        )
+
+        // Build user content with frames
+        var userContent: [[String: Any]] = []
+
+        userContent.append([
+            "type": "text",
+            "text": "Here are \(plannerFrames.count) frames from 1 source file.\nStudy every single frame — the composition, lighting, emotion, motion, story. Each frame is annotated with its virality score and analysis from the scoring pass. Understand the content deeply before you make any editing decisions.\n"
+        ])
+
+        for frame in plannerFrames {
+            userContent.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": frame.base64
+                ] as [String: Any]
+            ])
+
+            let scoreData = scoreLookup[String(format: "%.1f", frame.timestamp)]
+            let position = totalDuration > 0
+                ? "\(Int(frame.timestamp / totalDuration * 100))% through"
+                : "start"
+
+            let audio = audioLookup[Int(frame.timestamp)]
+            let audioVal = audio.map { " | AUDIO: \(String(format: "%.2f", $0.audioEnergy))" } ?? ""
+            let onsetVal = (audio?.audioOnset ?? 0) > 0.1 ? " | ONSET: \(String(format: "%.2f", audio!.audioOnset))" : ""
+            let specVal: String
+            if let a = audio, a.audioEnergy > 0.1 {
+                specVal = " | SPECTRUM: B\(String(format: "%.2f", a.audioBass))/M\(String(format: "%.2f", a.audioMid))/T\(String(format: "%.2f", a.audioTreble))"
+            } else {
+                specVal = ""
+            }
+
+            var annotation = "↑ \"video\" (video), t=\(String(format: "%.1f", frame.timestamp))s (\(position))\(audioVal)\(onsetVal)\(specVal)"
+            if let s = scoreData {
+                let roleTag = s.narrativeRole.map { " [\($0)]" } ?? ""
+                annotation += " | SCORE: \(String(format: "%.2f", s.score))\(roleTag) | \"\(s.label)\""
+            }
+            userContent.append(["type": "text", "text": annotation])
+        }
+
+        let userIntentText = userPrompt.isEmpty
+            ? ""
+            : "\n\nDIRECTOR'S NOTE — The user has specific creative direction that takes PRIORITY:\n\"\(userPrompt)\"\nHonor this direction in every creative decision."
+
+        userContent.append([
+            "type": "text",
+            "text": "\nYou've now seen ALL the footage. Think deeply:\n- What's the story across this source?\n- What are the peak moments?\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?\(userIntentText)\n\nNow create the highlight tape."
+        ])
+
+        // Build request (matches web: Opus 4.6 + adaptive thinking + SSE streaming)
+        let requestBody: [String: Any] = [
+            "model": "claude-opus-4-6",
+            "max_tokens": 32000,
+            "stream": true,
+            "thinking": ["type": "adaptive"],
+            "output_config": ["effort": "medium"],
+            "system": [
+                [
+                    "type": "text",
+                    "text": systemPrompt,
+                    "cache_control": ["type": "ephemeral"]
+                ] as [String: Any]
+            ],
+            "messages": [
+                ["role": "user", "content": userContent]
+            ]
+        ]
+
+        guard let url = URL(string: endpoint) else {
+            throw ClaudeVisionError.invalidEndpoint
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        request.timeoutInterval = 300  // 5 min — Opus with thinking can take 2-3+ min
+
+        // Use SSE streaming to avoid HTTP timeout during long thinking
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            logger.error("Opus planner HTTP \(statusCode)")
+            throw ClaudeVisionError.requestFailed
+        }
+
+        progressHandler?(0.85)
+
+        // Consume SSE stream (matches web consumeSSEStream)
+        let text = try await consumeSSEStream(bytes: bytes, progressHandler: progressHandler)
+
+        progressHandler?(0.95)
+
+        // Parse the planner response (matches web planHighlightTape parsing)
+        return parseOpusPlannerResponse(text: text, segmentCount: segments.count, template: template, prompt: userPrompt)
+    }
+
+    /// Consume an SSE stream from the Anthropic Messages API.
+    /// Accumulates text_delta events, silently skips thinking blocks.
+    private func consumeSSEStream(
+        bytes: URLSession.AsyncBytes,
+        progressHandler: (@Sendable (Double) -> Void)?
+    ) async throws -> String {
+        var text = ""
+        var buffer = ""
+
+        for try await byte in bytes {
+            buffer.append(Character(UnicodeScalar(byte)))
+
+            // Process complete lines
+            while let newlineRange = buffer.range(of: "\n") {
+                let line = String(buffer[buffer.startIndex..<newlineRange.lowerBound])
+                buffer = String(buffer[newlineRange.upperBound...])
+
+                guard line.hasPrefix("data: ") else { continue }
+                let dataStr = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+                if dataStr == "[DONE]" { continue }
+
+                guard let eventData = dataStr.data(using: .utf8),
+                      let event = try? JSONSerialization.jsonObject(with: eventData) as? [String: Any] else {
+                    continue
+                }
+
+                if let type = event["type"] as? String {
+                    if type == "content_block_start" {
+                        if let block = event["content_block"] as? [String: Any],
+                           let blockType = block["type"] as? String {
+                            if blockType == "thinking" {
+                                progressHandler?(0.87)
+                            } else if blockType == "text" {
+                                progressHandler?(0.92)
+                            }
+                        }
+                    } else if type == "content_block_delta" {
+                        if let delta = event["delta"] as? [String: Any],
+                           delta["type"] as? String == "text_delta",
+                           let deltaText = delta["text"] as? String {
+                            text += deltaText
+                        }
+                        // thinking_delta events are silently skipped
+                    }
+                }
+            }
+        }
+
+        return text
+    }
+
+    /// Parse the Opus planner's JSON response into CustomEffectConfig objects.
+    /// The planner returns a wrapper: {"contentSummary": ..., "theme": ..., "clips": [...]}
+    /// Each clip maps to a segment. Unlike the legacy planner, this returns exactly the clips
+    /// the AI designed (not necessarily 1:1 with input segments).
+    private func parseOpusPlannerResponse(
+        text: String,
+        segmentCount: Int,
+        template: HighlightTemplate?,
+        prompt: String
+    ) -> [CustomEffectConfig] {
+        // Extract JSON object
+        guard let jsonString = Self.extractBalancedJSON(from: text),
+              let jsonData = jsonString.data(using: .utf8),
+              let wrapper = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let clips = wrapper["clips"] as? [[String: Any]] else {
+            logger.warning("Opus planner: failed to parse response")
+            return (0..<segmentCount).map { _ in fallbackRecommendation(template: template, prompt: prompt) }
+        }
+
+        var configs: [CustomEffectConfig] = []
+        for dict in clips {
+            var config = parseManually(jsonData: (try? JSONSerialization.data(withJSONObject: dict)) ?? Data())
+
+            // Parse custom velocity keyframes
+            if let kfArray = dict["velocityKeyframes"] as? [[String: Any]] {
+                config.customVelocityKeyframes = kfArray.compactMap { kf in
+                    guard let pos = Self.jsonDouble(kf, "position", default: -1),
+                          let spd = Self.jsonDouble(kf, "speed", default: -1),
+                          pos >= 0, pos <= 1, spd > 0 else { return nil }
+                    return VelocityKeyframe(position: pos, speed: min(spd, 5.0))
+                }
+                if (config.customVelocityKeyframes?.count ?? 0) < 2 {
+                    config.customVelocityKeyframes = nil
+                }
+            }
+
+            // Parse per-clip creative overrides
+            config.customTransitionType = dict["transitionType"] as? String
+            if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
+                config.customTransitionDuration = min(max(td, 0.1), 1.5)
+            }
+            if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
+                config.entryPunchScale = min(max(eps, 1.0), 1.1)
+            }
+            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd > 0 {
+                config.entryPunchDuration = min(max(epd, 0.05), 0.5)
+            }
+            config.customCaptionAnimation = dict["captionAnimation"] as? String
+            if let fw = dict["captionFontWeight"] as? Int, fw >= 100, fw <= 900 {
+                config.customCaptionFontWeight = fw
+            }
+            config.customCaptionFontStyle = dict["captionFontStyle"] as? String
+            config.customCaptionFontFamily = dict["captionFontFamily"] as? String
+            config.customCaptionColor = dict["captionColor"] as? String
+            config.customCaptionGlowColor = dict["captionGlowColor"] as? String
+            if let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
+                config.customCaptionGlowRadius = min(gr, 30)
+            }
+
+            // Parse AI-authored CSS filter as custom color grade
+            if let filterCSS = dict["filterCSS"] as? String, !filterCSS.isEmpty {
+                config.customGrade = parseCSSFilterToGrade(filterCSS)
+            }
+
+            applyMoodBasedDefaults(to: &config)
+            configs.append(config)
+        }
+
+        // If planner returned fewer configs than segments, fill with fallbacks
+        while configs.count < segmentCount {
+            configs.append(fallbackRecommendation(template: template, prompt: prompt))
+        }
+
+        logger.info("Opus planner: designed \(configs.count) creative briefs from \(clips.count) AI clips")
+        return configs
+    }
+
+    /// Convert a CSS filter string (web format) to a CustomColorGrade (iOS format).
+    /// Maps saturate→saturation, contrast→contrast, brightness→brightness, etc.
+    private nonisolated func parseCSSFilterToGrade(_ css: String) -> CustomColorGrade {
+        var grade = CustomColorGrade()
+
+        // Extract function values from CSS filter string
+        let pattern = #"(\w[\w-]*)\(([^)]+)\)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return grade }
+        let matches = regex.matches(in: css, range: NSRange(css.startIndex..., in: css))
+
+        for match in matches {
+            guard let funcRange = Range(match.range(at: 1), in: css),
+                  let valRange = Range(match.range(at: 2), in: css) else { continue }
+            let funcName = String(css[funcRange])
+            let valStr = String(css[valRange]).replacingOccurrences(of: "deg", with: "")
+            guard let value = Double(valStr) else { continue }
+
+            switch funcName {
+            case "saturate": grade.saturation = value
+            case "contrast": grade.contrast = value
+            case "brightness": grade.brightness = value - 1.0  // CSS 1.0 = no change, our 0.0 = no change
+            case "sepia":
+                // Approximate sepia as warm temperature shift
+                grade.temperature = 6500 + value * 2000
+                grade.saturation = max(grade.saturation - value * 0.3, 0.3)
+            case "hue-rotate": grade.hueShift = value / 360.0  // CSS degrees → our 0-1 range
+            default: break
+            }
+        }
+
+        return grade
+    }
+
+    /// Build the Opus planner system prompt — identical to web's planHighlightTape systemPrompt.
+    private func buildOpusPlannerSystemPrompt(
+        allScoresSummary: String,
+        totalDuration: Double,
+        templateName: String
+    ) -> String {
+        return """
+        You are an elite Instagram Reels editor. Your content consistently hits 1M+ views because
+        you understand Instagram's algorithm AND human psychology at a deep level.
+
+        You are being shown the ACTUAL FRAMES from the user's footage. Study every single one deeply.
+        You have full creative control. No limits on clip count, total reel length, or how you structure
+        the tape. Each clip must be at least 2 seconds (let moments breathe). YOU are the editor. Make something incredible.
+
+        SOURCE FILES (1 total):
+        - "video" (video, ~\(Int(totalDuration))s duration)
+
+        EVERY SCORED MOMENT (from frame-by-frame analysis — your complete footage map):
+        \(allScoresSummary)
+
+        ═══════════════════════════════════════════════
+        HOW INSTAGRAM'S ALGORITHM ACTUALLY WORKS
+        ═══════════════════════════════════════════════
+        The algorithm ranks Reels by predicted engagement. The signals, IN ORDER OF WEIGHT:
+        1. WATCH-THROUGH RATE — % of viewers who watch the entire reel (most important)
+        2. REPLAYS — viewers watching 2+ times (this is why loops matter)
+        3. SAVES — bookmarks. Instagram treats a save as "this content has lasting value"
+        4. SHARES — DMs and story reposts. "I need someone else to see this"
+        5. COMMENTS — engagement signal, especially fast comments (means strong reaction)
+        6. LIKES — weakest signal but still counted
+
+        Your job is to maximize ALL of these. The edit structure directly affects every one:
+        - Hook → watch-through rate. Bad hook = 65% of viewers gone in 1.5s
+        - Pacing → watch-through. Monotonous rhythm = viewers lose interest at 4-6s
+        - Emotional peaks → saves + shares. "I need to keep this / show someone this"
+        - Loop design → replays. When the end connects to the start = automatic rewatch
+        - Surprise/humor → comments. Unexpected moments trigger impulse commenting
+
+        ═══════════════════════════════════════════════
+        YOUR PROCESS — Full creative autonomy
+        ═══════════════════════════════════════════════
+
+        STEP 1: DEEPLY UNDERSTAND THE CONTENT
+        Study every frame image. Read every score and label. Build a COMPLETE mental model:
+        - What's the STORY across all this footage? What happened? What's the emotional arc?
+        - Who are the people? What are they doing? What's the setting/mood/energy?
+        - What are the absolute PEAK moments vs. the quieter supporting moments?
+        - What makes this content special? What would make someone who wasn't there feel like they were?
+
+        Put your understanding in a "contentSummary" field (2-3 vivid sentences).
+
+        STEP 2: LABEL THE THEME (for UI display only — does NOT control your creative decisions)
+        Pick a theme label that best describes this content. This is ONLY used in the UI header — it does
+        NOT restrict your transitions, filters, velocity, or any other editing choice. YOU control everything.
+        Valid labels: "sports", "cooking", "travel", "gaming", "party", "fitness", "pets", "vlog", "wedding", "cinematic"
+
+        STEP 2.5: READ THE AUDIO — THREE SIGNAL LAYERS
+        Each frame has audioEnergy (volume), audioOnset (beat detection), and frequency spectrum (bass/mid/treble).
+        Each source has ASCII visualizations of energy and onset. This is how pro editors sync cuts to sound.
+
+        AUDIO ENERGY = volume at this moment:
+        - High (0.7+) = loud (cheering, music peak, action). Low (0-0.3) = quiet (silence, calm).
+
+        AUDIO ONSET = the beat detector. How much energy CHANGED from the previous frame:
+        - High onset (0.5+) = TRANSIENT. Something just happened: beat hit, clap, impact, bass drop, voice starting.
+        - The onset visualization shows you exactly where the rhythm of the footage lives.
+        - Peaks in the onset graph = natural cut points. This is where transitions should land.
+
+        FREQUENCY SPECTRUM = what KIND of audio (spectrum: B=bass / M=mid / T=treble, ratios sum to ~1.0):
+        - Mid-dominant (M > 0.5): SPEECH — someone talking, narrating, reacting vocally
+        - Bass-dominant (B > 0.4) + onset peaks: MUSIC with a beat — drums, bass drops, rhythmic music
+        - Broad spectrum (all 0.2-0.5): Full mix — music with vocals, rich layered soundscape
+        - Treble-heavy (T > 0.4): Bright transients — cymbals, crowd hiss, sibilant speech
+
+        SPEECH vs MUSIC EDITING RULES:
+        - SPEECH (mid-dominant): NEVER cut mid-sentence. Start/end clips at speech pauses (low energy gaps).
+          Keep "normal" velocity — slow-mo makes speech unintelligible and breaks immersion.
+          Use softer transitions (crossfade, dip_to_black) — punchy transitions feel jarring over dialog.
+        - MUSIC (bass-dominant + onsets): Sync cuts to onset peaks. Speed ramps and velocity hits feel incredible.
+          Punchy transitions (flash, zoom_punch, whip) amplify beat drops. This is where you go hard.
+        - MIXED (speech over music): Treat as speech — preserve dialog intelligibility above all.
+        - SILENCE (low energy, no dominant band): Natural cut points. Perfect for dramatic pauses and breathing room.
+
+        USE AUDIO FOR EVERY EDITING DECISION:
+        - START clips at high-onset timestamps — cuts landing on sound hits feel intentional and "tight"
+        - END clips at low-energy, low-onset moments — natural silence boundaries = clean exits
+        - Match transition TYPE to audio: flash/zoom_punch on high onset, crossfade on low onset
+        - VELOCITY + audio: place the slow-mo zone where audio energy peaks (dramatic emphasis)
+        - High onset + high visual score = absolute HERO moment — the audio and visual peak together
+        - Rising energy, low onset = building tension — perfect for ramp_in velocity
+        - High onset + calm visual = off-screen event (reaction opportunity, cut to source with the action)
+        - Cluster of high onsets = rhythmic section — use montage velocity, rapid cuts, beat-sync energy
+
+        STEP 3: CHOOSE YOUR REEL STRUCTURE
+        Before placing a single clip, decide the ARCHITECTURE. Random clip order = amateur.
+        Intentional structure = professional. Choose the pattern that fits YOUR content:
+
+        COLD OPEN — Start at the climax, then rewind to build back.
+        ESCALATION — Each clip tops the last. Start strong, end STRONGEST.
+        CONTRAST CUT — Alternate between opposing energies. A ↔ B ↔ A ↔ B.
+        RHYTHM BUILD — Short punchy clips that get longer as stakes increase.
+        EMOTIONAL ARC — Setup → rising tension → climax → emotional release → reflective close.
+
+        THE HOOK (Clip 1): 65% of viewers decide in the first 1.5 seconds. Period.
+        Your first clip MUST be the single most visually striking moment in the footage.
+
+        YOU DECIDE EVERYTHING:
+        - How many clips to use (as many as the content needs)
+        - How long each clip is — MINIMUM 2 seconds per clip. Most clips should be 3-6 seconds.
+        - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
+        - NEVER repeat the same clip or select visually similar moments from the same timestamp range.
+        \(templateName)
+
+        STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
+
+        VELOCITY — Design a UNIQUE speed curve for each clip using "velocityKeyframes":
+        Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects (minimum 2 keyframes).
+        Position = where in the clip (0=start, 1=end). Speed = playback rate (0.25=slow-mo, 3.0=fast).
+
+        TRANSITIONS ARE NOT DECORATION — THEY CREATE MEANING.
+        "zoom_punch" → IMPACT. "flash" → PUNCTUATION. "hard_flash" → EXPLOSION.
+        "whip" → MOMENTUM. "glitch" → DISRUPTION. "crossfade" → CONNECTION.
+        "light_leak" → MEMORY. "soft_zoom" → DRIFT. "dip_to_black" → CHAPTER BREAK.
+        "color_flash" → SYNESTHESIA. "strobe" → RAPID-FIRE. "hard_cut" → CONFIDENCE.
+        Match transition energy to what FOLLOWS. Never repeat the same transition twice in a row.
+
+        COLOR GRADING — Design a UNIQUE color grade for each clip using "customGrade":
+        {temperature: 2000-10000, tint: -1 to 1, saturation: 0-2, contrast: 0.5-2,
+         brightness: -0.5 to 0.5, vibrance: -1 to 1, exposure: -2 to 2, hueShift: -0.5 to 0.5,
+         fadeAmount: 0-1, sharpen: 0-1}
+
+        ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic)
+
+        CAPTIONS — text that AMPLIFIES, never NARRATES. 2-5 words max. Use on 30-50% of clips.
+        captionAnimation: "pop"|"slide"|"flicker"|"typewriter"|"fade"|"none"
+        captionFontWeight: 100-900, captionColor: hex, captionGlowColor: hex, captionGlowRadius: 0-30
+
+        Respond with ONLY a JSON object:
+        {"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "single", "startTime": 0, "endTime": 5, "label": "description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "customGrade": {"temperature": 6800, "saturation": 1.3, "contrast": 1.2, "brightness": -0.02}, "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15}]}
+        """
     }
 
     private func buildTapePlannerPrompt(

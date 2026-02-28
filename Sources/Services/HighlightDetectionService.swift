@@ -33,6 +33,225 @@ actor HighlightDetectionService {
             throw DetectionError.invalidVideo
         }
 
+        // Cloud-first path: when API is available, use Haiku scoring + Opus planning
+        // (identical to web platform). Falls back to Vision pipeline only when offline.
+        if await CloudScoringService.shared.isAvailable {
+            return try await detectHighlightsCloud(
+                asset: asset,
+                totalSeconds: totalSeconds,
+                prompt: prompt,
+                progressHandler: progressHandler
+            )
+        }
+
+        // Offline fallback: on-device Vision pipeline
+        return try await detectHighlightsOnDevice(
+            asset: asset,
+            totalSeconds: totalSeconds,
+            prompt: prompt,
+            progressHandler: progressHandler
+        )
+    }
+
+    // MARK: - Cloud Detection (Haiku + Opus — identical to web)
+
+    /// Cloud-first detection pipeline matching the web platform exactly:
+    /// 1. Extract audio features (energy, onset, bass/mid/treble per second)
+    /// 2. Score all frames with Claude Haiku (1 frame/sec, batches of 35)
+    /// 3. Z-score normalize across batches
+    /// 4. Build segments from scored frames
+    /// 5. Plan tape with Claude Opus 4.6 (extended thinking, SSE streaming)
+    private func detectHighlightsCloud(
+        asset: AVURLAsset,
+        totalSeconds: Double,
+        prompt: String,
+        progressHandler: @Sendable (Double) -> Void
+    ) async throws -> DetectionResult {
+        logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
+
+        // Phase 1: Extract audio features (0-5%)
+        progressHandler(0.01)
+        let audioFeatures: [AudioFeatureService.AudioFeatures]
+        do {
+            audioFeatures = try await AudioFeatureService.shared.extractFeatures(from: asset)
+        } catch {
+            logger.warning("Audio feature extraction failed: \(error.localizedDescription), continuing without audio")
+            audioFeatures = []
+        }
+        progressHandler(0.05)
+
+        // Phase 2: Score all frames with Haiku (5-75%)
+        let scoredFrames = try await CloudScoringService.shared.scoreFrames(
+            asset: asset,
+            audioFeatures: audioFeatures,
+            templateName: prompt.isEmpty ? nil : prompt
+        ) { phase in
+            progressHandler(0.05 + phase * 0.70)
+        }
+
+        guard !scoredFrames.isEmpty else {
+            logger.warning("Cloud scoring returned 0 frames, falling back to on-device")
+            return try await detectHighlightsOnDevice(
+                asset: asset, totalSeconds: totalSeconds,
+                prompt: prompt, progressHandler: progressHandler
+            )
+        }
+        progressHandler(0.75)
+
+        // Phase 3: Build segments from scored frames (75-80%)
+        let segments = buildSegmentsFromScoredFrames(
+            scoredFrames: scoredFrames,
+            totalSeconds: totalSeconds
+        )
+        progressHandler(0.80)
+
+        // Phase 4: Plan tape with Opus 4.6 (80-98%)
+        let configs = await AIEffectRecommendationService.shared.planTapeEffects(
+            for: asset,
+            segments: segments,
+            scoredFrames: scoredFrames,
+            audioFeatures: audioFeatures,
+            userPrompt: prompt
+        ) { phase in
+            progressHandler(phase)
+        }
+
+        // Attach AI configs to segments
+        var finalSegments = segments
+        for (i, segment) in finalSegments.enumerated() where i < configs.count {
+            // Store the label from scored frames if available
+            if let matchingScore = scoredFrames.first(where: {
+                abs($0.timestamp - segment.startSeconds) < 1.0
+            }) {
+                finalSegments[i].label = matchingScore.label
+            }
+            if !finalSegments[i].detectionSources.contains(.claudeVision) {
+                finalSegments[i].detectionSources.append(.claudeVision)
+            }
+        }
+
+        progressHandler(1.0)
+
+        let avgConfidence = finalSegments.isEmpty ? 0 :
+            finalSegments.map(\.confidenceScore).reduce(0, +) / Double(finalSegments.count)
+
+        return DetectionResult(
+            segments: finalSegments,
+            overallConfidence: avgConfidence
+        )
+    }
+
+    /// Build HighlightSegments from cloud-scored frames.
+    /// Groups consecutive high-scoring frames into segments, enforcing min/max duration.
+    private func buildSegmentsFromScoredFrames(
+        scoredFrames: [CloudScoringService.ScoredFrame],
+        totalSeconds: Double
+    ) -> [HighlightSegment] {
+        guard !scoredFrames.isEmpty else { return [] }
+
+        let sorted = scoredFrames.sorted { $0.timestamp < $1.timestamp }
+
+        // Find peaks above threshold
+        let threshold = 0.5  // Frames above this are candidates
+        var peaks: [(timestamp: Double, score: Double, label: String, role: String?)] = []
+        for frame in sorted where frame.score >= threshold {
+            peaks.append((frame.timestamp, frame.score, frame.label, frame.narrativeRole))
+        }
+
+        // Sort by score descending
+        peaks.sort { $0.score > $1.score }
+
+        // Build score lookup for boundary expansion
+        let scoreLookup = Dictionary(sorted.map { (Int($0.timestamp), $0.score) },
+                                      uniquingKeysWith: { first, _ in first })
+
+        var segments: [HighlightSegment] = []
+        var usedTimestamps: Set<Int> = []
+
+        for peak in peaks {
+            let peakSec = Int(peak.timestamp)
+            guard !usedTimestamps.contains(peakSec) else { continue }
+
+            // Expand outward from peak while scores stay above continuation threshold
+            let continuationThreshold = peak.score * 0.4
+            var startSec = peakSec
+            while startSec > 0, (scoreLookup[startSec - 1] ?? 0) >= continuationThreshold {
+                startSec -= 1
+            }
+            var endSec = peakSec
+            while endSec < Int(totalSeconds) - 1, (scoreLookup[endSec + 1] ?? 0) >= continuationThreshold {
+                endSec += 1
+            }
+
+            var startTime = Double(startSec)
+            var endTime = Double(endSec + 1)
+            let rawDuration = endTime - startTime
+
+            // Enforce min/max clip duration
+            if rawDuration < Constants.minClipDuration {
+                let deficit = Constants.minClipDuration - rawDuration
+                startTime = max(0, startTime - deficit / 2)
+                endTime = min(totalSeconds, endTime + deficit / 2)
+            } else if rawDuration > Constants.maxClipDuration {
+                startTime = max(0, peak.timestamp - Constants.maxClipDuration / 2)
+                endTime = min(totalSeconds, peak.timestamp + Constants.maxClipDuration / 2)
+            }
+
+            // Check overlap with existing segments
+            let candidateDuration = endTime - startTime
+            let overlapsExisting = candidateDuration > 0 && segments.contains { existing in
+                let overlapStart = max(existing.startSeconds, startTime)
+                let overlapEnd = min(existing.endSeconds, endTime)
+                let overlap = max(0, overlapEnd - overlapStart)
+                return overlap / candidateDuration > 0.5
+            }
+            guard !overlapsExisting else { continue }
+
+            // Mark used timestamps
+            for t in startSec...endSec {
+                usedTimestamps.insert(t)
+            }
+
+            segments.append(HighlightSegment(
+                startTime: CMTime(seconds: startTime, preferredTimescale: 600),
+                endTime: CMTime(seconds: endTime, preferredTimescale: 600),
+                confidenceScore: peak.score,
+                label: peak.label,
+                detectionSources: [.claudeVision]
+            ))
+
+            if segments.count >= Constants.targetClipCount { break }
+        }
+
+        // Sort by start time
+        segments.sort { $0.startSeconds < $1.startSeconds }
+
+        // Fallback: if no segments found, create one from the best frame
+        if segments.isEmpty, let best = sorted.max(by: { $0.score < $1.score }) {
+            let start = max(0, best.timestamp - Constants.minClipDuration / 2)
+            let end = min(totalSeconds, best.timestamp + Constants.minClipDuration / 2)
+            segments.append(HighlightSegment(
+                startTime: CMTime(seconds: start, preferredTimescale: 600),
+                endTime: CMTime(seconds: end, preferredTimescale: 600),
+                confidenceScore: best.score,
+                label: best.label,
+                detectionSources: [.claudeVision]
+            ))
+        }
+
+        return segments
+    }
+
+    // MARK: - On-Device Detection (Vision Framework fallback)
+
+    private func detectHighlightsOnDevice(
+        asset: AVURLAsset,
+        totalSeconds: Double,
+        prompt: String,
+        progressHandler: @Sendable (Double) -> Void
+    ) async throws -> DetectionResult {
+        logger.info("On-device detection pipeline (offline fallback)")
+
         // Chunked processing: reduce sample density for long videos (>5 min)
         let isLongVideo = totalSeconds > 300
         if isLongVideo {
@@ -96,8 +315,6 @@ actor HighlightDetectionService {
         progressHandler(0.85)
 
         // Pass 7: Claude Vision refinement (85-98%)
-        // Claude is the creative director — always refine when API is available.
-        // Wi-Fi connectivity is assumed (user-confirmed), so no network/battery gating.
         if await ClaudeVisionService.shared.isAvailable {
             segments = await refineWithClaudeVision(
                 segments: segments,

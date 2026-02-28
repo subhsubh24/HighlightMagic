@@ -191,6 +191,70 @@ struct HighlightDetectionTests {
         #expect(medConfidence >= 0.6 && medConfidence < 0.8, "Med confidence 0.6-0.8")
         #expect(lowConfidence < 0.6, "Low confidence < 0.6")
     }
+
+    @Test("AudioFeatures struct stores per-timestamp data")
+    func testAudioFeaturesStruct() {
+        let features = AudioFeatureService.AudioFeatures(
+            timestamp: 5.0,
+            audioEnergy: 0.72,
+            audioOnset: 0.65,
+            audioBass: 0.45,
+            audioMid: 0.35,
+            audioTreble: 0.20
+        )
+
+        #expect(features.timestamp == 5.0)
+        #expect(features.audioEnergy == 0.72)
+        #expect(features.audioOnset == 0.65)
+        #expect(abs(features.audioBass + features.audioMid + features.audioTreble - 1.0) < 0.01,
+                "Frequency bands should sum to ~1.0")
+    }
+
+    @Test("CloudScoringService.ScoredFrame carries narrative role")
+    func testScoredFrameNarrativeRole() {
+        let frame = CloudScoringService.ScoredFrame(
+            timestamp: 12.0,
+            score: 0.92,
+            label: "group mid-air jump under strobes — PEAK energy hero shot",
+            narrativeRole: "HERO"
+        )
+
+        #expect(frame.timestamp == 12.0)
+        #expect(frame.score == 0.92)
+        #expect(frame.narrativeRole == "HERO")
+        #expect(frame.label.contains("PEAK"))
+    }
+
+    @Test("CloudScoringService.AnnotatedFrame carries audio metadata")
+    func testAnnotatedFrameAudio() {
+        let frame = CloudScoringService.AnnotatedFrame(
+            timestamp: 3.0,
+            base64: "dGVzdA==",
+            audioEnergy: 0.8,
+            audioOnset: 0.6,
+            audioBass: 0.5,
+            audioMid: 0.3,
+            audioTreble: 0.2
+        )
+
+        #expect(frame.timestamp == 3.0)
+        #expect(frame.audioEnergy == 0.8)
+        #expect(frame.audioBass == 0.5)
+    }
+
+    @Test("Detection source includes Cloud AI for cloud-scored segments")
+    func testCloudDetectionSource() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 5, preferredTimescale: 600),
+            endTime: CMTime(seconds: 15, preferredTimescale: 600),
+            confidenceScore: 0.88,
+            label: "Cloud scored moment",
+            detectionSources: [.claudeVision]
+        )
+
+        #expect(segment.detectionSources.contains(.claudeVision))
+        #expect(segment.duration == 10.0)
+    }
 }
 
 @Suite("Music Library")
