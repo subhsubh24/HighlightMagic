@@ -20,6 +20,13 @@ actor AIEffectRecommendationService {
 
     private init() {}
 
+    /// Result from the tape planner containing both AI-decided clip boundaries and creative configs.
+    /// Gap 1 fix: Opus now decides WHERE to cut (startTime/endTime per clip), not just how to style.
+    struct TapePlanResult: Sendable {
+        let segments: [HighlightSegment]
+        let configs: [CustomEffectConfig]
+    }
+
     /// API key — delegates to the same resolution chain as ClaudeVisionService.
     private var apiKey: String? {
         if let envKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"],
@@ -89,19 +96,22 @@ actor AIEffectRecommendationService {
     /// Claude sees ALL scored frames, audio features, and top frames, then designs per-clip
     /// creative decisions for a cohesive tape.
     ///
-    /// Returns one CustomEffectConfig per segment, in the same order as the input.
-    func planTapeEffects(
+    /// Gap 1: Opus now decides clip boundaries (startTime/endTime) — no pre-built segments needed.
+    /// Returns a TapePlanResult with both AI-decided segments and per-clip configs.
+    func planTapeFromScoredFrames(
         for asset: AVURLAsset,
-        segments: [HighlightSegment],
+        totalSeconds: Double,
         scoredFrames: [CloudScoringService.ScoredFrame],
         audioFeatures: [AudioFeatureService.AudioFeatures],
         userPrompt: String,
         template: HighlightTemplate? = nil,
         progressHandler: (@Sendable (Double) -> Void)? = nil
-    ) async -> [CustomEffectConfig] {
+    ) async -> TapePlanResult {
+        let emptyResult = TapePlanResult(segments: [], configs: [])
+
         guard let apiKey else {
-            logger.info("No API key — falling back to per-segment heuristics")
-            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+            logger.info("No API key — falling back to empty plan (caller builds segments)")
+            return emptyResult
         }
 
         do {
@@ -113,12 +123,21 @@ actor AIEffectRecommendationService {
             // Sort by score, select top 60 with temporal diversity
             let sortedScores = scoredFrames.sorted { $0.score > $1.score }
             var selectedTimestamps: [Double] = []
-            var plannerFrames: [(timestamp: Double, base64: String)] = []
+            var plannerFrames: [(timestamp: Double, base64: String, byteCount: Int)] = []
             let maxPlannerFrames = 60
             let minTemporalGap = 3.0  // seconds between selected frames
 
+            // Gap 4: Payload budget enforcement — 9MB total / 5MB per image (matches web)
+            let maxTotalPayloadBytes = 9 * 1024 * 1024
+            let maxPerImageBytes = 5 * 1024 * 1024
+            var totalPayloadBytes = 0
+
             for scored in sortedScores {
                 guard plannerFrames.count < maxPlannerFrames else { break }
+                guard totalPayloadBytes < maxTotalPayloadBytes else {
+                    logger.info("Payload budget reached (\(totalPayloadBytes) bytes), stopping frame selection at \(plannerFrames.count) frames")
+                    break
+                }
                 // Temporal diversity: skip if too close to an already-selected frame
                 if selectedTimestamps.contains(where: { abs($0 - scored.timestamp) < minTemporalGap }) {
                     continue
@@ -127,15 +146,24 @@ actor AIEffectRecommendationService {
                 guard let cgImage = try? await generator.image(at: time).image else { continue }
                 let uiImage = UIImage(cgImage: cgImage)
                 guard let jpegData = uiImage.jpegData(compressionQuality: 0.6) else { continue }
-                plannerFrames.append((scored.timestamp, jpegData.base64EncodedString()))
+
+                // Gap 4: Skip individual images that exceed per-image budget
+                if jpegData.count > maxPerImageBytes {
+                    logger.info("Frame at \(scored.timestamp)s exceeds 5MB (\(jpegData.count) bytes), skipping")
+                    continue
+                }
+
+                let base64 = jpegData.base64EncodedString()
+                plannerFrames.append((scored.timestamp, base64, jpegData.count))
                 selectedTimestamps.append(scored.timestamp)
+                totalPayloadBytes += jpegData.count
             }
 
             // Sort plannerFrames by timestamp for coherent temporal narrative
             plannerFrames.sort { $0.timestamp < $1.timestamp }
 
             guard !plannerFrames.isEmpty else {
-                return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+                return emptyResult
             }
 
             // Rate limiting
@@ -146,22 +174,22 @@ actor AIEffectRecommendationService {
 
             progressHandler?(0.80)
 
-            let configs = try await callTapePlannerOpus(
-                plannerFrames: plannerFrames,
+            let result = try await callTapePlannerOpus(
+                plannerFrames: plannerFrames.map { ($0.timestamp, $0.base64) },
                 scoredFrames: scoredFrames,
                 audioFeatures: audioFeatures,
-                segments: segments,
+                totalSeconds: totalSeconds,
                 userPrompt: userPrompt,
                 template: template,
                 apiKey: apiKey,
                 progressHandler: progressHandler
             )
             lastRequestTime = .now
-            return configs
+            return result
         } catch {
             lastRequestTime = .now
-            logger.warning("Tape planner failed: \(error.localizedDescription), using fallback")
-            return segments.map { _ in fallbackRecommendation(template: template, prompt: userPrompt) }
+            logger.warning("Tape planner failed: \(error.localizedDescription), returning empty plan")
+            return emptyResult
         }
     }
 
@@ -290,16 +318,17 @@ actor AIEffectRecommendationService {
 
     /// Call the Opus 4.6 planner with SSE streaming, extended thinking, and the web's exact prompt.
     /// This is the primary planner when scored frames are available (cloud-first path).
+    /// Gap 1: No pre-built segments — Opus decides clip boundaries via startTime/endTime.
     private func callTapePlannerOpus(
         plannerFrames: [(timestamp: Double, base64: String)],
         scoredFrames: [CloudScoringService.ScoredFrame],
         audioFeatures: [AudioFeatureService.AudioFeatures],
-        segments: [HighlightSegment],
+        totalSeconds: Double,
         userPrompt: String,
         template: HighlightTemplate?,
         apiKey: String,
         progressHandler: (@Sendable (Double) -> Void)?
-    ) async throws -> [CustomEffectConfig] {
+    ) async throws -> TapePlanResult {
         // Build audio lookups
         let audioLookup = Dictionary(audioFeatures.map { (Int($0.timestamp), $0) },
                                       uniquingKeysWith: { first, _ in first })
@@ -340,7 +369,7 @@ actor AIEffectRecommendationService {
             (onsetViz.isEmpty ? "" : "\n" + onsetViz) +
             "\n" + scoreLines
 
-        let totalDuration = sortedScores.last.map { $0.timestamp + 2 } ?? 60.0
+        let totalDuration = totalSeconds
 
         // Build system prompt (identical to web planHighlightTape systemPrompt)
         let templateLine = template.map { "- Style context: \($0.name) template" } ?? ""
@@ -449,7 +478,8 @@ actor AIEffectRecommendationService {
         progressHandler?(0.95)
 
         // Parse the planner response (matches web planHighlightTape parsing)
-        return parseOpusPlannerResponse(text: text, segmentCount: segments.count, template: template, prompt: userPrompt)
+        // Gap 1: Extract startTime/endTime from Opus clips to build segments
+        return parseOpusPlannerResponse(text: text, totalSeconds: totalSeconds, template: template, prompt: userPrompt)
     }
 
     /// Consume an SSE stream from the Anthropic Messages API.
@@ -503,27 +533,65 @@ actor AIEffectRecommendationService {
         return text
     }
 
-    /// Parse the Opus planner's JSON response into CustomEffectConfig objects.
-    /// The planner returns a wrapper: {"contentSummary": ..., "theme": ..., "clips": [...]}
-    /// Each clip maps to a segment. Unlike the legacy planner, this returns exactly the clips
-    /// the AI designed (not necessarily 1:1 with input segments).
+    /// Parse the Opus planner's JSON response into segments and configs.
+    /// Gap 1: Opus now returns startTime/endTime per clip — we build HighlightSegments from these.
+    /// Gap 2: Applies deduplication/spacing validation after parsing.
     private func parseOpusPlannerResponse(
         text: String,
-        segmentCount: Int,
+        totalSeconds: Double,
         template: HighlightTemplate?,
         prompt: String
-    ) -> [CustomEffectConfig] {
+    ) -> TapePlanResult {
         // Extract JSON object
         guard let jsonString = Self.extractBalancedJSON(from: text),
               let jsonData = jsonString.data(using: .utf8),
               let wrapper = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
               let clips = wrapper["clips"] as? [[String: Any]] else {
             logger.warning("Opus planner: failed to parse response")
-            return (0..<segmentCount).map { _ in fallbackRecommendation(template: template, prompt: prompt) }
+            return TapePlanResult(segments: [], configs: [])
         }
 
+        var segments: [HighlightSegment] = []
         var configs: [CustomEffectConfig] = []
+
         for dict in clips {
+            // Gap 1: Extract startTime/endTime from Opus response
+            let startTime = Self.jsonDouble(dict, "startTime", default: -1)
+            let endTime = Self.jsonDouble(dict, "endTime", default: -1)
+
+            // Validate clip boundaries
+            guard startTime >= 0, endTime > startTime, endTime <= totalSeconds + 1 else {
+                logger.warning("Opus planner: skipping clip with invalid boundaries (\(startTime)-\(endTime))")
+                continue
+            }
+
+            // Clamp to video bounds and enforce min/max duration
+            let clampedStart = max(0, startTime)
+            var clampedEnd = min(totalSeconds, endTime)
+            let duration = clampedEnd - clampedStart
+
+            if duration < Constants.minClipDuration {
+                // Expand to minimum duration, centered on midpoint
+                let mid = (clampedStart + clampedEnd) / 2
+                let halfMin = Constants.minClipDuration / 2
+                let expandedStart = max(0, mid - halfMin)
+                clampedEnd = min(totalSeconds, expandedStart + Constants.minClipDuration)
+            } else if duration > Constants.maxClipDuration {
+                clampedEnd = clampedStart + Constants.maxClipDuration
+            }
+
+            let confidence = Self.jsonDouble(dict, "confidenceScore", default: 0.8)
+            let label = dict["label"] as? String ?? "AI Clip"
+
+            let segment = HighlightSegment(
+                startTime: CMTime(seconds: clampedStart, preferredTimescale: 600),
+                endTime: CMTime(seconds: clampedEnd, preferredTimescale: 600),
+                confidenceScore: max(0, min(1, confidence)),
+                label: label,
+                detectionSources: [.claudeVision]
+            )
+
+            // Parse config
             var config = parseManually(jsonData: (try? JSONSerialization.data(withJSONObject: dict)) ?? Data())
 
             // Parse custom velocity keyframes
@@ -541,14 +609,16 @@ actor AIEffectRecommendationService {
 
             // Parse per-clip creative overrides
             config.customTransitionType = dict["transitionType"] as? String
+            // Gap 5: transitionDuration clamped to [0.1, 2.0] (was [0.1, 1.5]) — matches web
             if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
-                config.customTransitionDuration = min(max(td, 0.1), 1.5)
+                config.customTransitionDuration = min(max(td, 0.1), 2.0)
             }
             if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
                 config.entryPunchScale = min(max(eps, 1.0), 1.1)
             }
-            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd > 0 {
-                config.entryPunchDuration = min(max(epd, 0.05), 0.5)
+            // Gap 5: entryPunchDuration floor is 0.0 (was 0.05) — matches web
+            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
+                config.entryPunchDuration = min(max(epd, 0.0), 0.5)
             }
             config.customCaptionAnimation = dict["captionAnimation"] as? String
             if let fw = dict["captionFontWeight"] as? Int, fw >= 100, fw <= 900 {
@@ -568,16 +638,69 @@ actor AIEffectRecommendationService {
             }
 
             applyMoodBasedDefaults(to: &config)
+
+            segments.append(segment)
             configs.append(config)
         }
 
-        // If planner returned fewer configs than segments, fill with fallbacks
-        while configs.count < segmentCount {
-            configs.append(fallbackRecommendation(template: template, prompt: prompt))
+        // Gap 2: Validate, deduplicate, and enforce spacing (matches web)
+        let (validSegments, validConfigs) = deduplicateAndValidateClips(
+            segments: segments, configs: configs
+        )
+
+        logger.info("Opus planner: \(clips.count) AI clips → \(validSegments.count) after dedup/validation")
+        return TapePlanResult(segments: validSegments, configs: validConfigs)
+    }
+
+    // MARK: - Clip Deduplication & Spacing (Gap 2 — matches web)
+
+    /// Validates Opus-returned clips: drops overlapping clips (>50%), enforces 5s min gap,
+    /// and caps at 6 clips per source. Matches the web platform's post-planner validation.
+    private nonisolated func deduplicateAndValidateClips(
+        segments: [HighlightSegment],
+        configs: [CustomEffectConfig]
+    ) -> ([HighlightSegment], [CustomEffectConfig]) {
+        guard !segments.isEmpty else { return ([], []) }
+
+        // Sort by startTime (temporal order)
+        let indexed = zip(segments, configs).enumerated()
+            .sorted { $0.element.0.startSeconds < $1.element.0.startSeconds }
+
+        var accepted: [(HighlightSegment, CustomEffectConfig)] = []
+        let maxClipsPerSource = 6
+        let minGapSeconds = 5.0
+
+        for (_, (segment, config)) in indexed {
+            // Cap at 6 clips per source (we have 1 source, so this caps total clips)
+            guard accepted.count < maxClipsPerSource else { break }
+
+            let candidateDuration = segment.duration
+
+            // Drop if >50% of this clip overlaps any accepted clip
+            let overlapsExisting = candidateDuration > 0 && accepted.contains { (existing, _) in
+                let overlapStart = max(existing.startSeconds, segment.startSeconds)
+                let overlapEnd = min(existing.endSeconds, segment.endSeconds)
+                let overlap = max(0, overlapEnd - overlapStart)
+                return overlap / candidateDuration > 0.5
+            }
+            guard !overlapsExisting else { continue }
+
+            // Enforce 5s minimum gap between clips from the same source
+            let tooClose = accepted.contains { (existing, _) in
+                let gapAfter = segment.startSeconds - existing.endSeconds
+                let gapBefore = existing.startSeconds - segment.endSeconds
+                let gap = max(gapAfter, gapBefore)
+                return gap >= 0 && gap < minGapSeconds
+            }
+            guard !tooClose else { continue }
+
+            accepted.append((segment, config))
         }
 
-        logger.info("Opus planner: designed \(configs.count) creative briefs from \(clips.count) AI clips")
-        return configs
+        // Sort accepted clips by startTime
+        accepted.sort { $0.0.startSeconds < $1.0.startSeconds }
+
+        return (accepted.map(\.0), accepted.map(\.1))
     }
 
     /// Convert a CSS filter string (web format) to a CustomColorGrade (iOS format).
@@ -857,14 +980,16 @@ actor AIEffectRecommendationService {
 
             // Parse per-clip creative overrides
             config.customTransitionType = dict["transitionType"] as? String
+            // Gap 5: transitionDuration clamped to [0.1, 2.0] (was [0.1, 1.5]) — matches web
             if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
-                config.customTransitionDuration = min(max(td, 0.1), 1.5)
+                config.customTransitionDuration = min(max(td, 0.1), 2.0)
             }
             if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
                 config.entryPunchScale = min(max(eps, 1.0), 1.1)
             }
-            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd > 0 {
-                config.entryPunchDuration = min(max(epd, 0.05), 0.5)
+            // Gap 5: entryPunchDuration floor is 0.0 (was 0.05) — matches web
+            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
+                config.entryPunchDuration = min(max(epd, 0.0), 0.5)
             }
             config.customCaptionAnimation = dict["captionAnimation"] as? String
             if let fw = dict["captionFontWeight"] as? Int, fw >= 100, fw <= 900 {

@@ -120,17 +120,45 @@ actor CloudScoringService {
             batches.append(Array(frames[i..<end]))
         }
 
-        // Score each batch with Haiku
+        // Gap 3: Score batches concurrently (up to 5 at once) — matches web's concurrent scoring.
+        // Web does 5 concurrent batches with staggered 200ms starts.
+        let maxConcurrent = 5
         var allScored: [ScoredFrame] = []
-        for (batchIdx, batch) in batches.enumerated() {
-            let scored = try await scoreBatch(
-                batch: batch,
-                apiKey: apiKey,
-                templateName: templateName
-            )
-            allScored.append(contentsOf: scored)
+        let batchCount = batches.count
 
-            let progress = 0.20 + Double(batchIdx + 1) / Double(batches.count) * 0.50
+        // Process batches in concurrent groups
+        for groupStart in stride(from: 0, to: batchCount, by: maxConcurrent) {
+            let groupEnd = min(groupStart + maxConcurrent, batchCount)
+            let groupBatches = Array(batches[groupStart..<groupEnd])
+
+            let groupResults = try await withThrowingTaskGroup(of: (Int, [ScoredFrame]).self) { group in
+                for (offset, batch) in groupBatches.enumerated() {
+                    let batchIndex = groupStart + offset
+                    group.addTask {
+                        // Stagger start by 200ms per batch within the group (matches web)
+                        if offset > 0 {
+                            try? await Task.sleep(for: .milliseconds(200 * offset))
+                        }
+                        let scored = try await self.scoreBatch(
+                            batch: batch,
+                            apiKey: apiKey,
+                            templateName: templateName
+                        )
+                        return (batchIndex, scored)
+                    }
+                }
+                var results: [(Int, [ScoredFrame])] = []
+                for try await result in group {
+                    results.append(result)
+                }
+                return results.sorted { $0.0 < $1.0 }
+            }
+
+            for (_, scored) in groupResults {
+                allScored.append(contentsOf: scored)
+            }
+
+            let progress = 0.20 + Double(groupEnd) / Double(batchCount) * 0.50
             progressHandler(progress)
         }
 
@@ -144,6 +172,7 @@ actor CloudScoringService {
 
     // MARK: - Batch Scoring
 
+    /// Gap 3: 5 retries (was 2) with Retry-After header support — matches web.
     private func scoreBatch(
         batch: [AnnotatedFrame],
         apiKey: String,
@@ -214,9 +243,13 @@ actor CloudScoringService {
                 throw ClaudeVisionError.requestFailed
             }
 
-            // Retry on 429/529
-            if (httpResponse.statusCode == 429 || httpResponse.statusCode >= 500) && attempt < 2 {
-                let delay = Double(1 << attempt) * 2  // 2s, 4s
+            // Gap 3: Retry on 429/5xx with Retry-After header support, up to 5 attempts (was 2)
+            if (httpResponse.statusCode == 429 || httpResponse.statusCode >= 500) && attempt < 4 {
+                // Respect Retry-After header if present (matches web)
+                let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                    .flatMap { Double($0) }
+                let delay = retryAfter ?? (Double(1 << attempt) * 2)  // 2s, 4s, 8s, 16s
+                logger.info("Scoring batch HTTP \(httpResponse.statusCode), retry \(attempt + 1)/4 after \(String(format: "%.1f", delay))s")
                 try? await Task.sleep(for: .seconds(delay))
                 return try await scoreBatch(batch: batch, apiKey: apiKey,
                                            templateName: templateName, attempt: attempt + 1)
@@ -231,8 +264,9 @@ actor CloudScoringService {
         } catch let error as ClaudeVisionError {
             throw error
         } catch {
-            if attempt < 2 {
+            if attempt < 4 {
                 let delay = Double(1 << attempt) * 2
+                logger.info("Scoring batch error: \(error.localizedDescription), retry \(attempt + 1)/4 after \(String(format: "%.1f", delay))s")
                 try? await Task.sleep(for: .seconds(delay))
                 return try await scoreBatch(batch: batch, apiKey: apiKey,
                                            templateName: templateName, attempt: attempt + 1)

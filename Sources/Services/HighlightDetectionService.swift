@@ -96,19 +96,14 @@ actor HighlightDetectionService {
                 prompt: prompt, progressHandler: progressHandler
             )
         }
+        // Phase 3+4: Plan tape with Opus 4.6 (75-98%)
+        // Gap 1: Opus decides clip boundaries (startTime/endTime) — no pre-built segments.
+        // This matches the web platform where AI has full creative control over WHERE to cut.
         progressHandler(0.75)
 
-        // Phase 3: Build segments from scored frames (75-80%)
-        let segments = buildSegmentsFromScoredFrames(
-            scoredFrames: scoredFrames,
-            totalSeconds: totalSeconds
-        )
-        progressHandler(0.80)
-
-        // Phase 4: Plan tape with Opus 4.6 (80-98%)
-        let configs = await AIEffectRecommendationService.shared.planTapeEffects(
+        let planResult = await AIEffectRecommendationService.shared.planTapeFromScoredFrames(
             for: asset,
-            segments: segments,
+            totalSeconds: totalSeconds,
             scoredFrames: scoredFrames,
             audioFeatures: audioFeatures,
             userPrompt: prompt
@@ -116,18 +111,17 @@ actor HighlightDetectionService {
             progressHandler(phase)
         }
 
-        // Attach AI configs to segments
-        var finalSegments = segments
-        for (i, segment) in finalSegments.enumerated() where i < configs.count {
-            // Store the label from scored frames if available
-            if let matchingScore = scoredFrames.first(where: {
-                abs($0.timestamp - segment.startSeconds) < 1.0
-            }) {
-                finalSegments[i].label = matchingScore.label
-            }
-            if !finalSegments[i].detectionSources.contains(.claudeVision) {
-                finalSegments[i].detectionSources.append(.claudeVision)
-            }
+        // If Opus returned valid clips, use them directly.
+        // Otherwise fall back to the legacy segment-building approach.
+        var finalSegments: [HighlightSegment]
+        if !planResult.segments.isEmpty {
+            finalSegments = planResult.segments
+        } else {
+            logger.warning("Opus returned no clips, falling back to scored-frame segment builder")
+            finalSegments = buildSegmentsFromScoredFrames(
+                scoredFrames: scoredFrames,
+                totalSeconds: totalSeconds
+            )
         }
 
         progressHandler(1.0)
