@@ -122,12 +122,14 @@ struct ProcessingView: View {
 
             appState.detectedHighlights = result.segments
 
-            // Generate clips with AI-powered effect recommendations
+            // Generate clips with AI-powered effect recommendations.
+            // Pass Opus-planned configs when available to skip legacy Sonnet re-planning.
             let clips = await ClipGenerationService.shared.generateClips(
                 from: video,
                 segments: result.segments,
                 userPrompt: appState.userPrompt,
-                sourceURL: video.sourceURL
+                sourceURL: video.sourceURL,
+                precomputedConfigs: result.perClipConfigs
             )
             appState.generatedClips = clips
 

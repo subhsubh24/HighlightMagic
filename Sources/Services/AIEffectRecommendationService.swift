@@ -566,7 +566,7 @@ actor AIEffectRecommendationService {
             }
 
             // Clamp to video bounds and enforce min/max duration
-            let clampedStart = max(0, startTime)
+            var clampedStart = max(0, startTime)
             var clampedEnd = min(totalSeconds, endTime)
             let duration = clampedEnd - clampedStart
 
@@ -574,8 +574,8 @@ actor AIEffectRecommendationService {
                 // Expand to minimum duration, centered on midpoint
                 let mid = (clampedStart + clampedEnd) / 2
                 let halfMin = Constants.minClipDuration / 2
-                let expandedStart = max(0, mid - halfMin)
-                clampedEnd = min(totalSeconds, expandedStart + Constants.minClipDuration)
+                clampedStart = max(0, mid - halfMin)
+                clampedEnd = min(totalSeconds, clampedStart + Constants.minClipDuration)
             } else if duration > Constants.maxClipDuration {
                 clampedEnd = clampedStart + Constants.maxClipDuration
             }
@@ -963,7 +963,7 @@ actor AIEffectRecommendationService {
         var configs: [CustomEffectConfig] = []
         for (i, dict) in results.enumerated() {
             guard i < segmentCount else { break }
-            var config = parseManually(jsonData: try! JSONSerialization.data(withJSONObject: dict))
+            var config = parseManually(jsonData: (try? JSONSerialization.data(withJSONObject: dict)) ?? Data())
 
             // Parse custom velocity keyframes
             if let kfArray = dict["velocityKeyframes"] as? [[String: Any]] {

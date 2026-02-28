@@ -16,6 +16,9 @@ actor HighlightDetectionService {
     struct DetectionResult: Sendable {
         var segments: [HighlightSegment]
         var overallConfidence: Double
+        /// Per-clip AI creative configs from the Opus planner (1:1 with segments).
+        /// When present, downstream clip generation skips re-planning.
+        var perClipConfigs: [CustomEffectConfig]?
     }
 
     // MARK: - Main Detection Pipeline
@@ -114,8 +117,10 @@ actor HighlightDetectionService {
         // If Opus returned valid clips, use them directly.
         // Otherwise fall back to the legacy segment-building approach.
         var finalSegments: [HighlightSegment]
+        var finalConfigs: [CustomEffectConfig]?
         if !planResult.segments.isEmpty {
             finalSegments = planResult.segments
+            finalConfigs = planResult.configs
         } else {
             logger.warning("Opus returned no clips, falling back to scored-frame segment builder")
             finalSegments = buildSegmentsFromScoredFrames(
@@ -131,7 +136,8 @@ actor HighlightDetectionService {
 
         return DetectionResult(
             segments: finalSegments,
-            overallConfidence: avgConfidence
+            overallConfidence: avgConfidence,
+            perClipConfigs: finalConfigs
         )
     }
 

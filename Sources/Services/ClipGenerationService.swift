@@ -12,20 +12,44 @@ actor ClipGenerationService {
     /// Uses the unified tape planner: Claude sees ALL segments at once and designs
     /// per-clip creative decisions for a cohesive tape (custom velocity curves,
     /// custom color grades, per-clip caption styling, transitions).
+    ///
+    /// When `precomputedConfigs` is provided (from the Opus cloud planner), those configs
+    /// are used directly — skipping the legacy Sonnet re-planning call entirely.
     func generateClips(
         from video: VideoItem,
         segments: [HighlightSegment],
         userPrompt: String = "",
         template: HighlightTemplate? = nil,
-        sourceURL: URL? = nil
+        sourceURL: URL? = nil,
+        precomputedConfigs: [CustomEffectConfig]? = nil
     ) async -> [EditedClip] {
         // Hook-first ordering: put the highest-confidence segment first
         let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
 
+        // If Opus already planned configs (cloud path), use them directly.
+        // Reorder configs to match hook-first segment ordering.
+        if let precomputed = precomputedConfigs, precomputed.count == segments.count {
+            // Build a lookup from segment ID → config, then reorder to match `ordered`
+            let segmentIDs = segments.map(\.id)
+            let configByID = Dictionary(uniqueKeysWithValues: zip(segmentIDs, precomputed))
+            let reorderedConfigs = ordered.compactMap { configByID[$0.id] }
+
+            if reorderedConfigs.count == ordered.count {
+                return zip(ordered, reorderedConfigs).map { segment, aiConfig in
+                    buildClipFromAIConfig(
+                        aiConfig: aiConfig,
+                        sourceVideoID: video.id,
+                        segment: segment,
+                        template: template
+                    )
+                }
+            }
+        }
+
         if let sourceURL {
             let asset = AVURLAsset(url: sourceURL)
 
-            // Unified tape planner: Claude sees ALL clips at once for cohesive creative direction
+            // Legacy tape planner: Claude Sonnet sees ALL clips at once for cohesive creative direction
             let perClipConfigs = await AIEffectRecommendationService.shared.planTapeEffects(
                 for: asset,
                 segments: ordered,
