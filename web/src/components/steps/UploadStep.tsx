@@ -225,15 +225,6 @@ export default function UploadStep() {
             )}
           </div>
 
-          {/* Continue button */}
-          <button
-            onClick={handleContinue}
-            className="btn-primary mt-6 flex w-full items-center justify-center gap-2"
-          >
-            <span>Create Highlight Tape</span>
-            <ArrowRight className="h-5 w-5" />
-          </button>
-
           {/* Creative direction (optional) */}
           <div className="mt-4">
             <label className="mb-1.5 block text-xs font-medium text-[var(--text-tertiary)]">
@@ -253,6 +244,15 @@ export default function UploadStep() {
               Optional — tell the AI how you want your video styled
             </p>
           </div>
+
+          {/* Continue button */}
+          <button
+            onClick={handleContinue}
+            className="btn-primary mt-4 flex w-full items-center justify-center gap-2"
+          >
+            <span>Create Highlight Tape</span>
+            <ArrowRight className="h-5 w-5" />
+          </button>
         </div>
       )}
 
