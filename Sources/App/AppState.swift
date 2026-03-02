@@ -5,6 +5,7 @@ final class AppState {
     var navigationPath = NavigationPath()
     var selectedVideo: VideoItem?
     var userPrompt: String = ""
+    var creativeDirection: String = ""
     var detectedHighlights: [HighlightSegment] = []
     var generatedClips: [EditedClip] = []
     var currentScreen: AppScreen = .home
@@ -50,6 +51,7 @@ final class AppState {
     func clearSession() {
         selectedVideo = nil
         userPrompt = ""
+        creativeDirection = ""
         detectedHighlights = []
         generatedClips = []
         isProcessing = false

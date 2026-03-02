@@ -26,6 +26,7 @@ actor HighlightDetectionService {
     func detectHighlights(
         in videoURL: URL,
         prompt: String,
+        creativeDirection: String = "",
         progressHandler: @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         let asset = AVURLAsset(url: videoURL)
@@ -43,6 +44,7 @@ actor HighlightDetectionService {
                 asset: asset,
                 totalSeconds: totalSeconds,
                 prompt: prompt,
+                creativeDirection: creativeDirection,
                 progressHandler: progressHandler
             )
         }
@@ -68,6 +70,7 @@ actor HighlightDetectionService {
         asset: AVURLAsset,
         totalSeconds: Double,
         prompt: String,
+        creativeDirection: String = "",
         progressHandler: @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
@@ -109,7 +112,8 @@ actor HighlightDetectionService {
             totalSeconds: totalSeconds,
             scoredFrames: scoredFrames,
             audioFeatures: audioFeatures,
-            userPrompt: prompt
+            userPrompt: prompt,
+            creativeDirection: creativeDirection
         ) { phase in
             progressHandler(phase)
         }

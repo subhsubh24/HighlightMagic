@@ -111,7 +111,8 @@ struct ProcessingView: View {
         do {
             let result = try await HighlightDetectionService.shared.detectHighlights(
                 in: video.sourceURL,
-                prompt: appState.userPrompt
+                prompt: appState.userPrompt,
+                creativeDirection: appState.creativeDirection
             ) { newProgress in
                 Task { @MainActor in
                     withAnimation(.easeOut(duration: 0.2)) {

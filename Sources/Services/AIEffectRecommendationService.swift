@@ -104,6 +104,7 @@ actor AIEffectRecommendationService {
         scoredFrames: [CloudScoringService.ScoredFrame],
         audioFeatures: [AudioFeatureService.AudioFeatures],
         userPrompt: String,
+        creativeDirection: String = "",
         template: HighlightTemplate? = nil,
         progressHandler: (@Sendable (Double) -> Void)? = nil
     ) async -> TapePlanResult {
@@ -180,6 +181,7 @@ actor AIEffectRecommendationService {
                 audioFeatures: audioFeatures,
                 totalSeconds: totalSeconds,
                 userPrompt: userPrompt,
+                creativeDirection: creativeDirection,
                 template: template,
                 apiKey: apiKey,
                 progressHandler: progressHandler
@@ -325,6 +327,7 @@ actor AIEffectRecommendationService {
         audioFeatures: [AudioFeatureService.AudioFeatures],
         totalSeconds: Double,
         userPrompt: String,
+        creativeDirection: String = "",
         template: HighlightTemplate?,
         apiKey: String,
         progressHandler: (@Sendable (Double) -> Void)?
@@ -424,9 +427,13 @@ actor AIEffectRecommendationService {
             ? ""
             : "\n\nDIRECTOR'S NOTE — The user has specific creative direction that takes PRIORITY:\n\"\(userPrompt)\"\nHonor this direction in every creative decision."
 
+        let styleDirectionText = creativeDirection.isEmpty
+            ? ""
+            : "\n\nSTYLE DIRECTION — The user wants a specific look and feel:\n\"\(creativeDirection)\"\nApply this style across all clips: colors, mood, pacing, effects, filters, captions, transitions — everything should reflect this direction."
+
         userContent.append([
             "type": "text",
-            "text": "\nYou've now seen ALL the footage. Think deeply:\n- What's the story across this source?\n- What are the peak moments?\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?\(userIntentText)\n\nNow create the highlight tape."
+            "text": "\nYou've now seen ALL the footage. Think deeply:\n- What's the story across this source?\n- What are the peak moments?\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?\(userIntentText)\(styleDirectionText)\n\nNow create the highlight tape."
         ])
 
         // Build request (matches web: Opus 4.6 + adaptive thinking + SSE streaming)

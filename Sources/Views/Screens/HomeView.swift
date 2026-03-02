@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var loadError: String?
     @State private var logoScale: CGFloat = 0.8
     @State private var logoOpacity: Double = 0
+    @FocusState private var isDirectionFocused: Bool
 
     var body: some View {
         ZStack {
@@ -44,6 +45,38 @@ struct HomeView: View {
                 }
 
                 Spacer()
+
+                // Creative direction (optional)
+                VStack(alignment: .leading, spacing: 8) {
+                    @Bindable var state = appState
+
+                    Text("Special instructions")
+                        .font(Theme.caption)
+                        .foregroundStyle(Theme.textTertiary)
+
+                    TextField("e.g., violet neon theme, cinematic slow-mo...", text: $state.creativeDirection)
+                        .font(Theme.body)
+                        .foregroundStyle(.white)
+                        .padding()
+                        .background(Theme.surfaceColor)
+                        .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.smallCornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Constants.Layout.smallCornerRadius)
+                                .stroke(Theme.surfaceLight, lineWidth: 1)
+                        )
+                        .focused($isDirectionFocused)
+                        .submitLabel(.done)
+                        .onSubmit { isDirectionFocused = false }
+                        .onChange(of: state.creativeDirection) { _, newValue in
+                            if newValue.count > 300 {
+                                state.creativeDirection = String(newValue.prefix(300))
+                            }
+                        }
+
+                    Text("Optional — tell the AI how you want your video styled")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textTertiary)
+                }
 
                 // Upload Button
                 PhotosPicker(
