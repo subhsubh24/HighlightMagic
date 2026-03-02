@@ -22,6 +22,7 @@ export const initialState: AppState = {
   exportsUsed: 0,
   viralOptions: { beatSync: true, seamlessLoop: false },
   regenerateFeedback: null,
+  creativeDirection: "",
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
@@ -55,6 +56,7 @@ export type Action =
   | { type: "INCREMENT_EXPORTS" }
   | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }
   | { type: "SET_REGENERATE_FEEDBACK"; feedback: string | null }
+  | { type: "SET_CREATIVE_DIRECTION"; direction: string }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -125,6 +127,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, viralOptions: { ...state.viralOptions, ...action.options } };
     case "SET_REGENERATE_FEEDBACK":
       return { ...state, regenerateFeedback: action.feedback };
+    case "SET_CREATIVE_DIRECTION":
+      return { ...state, creativeDirection: action.direction };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const, contentSummary: "" };

@@ -152,4 +152,6 @@ export interface AppState {
   viralOptions: ViralExportOptions;
   // Regeneration — when set, detecting step skips scoring and re-runs planner with this feedback
   regenerateFeedback: string | null;
+  // Creative direction — optional user-provided style instructions passed to Opus planner
+  creativeDirection: string;
 }

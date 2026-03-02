@@ -233,6 +233,26 @@ export default function UploadStep() {
             <span>Create Highlight Tape</span>
             <ArrowRight className="h-5 w-5" />
           </button>
+
+          {/* Creative direction (optional) */}
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs font-medium text-[var(--text-tertiary)]">
+              Special instructions
+            </label>
+            <input
+              type="text"
+              value={state.creativeDirection}
+              onChange={(e) => {
+                const value = e.target.value.slice(0, 300);
+                dispatch({ type: "SET_CREATIVE_DIRECTION", direction: value });
+              }}
+              placeholder="e.g., violet neon theme, cinematic slow-mo..."
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-[var(--text-tertiary)] outline-none transition-colors focus:border-[var(--accent)]"
+            />
+            <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
+              Optional — tell the AI how you want your video styled
+            </p>
+          </div>
         </div>
       )}
 

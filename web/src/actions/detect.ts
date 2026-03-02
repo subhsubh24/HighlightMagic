@@ -452,6 +452,7 @@ export async function planFromScores(
   scores: ScoredFrame[],
   templateName?: string,
   userFeedback?: string,
+  creativeDirection?: string,
   onPhase?: (phase: "thinking" | "generating") => void
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -466,7 +467,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, onPhase);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -925,6 +926,7 @@ async function planHighlightTape(
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string,
   userFeedback?: string,
+  creativeDirection?: string,
   onPhase?: (phase: SSEStreamPhase) => void
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
   // Compute approximate duration for each source from max timestamp + sample interval
@@ -1351,6 +1353,10 @@ Respond with ONLY a JSON object:
     text: `\nYou've now seen ALL the footage. Think deeply:\n- What's the story across these ${sourceCount} sources?\n- What are the cross-source connections? (cause→effect, before→after, matching energy)\n- What's the emotional arc?\n- What would make this reel go VIRAL on Instagram — maximum watch-through, saves, shares, and replays?${
       userFeedback
         ? `\n\nDIRECTOR'S NOTE — The user has specific creative direction that takes PRIORITY:\n"${userFeedback}"\nHonor this direction in every creative decision. This is a regeneration — make a DIFFERENT edit than before.`
+        : ""
+    }${
+      creativeDirection
+        ? `\n\nSTYLE DIRECTION — The user wants a specific look and feel:\n"${creativeDirection}"\nApply this style across all clips: colors, mood, pacing, effects, filters, captions, transitions — everything should reflect this direction.`
         : ""
     }\n\nNow create the highlight tape.`,
   });
