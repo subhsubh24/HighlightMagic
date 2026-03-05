@@ -204,7 +204,7 @@ export default function DetectingStep() {
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
 
-        processResult(result);
+        await processResult(result);
       } catch (err) {
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
         handleError(err);
@@ -357,13 +357,13 @@ export default function DetectingStep() {
         );
 
         clearInterval(plannerTimer);
-        processResult(result);
+        await processResult(result);
       } catch (err) {
         handleError(err);
       }
     }
 
-    function processResult(result: DetectionResult) {
+    async function processResult(result: DetectionResult) {
       setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
       setProgress(95);
 
