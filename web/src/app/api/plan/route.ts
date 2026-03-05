@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   const body = await req.json();
-  const { frames, scores, templateName, userFeedback, creativeDirection } = body;
+  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations } = body;
 
   const encoder = new TextEncoder();
 
@@ -47,7 +47,8 @@ export async function POST(req: Request) {
             } catch {
               // Controller closed — ignore
             }
-          }
+          },
+          photoAnimations ?? undefined
         );
         clearInterval(keepalive);
         controller.enqueue(

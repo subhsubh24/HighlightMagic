@@ -1,29 +1,91 @@
 # Implementation Plan
 
-## Feature 1: Regenerate with User Feedback
+## Feature: Photo Animation via Kling 3.0 (Atlas Cloud)
 
-### Flow
-1. After first detection, cache frames + scores in module-level memory
-2. ResultsStep gets "Regenerate" button → shows feedback input + presets
-3. On submit, navigate to detecting step with "replan-only" flag
-4. DetectingStep detects replan mode → skips extraction + scoring → only runs planner with feedback
-5. planFromScores injects user feedback as "DIRECTOR'S NOTE" in planner prompt
+Add per-photo animation controls in the upload step. When a user checks "Animate this photo", the photo gets sent to Kling 3.0 (via Atlas Cloud) to generate a short video clip. Users can optionally provide motion instructions; if left blank, Opus generates the prompt during the planning phase.
 
-### Files
-- NEW: web/src/lib/detection-cache.ts (module-level cache for frames + scores)
-- MODIFY: web/src/lib/store.ts (add regenerateFeedback to state + actions)
-- MODIFY: web/src/actions/detect.ts (add userFeedback param to planFromScores)
-- MODIFY: web/src/components/steps/DetectingStep.tsx (replan mode using cache)
-- MODIFY: web/src/components/steps/ResultsStep.tsx (regenerate button + UI)
+---
 
-## Feature 2: Beat-Sync Validation
+### Step 1: Update Types
+**File:** `web/src/lib/types.ts`
 
-### Flow
-1. After beat-sync adjusts clip durations, validate and report
-2. Check transitions land within tolerance of beat boundaries
-3. Warn about clips adjusted >30% from original duration
-4. Surface warnings in export UI
+Add to `MediaFile` interface:
+- `animatePhoto: boolean` (default `false`)
+- `animationInstructions: string` (default `""`)
+- `animatedVideoUrl: string | null` (populated after Kling returns)
+- `animationStatus: "idle" | "generating" | "completed" | "failed"` (track generation state)
 
-### Files
-- MODIFY: web/src/lib/beat-sync.ts (add validation function)
-- MODIFY: web/src/components/steps/ExportStep.tsx (show validation warnings)
+---
+
+### Step 2: Update Store
+**File:** `web/src/lib/store.ts`
+
+- Add action: `UPDATE_MEDIA_ANIMATION` — updates `animatePhoto` and `animationInstructions` for a given file ID
+- Add action: `SET_ANIMATION_RESULT` — sets `animatedVideoUrl` and `animationStatus` for a given file ID
+
+---
+
+### Step 3: Upload Step UI — Per-Photo Animation Controls
+**File:** `web/src/components/steps/UploadStep.tsx`
+
+For each file tile where `type === "photo"`, add below the thumbnail:
+- **Checkbox**: "Animate this photo" — toggles `animatePhoto`
+- **Text input** (shown when checkbox is checked): placeholder "Describe the motion... (optional — AI will decide if left blank)" — binds to `animationInstructions`, max 500 chars
+- Video files don't get these controls
+
+---
+
+### Step 4: Atlas Cloud Kling API Client
+**New file:** `web/src/lib/kling.ts`
+
+- `generatePhotoAnimation(imageUrl: string, prompt: string, duration?: number)` — submits task
+  - `POST https://api.atlascloud.ai/api/v1/model/generateVideo`
+  - Body: `{ model: "kwaivgi/kling-v3.0-pro/image-to-video", image, prompt, duration: 5, cfg_scale: 0.5, sound: false }`
+  - Auth: `Bearer ${ATLASCLOUD_API_KEY}`
+  - Returns prediction ID
+- `pollAnimationResult(predictionId: string)` — polls every 5s, 3-min timeout, returns video URL
+
+---
+
+### Step 5: Server Action for Animation
+**New file:** `web/src/actions/animate.ts`
+
+- Server action `animatePhoto(imageUrl: string, prompt: string)` that:
+  1. Calls `generatePhotoAnimation` to submit the task
+  2. Calls `pollAnimationResult` to wait for the video
+  3. Returns the video URL
+- Keeps the API key server-side
+
+---
+
+### Step 6: Wire Animation into the Detection Pipeline
+**File:** `web/src/actions/detect.ts`
+
+After Opus planning completes, for any photo with `animatePhoto: true`:
+- If `animationInstructions` is empty → use Opus-generated `animationPrompt`
+- If `animationInstructions` is provided → use that directly
+- Fire off all Kling calls in parallel, report progress via SSE
+
+**Opus prompt update:** When Opus sees a photo clip with `animatePhoto: true` and no user instructions, generate an `animationPrompt` field describing the ideal motion.
+
+---
+
+### Step 7: Update .env.example
+**File:** `web/.env.example`
+
+Add `ATLASCLOUD_API_KEY=`
+
+---
+
+### Step 8: Preview Support
+**File:** `web/src/components/TapePreviewPlayer.tsx`
+
+When rendering a photo clip with `animatedVideoUrl`, use the video instead of static image. Falls back to static + Ken Burns if not yet completed.
+
+---
+
+### Out of Scope (for later)
+- Pro-tier gating
+- iOS native export with animated photos
+- Cost/usage tracking
+- Retry UI if animation fails

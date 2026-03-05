@@ -308,6 +308,8 @@ export interface DetectedClip {
   customCaptionAnimation?: string;
   customCaptionGlowColor?: string;
   customCaptionGlowRadius?: number;
+  // Photo animation — AI-generated motion prompt for Kling 3.0
+  animationPrompt?: string;
 }
 
 export interface DetectionResult {
@@ -447,13 +449,21 @@ function normalizeScoresAcrossBatches(scores: ScoredFrame[]): ScoredFrame[] {
 
 // ── Phase 2: Plan highlights from scores ──
 
+/** Info about which photos should be animated (passed from upload step). */
+export interface PhotoAnimationInfo {
+  sourceFileId: string;
+  animatePhoto: boolean;
+  animationInstructions: string;
+}
+
 export async function planFromScores(
   frames: MultiFrameInput[],
   scores: ScoredFrame[],
   templateName?: string,
   userFeedback?: string,
   creativeDirection?: string,
-  onPhase?: (phase: "thinking" | "generating") => void
+  onPhase?: (phase: "thinking" | "generating") => void,
+  photoAnimations?: PhotoAnimationInfo[]
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -467,7 +477,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -927,7 +937,8 @@ async function planHighlightTape(
   templateName?: string,
   userFeedback?: string,
   creativeDirection?: string,
-  onPhase?: (phase: SSEStreamPhase) => void
+  onPhase?: (phase: SSEStreamPhase) => void,
+  photoAnimations?: PhotoAnimationInfo[]
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -936,11 +947,27 @@ async function planHighlightTape(
     if (f.timestamp > current) sourceDurations.set(f.sourceFileId, f.timestamp);
   }
 
+  // Build animation lookup for photos
+  const animationLookup = new Map<string, PhotoAnimationInfo>();
+  if (photoAnimations) {
+    for (const pa of photoAnimations) {
+      animationLookup.set(pa.sourceFileId, pa);
+    }
+  }
+
   const sourceList = Array.from(sourceFiles.entries())
     .map(([id, info]) => {
       const approxDuration = (sourceDurations.get(id) ?? 0) + 2; // +2s for last sample interval
       const durationStr = info.type === "photo" ? "photo (still)" : `~${approxDuration.toFixed(0)}s duration`;
-      return `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled, ${durationStr})`;
+      let line = `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled, ${durationStr})`;
+      // Include animation info for photos
+      const animInfo = animationLookup.get(id);
+      if (animInfo?.animatePhoto) {
+        line += animInfo.animationInstructions
+          ? ` [ANIMATE — user wants: "${animInfo.animationInstructions}"]`
+          : ` [ANIMATE — generate a motion prompt for this photo]`;
+      }
+      return line;
     })
     .join("\n");
 
@@ -1296,6 +1323,18 @@ DESIGN UNIQUE CAPTION STYLES FOR EACH CLIP. Match the look to the moment's energ
 KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
 
+PHOTO ANIMATION — some photos are marked [ANIMATE] in the source list above.
+For these photos, you MUST include an "animationPrompt" field in the clip JSON.
+This prompt will be sent to a video generation AI (Kling 3.0) to animate the photo into a short video.
+- If the user provided instructions (shown after "user wants:"), incorporate them into your prompt.
+- If no instructions, write a cinematic motion description based on the photo content and edit context.
+- Good prompts describe CAMERA MOTION + SUBJECT MOTION, e.g.:
+  "Slow camera push-in, subject turns head slightly and smiles, hair moves gently in breeze"
+  "Gentle parallax drift left to right, clouds move slowly in background"
+  "Zoom out slowly revealing the full scene, subtle ambient movement"
+- Keep prompts under 200 characters. Be specific about what moves and how.
+- For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
+
 YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
 sourceFileId, startTime, endTime (MUST be 2+ seconds apart), label, confidenceScore,
 velocityKeyframes (REQUIRED — custom speed curve for this clip),
@@ -1305,6 +1344,7 @@ filterCSS (REQUIRED — custom CSS color grade for this clip),
 entryPunchScale (REQUIRED — 1.0 = none, up to 1.1),
 entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
 kenBurnsIntensity (photos only, 0-0.08),
+animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling 3.0),
 captionText (optional — only 30-50% of clips),
 captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
 
@@ -1443,6 +1483,7 @@ Respond with ONLY a JSON object:
             captionAnimation?: string;
             captionGlowColor?: string;
             captionGlowRadius?: number;
+            animationPrompt?: string;
           }>;
         };
 
@@ -1577,6 +1618,9 @@ Respond with ONLY a JSON object:
             ? p.captionGlowColor : undefined,
           customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
             ? p.captionGlowRadius : undefined,
+          // Photo animation prompt from AI
+          animationPrompt: (typeof p.animationPrompt === "string" && p.animationPrompt.trim())
+            ? p.animationPrompt.trim().slice(0, 500) : undefined,
         }; });
 
         // Deduplicate: drop clips with identical or overlapping time ranges from the same source

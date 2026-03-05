@@ -37,6 +37,8 @@ export interface HighlightTemplate {
 
 export type MediaType = "video" | "photo";
 
+export type AnimationStatus = "idle" | "generating" | "completed" | "failed";
+
 export interface MediaFile {
   id: string;
   file: File;
@@ -45,6 +47,11 @@ export interface MediaFile {
   duration: number; // 0 for photos
   name: string;
   thumbnailUrl?: string;
+  // Photo animation (Kling 3.0 via Atlas Cloud)
+  animatePhoto?: boolean;
+  animationInstructions?: string;
+  animatedVideoUrl?: string | null;
+  animationStatus?: AnimationStatus;
 }
 
 export interface HighlightSegment {

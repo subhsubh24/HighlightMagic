@@ -10,7 +10,9 @@ import {
   pollScoringBatch,
   retrieveScoringResults,
   type DetectionResult,
+  type DetectedClip,
 } from "@/actions/detect";
+import { animatePhoto } from "@/actions/animate";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
@@ -56,12 +58,13 @@ async function callPlannerSSE(
   templateName?: string,
   userFeedback?: string,
   creativeDirection?: string,
-  onPhase?: (phase: "thinking" | "generating") => void
+  onPhase?: (phase: "thinking" | "generating") => void,
+  photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
   });
 
   if (!response.ok) {
@@ -141,6 +144,15 @@ export default function DetectingStep() {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
+    // Build photo animation info from upload step selections
+    const photoAnimations = state.mediaFiles
+      .filter((f) => f.type === "photo" && f.animatePhoto)
+      .map((f) => ({
+        sourceFileId: f.id,
+        animatePhoto: true,
+        animationInstructions: f.animationInstructions ?? "",
+      }));
+
     if (isReplan) {
       runReplan();
     } else {
@@ -182,7 +194,8 @@ export default function DetectingStep() {
             } else if (phase === "generating") {
               setProgress(82);
             }
-          }
+          },
+          photoAnimations.length > 0 ? photoAnimations : undefined
         );
 
         clearInterval(plannerTimer);
@@ -338,7 +351,8 @@ export default function DetectingStep() {
               // Model is outputting text — we're nearly done
               setProgress(88);
             }
-          }
+          },
+          photoAnimations.length > 0 ? photoAnimations : undefined
         );
 
         clearInterval(plannerTimer);
@@ -429,12 +443,63 @@ export default function DetectingStep() {
 
       setProgress(100);
 
+      // Fire off photo animations in the background (don't block navigation)
+      // Clips with animationPrompt get animated via Kling 3.0 / Atlas Cloud
+      const animatableClips = detectedClips.filter((c) => c.animationPrompt);
+      if (animatableClips.length > 0) {
+        triggerPhotoAnimations(animatableClips);
+      }
+
       // Brief pause for the 100% satisfaction, then navigate
       setTimeout(() => {
         dispatch({ type: "SET_HIGHLIGHTS", highlights });
         dispatch({ type: "SET_CLIPS", clips });
         dispatch({ type: "SET_STEP", step: "results" });
       }, 400);
+    }
+
+    /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
+    function triggerPhotoAnimations(clips: DetectedClip[]) {
+      // Deduplicate by sourceFileId (one animation per photo, not per clip)
+      const seen = new Set<string>();
+      const uniqueClips = clips.filter((c) => {
+        if (seen.has(c.sourceFileId)) return false;
+        seen.add(c.sourceFileId);
+        return true;
+      });
+
+      for (const clip of uniqueClips) {
+        const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
+        if (!media || media.type !== "photo") continue;
+
+        // Mark as generating
+        dispatch({
+          type: "SET_ANIMATION_RESULT",
+          fileId: media.id,
+          animatedVideoUrl: null,
+          animationStatus: "generating",
+        });
+
+        // Fire and forget — update state when done
+        animatePhoto(media.url, clip.animationPrompt!, 5)
+          .then((videoUrl) => {
+            dispatch({
+              type: "SET_ANIMATION_RESULT",
+              fileId: media.id,
+              animatedVideoUrl: videoUrl,
+              animationStatus: "completed",
+            });
+          })
+          .catch((err) => {
+            console.error(`Photo animation failed for "${media.name}":`, err);
+            dispatch({
+              type: "SET_ANIMATION_RESULT",
+              fileId: media.id,
+              animatedVideoUrl: null,
+              animationStatus: "failed",
+            });
+          });
+      }
     }
 
     function handleError(err: unknown) {

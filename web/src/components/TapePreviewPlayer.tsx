@@ -122,9 +122,15 @@ export default function TapePreviewPlayer() {
   useEffect(() => {
     const map = new Map<string, HTMLVideoElement | HTMLImageElement>();
     for (const entry of timeline) {
-      if (entry.mediaType === "video") {
+      // Check if this photo has been animated — use the generated video instead
+      const mediaFile = getMediaFile(state, entry.clip.sourceFileId);
+      const useAnimatedVideo = entry.mediaType === "photo" &&
+        mediaFile?.animationStatus === "completed" &&
+        mediaFile?.animatedVideoUrl;
+
+      if (entry.mediaType === "video" || useAnimatedVideo) {
         const v = document.createElement("video");
-        v.src = entry.mediaUrl;
+        v.src = useAnimatedVideo ? mediaFile!.animatedVideoUrl! : entry.mediaUrl;
         v.muted = isMuted;
         v.playsInline = true;
         v.preload = "auto";
@@ -209,8 +215,8 @@ export default function TapePreviewPlayer() {
         dh = dw / sa;
       }
 
-      // Ken Burns zoom for photos (intensity from theme)
-      if (entry.mediaType === "photo") {
+      // Ken Burns zoom for static photos only (animated photos are now video, skip Ken Burns)
+      if (entry.mediaType === "photo" && !(el instanceof HTMLVideoElement)) {
         const p = Math.min(localTime / entry.clipDuration, 1);
         const scale = 1 + p * kenBurnsIntensity;
         dw *= scale;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { formatFileSize, haptic, uuid } from "@/lib/utils";
@@ -152,65 +152,105 @@ export default function UploadStep() {
 
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {state.mediaFiles.map((media, index) => (
-              <div
-                key={media.id}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
-                  dragOverIndex === index
-                    ? "border-[var(--accent)] scale-105"
-                    : "border-white/10 hover:border-white/20"
-                }`}
-              >
-                {media.type === "video" ? (
-                  <video
-                    src={`${media.url}#t=1`}
-                    className="h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
-                )}
-
-                {/* Overlay info */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-
-                {/* Type badge */}
-                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                  {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <Image className="h-2.5 w-2.5" />}
-                  {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
-                </div>
-
-                {/* Order number */}
-                <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
-                  {index + 1}
-                </div>
-
-                {/* Drag handle */}
-                <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical className="h-3.5 w-3.5 text-white/70" />
-                </div>
-
-                {/* Remove button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(media.id);
-                  }}
-                  className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+              <div key={media.id} className="flex flex-col gap-1.5">
+                <div
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
+                    dragOverIndex === index
+                      ? "border-[var(--accent)] scale-105"
+                      : "border-white/10 hover:border-white/20"
+                  }`}
                 >
-                  <X className="h-3 w-3" />
-                </button>
+                  {media.type === "video" ? (
+                    <video
+                      src={`${media.url}#t=1`}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
+                  )}
 
-                {/* Filename */}
-                <p className="absolute bottom-1.5 left-7 right-7 truncate text-[9px] text-white/70">
-                  {media.name}
-                </p>
+                  {/* Overlay info */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+                  {/* Type badge */}
+                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <Image className="h-2.5 w-2.5" />}
+                    {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
+                  </div>
+
+                  {/* Order number */}
+                  <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
+                    {index + 1}
+                  </div>
+
+                  {/* Drag handle */}
+                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GripVertical className="h-3.5 w-3.5 text-white/70" />
+                  </div>
+
+                  {/* Remove button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemove(media.id);
+                    }}
+                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+
+                  {/* Filename */}
+                  <p className="absolute bottom-1.5 left-7 right-7 truncate text-[9px] text-white/70">
+                    {media.name}
+                  </p>
+                </div>
+
+                {/* Photo animation controls */}
+                {media.type === "photo" && (
+                  <div className="flex flex-col gap-1">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={media.animatePhoto ?? false}
+                        onChange={(e) => {
+                          dispatch({
+                            type: "UPDATE_MEDIA_ANIMATION",
+                            fileId: media.id,
+                            animatePhoto: e.target.checked,
+                            animationInstructions: media.animationInstructions ?? "",
+                          });
+                        }}
+                        className="h-3 w-3 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
+                      />
+                      <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
+                      <span className="text-[10px] text-[var(--text-secondary)]">Animate</span>
+                    </label>
+                    {media.animatePhoto && (
+                      <input
+                        type="text"
+                        value={media.animationInstructions ?? ""}
+                        onChange={(e) => {
+                          dispatch({
+                            type: "UPDATE_MEDIA_ANIMATION",
+                            fileId: media.id,
+                            animatePhoto: true,
+                            animationInstructions: e.target.value.slice(0, 500),
+                          });
+                        }}
+                        placeholder="Motion instructions... (AI decides if blank)"
+                        className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)]"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             ))}
 

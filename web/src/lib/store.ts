@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
+import type { AppState, AnimationStatus, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -57,6 +57,8 @@ export type Action =
   | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }
   | { type: "SET_REGENERATE_FEEDBACK"; feedback: string | null }
   | { type: "SET_CREATIVE_DIRECTION"; direction: string }
+  | { type: "UPDATE_MEDIA_ANIMATION"; fileId: string; animatePhoto: boolean; animationInstructions: string }
+  | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -129,6 +131,22 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, regenerateFeedback: action.feedback };
     case "SET_CREATIVE_DIRECTION":
       return { ...state, creativeDirection: action.direction };
+    case "UPDATE_MEDIA_ANIMATION": {
+      const updated = state.mediaFiles.map((f) =>
+        f.id === action.fileId
+          ? { ...f, animatePhoto: action.animatePhoto, animationInstructions: action.animationInstructions }
+          : f
+      );
+      return { ...state, mediaFiles: updated };
+    }
+    case "SET_ANIMATION_RESULT": {
+      const updated = state.mediaFiles.map((f) =>
+        f.id === action.fileId
+          ? { ...f, animatedVideoUrl: action.animatedVideoUrl, animationStatus: action.animationStatus }
+          : f
+      );
+      return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
+    }
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const, contentSummary: "" };
