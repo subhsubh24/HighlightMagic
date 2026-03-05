@@ -5,6 +5,7 @@ final class AppState {
     var navigationPath = NavigationPath()
     var selectedVideo: VideoItem?
     var userPrompt: String = ""
+    var creativeDirection: String = ""
     var detectedHighlights: [HighlightSegment] = []
     var generatedClips: [EditedClip] = []
     var currentScreen: AppScreen = .home
@@ -12,37 +13,45 @@ final class AppState {
     var processingProgress: Double = 0
     var errorMessage: String?
 
+    /// Stored property so @Observable can track mutations and trigger SwiftUI updates.
+    /// Synced to UserDefaults on write and loaded from UserDefaults on init.
     var exportsUsedThisMonth: Int {
-        get { UserDefaults.standard.integer(forKey: "exportsUsedThisMonth") }
-        set { UserDefaults.standard.set(newValue, forKey: "exportsUsedThisMonth") }
+        didSet { UserDefaults.standard.set(exportsUsedThisMonth, forKey: "exportsUsedThisMonth") }
     }
 
+    /// Stored property synced to UserDefaults. See `exportsUsedThisMonth`.
     var lastExportResetDate: Date {
-        get { UserDefaults.standard.object(forKey: "lastExportResetDate") as? Date ?? .distantPast }
-        set { UserDefaults.standard.set(newValue, forKey: "lastExportResetDate") }
+        didSet { UserDefaults.standard.set(lastExportResetDate, forKey: "lastExportResetDate") }
     }
 
     var isProUser: Bool = false
 
     var canExportFree: Bool {
+        exportsUsedThisMonth < Constants.freeExportLimit
+    }
+
+    init() {
+        self.exportsUsedThisMonth = UserDefaults.standard.integer(forKey: "exportsUsedThisMonth")
+        self.lastExportResetDate = UserDefaults.standard.object(forKey: "lastExportResetDate") as? Date ?? .distantPast
         resetExportsIfNewMonth()
-        return exportsUsedThisMonth < Constants.freeExportLimit
     }
 
     func resetExportsIfNewMonth() {
         let calendar = Calendar.current
         guard !calendar.isDate(lastExportResetDate, equalTo: .now, toGranularity: .month) else { return }
-        UserDefaults.standard.set(0, forKey: "exportsUsedThisMonth")
-        UserDefaults.standard.set(Date.now, forKey: "lastExportResetDate")
+        exportsUsedThisMonth = 0
+        lastExportResetDate = .now
     }
 
     func incrementExportCount() {
+        resetExportsIfNewMonth()
         exportsUsedThisMonth += 1
     }
 
     func clearSession() {
         selectedVideo = nil
         userPrompt = ""
+        creativeDirection = ""
         detectedHighlights = []
         generatedClips = []
         isProcessing = false

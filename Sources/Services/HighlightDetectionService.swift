@@ -8,12 +8,17 @@ actor HighlightDetectionService {
     static let shared = HighlightDetectionService()
 
     private let logger = Logger(subsystem: "com.highlightmagic.app", category: "Detection")
+    // Reuse a single CIContext instead of creating one per frame — CIContext is expensive to create.
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private init() {}
 
     struct DetectionResult: Sendable {
         var segments: [HighlightSegment]
         var overallConfidence: Double
+        /// Per-clip AI creative configs from the Opus planner (1:1 with segments).
+        /// When present, downstream clip generation skips re-planning.
+        var perClipConfigs: [CustomEffectConfig]?
     }
 
     // MARK: - Main Detection Pipeline
@@ -21,6 +26,7 @@ actor HighlightDetectionService {
     func detectHighlights(
         in videoURL: URL,
         prompt: String,
+        creativeDirection: String = "",
         progressHandler: @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         let asset = AVURLAsset(url: videoURL)
@@ -31,15 +37,229 @@ actor HighlightDetectionService {
             throw DetectionError.invalidVideo
         }
 
+        // Cloud-first path: when API is available, use Haiku scoring + Opus planning
+        // (identical to web platform). Falls back to Vision pipeline only when offline.
+        if await CloudScoringService.shared.isAvailable {
+            return try await detectHighlightsCloud(
+                asset: asset,
+                totalSeconds: totalSeconds,
+                prompt: prompt,
+                creativeDirection: creativeDirection,
+                progressHandler: progressHandler
+            )
+        }
+
+        // Offline fallback: on-device Vision pipeline
+        return try await detectHighlightsOnDevice(
+            asset: asset,
+            totalSeconds: totalSeconds,
+            prompt: prompt,
+            progressHandler: progressHandler
+        )
+    }
+
+    // MARK: - Cloud Detection (Haiku + Opus — identical to web)
+
+    /// Cloud-first detection pipeline matching the web platform exactly:
+    /// 1. Extract audio features (energy, onset, bass/mid/treble per second)
+    /// 2. Score all frames with Claude Haiku (1 frame/sec, batches of 35)
+    /// 3. Z-score normalize across batches
+    /// 4. Build segments from scored frames
+    /// 5. Plan tape with Claude Opus 4.6 (extended thinking, SSE streaming)
+    private func detectHighlightsCloud(
+        asset: AVURLAsset,
+        totalSeconds: Double,
+        prompt: String,
+        creativeDirection: String = "",
+        progressHandler: @Sendable (Double) -> Void
+    ) async throws -> DetectionResult {
+        logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
+
+        // Phase 1: Extract audio features (0-5%)
+        progressHandler(0.01)
+        let audioFeatures: [AudioFeatureService.AudioFeatures]
+        do {
+            audioFeatures = try await AudioFeatureService.shared.extractFeatures(from: asset)
+        } catch {
+            logger.warning("Audio feature extraction failed: \(error.localizedDescription), continuing without audio")
+            audioFeatures = []
+        }
+        progressHandler(0.05)
+
+        // Phase 2: Score all frames with Haiku (5-75%)
+        let scoredFrames = try await CloudScoringService.shared.scoreFrames(
+            asset: asset,
+            audioFeatures: audioFeatures,
+            templateName: prompt.isEmpty ? nil : prompt
+        ) { phase in
+            progressHandler(0.05 + phase * 0.70)
+        }
+
+        guard !scoredFrames.isEmpty else {
+            logger.warning("Cloud scoring returned 0 frames, falling back to on-device")
+            return try await detectHighlightsOnDevice(
+                asset: asset, totalSeconds: totalSeconds,
+                prompt: prompt, progressHandler: progressHandler
+            )
+        }
+        // Phase 3+4: Plan tape with Opus 4.6 (75-98%)
+        // Gap 1: Opus decides clip boundaries (startTime/endTime) — no pre-built segments.
+        // This matches the web platform where AI has full creative control over WHERE to cut.
+        progressHandler(0.75)
+
+        let planResult = await AIEffectRecommendationService.shared.planTapeFromScoredFrames(
+            for: asset,
+            totalSeconds: totalSeconds,
+            scoredFrames: scoredFrames,
+            audioFeatures: audioFeatures,
+            userPrompt: prompt,
+            creativeDirection: creativeDirection
+        ) { phase in
+            progressHandler(phase)
+        }
+
+        // If Opus returned valid clips, use them directly.
+        // Otherwise fall back to the legacy segment-building approach.
+        var finalSegments: [HighlightSegment]
+        var finalConfigs: [CustomEffectConfig]?
+        if !planResult.segments.isEmpty {
+            finalSegments = planResult.segments
+            finalConfigs = planResult.configs
+        } else {
+            logger.warning("Opus returned no clips, falling back to scored-frame segment builder")
+            finalSegments = buildSegmentsFromScoredFrames(
+                scoredFrames: scoredFrames,
+                totalSeconds: totalSeconds
+            )
+        }
+
+        progressHandler(1.0)
+
+        let avgConfidence = finalSegments.isEmpty ? 0 :
+            finalSegments.map(\.confidenceScore).reduce(0, +) / Double(finalSegments.count)
+
+        return DetectionResult(
+            segments: finalSegments,
+            overallConfidence: avgConfidence,
+            perClipConfigs: finalConfigs
+        )
+    }
+
+    /// Build HighlightSegments from cloud-scored frames.
+    /// Groups consecutive high-scoring frames into segments, enforcing min/max duration.
+    private func buildSegmentsFromScoredFrames(
+        scoredFrames: [CloudScoringService.ScoredFrame],
+        totalSeconds: Double
+    ) -> [HighlightSegment] {
+        guard !scoredFrames.isEmpty else { return [] }
+
+        let sorted = scoredFrames.sorted { $0.timestamp < $1.timestamp }
+
+        // Find peaks above threshold
+        let threshold = 0.5  // Frames above this are candidates
+        var peaks: [(timestamp: Double, score: Double, label: String, role: String?)] = []
+        for frame in sorted where frame.score >= threshold {
+            peaks.append((frame.timestamp, frame.score, frame.label, frame.narrativeRole))
+        }
+
+        // Sort by score descending
+        peaks.sort { $0.score > $1.score }
+
+        // Build score lookup for boundary expansion
+        let scoreLookup = Dictionary(sorted.map { (Int($0.timestamp), $0.score) },
+                                      uniquingKeysWith: { first, _ in first })
+
+        var segments: [HighlightSegment] = []
+        var usedTimestamps: Set<Int> = []
+
+        for peak in peaks {
+            let peakSec = Int(peak.timestamp)
+            guard !usedTimestamps.contains(peakSec) else { continue }
+
+            // Expand outward from peak while scores stay above continuation threshold
+            let continuationThreshold = peak.score * 0.4
+            var startSec = peakSec
+            while startSec > 0, (scoreLookup[startSec - 1] ?? 0) >= continuationThreshold {
+                startSec -= 1
+            }
+            var endSec = peakSec
+            while endSec < Int(totalSeconds) - 1, (scoreLookup[endSec + 1] ?? 0) >= continuationThreshold {
+                endSec += 1
+            }
+
+            var startTime = Double(startSec)
+            var endTime = Double(endSec + 1)
+            let rawDuration = endTime - startTime
+
+            // Enforce min/max clip duration
+            if rawDuration < Constants.minClipDuration {
+                let deficit = Constants.minClipDuration - rawDuration
+                startTime = max(0, startTime - deficit / 2)
+                endTime = min(totalSeconds, endTime + deficit / 2)
+            } else if rawDuration > Constants.maxClipDuration {
+                startTime = max(0, peak.timestamp - Constants.maxClipDuration / 2)
+                endTime = min(totalSeconds, peak.timestamp + Constants.maxClipDuration / 2)
+            }
+
+            // Check overlap with existing segments
+            let candidateDuration = endTime - startTime
+            let overlapsExisting = candidateDuration > 0 && segments.contains { existing in
+                let overlapStart = max(existing.startSeconds, startTime)
+                let overlapEnd = min(existing.endSeconds, endTime)
+                let overlap = max(0, overlapEnd - overlapStart)
+                return overlap / candidateDuration > 0.5
+            }
+            guard !overlapsExisting else { continue }
+
+            // Mark used timestamps
+            for t in startSec...endSec {
+                usedTimestamps.insert(t)
+            }
+
+            segments.append(HighlightSegment(
+                startTime: CMTime(seconds: startTime, preferredTimescale: 600),
+                endTime: CMTime(seconds: endTime, preferredTimescale: 600),
+                confidenceScore: peak.score,
+                label: peak.label,
+                detectionSources: [.claudeVision]
+            ))
+
+            if segments.count >= Constants.targetClipCount { break }
+        }
+
+        // Sort by start time
+        segments.sort { $0.startSeconds < $1.startSeconds }
+
+        // Fallback: if no segments found, create one from the best frame
+        if segments.isEmpty, let best = sorted.max(by: { $0.score < $1.score }) {
+            let start = max(0, best.timestamp - Constants.minClipDuration / 2)
+            let end = min(totalSeconds, best.timestamp + Constants.minClipDuration / 2)
+            segments.append(HighlightSegment(
+                startTime: CMTime(seconds: start, preferredTimescale: 600),
+                endTime: CMTime(seconds: end, preferredTimescale: 600),
+                confidenceScore: best.score,
+                label: best.label,
+                detectionSources: [.claudeVision]
+            ))
+        }
+
+        return segments
+    }
+
+    // MARK: - On-Device Detection (Vision Framework fallback)
+
+    private func detectHighlightsOnDevice(
+        asset: AVURLAsset,
+        totalSeconds: Double,
+        prompt: String,
+        progressHandler: @Sendable (Double) -> Void
+    ) async throws -> DetectionResult {
+        logger.info("On-device detection pipeline (offline fallback)")
+
         // Chunked processing: reduce sample density for long videos (>5 min)
         let isLongVideo = totalSeconds > 300
         if isLongVideo {
             logger.info("Long video detected (\(Int(totalSeconds))s) — using chunked processing")
-        }
-
-        // Low battery check — reduce quality gracefully
-        if CrashReporting.isLowBattery {
-            logger.warning("Low battery — using reduced analysis quality")
         }
 
         // Pass 1: Vision — Motion analysis (0-20%)
@@ -98,13 +318,8 @@ actor HighlightDetectionService {
         )
         progressHandler(0.85)
 
-        // Pass 7: Claude Vision refinement for low-confidence segments (85-98%)
-        // Only use Cloud AI on Wi-Fi and when not low battery
-        let avgConfidenceBefore = segments.isEmpty ? 0 : segments.map(\.confidenceScore).reduce(0, +) / Double(segments.count)
-        if avgConfidenceBefore < Constants.claudeAPIConfidenceThreshold,
-           await ClaudeVisionService.shared.isAvailable,
-           NetworkMonitor.shared.shouldUseCloudAI,
-           !CrashReporting.isLowBattery {
+        // Pass 7: Claude Vision refinement (85-98%)
+        if await ClaudeVisionService.shared.isAvailable {
             segments = await refineWithClaudeVision(
                 segments: segments,
                 asset: asset,
@@ -133,36 +348,73 @@ actor HighlightDetectionService {
         totalSeconds: Double,
         progressHandler: @Sendable (Double) -> Void
     ) async -> [HighlightSegment] {
-        let candidateTimestamps = segments.map { $0.startSeconds + $0.duration / 2 }
+        // Build candidate context with full segment boundaries for Claude
+        let candidates = segments.map {
+            ClaudeVisionService.CandidateSegment(
+                midpoint: $0.startSeconds + $0.duration / 2,
+                start: $0.startSeconds,
+                end: $0.endSeconds
+            )
+        }
 
         do {
             let scored = try await ClaudeVisionService.shared.scoreHighlights(
                 asset: asset,
                 prompt: prompt,
-                candidateTimestamps: candidateTimestamps
+                candidates: candidates
             ) { phase in
                 progressHandler(phase)
             }
 
-            // Merge Claude scores with existing segments
+            // Merge Claude scores with 1:1 matching — each score maps to exactly
+            // one segment, matched by closest candidate midpoint. This prevents
+            // a single segment from absorbing multiple labels when segments are
+            // close together in time.
             var refined = segments
+            let candidateMidpoints = candidates.map(\.midpoint)
+            var matchedIndices: Set<Int> = []
+
             for scoredItem in scored {
-                if let idx = refined.firstIndex(where: {
-                    abs($0.startSeconds + $0.duration / 2 - scoredItem.seconds) < 5
-                }) {
-                    // Blend: 60% Claude score + 40% original
-                    let blended = scoredItem.score * 0.6 + refined[idx].confidenceScore * 0.4
-                    refined[idx].confidenceScore = blended
-                    if !refined[idx].detectionSources.contains(.claudeVision) {
-                        refined[idx].detectionSources.append(.claudeVision)
+                // Find the closest unmatched candidate midpoint
+                var bestIdx: Int?
+                var bestDist = Double.infinity
+                for (i, ts) in candidateMidpoints.enumerated() where !matchedIndices.contains(i) {
+                    let dist = abs(ts - scoredItem.seconds)
+                    if dist < bestDist && dist < 5 {
+                        bestDist = dist
+                        bestIdx = i
                     }
-                    if !scoredItem.reason.isEmpty {
-                        refined[idx].label = scoredItem.reason
+                }
+
+                guard let idx = bestIdx else { continue }
+                matchedIndices.insert(idx)
+
+                // Blend: 60% Claude score + 40% original
+                let blended = scoredItem.score * 0.6 + refined[idx].confidenceScore * 0.4
+                refined[idx].confidenceScore = blended
+                if !refined[idx].detectionSources.contains(.claudeVision) {
+                    refined[idx].detectionSources.append(.claudeVision)
+                }
+                if !scoredItem.reason.isEmpty {
+                    refined[idx].label = scoredItem.reason
+                }
+
+                // Apply AI-suggested trim points if provided and valid
+                if let sugStart = scoredItem.suggestedStart,
+                   let sugEnd = scoredItem.suggestedEnd,
+                   sugEnd > sugStart,
+                   sugStart >= 0,
+                   sugEnd <= totalSeconds {
+                    let sugDuration = sugEnd - sugStart
+                    // Only accept if within allowed duration range
+                    if sugDuration >= Constants.minClipDuration && sugDuration <= Constants.maxClipDuration {
+                        refined[idx].aiSuggestedStart = CMTime(seconds: sugStart, preferredTimescale: 600)
+                        refined[idx].aiSuggestedEnd = CMTime(seconds: sugEnd, preferredTimescale: 600)
                     }
                 }
             }
 
-            return refined.sorted { $0.confidenceScore > $1.confidenceScore }
+            return refined
         } catch {
             return segments
         }
@@ -195,9 +447,8 @@ actor HighlightDetectionService {
             }
 
             let ciImage = CIImage(cgImage: cgImage)
-            let context = CIContext()
 
-            guard let pixelBuffer = context.createPixelBuffer(from: ciImage) else {
+            guard let pixelBuffer = ciContext.createPixelBuffer(from: ciImage) else {
                 continue
             }
 
@@ -383,6 +634,15 @@ actor HighlightDetectionService {
         let motion: Double
         let face: Double
         let scene: Double
+
+        /// Content-aware continuation threshold ratio (0.0–1.0).
+        /// Scenic content → lower threshold = wider clips to capture slow pans.
+        /// Action content → higher threshold = tighter clips around the burst.
+        var continuationRatio: Double {
+            if scene >= 0.5 { return 0.3 }     // Scenic: expand more (30% of peak)
+            if motion >= 0.45 { return 0.5 }    // Action: stay tight (50% of peak)
+            return 0.4                           // Balanced: 40% of peak
+        }
     }
 
     private func promptBasedWeights(for prompt: String) -> DetectionWeights {
@@ -417,6 +677,8 @@ actor HighlightDetectionService {
         guard !scores.isEmpty else { return [] }
 
         let interval = totalSeconds / Double(scores.count)
+        let weights = promptBasedWeights(for: prompt)
+        let continuationRatio = weights.continuationRatio
 
         // Find peaks above threshold
         let threshold = scores.sorted().dropLast(scores.count / 3).last ?? 0.3
@@ -451,22 +713,59 @@ actor HighlightDetectionService {
         for peak in peaks.prefix(Constants.targetClipCount * 2) {
             guard !usedIndices.contains(peak.index) else { continue }
 
-            // Expand around peak to form a clip
-            let peakTimeSec = Double(peak.index) * interval
-            let clipDuration = min(
-                max(Constants.minClipDuration, 30.0),
-                Constants.maxClipDuration
-            )
-            let halfClip = clipDuration / 2.0
+            // Score-based boundary expansion: walk outward from the peak in
+            // both directions while the score stays above a continuation threshold.
+            // This produces clips whose duration naturally matches the content —
+            // high-action stretches get longer clips, brief moments get shorter ones.
+            let continuationThreshold = peak.score * continuationRatio
 
-            let startSec = max(0, peakTimeSec - halfClip)
-            let endSec = min(totalSeconds, peakTimeSec + halfClip)
+            var leftIdx = peak.index
+            while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
+                leftIdx -= 1
+            }
+            var rightIdx = peak.index
+            while rightIdx < scores.count - 1 && scores[rightIdx + 1] >= continuationThreshold {
+                rightIdx += 1
+            }
+
+            var startSec = Double(leftIdx) * interval
+            var endSec = Double(rightIdx + 1) * interval
+            var rawDuration = endSec - startSec
+
+            // Enforce min/max clip duration
+            if rawDuration < Constants.minClipDuration {
+                // Center-expand to minimum
+                let deficit = Constants.minClipDuration - rawDuration
+                startSec = max(0, startSec - deficit / 2)
+                endSec = min(totalSeconds, endSec + deficit / 2)
+            } else if rawDuration > Constants.maxClipDuration {
+                // Shrink to max, keeping the peak centered
+                let peakTimeSec = Double(peak.index) * interval
+                startSec = max(0, peakTimeSec - Constants.maxClipDuration / 2)
+                endSec = min(totalSeconds, peakTimeSec + Constants.maxClipDuration / 2)
+            }
+
+            // Clamp to video bounds
+            startSec = max(0, startSec)
+            endSec = min(totalSeconds, endSec)
+            let candidateDuration = endSec - startSec
+
+            // Drop if >50% of this clip overlaps an existing segment.
+            let overlapsExisting = candidateDuration > 0 && segments.contains { existing in
+                let overlapStart = max(existing.startSeconds, startSec)
+                let overlapEnd = min(existing.startSeconds + existing.duration, endSec)
+                let overlap = max(0, overlapEnd - overlapStart)
+                return overlap / candidateDuration > 0.5
+            }
+            guard !overlapsExisting else { continue }
 
             // Mark used indices
-            let startIdx = Int(startSec / interval)
+            let startIdx = max(0, Int(startSec / interval))
             let endIdx = min(Int(endSec / interval), scores.count - 1)
-            for idx in startIdx...endIdx {
-                usedIndices.insert(idx)
+            if startIdx <= endIdx {
+                for idx in startIdx...endIdx {
+                    usedIndices.insert(idx)
+                }
             }
 
             let label = generateLabel(score: peak.score, prompt: prompt)
@@ -488,9 +787,26 @@ actor HighlightDetectionService {
         // If no segments found, create one from the best overall section
         if segments.isEmpty {
             let bestIdx = scores.enumerated().max(by: { $0.element < $1.element })?.offset ?? 0
-            let peakTime = Double(bestIdx) * interval
-            let startSec = max(0, peakTime - 15)
-            let endSec = min(totalSeconds, peakTime + 15)
+            // Use score-based expansion for the fallback too
+            let continuationThreshold = scores[bestIdx] * continuationRatio
+            var leftIdx = bestIdx
+            while leftIdx > 0 && scores[leftIdx - 1] >= continuationThreshold {
+                leftIdx -= 1
+            }
+            var rightIdx = bestIdx
+            while rightIdx < scores.count - 1 && scores[rightIdx + 1] >= continuationThreshold {
+                rightIdx += 1
+            }
+
+            var startSec = Double(leftIdx) * interval
+            var endSec = Double(rightIdx + 1) * interval
+
+            // Enforce minimum duration
+            if endSec - startSec < Constants.minClipDuration {
+                let deficit = Constants.minClipDuration - (endSec - startSec)
+                startSec = max(0, startSec - deficit / 2)
+                endSec = min(totalSeconds, endSec + deficit / 2)
+            }
 
             segments.append(HighlightSegment(
                 startTime: CMTime(seconds: startSec, preferredTimescale: 600),
@@ -505,8 +821,24 @@ actor HighlightDetectionService {
     }
 
     private func generateLabel(score: Double, prompt: String) -> String {
+        // When Claude Vision is available, it will override this with a
+        // content-specific label via scoredItem.reason. This is the fallback
+        // for on-device-only detection.
         if !prompt.isEmpty {
-            return prompt.prefix(30).capitalized
+            let weights = promptBasedWeights(for: prompt)
+            let prefix: String
+            if weights.motion >= 0.45 {
+                prefix = score >= 0.8 ? "Peak Action" : "Action"
+            } else if weights.face >= 0.45 {
+                prefix = score >= 0.8 ? "Best Reaction" : "Key Moment"
+            } else if weights.scene >= 0.5 {
+                prefix = score >= 0.8 ? "Stunning View" : "Scenic"
+            } else {
+                prefix = score >= 0.8 ? "Top Highlight" : "Highlight"
+            }
+            // Append user intent if it adds context
+            let shortPrompt = String(prompt.prefix(20)).capitalized
+            return "\(prefix) — \(shortPrompt)"
         }
 
         switch score {

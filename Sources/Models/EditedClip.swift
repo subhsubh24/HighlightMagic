@@ -14,6 +14,8 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var selectedFilter: VideoFilter
     var viralConfig: ViralEditConfig
     var cinematicGrade: CinematicGrade
+    var selectedPremiumEffects: [PremiumEffect]
+    var aiEffectConfig: CustomEffectConfig?
     var exportURL: URL?
 
     init(
@@ -27,19 +29,24 @@ struct EditedClip: Identifiable, Hashable, Sendable {
         captionStyle: CaptionStyle = .bold,
         selectedFilter: VideoFilter = .none,
         viralConfig: ViralEditConfig = .default,
-        cinematicGrade: CinematicGrade = .none
+        cinematicGrade: CinematicGrade = .none,
+        selectedPremiumEffects: [PremiumEffect] = [],
+        aiEffectConfig: CustomEffectConfig? = nil
     ) {
         self.id = id
         self.sourceVideoID = sourceVideoID
         self.segment = segment
-        self.trimStart = trimStart ?? segment.startTime
-        self.trimEnd = trimEnd ?? segment.endTime
+        // Use AI-suggested trim points when available, falling back to detection boundaries
+        self.trimStart = trimStart ?? segment.effectiveStartTime
+        self.trimEnd = trimEnd ?? segment.effectiveEndTime
         self.selectedMusicTrack = selectedMusicTrack
         self.captionText = captionText
         self.captionStyle = captionStyle
         self.selectedFilter = selectedFilter
         self.viralConfig = viralConfig
         self.cinematicGrade = cinematicGrade
+        self.selectedPremiumEffects = selectedPremiumEffects
+        self.aiEffectConfig = aiEffectConfig
     }
 
     var duration: TimeInterval {

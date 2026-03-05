@@ -11,7 +11,7 @@ struct ExportView: View {
     @State private var showShareSheet = false
     @State private var showPaywall = false
     @State private var showConfetti = false
-    @State private var addWatermark = true // Pro users can toggle off
+    @State private var addWatermark = true
 
     private var clip: EditedClip? {
         appState.generatedClips.first { $0.id == clipID }
@@ -24,7 +24,8 @@ struct ExportView: View {
         case 0.12..<0.22: "Composing video timeline..."
         case 0.22..<0.30: "Mixing audio tracks..."
         case 0.30..<0.35: "Creating seamless loop..."
-        case 0.35..<0.42: "Applying filters & captions..."
+        case 0.35..<0.60: "Applying filters & effects..."
+        case 0.60..<0.65: "Adding overlays & captions..."
         default: "Rendering final export..."
         }
     }
@@ -68,6 +69,12 @@ struct ExportView: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView()
         }
+        .onAppear {
+            // Pro users get watermark off by default; free users always get it
+            if appState.isProUser {
+                addWatermark = false
+            }
+        }
     }
 
     // MARK: - State Views
@@ -104,6 +111,15 @@ struct ExportView: View {
                     }
                     if clip.viralConfig.kineticCaptionStyle != .none {
                         InfoRow(label: "Caption FX", value: clip.viralConfig.kineticCaptionStyle.rawValue)
+                    }
+
+                    // Premium effects summary
+                    if !clip.selectedPremiumEffects.isEmpty {
+                        let effectNames = clip.selectedPremiumEffects.map(\.name).joined(separator: ", ")
+                        InfoRow(label: "Effects", value: effectNames)
+                    }
+                    if clip.cinematicGrade != .none {
+                        InfoRow(label: "Grade", value: clip.cinematicGrade.rawValue)
                     }
 
                     // Watermark toggle
@@ -249,7 +265,9 @@ struct ExportView: View {
             addWatermark: shouldWatermark,
             outputSize: ExportService.ExportConfig.defaultSize,
             viralConfig: clip.viralConfig,
-            cinematicGrade: clip.cinematicGrade
+            cinematicGrade: clip.cinematicGrade,
+            premiumEffects: clip.selectedPremiumEffects,
+            aiEffectConfig: clip.aiEffectConfig
         )
 
         Analytics.exportStarted(

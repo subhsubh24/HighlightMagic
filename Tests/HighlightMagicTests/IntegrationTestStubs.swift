@@ -37,10 +37,12 @@ struct IntegrationTestStubs {
             )
         ]
 
-        // 3. Simulate clip generation
+        // 3. Simulate clip generation (AI-powered pipeline)
         let clips = await ClipGenerationService.shared.generateClips(
             from: videoItem,
-            segments: segments
+            segments: segments,
+            userPrompt: "exciting moments",
+            sourceURL: videoItem.sourceURL
         )
 
         #expect(clips.count == 2)

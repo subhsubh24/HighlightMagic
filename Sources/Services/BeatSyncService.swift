@@ -45,7 +45,7 @@ actor BeatSyncService {
         let asset = AVURLAsset(url: audioURL)
         let duration = try await CMTimeGetSeconds(asset.load(.duration))
 
-        guard duration > 0 else {
+        guard duration > 0, duration.isFinite else {
             throw BeatSyncError.invalidAudio
         }
 
@@ -107,10 +107,11 @@ actor BeatSyncService {
 
             if let data = dataPointer {
                 let floatCount = length / MemoryLayout<Float>.size
-                let floatPointer = data.withMemoryRebound(to: Float.self, capacity: floatCount) { ptr in
-                    Array(UnsafeBufferPointer(start: ptr, count: floatCount))
-                }
-                allSamples.append(contentsOf: floatPointer)
+                // Use memcpy instead of withMemoryRebound to avoid undefined behavior
+                // when CMBlockBuffer data pointer is not 4-byte aligned for Float.
+                var floatArray = [Float](repeating: 0, count: floatCount)
+                memcpy(&floatArray, data, length)
+                allSamples.append(contentsOf: floatArray)
             }
         }
 
@@ -206,19 +207,25 @@ actor BeatSyncService {
 
         guard !intervals.isEmpty else { return 120.0 }
 
-        // Median interval
-        let sorted = intervals.sorted()
-        let median = sorted[sorted.count / 2]
+        // Median interval — filter to positive values only to prevent negative
+        // medians from unsorted onsets causing infinite loops in BPM normalization.
+        let positiveIntervals = intervals.filter { $0 > 0.01 }
+        guard !positiveIntervals.isEmpty else { return 120.0 }
 
-        guard median > 0 else { return 120.0 }
+        let sorted = positiveIntervals.sorted()
+        let median = sorted[sorted.count / 2]
 
         var bpm = 60.0 / median
 
-        // Normalize to common range (60-180 BPM)
-        while bpm < 60 { bpm *= 2 }
-        while bpm > 180 { bpm /= 2 }
+        // Normalize to common range (60-180 BPM) with iteration cap to prevent
+        // infinite loops from extreme values (near-zero or infinity).
+        var iterations = 0
+        while bpm < 60 && iterations < 20 { bpm *= 2; iterations += 1 }
+        iterations = 0
+        while bpm > 180 && iterations < 20 { bpm /= 2; iterations += 1 }
 
-        return bpm
+        // Clamp to valid range as final safety net
+        return min(max(bpm, 60), 180)
     }
 
     // MARK: - Onset Quantization to Beat Grid
@@ -268,11 +275,17 @@ actor BeatSyncService {
     // MARK: - Synthetic Beat Map
 
     func syntheticBeatMap(bpm: Double, duration: Double) -> BeatMap {
-        let interval = 60.0 / bpm
+        // Guard against zero/negative BPM which would produce infinite interval
+        // or negative interval causing an infinite loop.
+        let safeBPM = bpm > 0 ? bpm : 120.0
+        // Guard against non-finite or non-positive duration which would cause
+        // an infinite loop (infinity) or empty/degenerate result (NaN/negative).
+        let safeDuration = duration.isFinite && duration > 0 ? duration : 60.0
+        let interval = 60.0 / safeBPM
         var beats: [Double] = []
         var time = 0.0
 
-        while time < duration {
+        while time < safeDuration {
             beats.append(time)
             time += interval
         }
@@ -282,7 +295,7 @@ actor BeatSyncService {
             .map(\.element)
 
         return BeatMap(
-            bpm: bpm,
+            bpm: safeBPM,
             beatTimes: beats,
             strongBeats: strong,
             beatInterval: interval

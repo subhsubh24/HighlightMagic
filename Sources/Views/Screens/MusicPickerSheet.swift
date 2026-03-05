@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicPickerSheet: View {
     @Binding var selectedTrack: MusicTrack?
+    let isProUser: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var selectedCategory: TrackCategory? = nil
 
@@ -60,9 +61,12 @@ struct MusicPickerSheet: View {
                                     isPremium: track.isPremium,
                                     isSelected: selectedTrack?.id == track.id
                                 ) {
+                                    // Block free users from selecting premium tracks
+                                    guard !track.isPremium || isProUser else { return }
                                     selectedTrack = track
                                     dismiss()
                                 }
+                                .opacity(track.isPremium && !isProUser ? 0.6 : 1.0)
                             }
                         }
                         .padding(.horizontal, Constants.Layout.padding)

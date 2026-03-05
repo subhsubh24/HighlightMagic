@@ -111,7 +111,8 @@ struct ProcessingView: View {
         do {
             let result = try await HighlightDetectionService.shared.detectHighlights(
                 in: video.sourceURL,
-                prompt: appState.userPrompt
+                prompt: appState.userPrompt,
+                creativeDirection: appState.creativeDirection
             ) { newProgress in
                 Task { @MainActor in
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -122,10 +123,14 @@ struct ProcessingView: View {
 
             appState.detectedHighlights = result.segments
 
-            // Generate clips from segments
+            // Generate clips with AI-powered effect recommendations.
+            // Pass Opus-planned configs when available to skip legacy Sonnet re-planning.
             let clips = await ClipGenerationService.shared.generateClips(
                 from: video,
-                segments: result.segments
+                segments: result.segments,
+                userPrompt: appState.userPrompt,
+                sourceURL: video.sourceURL,
+                precomputedConfigs: result.perClipConfigs
             )
             appState.generatedClips = clips
 

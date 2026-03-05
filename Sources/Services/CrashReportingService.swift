@@ -81,6 +81,7 @@ enum CrashReporting {
 
     // MARK: - Battery Level Check
 
+    @MainActor
     static var isLowBattery: Bool {
         UIDevice.current.isBatteryMonitoringEnabled = true
         return UIDevice.current.batteryLevel > 0 && UIDevice.current.batteryLevel < 0.1

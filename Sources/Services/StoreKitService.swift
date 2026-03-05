@@ -1,7 +1,7 @@
 import Foundation
 import StoreKit
 
-@Observable
+@Observable @MainActor
 final class StoreKitService {
     static let shared = StoreKitService()
 
@@ -82,6 +82,9 @@ final class StoreKitService {
 
         purchasedProductIDs = purchased
         isProUser = !purchased.isEmpty
+
+        // Propagate Pro status to services that gate features on it
+        UserAccountService.shared.updateProStatus(isProUser)
     }
 
     // MARK: - Helpers

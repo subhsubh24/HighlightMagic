@@ -120,8 +120,12 @@ struct PaywallView: View {
                             .multilineTextAlignment(.center)
 
                         HStack(spacing: 16) {
-                            Link("Privacy Policy", destination: URL(string: AppStoreMetadata.privacyPolicyURL)!)
-                            Link("Terms of Use", destination: URL(string: AppStoreMetadata.termsOfServiceURL)!)
+                            if let url = URL(string: AppStoreMetadata.privacyPolicyURL) {
+                                Link("Privacy Policy", destination: url)
+                            }
+                            if let url = URL(string: AppStoreMetadata.termsOfServiceURL) {
+                                Link("Terms of Use", destination: url)
+                            }
                         }
                         .font(.caption2)
                         .foregroundStyle(Theme.accent)

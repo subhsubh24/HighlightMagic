@@ -55,12 +55,13 @@ async function callPlannerSSE(
   scores: unknown[],
   templateName?: string,
   userFeedback?: string,
+  creativeDirection?: string,
   onPhase?: (phase: "thinking" | "generating") => void
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection }),
   });
 
   if (!response.ok) {
@@ -173,6 +174,7 @@ export default function DetectingStep() {
           cached.scores,
           state.selectedTemplate?.name,
           state.regenerateFeedback ?? undefined,
+          state.creativeDirection || undefined,
           (phase) => {
             clearInterval(plannerTimer);
             if (phase === "thinking") {
@@ -326,6 +328,7 @@ export default function DetectingStep() {
           scores,
           state.selectedTemplate?.name,
           undefined,
+          state.creativeDirection || undefined,
           (phase) => {
             clearInterval(plannerTimer);
             if (phase === "thinking") {

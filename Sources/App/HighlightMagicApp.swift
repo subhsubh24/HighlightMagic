@@ -7,7 +7,6 @@ struct HighlightMagicApp: App {
 
     init() {
         CrashReporting.initialize()
-        UserAccountService.shared.startObservingCloudChanges()
     }
 
     var body: some Scene {

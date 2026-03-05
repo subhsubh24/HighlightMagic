@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-@Observable
+@Observable @MainActor
 final class NetworkMonitor {
     static let shared = NetworkMonitor()
 
@@ -18,7 +18,7 @@ final class NetworkMonitor {
 
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.isConnected = path.status == .satisfied
                 self?.isExpensive = path.isExpensive
 
@@ -40,8 +40,6 @@ final class NetworkMonitor {
         monitor.cancel()
     }
 
-    /// Check if Claude Vision API should be used (prefer Wi-Fi for large uploads)
-    var shouldUseCloudAI: Bool {
-        isConnected && !isExpensive
-    }
+    /// Always use Claude API — connectivity (Wi-Fi or cellular) is assumed available.
+    var shouldUseCloudAI: Bool { true }
 }

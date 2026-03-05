@@ -46,7 +46,7 @@ struct HighlightDetectionTests {
     func testClipDurationLimits() {
         let segment = HighlightSegment(
             startTime: CMTime(seconds: 0, preferredTimescale: 600),
-            endTime: CMTime(seconds: 30, preferredTimescale: 600),
+            endTime: CMTime(seconds: 25, preferredTimescale: 600),
             confidenceScore: 0.8,
             label: "Test"
         )
@@ -56,8 +56,129 @@ struct HighlightDetectionTests {
             segment: segment
         )
 
-        #expect(clip.duration >= Constants.minClipDuration || clip.duration <= Constants.maxClipDuration)
-        #expect(clip.duration == 30.0)
+        #expect(clip.duration >= Constants.minClipDuration)
+        #expect(clip.duration <= Constants.maxClipDuration)
+        #expect(clip.duration == 25.0) // Duration is now content-driven, not hardcoded
+    }
+
+    @Test("Clip uses AI-suggested trim when available")
+    func testAISuggestedTrim() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 10, preferredTimescale: 600),
+            endTime: CMTime(seconds: 40, preferredTimescale: 600),
+            confidenceScore: 0.9,
+            label: "AI Refined",
+            aiSuggestedStart: CMTime(seconds: 12, preferredTimescale: 600),
+            aiSuggestedEnd: CMTime(seconds: 35, preferredTimescale: 600)
+        )
+
+        // Clip should use AI-suggested trim points
+        let clip = EditedClip(sourceVideoID: UUID(), segment: segment)
+        #expect(CMTimeGetSeconds(clip.trimStart) == 12.0)
+        #expect(CMTimeGetSeconds(clip.trimEnd) == 35.0)
+        #expect(clip.duration == 23.0)
+    }
+
+    @Test("Clip falls back to detection boundaries when no AI suggestion")
+    func testFallbackTrim() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 5, preferredTimescale: 600),
+            endTime: CMTime(seconds: 25, preferredTimescale: 600),
+            confidenceScore: 0.7,
+            label: "No AI"
+        )
+
+        let clip = EditedClip(sourceVideoID: UUID(), segment: segment)
+        #expect(CMTimeGetSeconds(clip.trimStart) == 5.0)
+        #expect(CMTimeGetSeconds(clip.trimEnd) == 25.0)
+        #expect(clip.duration == 20.0)
+    }
+
+    @Test("Effective duration uses AI trim when both set")
+    func testEffectiveDurationWithAI() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 0, preferredTimescale: 600),
+            endTime: CMTime(seconds: 60, preferredTimescale: 600),
+            confidenceScore: 0.95,
+            label: "Full",
+            aiSuggestedStart: CMTime(seconds: 5, preferredTimescale: 600),
+            aiSuggestedEnd: CMTime(seconds: 45, preferredTimescale: 600)
+        )
+
+        #expect(segment.duration == 60.0) // Raw detection boundaries
+        #expect(segment.effectiveDuration == 40.0) // AI-refined boundaries
+        #expect(CMTimeGetSeconds(segment.effectiveStartTime) == 5.0)
+        #expect(CMTimeGetSeconds(segment.effectiveEndTime) == 45.0)
+    }
+
+    @Test("AI creative config fields are populated by energy-based defaults")
+    func testAICreativeConfigDefaults() {
+        let service = AIEffectRecommendationService.shared
+
+        // Calm content
+        let calmConfig = service.fallbackRecommendation(prompt: "relaxing sunset view")
+        #expect(calmConfig.beatSyncEnabled == false)
+        #expect(calmConfig.seamlessLoopEnabled == false)
+        #expect(calmConfig.velocityIntensity != nil)
+        #expect(calmConfig.velocityIntensity! <= 0.5)
+        #expect(calmConfig.musicVolume != nil)
+
+        // Action content
+        let actionConfig = service.fallbackRecommendation(prompt: "extreme workout gym")
+        #expect(actionConfig.beatSyncEnabled == true)
+        #expect(actionConfig.velocityIntensity! >= 0.8)
+    }
+
+    @Test("VelocityKeyframe model stores position and speed")
+    func testVelocityKeyframe() {
+        let keyframes = [
+            VelocityKeyframe(position: 0.0, speed: 2.0),
+            VelocityKeyframe(position: 0.35, speed: 0.3),
+            VelocityKeyframe(position: 0.6, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 1.5)
+        ]
+
+        #expect(keyframes.count == 4)
+        #expect(keyframes[0].position == 0.0)
+        #expect(keyframes[0].speed == 2.0)
+        #expect(keyframes[1].speed == 0.3) // Slow-mo zone
+        #expect(keyframes[3].position == 1.0)
+    }
+
+    @Test("CustomEffectConfig carries per-clip creative fields")
+    func testPerClipCreativeFields() {
+        var config = CustomEffectConfig()
+        config.customVelocityKeyframes = [
+            VelocityKeyframe(position: 0, speed: 1.5),
+            VelocityKeyframe(position: 0.5, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 2.0)
+        ]
+        config.customTransitionType = "zoom_punch"
+        config.customTransitionDuration = 0.3
+        config.entryPunchScale = 1.03
+        config.customCaptionAnimation = "pop"
+        config.customCaptionColor = "#ff3366"
+        config.customCaptionGlowColor = "#7c3aed"
+        config.customCaptionGlowRadius = 15
+
+        #expect(config.customVelocityKeyframes?.count == 3)
+        #expect(config.customTransitionType == "zoom_punch")
+        #expect(config.entryPunchScale == 1.03)
+        #expect(config.customCaptionColor == "#ff3366")
+        #expect(config.customCaptionGlowRadius == 15)
+    }
+
+    @Test("VelocityKeyframe is Codable for serialization")
+    func testVelocityKeyframeCodable() throws {
+        let keyframes = [
+            VelocityKeyframe(position: 0.0, speed: 2.0),
+            VelocityKeyframe(position: 0.5, speed: 0.3),
+            VelocityKeyframe(position: 1.0, speed: 1.5)
+        ]
+        let data = try JSONEncoder().encode(keyframes)
+        let decoded = try JSONDecoder().decode([VelocityKeyframe].self, from: data)
+        #expect(decoded.count == 3)
+        #expect(decoded[1].speed == 0.3)
     }
 
     @Test("Confidence badge threshold mapping")
@@ -69,6 +190,70 @@ struct HighlightDetectionTests {
         #expect(highConfidence >= 0.8, "High confidence should be >= 0.8")
         #expect(medConfidence >= 0.6 && medConfidence < 0.8, "Med confidence 0.6-0.8")
         #expect(lowConfidence < 0.6, "Low confidence < 0.6")
+    }
+
+    @Test("AudioFeatures struct stores per-timestamp data")
+    func testAudioFeaturesStruct() {
+        let features = AudioFeatureService.AudioFeatures(
+            timestamp: 5.0,
+            audioEnergy: 0.72,
+            audioOnset: 0.65,
+            audioBass: 0.45,
+            audioMid: 0.35,
+            audioTreble: 0.20
+        )
+
+        #expect(features.timestamp == 5.0)
+        #expect(features.audioEnergy == 0.72)
+        #expect(features.audioOnset == 0.65)
+        #expect(abs(features.audioBass + features.audioMid + features.audioTreble - 1.0) < 0.01,
+                "Frequency bands should sum to ~1.0")
+    }
+
+    @Test("CloudScoringService.ScoredFrame carries narrative role")
+    func testScoredFrameNarrativeRole() {
+        let frame = CloudScoringService.ScoredFrame(
+            timestamp: 12.0,
+            score: 0.92,
+            label: "group mid-air jump under strobes — PEAK energy hero shot",
+            narrativeRole: "HERO"
+        )
+
+        #expect(frame.timestamp == 12.0)
+        #expect(frame.score == 0.92)
+        #expect(frame.narrativeRole == "HERO")
+        #expect(frame.label.contains("PEAK"))
+    }
+
+    @Test("CloudScoringService.AnnotatedFrame carries audio metadata")
+    func testAnnotatedFrameAudio() {
+        let frame = CloudScoringService.AnnotatedFrame(
+            timestamp: 3.0,
+            base64: "dGVzdA==",
+            audioEnergy: 0.8,
+            audioOnset: 0.6,
+            audioBass: 0.5,
+            audioMid: 0.3,
+            audioTreble: 0.2
+        )
+
+        #expect(frame.timestamp == 3.0)
+        #expect(frame.audioEnergy == 0.8)
+        #expect(frame.audioBass == 0.5)
+    }
+
+    @Test("Detection source includes Cloud AI for cloud-scored segments")
+    func testCloudDetectionSource() {
+        let segment = HighlightSegment(
+            startTime: CMTime(seconds: 5, preferredTimescale: 600),
+            endTime: CMTime(seconds: 15, preferredTimescale: 600),
+            confidenceScore: 0.88,
+            label: "Cloud scored moment",
+            detectionSources: [.claudeVision]
+        )
+
+        #expect(segment.detectionSources.contains(.claudeVision))
+        #expect(segment.duration == 10.0)
     }
 }
 

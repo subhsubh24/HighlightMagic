@@ -17,10 +17,19 @@ struct EditorView: View {
     }
 
     private var clipBinding: Binding<EditedClip>? {
-        guard let index = clipIndex else { return nil }
+        guard clipIndex != nil else { return nil }
         return Binding(
-            get: { appState.generatedClips[index] },
-            set: { appState.generatedClips[index] = $0 }
+            get: {
+                guard let idx = appState.generatedClips.firstIndex(where: { $0.id == clipID }) else {
+                    return appState.generatedClips[0]
+                }
+                return appState.generatedClips[idx]
+            },
+            set: { newValue in
+                if let idx = appState.generatedClips.firstIndex(where: { $0.id == clipID }) {
+                    appState.generatedClips[idx] = newValue
+                }
+            }
         )
     }
 
@@ -124,13 +133,24 @@ struct EditorView: View {
             }
         }
         .sheet(isPresented: $showMusicPicker) {
-            MusicPickerSheet(selectedTrack: musicBinding)
+            MusicPickerSheet(selectedTrack: musicBinding, isProUser: appState.isProUser)
         }
         .sheet(isPresented: $showTemplatePicker) {
             TemplatePickerSheet(clipBinding: clipBinding)
         }
         .sheet(isPresented: $showPremiumEffects) {
-            PremiumEffectsSheet()
+            PremiumEffectsSheet(
+                selectedEffects: Binding(
+                    get: {
+                        appState.generatedClips.first(where: { $0.id == clipID })?.selectedPremiumEffects ?? []
+                    },
+                    set: { newValue in
+                        if let index = appState.generatedClips.firstIndex(where: { $0.id == clipID }) {
+                            appState.generatedClips[index].selectedPremiumEffects = newValue
+                        }
+                    }
+                )
+            )
         }
         .task { await loadTimelineThumbnails() }
     }
@@ -374,6 +394,15 @@ struct EditorView: View {
                 Text("Premium Effects")
                     .font(Theme.headline)
                     .foregroundStyle(.white)
+                if let clip, !clip.selectedPremiumEffects.isEmpty {
+                    Text("\(clip.selectedPremiumEffects.count)")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Theme.accent)
+                        .clipShape(Capsule())
+                }
                 Spacer()
                 if !appState.isProUser {
                     Text("PRO")

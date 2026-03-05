@@ -11,6 +11,9 @@ enum SubscriptionProduct: String, CaseIterable {
         }
     }
 
+    /// Fallback display prices — UI should prefer StoreKit's localized price via
+    /// `Product.displayPrice` for correct currency/region. These are only shown
+    /// before StoreKit product data loads or if the fetch fails.
     var price: String {
         switch self {
         case .monthly: "$4.99/mo"

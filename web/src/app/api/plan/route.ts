@@ -17,7 +17,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: Request) {
   const body = await req.json();
-  const { frames, scores, templateName, userFeedback } = body;
+  const { frames, scores, templateName, userFeedback, creativeDirection } = body;
 
   const encoder = new TextEncoder();
 
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
           scores,
           templateName ?? undefined,
           userFeedback ?? undefined,
+          creativeDirection ?? undefined,
           (phase) => {
             try {
               controller.enqueue(

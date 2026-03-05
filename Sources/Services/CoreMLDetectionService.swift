@@ -9,7 +9,7 @@ actor CoreMLDetectionService {
     static let shared = CoreMLDetectionService()
 
     private var model: VNCoreMLModel?
-    private var isModelLoaded = false
+    private var loadingComplete = false
     private var loadAttempted = false
     private let logger = Logger(subsystem: "com.highlightmagic.app", category: "CoreML")
 
@@ -26,10 +26,10 @@ actor CoreMLDetectionService {
     // MARK: - Model Loading
 
     func loadModel() async throws {
-        guard !isModelLoaded else { return }
+        guard !loadingComplete else { return }
         guard !loadAttempted else {
             // Already attempted and failed — use Vision fallback silently
-            isModelLoaded = true
+            loadingComplete = true
             return
         }
         loadAttempted = true
@@ -46,7 +46,7 @@ actor CoreMLDetectionService {
 
                     let mlModel = try MLModel(contentsOf: modelURL, configuration: config)
                     model = try VNCoreMLModel(for: mlModel)
-                    isModelLoaded = true
+                    loadingComplete = true
                     logger.info("Loaded CoreML model: \(candidate.resource)")
                     return
                 } catch {
@@ -58,7 +58,7 @@ actor CoreMLDetectionService {
 
         // No bundled model found — gracefully fall back to Vision classifiers
         logger.info("No CoreML model bundled — using Vision classification fallback")
-        isModelLoaded = true
+        loadingComplete = true
     }
 
     // MARK: - Video-Text Similarity Scoring
@@ -116,7 +116,12 @@ actor CoreMLDetectionService {
         prompt: String
     ) async -> Double {
         await withCheckedContinuation { continuation in
+            var hasResumed = false
+
             let request = VNCoreMLRequest(model: model) { request, _ in
+                guard !hasResumed else { return }
+                hasResumed = true
+
                 guard let results = request.results as? [VNClassificationObservation] else {
                     continuation.resume(returning: 0.5)
                     return
@@ -130,9 +135,16 @@ actor CoreMLDetectionService {
                         observation.identifier.lowercased().split(separator: " ").map(String.init)
                     )
                     let overlap = promptWords.intersection(labelWords).count
-                    let relevance = overlap > 0
-                        ? Double(observation.confidence) * (1.0 + Double(overlap) * 0.3)
-                        : Double(observation.confidence) * 0.3
+                    // When prompt is empty, promptWords is empty and overlap is always 0.
+                    // Use confidence directly (scaled by 0.5) so scores aren't uniformly low.
+                    let relevance: Double
+                    if promptWords.isEmpty {
+                        relevance = Double(observation.confidence) * 0.5
+                    } else if overlap > 0 {
+                        relevance = Double(observation.confidence) * (1.0 + Double(overlap) * 0.3)
+                    } else {
+                        relevance = Double(observation.confidence) * 0.3
+                    }
                     bestScore = max(bestScore, min(relevance, 1.0))
                 }
 
@@ -143,6 +155,8 @@ actor CoreMLDetectionService {
             do {
                 try handler.perform([request])
             } catch {
+                guard !hasResumed else { return }
+                hasResumed = true
                 continuation.resume(returning: 0.5)
             }
         }
@@ -155,7 +169,12 @@ actor CoreMLDetectionService {
         prompt: String
     ) async -> Double {
         await withCheckedContinuation { continuation in
+            var hasResumed = false
+
             let classifyRequest = VNClassifyImageRequest { request, _ in
+                guard !hasResumed else { return }
+                hasResumed = true
+
                 guard let results = request.results as? [VNClassificationObservation] else {
                     continuation.resume(returning: 0.5)
                     return
@@ -164,11 +183,16 @@ actor CoreMLDetectionService {
                 let promptWords = Set(prompt.lowercased().split(separator: " ").map(String.init))
                 var score: Double = 0.3
 
-                for observation in results.prefix(20) {
-                    let label = observation.identifier.lowercased()
-                    for word in promptWords {
-                        if label.contains(word) {
-                            score = max(score, Double(observation.confidence))
+                if promptWords.isEmpty {
+                    // No prompt: use top classification confidence directly
+                    score = results.prefix(5).map { Double($0.confidence) }.max() ?? 0.3
+                } else {
+                    for observation in results.prefix(20) {
+                        let label = observation.identifier.lowercased()
+                        for word in promptWords {
+                            if label.contains(word) {
+                                score = max(score, Double(observation.confidence))
+                            }
                         }
                     }
                 }
@@ -180,6 +204,8 @@ actor CoreMLDetectionService {
             do {
                 try handler.perform([classifyRequest])
             } catch {
+                guard !hasResumed else { return }
+                hasResumed = true
                 continuation.resume(returning: 0.5)
             }
         }
