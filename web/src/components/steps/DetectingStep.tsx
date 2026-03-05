@@ -551,7 +551,7 @@ export default function DetectingStep() {
         // 3. Fall back to a generic prompt based on the clip label
         const prompt = clip.animationPrompt
           || media.animationInstructions
-          || `Subtle cinematic motion: gentle camera drift, ambient movement. Scene: ${clip.label}`;
+          || `Bring this photo to life with natural realistic motion. Subjects move naturally, environment has ambient motion. Scene: ${clip.label}`;
 
         // Mark as generating
         dispatch({

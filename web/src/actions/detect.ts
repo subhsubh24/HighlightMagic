@@ -1325,14 +1325,20 @@ KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 
 PHOTO ANIMATION — some photos are marked [ANIMATE] in the source list above.
 For these photos, you MUST include an "animationPrompt" field in the clip JSON.
-This prompt will be sent to a video generation AI (Kling 3.0) to animate the photo into a short video.
+This prompt will be sent to Kling 3.0 (image-to-video AI) to BRING THE PHOTO TO LIFE.
+The goal is realistic subject motion — people move, animals react, nature flows — not just camera tricks.
+Think about what would ACTUALLY HAPPEN next if the photo unfroze. Make it feel alive.
+Analyze the photo holistically: the subjects, their poses, the environment, the mood, and the edit context.
 - If the user provided instructions (shown after "user wants:"), incorporate them into your prompt.
-- If no instructions, write a cinematic motion description based on the photo content and edit context.
-- Good prompts describe CAMERA MOTION + SUBJECT MOTION, e.g.:
-  "Slow camera push-in, subject turns head slightly and smiles, hair moves gently in breeze"
-  "Gentle parallax drift left to right, clouds move slowly in background"
-  "Zoom out slowly revealing the full scene, subtle ambient movement"
-- Keep prompts under 200 characters. Be specific about what moves and how.
+- If no instructions, imagine what natural motion would occur and describe it vividly.
+- PRIORITIZE SUBJECT MOTION over camera motion. Describe what the people/animals/objects DO:
+  "Person on couch starts to stand up, stretches arms, turns head toward camera with a smile"
+  "Dog leaps up excitedly, tail wagging fast, ears perking up, tongue out"
+  "Athlete mid-stride pushes off and sprints forward, jersey rippling, crowd blurs behind"
+  "Waves crash onto shore, foam spreads across sand, seagrass sways in wind"
+  "Child blows out birthday candles, smoke wisps rise, nearby kids cheer and clap"
+- You CAN add subtle camera motion too (slow push-in, gentle drift) but subject motion comes first.
+- Keep prompts under 300 characters. Be specific about what moves, how, and in what order.
 - For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
 
 YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
