@@ -122,6 +122,7 @@ export default function DetectingStep() {
   const [passIndex, setPassIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSlow, setIsSlow] = useState(false);
+  const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -443,7 +444,6 @@ export default function DetectingStep() {
 
       setProgress(100);
 
-      // Fire off photo animations in the background (don't block navigation)
       // Animate any photo that the user marked as animatePhoto, or that Opus gave an animationPrompt
       const animatableSourceIds = new Set(
         state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
@@ -451,8 +451,12 @@ export default function DetectingStep() {
       const animatableClips = detectedClips.filter(
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
+
       if (animatableClips.length > 0) {
-        triggerPhotoAnimations(animatableClips);
+        // Wait for all photo animations to complete before navigating
+        setAnimatingPhotos(true);
+        await triggerPhotoAnimations(animatableClips);
+        setAnimatingPhotos(false);
       }
 
       // Brief pause for the 100% satisfaction, then navigate
@@ -538,7 +542,7 @@ export default function DetectingStep() {
     }
 
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
-    function triggerPhotoAnimations(clips: DetectedClip[]) {
+    function triggerPhotoAnimations(clips: DetectedClip[]): Promise<void> {
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
       const seen = new Set<string>();
       const uniqueClips = clips.filter((c) => {
@@ -546,6 +550,8 @@ export default function DetectingStep() {
         seen.add(c.sourceFileId);
         return true;
       });
+
+      const promises: Promise<void>[] = [];
 
       for (const clip of uniqueClips) {
         const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
@@ -568,7 +574,7 @@ export default function DetectingStep() {
         });
 
         // Submit task via API route (avoids React Flight serialization limits for large base64)
-        fileToDataUri(media.file)
+        const p = fileToDataUri(media.file)
           .then(async (dataUri) => {
             const res = await fetch("/api/animate/submit", {
               method: "POST",
@@ -589,7 +595,10 @@ export default function DetectingStep() {
               animationStatus: "failed",
             });
           });
+        promises.push(p);
       }
+
+      return Promise.all(promises).then(() => {});
     }
 
     function handleError(err: unknown) {
@@ -659,13 +668,17 @@ export default function DetectingStep() {
 
       {/* Pass label */}
       <p className="text-center text-[var(--text-secondary)]">
-        {passes[passIndex] ?? passes[passes.length - 1]}
+        {animatingPhotos
+          ? "Animating your photos..."
+          : (passes[passIndex] ?? passes[passes.length - 1])}
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
-        {isReplan
-          ? "Re-generating with your creative direction..."
-          : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
+        {animatingPhotos
+          ? "Generating motion for your photos — this usually takes 1-2 minutes"
+          : isReplan
+            ? "Re-generating with your creative direction..."
+            : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
       </p>
 
       {isSlow && (
