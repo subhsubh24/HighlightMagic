@@ -4,7 +4,7 @@
  */
 
 const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
-const MODEL_ID = "kwaivgi/kling-v3.0-pro/image-to-video";
+const MODEL_ID = "kwaivgi/kling-v3.0-std/image-to-video";
 
 /** How often to poll for results (ms) */
 const POLL_INTERVAL_MS = 5_000;
