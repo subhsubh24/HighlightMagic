@@ -25,7 +25,7 @@ interface AtlasEnvelope<T> {
 
 interface PredictionData {
   id: string;
-  status: "created" | "starting" | "processing" | "succeeded" | "failed" | "canceled";
+  status: "created" | "starting" | "processing" | "succeeded" | "completed" | "failed" | "canceled";
   outputs?: string[] | null;
   error?: string;
 }
@@ -109,7 +109,7 @@ export async function checkAnimationResult(predictionId: string): Promise<Animat
   const prediction = envelope.data;
   console.log(`[kling] prediction ${predictionId}: status=${prediction.status}, outputs=${JSON.stringify(prediction.outputs)}`);
 
-  if (prediction.status === "succeeded") {
+  if (prediction.status === "succeeded" || prediction.status === "completed") {
     if (!prediction.outputs || prediction.outputs.length === 0) {
       return { status: "failed", error: "Animation succeeded but no output video URL returned" };
     }
