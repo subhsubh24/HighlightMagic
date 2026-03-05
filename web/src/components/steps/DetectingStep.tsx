@@ -149,7 +149,7 @@ export default function DetectingStep() {
 
     // Cleanup: abort in-flight fetches and polling when component unmounts
     // (e.g. user navigates back during detection)
-    const cleanup = () => abort.abort();
+    const cleanup = () => abort.abort("DetectingStep unmounted");
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -622,6 +622,7 @@ export default function DetectingStep() {
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
           })
           .catch((err) => {
+            if (abort.signal.aborted) return;
             completedAnimations++;
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
             console.error(`Photo animation submit failed for "${media.name}":`, err);
