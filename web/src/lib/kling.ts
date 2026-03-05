@@ -9,7 +9,7 @@ const MODEL_ID = "kwaivgi/kling-v3.0-std/image-to-video";
 /** How often to poll for results (ms) */
 const POLL_INTERVAL_MS = 5_000;
 /** Max time to wait for generation (ms) */
-const POLL_TIMEOUT_MS = 180_000; // 3 minutes
+const POLL_TIMEOUT_MS = 300_000; // 5 minutes
 
 interface GenerateVideoResponse {
   data: {

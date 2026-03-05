@@ -476,7 +476,7 @@ export default function DetectingStep() {
     /** Poll interval for animation status checks (ms) */
     const ANIMATION_POLL_MS = 5_000;
     /** Max animation wait time (ms) */
-    const ANIMATION_TIMEOUT_MS = 180_000;
+    const ANIMATION_TIMEOUT_MS = 300_000;
 
     /** Poll for animation completion on the client side (avoids server action timeout). */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
