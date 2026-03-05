@@ -458,6 +458,16 @@ export default function DetectingStep() {
       }, 400);
     }
 
+    /** Convert a File to a base64 data URI for server-side API calls. */
+    function fileToDataUri(file: File): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
     function triggerPhotoAnimations(clips: DetectedClip[]) {
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
@@ -480,8 +490,9 @@ export default function DetectingStep() {
           animationStatus: "generating",
         });
 
-        // Fire and forget — update state when done
-        animatePhoto(media.url, clip.animationPrompt!, 5)
+        // Convert file to base64 data URI, then send to server action
+        fileToDataUri(media.file)
+          .then((dataUri) => animatePhoto(dataUri, clip.animationPrompt!, 5))
           .then((videoUrl) => {
             dispatch({
               type: "SET_ANIMATION_RESULT",
