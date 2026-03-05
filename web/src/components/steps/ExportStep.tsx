@@ -108,10 +108,14 @@ export default function ExportStep() {
     try {
       const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
         const media = getMediaFile(state, clip.sourceFileId);
+        // Use animated video if available (photo → video via Kling 3.0)
+        const hasAnimatedVideo = media?.type === "photo" &&
+          media.animationStatus === "completed" &&
+          media.animatedVideoUrl;
         return {
           clip,
-          mediaUrl: media?.url ?? "",
-          mediaType: media?.type ?? "video",
+          mediaUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+          mediaType: hasAnimatedVideo ? "video" as const : (media?.type ?? "video"),
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
