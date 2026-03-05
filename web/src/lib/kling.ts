@@ -17,9 +17,16 @@ interface GenerateVideoResponse {
   };
 }
 
-interface PredictionResponse {
-  status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
-  output?: string[];
+interface AtlasEnvelope<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+interface PredictionData {
+  id: string;
+  status: "created" | "starting" | "processing" | "succeeded" | "failed" | "canceled";
+  outputs?: string[] | null;
   error?: string;
 }
 
@@ -101,21 +108,22 @@ export async function checkAnimationResult(predictionId: string): Promise<Animat
     throw new Error(`Atlas Cloud poll error (${response.status}): ${text}`);
   }
 
-  const data = (await response.json()) as PredictionResponse;
-  console.log(`[kling] raw prediction response:`, JSON.stringify(data));
+  const envelope = (await response.json()) as AtlasEnvelope<PredictionData>;
+  const prediction = envelope.data;
+  console.log(`[kling] prediction ${predictionId}: status=${prediction.status}, outputs=${JSON.stringify(prediction.outputs)}`);
 
-  if (data.status === "succeeded") {
-    if (!data.output || data.output.length === 0) {
+  if (prediction.status === "succeeded") {
+    if (!prediction.outputs || prediction.outputs.length === 0) {
       return { status: "failed", error: "Animation succeeded but no output video URL returned" };
     }
-    return { status: "completed", videoUrl: data.output[0] };
+    return { status: "completed", videoUrl: prediction.outputs[0] };
   }
 
-  if (data.status === "failed" || data.status === "canceled") {
-    return { status: "failed", error: data.error ?? "unknown error" };
+  if (prediction.status === "failed" || prediction.status === "canceled") {
+    return { status: "failed", error: prediction.error ?? "unknown error" };
   }
 
-  // Still starting or processing
+  // Still created, starting, or processing
   return { status: "processing" };
 }
 
