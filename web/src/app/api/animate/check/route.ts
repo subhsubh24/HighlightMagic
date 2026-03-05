@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     }
 
     const result = await checkAnimationResult(predictionId);
+    console.log(`[animate/check] predictionId=${predictionId} → status=${result.status}${result.videoUrl ? ` videoUrl=${result.videoUrl}` : ""}${result.error ? ` error=${result.error}` : ""}`);
     return Response.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -71,6 +71,7 @@ export async function submitPhotoAnimation(
   }
 
   const data = (await response.json()) as GenerateVideoResponse;
+  console.log(`[kling] submit response:`, JSON.stringify(data));
   if (!data?.data?.id) {
     throw new Error("Atlas Cloud API returned no prediction ID");
   }
@@ -101,6 +102,7 @@ export async function checkAnimationResult(predictionId: string): Promise<Animat
   }
 
   const data = (await response.json()) as PredictionResponse;
+  console.log(`[kling] raw prediction response:`, JSON.stringify(data));
 
   if (data.status === "succeeded") {
     if (!data.output || data.output.length === 0) {
