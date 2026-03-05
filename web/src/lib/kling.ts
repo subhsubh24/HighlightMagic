@@ -71,36 +71,57 @@ export async function submitPhotoAnimation(
   return data.data.id;
 }
 
+export interface AnimationPollResult {
+  status: "processing" | "completed" | "failed";
+  videoUrl?: string;
+  error?: string;
+}
+
 /**
- * Poll for the result of a photo animation task.
- * Returns the generated video URL on success.
+ * Check the status of a photo animation task (single request, no loop).
+ * Use this from a client-side polling loop to avoid server action timeouts.
+ */
+export async function checkAnimationResult(predictionId: string): Promise<AnimationPollResult> {
+  const apiKey = getApiKey();
+
+  const response = await fetch(`${ATLAS_API_BASE}/prediction/${predictionId}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Atlas Cloud poll error (${response.status}): ${text}`);
+  }
+
+  const data = (await response.json()) as PredictionResponse;
+
+  if (data.status === "succeeded") {
+    if (!data.output || data.output.length === 0) {
+      return { status: "failed", error: "Animation succeeded but no output video URL returned" };
+    }
+    return { status: "completed", videoUrl: data.output[0] };
+  }
+
+  if (data.status === "failed" || data.status === "canceled") {
+    return { status: "failed", error: data.error ?? "unknown error" };
+  }
+
+  // Still starting or processing
+  return { status: "processing" };
+}
+
+/**
+ * Poll for the result of a photo animation task (loops until done).
+ * Use this for server-side contexts where long-running is OK.
  */
 export async function pollAnimationResult(predictionId: string): Promise<string> {
-  const apiKey = getApiKey();
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
-    const response = await fetch(`${ATLAS_API_BASE}/prediction/${predictionId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    const result = await checkAnimationResult(predictionId);
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new Error(`Atlas Cloud poll error (${response.status}): ${text}`);
-    }
-
-    const data = (await response.json()) as PredictionResponse;
-
-    if (data.status === "succeeded") {
-      if (!data.output || data.output.length === 0) {
-        throw new Error("Animation succeeded but no output video URL returned");
-      }
-      return data.output[0];
-    }
-
-    if (data.status === "failed" || data.status === "canceled") {
-      throw new Error(`Animation ${data.status}: ${data.error ?? "unknown error"}`);
-    }
+    if (result.status === "completed") return result.videoUrl!;
+    if (result.status === "failed") throw new Error(`Animation failed: ${result.error}`);
 
     // Still processing — wait before next poll
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));

@@ -151,7 +151,7 @@ export default function TapePreviewPlayer() {
         }
       }
     };
-  }, [timeline, isMuted]);
+  }, [timeline, isMuted, state.mediaFiles]);
 
   // Sync mute state to all active video elements
   useEffect(() => {

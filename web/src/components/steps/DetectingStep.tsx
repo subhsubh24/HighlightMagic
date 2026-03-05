@@ -12,7 +12,7 @@ import {
   type DetectionResult,
   type DetectedClip,
 } from "@/actions/detect";
-import { animatePhoto } from "@/actions/animate";
+import { submitAnimation, checkAnimation } from "@/actions/animate";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
@@ -444,8 +444,13 @@ export default function DetectingStep() {
       setProgress(100);
 
       // Fire off photo animations in the background (don't block navigation)
-      // Clips with animationPrompt get animated via Kling 3.0 / Atlas Cloud
-      const animatableClips = detectedClips.filter((c) => c.animationPrompt);
+      // Animate any photo that the user marked as animatePhoto, or that Opus gave an animationPrompt
+      const animatableSourceIds = new Set(
+        state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
+      );
+      const animatableClips = detectedClips.filter(
+        (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
+      );
       if (animatableClips.length > 0) {
         triggerPhotoAnimations(animatableClips);
       }
@@ -468,6 +473,64 @@ export default function DetectingStep() {
       });
     }
 
+    /** Poll interval for animation status checks (ms) */
+    const ANIMATION_POLL_MS = 5_000;
+    /** Max animation wait time (ms) */
+    const ANIMATION_TIMEOUT_MS = 180_000;
+
+    /** Poll for animation completion on the client side (avoids server action timeout). */
+    async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
+      const deadline = Date.now() + ANIMATION_TIMEOUT_MS;
+
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
+
+        try {
+          const result = await checkAnimation(predictionId);
+
+          if (result.status === "completed" && result.videoUrl) {
+            dispatch({
+              type: "SET_ANIMATION_RESULT",
+              fileId: mediaId,
+              animatedVideoUrl: result.videoUrl,
+              animationStatus: "completed",
+            });
+            return;
+          }
+
+          if (result.status === "failed") {
+            console.error(`Photo animation failed for "${mediaName}": ${result.error}`);
+            dispatch({
+              type: "SET_ANIMATION_RESULT",
+              fileId: mediaId,
+              animatedVideoUrl: null,
+              animationStatus: "failed",
+            });
+            return;
+          }
+          // status === "processing" — keep polling
+        } catch (err) {
+          console.error(`Photo animation poll error for "${mediaName}":`, err);
+          dispatch({
+            type: "SET_ANIMATION_RESULT",
+            fileId: mediaId,
+            animatedVideoUrl: null,
+            animationStatus: "failed",
+          });
+          return;
+        }
+      }
+
+      // Timed out
+      console.error(`Photo animation timed out for "${mediaName}"`);
+      dispatch({
+        type: "SET_ANIMATION_RESULT",
+        fileId: mediaId,
+        animatedVideoUrl: null,
+        animationStatus: "failed",
+      });
+    }
+
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
     function triggerPhotoAnimations(clips: DetectedClip[]) {
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
@@ -482,6 +545,14 @@ export default function DetectingStep() {
         const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
         if (!media || media.type !== "photo") continue;
 
+        // Determine the animation prompt:
+        // 1. Use Opus-generated animationPrompt if available
+        // 2. Fall back to user's animationInstructions
+        // 3. Fall back to a generic prompt based on the clip label
+        const prompt = clip.animationPrompt
+          || media.animationInstructions
+          || `Subtle cinematic motion: gentle camera drift, ambient movement. Scene: ${clip.label}`;
+
         // Mark as generating
         dispatch({
           type: "SET_ANIMATION_RESULT",
@@ -490,19 +561,12 @@ export default function DetectingStep() {
           animationStatus: "generating",
         });
 
-        // Convert file to base64 data URI, then send to server action
+        // Submit task (fast), then poll on the client side (avoids server action timeout)
         fileToDataUri(media.file)
-          .then((dataUri) => animatePhoto(dataUri, clip.animationPrompt!, 5))
-          .then((videoUrl) => {
-            dispatch({
-              type: "SET_ANIMATION_RESULT",
-              fileId: media.id,
-              animatedVideoUrl: videoUrl,
-              animationStatus: "completed",
-            });
-          })
+          .then((dataUri) => submitAnimation(dataUri, prompt, 5))
+          .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
           .catch((err) => {
-            console.error(`Photo animation failed for "${media.name}":`, err);
+            console.error(`Photo animation submit failed for "${media.name}":`, err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
               fileId: media.id,
