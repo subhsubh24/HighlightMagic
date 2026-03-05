@@ -12,7 +12,7 @@ import {
   type DetectionResult,
   type DetectedClip,
 } from "@/actions/detect";
-import { submitAnimation, checkAnimation } from "@/actions/animate";
+import type { AnimationPollResult } from "@/lib/kling";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
@@ -486,7 +486,13 @@ export default function DetectingStep() {
         await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
 
         try {
-          const result = await checkAnimation(predictionId);
+          const res = await fetch("/api/animate/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ predictionId }),
+          });
+          if (!res.ok) throw new Error("Check request failed");
+          const result: AnimationPollResult = await res.json();
 
           if (result.status === "completed" && result.videoUrl) {
             dispatch({
@@ -561,9 +567,18 @@ export default function DetectingStep() {
           animationStatus: "generating",
         });
 
-        // Submit task (fast), then poll on the client side (avoids server action timeout)
+        // Submit task via API route (avoids React Flight serialization limits for large base64)
         fileToDataUri(media.file)
-          .then((dataUri) => submitAnimation(dataUri, prompt, 5))
+          .then(async (dataUri) => {
+            const res = await fetch("/api/animate/submit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageData: dataUri, prompt, duration: 5 }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Submit failed");
+            return data.predictionId as string;
+          })
           .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
           .catch((err) => {
             console.error(`Photo animation submit failed for "${media.name}":`, err);
