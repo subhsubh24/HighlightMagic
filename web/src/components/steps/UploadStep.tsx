@@ -5,6 +5,7 @@ import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sp
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { formatFileSize, haptic, uuid } from "@/lib/utils";
+import { clearDetectionCache } from "@/lib/detection-cache";
 import type { MediaFile } from "@/lib/types";
 
 export default function UploadStep() {
@@ -95,6 +96,9 @@ export default function UploadStep() {
   const handleContinue = () => {
     if (state.mediaFiles.length === 0) return;
     haptic();
+    // Clear stale replan state so we always run full detection from upload
+    dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
+    clearDetectionCache();
     dispatch({ type: "SET_STEP", step: "detecting" });
   };
 
