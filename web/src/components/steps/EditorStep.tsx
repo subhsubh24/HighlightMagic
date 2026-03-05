@@ -37,8 +37,12 @@ export default function EditorStep() {
   const clip = activeIndex >= 0 ? sortedClips[activeIndex] : sortedClips[0];
 
   const media = clip ? getMediaFile(state, clip.sourceFileId) : null;
-  const isPhoto = media?.type === "photo";
-  const mediaUrl = media?.url ?? null;
+  // Animated photos become videos — use the generated video URL and treat as video
+  const hasAnimatedVideo = media?.type === "photo" &&
+    media.animationStatus === "completed" &&
+    media.animatedVideoUrl;
+  const isPhoto = media?.type === "photo" && !hasAnimatedVideo;
+  const mediaUrl = hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? null);
 
   // Auto-suggest music from template
   useEffect(() => {

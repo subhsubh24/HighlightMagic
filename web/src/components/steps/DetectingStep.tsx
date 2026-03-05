@@ -126,6 +126,7 @@ export default function DetectingStep() {
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
+  const abortRef = useRef<AbortController>(new AbortController());
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -144,6 +145,11 @@ export default function DetectingStep() {
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
+    const abort = abortRef.current;
+
+    // Cleanup: abort in-flight fetches and polling when component unmounts
+    // (e.g. user navigates back during detection)
+    const cleanup = () => abort.abort();
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -481,22 +487,29 @@ export default function DetectingStep() {
     const ANIMATION_POLL_MS = 5_000;
     /** Max animation wait time (ms) */
     const ANIMATION_TIMEOUT_MS = 300_000;
+    /** Max consecutive transient errors before giving up */
+    const ANIMATION_MAX_TRANSIENT_ERRORS = 3;
 
     /** Poll for animation completion on the client side (avoids server action timeout). */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
       const deadline = Date.now() + ANIMATION_TIMEOUT_MS;
+      let consecutiveErrors = 0;
 
       while (Date.now() < deadline) {
+        if (abort.signal.aborted) return;
         await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
+        if (abort.signal.aborted) return;
 
         try {
           const res = await fetch("/api/animate/check", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ predictionId }),
+            signal: abort.signal,
           });
           if (!res.ok) throw new Error("Check request failed");
           const result: AnimationPollResult = await res.json();
+          consecutiveErrors = 0; // reset on success
 
           if (result.status === "completed" && result.videoUrl) {
             dispatch({
@@ -520,25 +533,33 @@ export default function DetectingStep() {
           }
           // status === "processing" — keep polling
         } catch (err) {
-          console.error(`Photo animation poll error for "${mediaName}":`, err);
-          dispatch({
-            type: "SET_ANIMATION_RESULT",
-            fileId: mediaId,
-            animatedVideoUrl: null,
-            animationStatus: "failed",
-          });
-          return;
+          if (abort.signal.aborted) return;
+          consecutiveErrors++;
+          console.warn(`Photo animation poll error for "${mediaName}" (${consecutiveErrors}/${ANIMATION_MAX_TRANSIENT_ERRORS}):`, err);
+          if (consecutiveErrors >= ANIMATION_MAX_TRANSIENT_ERRORS) {
+            console.error(`Photo animation gave up after ${ANIMATION_MAX_TRANSIENT_ERRORS} consecutive errors for "${mediaName}"`);
+            dispatch({
+              type: "SET_ANIMATION_RESULT",
+              fileId: mediaId,
+              animatedVideoUrl: null,
+              animationStatus: "failed",
+            });
+            return;
+          }
+          // Transient error — keep polling
         }
       }
 
       // Timed out
-      console.error(`Photo animation timed out for "${mediaName}"`);
-      dispatch({
-        type: "SET_ANIMATION_RESULT",
-        fileId: mediaId,
-        animatedVideoUrl: null,
-        animationStatus: "failed",
-      });
+      if (!abort.signal.aborted) {
+        console.error(`Photo animation timed out for "${mediaName}"`);
+        dispatch({
+          type: "SET_ANIMATION_RESULT",
+          fileId: mediaId,
+          animatedVideoUrl: null,
+          animationStatus: "failed",
+        });
+      }
     }
 
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
@@ -580,6 +601,7 @@ export default function DetectingStep() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ imageData: dataUri, prompt, duration: 5 }),
+              signal: abort.signal,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Submit failed");
@@ -602,6 +624,7 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
+      if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
       console.error("Detection failed:", message);
 
@@ -621,6 +644,7 @@ export default function DetectingStep() {
         setError(`Detection failed: ${message.slice(0, 150)}`);
       }
     }
+    return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

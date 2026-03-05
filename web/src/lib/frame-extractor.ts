@@ -100,109 +100,14 @@ function computeSpectralBands(
   };
 }
 
-async function extractAudioAnalysis(
-  videoUrl: string,
-  timestamps: number[]
-): Promise<AudioAnalysis> {
-  const empty: AudioAnalysis = { energy: new Map(), onset: new Map(), spectral: new Map() };
-  try {
-    const response = await fetch(videoUrl);
-    const arrayBuffer = await response.arrayBuffer();
-
-    // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const audioCtx = new AudioCtx();
-    if (audioCtx.state === "suspended") {
-      await audioCtx.resume().catch(() => {});
-    }
-
-    let audioBuffer: AudioBuffer;
-    try {
-      audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    } catch {
-      audioCtx.close();
-      return empty;
-    }
-
-    // Average all channels for stereo/surround content
-    const numChannels = audioBuffer.numberOfChannels;
-    const length = audioBuffer.getChannelData(0).length;
-    const mixedData = new Float32Array(length);
-    for (let ch = 0; ch < numChannels; ch++) {
-      const channelData = audioBuffer.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        mixedData[i] += channelData[i] / numChannels;
-      }
-    }
-
-    const sampleRate = audioBuffer.sampleRate;
-    const windowSamples = Math.floor(sampleRate * 0.25); // 0.25s window — tighter for transient precision
-
-    const energyMap = new Map<number, number>();
-    const spectralMap = new Map<number, { bass: number; mid: number; treble: number }>();
-    const halfWindow = Math.floor(windowSamples / 2);
-
-    for (const ts of timestamps) {
-      const centerSample = Math.floor(ts * sampleRate);
-      const start = Math.max(0, centerSample - halfWindow);
-      const end = Math.min(length, centerSample + halfWindow);
-
-      if (end <= start) {
-        energyMap.set(ts, 0);
-        continue;
-      }
-
-      let sumSquares = 0;
-      for (let i = start; i < end; i++) {
-        sumSquares += mixedData[i] * mixedData[i];
-      }
-      energyMap.set(ts, Math.sqrt(sumSquares / (end - start)));
-
-      // Spectral band analysis — reuses the same window
-      spectralMap.set(ts, computeSpectralBands(mixedData, sampleRate, centerSample, halfWindow));
-    }
-
-    // Normalize energy to 0-1
-    const maxEnergy = Math.max(...energyMap.values(), 0.001);
-    for (const [ts, energy] of energyMap) {
-      energyMap.set(ts, Math.round((energy / maxEnergy) * 100) / 100);
-    }
-
-    // Compute onset strength: how much energy CHANGED vs. the previous timestamp.
-    // High onset = transient (beat hit, impact, clap, sudden sound).
-    // This is what the AI needs to find natural cut points and sync to rhythm.
-    const onsetMap = new Map<number, number>();
-    const sortedTs = [...timestamps].sort((a, b) => a - b);
-    for (let i = 0; i < sortedTs.length; i++) {
-      const ts = sortedTs[i];
-      const current = energyMap.get(ts) ?? 0;
-      const prev = i > 0 ? (energyMap.get(sortedTs[i - 1]) ?? 0) : 0;
-      // Only positive deltas matter (onset = energy appearing, not disappearing)
-      onsetMap.set(ts, Math.max(0, current - prev));
-    }
-
-    // Normalize onset to 0-1
-    const maxOnset = Math.max(...onsetMap.values(), 0.001);
-    for (const [ts, onset] of onsetMap) {
-      onsetMap.set(ts, Math.round((onset / maxOnset) * 100) / 100);
-    }
-
-    audioCtx.close();
-    return { energy: energyMap, onset: onsetMap, spectral: spectralMap };
-  } catch {
-    return empty;
-  }
+/** Decoded audio data shared between prescan and full analysis to avoid double fetch+decode. */
+interface DecodedAudio {
+  mixedData: Float32Array;
+  sampleRate: number;
+  length: number;
 }
 
-/**
- * Lightweight audio pre-scan: decode audio once, compute onset at high resolution (100ms).
- * Returns timestamps of onset peaks — moments where something sonically "happened".
- * Runs in ~50ms for a 60s video (just math on the decoded buffer).
- */
-async function prescanAudioOnsets(
-  videoUrl: string,
-  duration: number
-): Promise<number[]> {
+async function decodeVideoAudio(videoUrl: string): Promise<DecodedAudio | null> {
   try {
     const response = await fetch(videoUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -216,7 +121,7 @@ async function prescanAudioOnsets(
       audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     } catch {
       audioCtx.close();
-      return [];
+      return null;
     }
 
     const numChannels = audioBuffer.numberOfChannels;
@@ -230,45 +135,103 @@ async function prescanAudioOnsets(
     }
 
     const sampleRate = audioBuffer.sampleRate;
-    const windowSamples = Math.floor(sampleRate * 0.1); // 100ms window — matches pre-scan interval
-    const halfWindow = Math.floor(windowSamples / 2);
-
-    // Compute RMS energy at every 100ms
-    const energies: { ts: number; rms: number }[] = [];
-    const totalSteps = Math.floor(duration / AUDIO_PRESCAN_INTERVAL_S);
-    for (let i = 0; i <= totalSteps; i++) {
-      const ts = i * AUDIO_PRESCAN_INTERVAL_S;
-      const center = Math.floor(ts * sampleRate);
-      const start = Math.max(0, center - halfWindow);
-      const end = Math.min(length, center + halfWindow);
-      if (end <= start) { energies.push({ ts, rms: 0 }); continue; }
-      let sum = 0;
-      for (let j = start; j < end; j++) sum += mixedData[j] * mixedData[j];
-      energies.push({ ts, rms: Math.sqrt(sum / (end - start)) });
-    }
-
-    // Normalize
-    const maxRms = Math.max(...energies.map((e) => e.rms), 0.001);
-    for (const e of energies) e.rms /= maxRms;
-
-    // Compute onset (positive energy delta) and normalize
-    const onsets: { ts: number; onset: number }[] = [];
-    for (let i = 0; i < energies.length; i++) {
-      const delta = i > 0 ? Math.max(0, energies[i].rms - energies[i - 1].rms) : 0;
-      onsets.push({ ts: energies[i].ts, onset: delta });
-    }
-    const maxOnset = Math.max(...onsets.map((o) => o.onset), 0.001);
-    for (const o of onsets) o.onset /= maxOnset;
-
     audioCtx.close();
-
-    // Return timestamps of onset peaks above threshold
-    return onsets
-      .filter((o) => o.onset >= ONSET_PEAK_THRESHOLD)
-      .map((o) => o.ts);
+    return { mixedData, sampleRate, length };
   } catch {
-    return [];
+    return null;
   }
+}
+
+function extractAudioAnalysisFromBuffer(
+  decoded: DecodedAudio,
+  timestamps: number[]
+): AudioAnalysis {
+  const { mixedData, sampleRate, length } = decoded;
+  const windowSamples = Math.floor(sampleRate * 0.25); // 0.25s window — tighter for transient precision
+  const halfWindow = Math.floor(windowSamples / 2);
+
+  const energyMap = new Map<number, number>();
+  const spectralMap = new Map<number, { bass: number; mid: number; treble: number }>();
+
+  for (const ts of timestamps) {
+    const centerSample = Math.floor(ts * sampleRate);
+    const start = Math.max(0, centerSample - halfWindow);
+    const end = Math.min(length, centerSample + halfWindow);
+
+    if (end <= start) {
+      energyMap.set(ts, 0);
+      continue;
+    }
+
+    let sumSquares = 0;
+    for (let i = start; i < end; i++) {
+      sumSquares += mixedData[i] * mixedData[i];
+    }
+    energyMap.set(ts, Math.sqrt(sumSquares / (end - start)));
+
+    spectralMap.set(ts, computeSpectralBands(mixedData, sampleRate, centerSample, halfWindow));
+  }
+
+  // Normalize energy to 0-1
+  const maxEnergy = Math.max(...energyMap.values(), 0.001);
+  for (const [ts, energy] of energyMap) {
+    energyMap.set(ts, Math.round((energy / maxEnergy) * 100) / 100);
+  }
+
+  // Compute onset strength
+  const onsetMap = new Map<number, number>();
+  const sortedTs = [...timestamps].sort((a, b) => a - b);
+  for (let i = 0; i < sortedTs.length; i++) {
+    const ts = sortedTs[i];
+    const current = energyMap.get(ts) ?? 0;
+    const prev = i > 0 ? (energyMap.get(sortedTs[i - 1]) ?? 0) : 0;
+    onsetMap.set(ts, Math.max(0, current - prev));
+  }
+
+  // Normalize onset to 0-1
+  const maxOnset = Math.max(...onsetMap.values(), 0.001);
+  for (const [ts, onset] of onsetMap) {
+    onsetMap.set(ts, Math.round((onset / maxOnset) * 100) / 100);
+  }
+
+  return { energy: energyMap, onset: onsetMap, spectral: spectralMap };
+}
+
+function prescanAudioOnsetsFromBuffer(
+  decoded: DecodedAudio,
+  duration: number
+): number[] {
+  const { mixedData, sampleRate, length } = decoded;
+  const windowSamples = Math.floor(sampleRate * 0.1); // 100ms window
+  const halfWindow = Math.floor(windowSamples / 2);
+
+  const energies: { ts: number; rms: number }[] = [];
+  const totalSteps = Math.floor(duration / AUDIO_PRESCAN_INTERVAL_S);
+  for (let i = 0; i <= totalSteps; i++) {
+    const ts = i * AUDIO_PRESCAN_INTERVAL_S;
+    const center = Math.floor(ts * sampleRate);
+    const start = Math.max(0, center - halfWindow);
+    const end = Math.min(length, center + halfWindow);
+    if (end <= start) { energies.push({ ts, rms: 0 }); continue; }
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += mixedData[j] * mixedData[j];
+    energies.push({ ts, rms: Math.sqrt(sum / (end - start)) });
+  }
+
+  const maxRms = Math.max(...energies.map((e) => e.rms), 0.001);
+  for (const e of energies) e.rms /= maxRms;
+
+  const onsets: { ts: number; onset: number }[] = [];
+  for (let i = 0; i < energies.length; i++) {
+    const delta = i > 0 ? Math.max(0, energies[i].rms - energies[i - 1].rms) : 0;
+    onsets.push({ ts: energies[i].ts, onset: delta });
+  }
+  const maxOnset = Math.max(...onsets.map((o) => o.onset), 0.001);
+  for (const o of onsets) o.onset /= maxOnset;
+
+  return onsets
+    .filter((o) => o.onset >= ONSET_PEAK_THRESHOLD)
+    .map((o) => o.ts);
 }
 
 /**
@@ -339,8 +302,8 @@ export async function extractFrames(
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
   const totalBaseFrames = Math.floor(duration / interval);
 
-  // ── Pass 1: Audio pre-scan (runs in parallel with visual extraction) ──
-  const onsetPeaksPromise = prescanAudioOnsets(videoUrl, duration);
+  // ── Decode audio once — shared between prescan and full analysis ──
+  const decodedAudioPromise = decodeVideoAudio(videoUrl);
 
   // ── Pass 2: Extract base frames at 1fps + detect visual scene changes ──
   const baseFrames: FrameResult[] = [];
@@ -374,7 +337,8 @@ export async function extractFrames(
   }
 
   // ── Collect interest points ──
-  const onsetPeaks = await onsetPeaksPromise;
+  const decodedAudio = await decodedAudioPromise;
+  const onsetPeaks = decodedAudio ? prescanAudioOnsetsFromBuffer(decodedAudio, duration) : [];
   const interestPoints = new Set<number>();
 
   // Audio onset peaks
@@ -430,9 +394,10 @@ export async function extractFrames(
     console.log(`Adaptive sampling: ${baseFrames.length} base + ${bonusFrames.length} bonus frames (${onsetPeaks.length} audio peaks, ${sceneChangeTimestamps.length} scene changes)`);
   }
 
-  // ── Full audio analysis on all final timestamps ──
+  // ── Full audio analysis on all final timestamps (reuses decoded buffer) ──
   const allTimestamps = allFrames.map((f) => f.timestamp);
-  const audio = await extractAudioAnalysis(videoUrl, allTimestamps);
+  const emptyAudio: AudioAnalysis = { energy: new Map(), onset: new Map(), spectral: new Map() };
+  const audio = decodedAudio ? extractAudioAnalysisFromBuffer(decodedAudio, allTimestamps) : emptyAudio;
 
   // Progress: audio analysis = 80-100%
   onProgress?.(90);

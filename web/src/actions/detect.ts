@@ -240,11 +240,6 @@ function safeParseJSONArray(raw: string): unknown {
 
 // ── Types ──
 
-interface FrameInput {
-  timestamp: number;
-  base64: string;
-}
-
 interface MultiFrameInput {
   sourceFileId: string;
   sourceFileName: string;
@@ -318,21 +313,6 @@ export interface DetectionResult {
   contentSummary: string;
 }
 
-// ── Legacy single-video detection (backward compat) ──
-
-export async function detectHighlights(
-  frames: FrameInput[],
-  templateName?: string
-): Promise<DetectionResult> {
-  const multiFrames: MultiFrameInput[] = frames.map((f) => ({
-    ...f,
-    sourceFileId: "single",
-    sourceFileName: "video",
-    sourceType: "video" as const,
-  }));
-  return detectMultiClipHighlights(multiFrames, templateName);
-}
-
 // ── Helpers ──
 
 function buildSourceFilesMap(frames: MultiFrameInput[]): Map<string, { name: string; type: "video" | "photo"; frameCount: number }> {
@@ -365,42 +345,6 @@ export async function scoreSingleBatch(
   return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
 }
 
-/** @deprecated Use buildFrameBatches + scoreSingleBatch from the client instead. */
-export async function scoreAllFrames(
-  frames: MultiFrameInput[],
-  templateName?: string
-): Promise<ScoredFrame[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
-  }
-
-  const sourceFiles = buildSourceFilesMap(frames);
-
-  // Batch frames BY SOURCE FILE so the AI sees temporal flow within each video.
-  const framesBySource = new Map<string, MultiFrameInput[]>();
-  for (const f of frames) {
-    if (!framesBySource.has(f.sourceFileId)) framesBySource.set(f.sourceFileId, []);
-    framesBySource.get(f.sourceFileId)!.push(f);
-  }
-
-  const batches: MultiFrameInput[][] = [];
-  for (const [, sourceFrames] of framesBySource) {
-    for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
-      batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
-    }
-  }
-
-  const batchResults = await runWithConcurrency(
-    batches.map((batch, i) => async () => {
-      // Stagger batch starts so we don't slam the API at t=0 and trigger 429s
-      if (i > 0) await new Promise((r) => setTimeout(r, i * BATCH_STAGGER_MS));
-      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
-    }),
-    MAX_CONCURRENCY
-  );
-  return batchResults.flat();
-}
 
 // ── Score normalization across batches ──
 
@@ -486,16 +430,6 @@ export async function planFromScores(
   }
 
   return result;
-}
-
-// ── Multi-clip detection (convenience wrapper) ──
-
-export async function detectMultiClipHighlights(
-  frames: MultiFrameInput[],
-  templateName?: string
-): Promise<DetectionResult> {
-  const scores = await scoreAllFrames(frames, templateName);
-  return planFromScores(frames, scores, templateName);
 }
 
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
@@ -871,7 +805,7 @@ function selectPlannerFrames(
   }
 
   // Phase 3: if still under budget, fill remaining WITHOUT gap enforcement
-  // Ensures we always get close to 80 frames even with dense scoring
+  // Ensures we always get close to 60 frames even with dense scoring
   if (selected.length < API_MAX_IMAGES && totalBytes < API_IMAGE_PAYLOAD_BUDGET) {
     for (const s of allSorted) {
       if (selected.length >= API_MAX_IMAGES || totalBytes >= API_IMAGE_PAYLOAD_BUDGET) break;

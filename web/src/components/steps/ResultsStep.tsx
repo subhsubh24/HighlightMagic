@@ -187,8 +187,11 @@ export default function ResultsStep() {
       <div className="flex flex-col gap-3">
         {sortedClips.map((clip, index) => {
           const media = getMediaFile(state, clip.sourceFileId);
-          const isPhoto = media?.type === "photo";
-          const mediaUrl = media?.url;
+          const hasAnimatedVideo = media?.type === "photo" &&
+            media.animationStatus === "completed" &&
+            media.animatedVideoUrl;
+          const isPhoto = media?.type === "photo" && !hasAnimatedVideo;
+          const mediaUrl = hasAnimatedVideo ? media.animatedVideoUrl! : media?.url;
 
           return (
             <div
