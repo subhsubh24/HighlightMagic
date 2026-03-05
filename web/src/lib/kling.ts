@@ -49,12 +49,9 @@ export async function submitPhotoAnimation(
 ): Promise<string> {
   const apiKey = getApiKey();
 
-  // Strip data URI prefix if present — Atlas Cloud expects raw base64 or a URL
-  let image = imageUrl;
-  const dataUriMatch = imageUrl.match(/^data:[^;]+;base64,(.+)$/s);
-  if (dataUriMatch) {
-    image = dataUriMatch[1];
-  }
+  // Atlas Cloud accepts data URIs (data:image/...;base64,...) or public URLs.
+  // Pass the image through as-is — do NOT strip the data URI prefix.
+  const image = imageUrl;
 
   const response = await fetch(`${ATLAS_API_BASE}/generateVideo`, {
     method: "POST",
