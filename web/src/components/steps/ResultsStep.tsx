@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2 } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
 import { useRef, useState } from "react";
@@ -244,7 +244,11 @@ export default function ResultsStep() {
                 )}
                 {/* Type badge */}
                 <div className="absolute right-1 top-1 flex items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] text-white">
-                  {isPhoto ? <Image className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
+                  {media?.animationStatus === "generating" ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin text-[var(--accent)]" />
+                  ) : hasAnimatedVideo ? (
+                    <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
+                  ) : isPhoto ? <Image className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                 </div>
               </div>
 

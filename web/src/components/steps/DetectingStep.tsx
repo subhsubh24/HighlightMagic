@@ -448,9 +448,7 @@ export default function DetectingStep() {
         customCaptionGlowRadius: c.customCaptionGlowRadius,
       }));
 
-      setProgress(100);
-
-      // Animate any photo that the user marked as animatePhoto, or that Opus gave an animationPrompt
+      // Animate any photos that the user marked or that Opus gave an animationPrompt
       const animatableSourceIds = new Set(
         state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
       );
@@ -459,11 +457,14 @@ export default function DetectingStep() {
       );
 
       if (animatableClips.length > 0) {
-        // Wait for all photo animations to complete before navigating
+        // Hold progress at 92% — animation phase takes over
+        setProgress(92);
         setAnimatingPhotos(true);
         await triggerPhotoAnimations(animatableClips);
         setAnimatingPhotos(false);
       }
+
+      setProgress(100);
 
       // Brief pause for the 100% satisfaction, then navigate
       setTimeout(() => {
@@ -572,6 +573,13 @@ export default function DetectingStep() {
         return true;
       });
 
+      // Track completions — progress goes from 92% to 99% as animations finish
+      let completedAnimations = 0;
+      const totalAnimations = uniqueClips.filter((c) => {
+        const m = state.mediaFiles.find((f) => f.id === c.sourceFileId);
+        return m && m.type === "photo";
+      }).length;
+
       const promises: Promise<void>[] = [];
 
       for (const clip of uniqueClips) {
@@ -608,7 +616,14 @@ export default function DetectingStep() {
             return data.predictionId as string;
           })
           .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
+          .then(() => {
+            completedAnimations++;
+            // Progress 92% → 99% as animations complete
+            setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
+          })
           .catch((err) => {
+            completedAnimations++;
+            setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
             console.error(`Photo animation submit failed for "${media.name}":`, err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
@@ -699,7 +714,7 @@ export default function DetectingStep() {
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
         {animatingPhotos
-          ? "Generating motion for your photos — this usually takes 1-2 minutes"
+          ? "Generating motion — this usually takes 1-2 minutes per photo"
           : isReplan
             ? "Re-generating with your creative direction..."
             : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
