@@ -461,6 +461,10 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
+      console.log(`[Animation] animatableClips: ${animatableClips.length}, animatableSourceIds:`, [...animatableSourceIds]);
+      console.log(`[Animation] clips with animationPrompt:`, detectedClips.filter((c) => c.animationPrompt).length);
+      console.log(`[Animation] photos with animatePhoto:`, state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.name));
+
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
@@ -469,66 +473,66 @@ export default function DetectingStep() {
         ).size;
         setAnimationProgress({ total: uniquePhotoCount, completed: 0, failed: 0 });
         setAnimatingPhotos(true);
+        console.log(`[Animation] Starting triggerPhotoAnimations for ${uniquePhotoCount} photos...`);
         await triggerPhotoAnimations(animatableClips);
+        console.log(`[Animation] triggerPhotoAnimations completed`);
         setAnimatingPhotos(false);
+      } else {
+        console.log(`[Animation] SKIPPED — no animatable clips`);
       }
 
       // ── Haiku QA validation loop (max 2 rounds) ──
-      const MAX_VALIDATION_ROUNDS = 2;
+      // Wrapped in try/catch — validation is non-blocking and must never prevent navigation.
       let finalHighlights = highlights;
       let finalClips = clips;
-      let currentDetectedClips = detectedClips;
 
-      for (let round = 0; round < MAX_VALIDATION_ROUNDS; round++) {
-        if (abort.signal.aborted) break;
+      try {
+        const MAX_VALIDATION_ROUNDS = 2;
+        let currentDetectedClips = detectedClips;
 
-        setValidationPhase("reviewing");
-        setValidationRound(round + 1);
-        setProgress(94 + round * 2);
+        for (let round = 0; round < MAX_VALIDATION_ROUNDS; round++) {
+          if (abort.signal.aborted) break;
 
-        const sourceFileInfo = state.mediaFiles.map((f) => ({
-          id: f.id,
-          name: f.name,
-          type: f.type,
-        }));
-        const animatedFileIds = state.mediaFiles
-          .filter((f) => f.animationStatus === "completed" || f.animationStatus === "generating")
-          .map((f) => f.id);
+          setValidationPhase("reviewing");
+          setValidationRound(round + 1);
+          setProgress(94 + round * 2);
 
-        let validation: TapeValidationResult;
-        try {
-          validation = await validateTape(
+          const sourceFileInfo = state.mediaFiles.map((f) => ({
+            id: f.id,
+            name: f.name,
+            type: f.type,
+          }));
+          const animatedFileIds = state.mediaFiles
+            .filter((f) => f.animationStatus === "completed" || f.animationStatus === "generating")
+            .map((f) => f.id);
+
+          const validation = await validateTape(
             currentDetectedClips,
             sourceFileInfo,
             result.contentSummary,
             animatedFileIds,
           );
-        } catch (err) {
-          console.warn("Tape validation error (non-blocking):", err);
-          break; // Skip validation on error
-        }
 
-        console.log(`Tape validation round ${round + 1}:`, validation);
+          console.log(`Tape validation round ${round + 1}:`, validation);
 
-        if (validation.passed) {
-          setValidationPhase("done");
-          break;
-        }
+          if (validation.passed) {
+            setValidationPhase("done");
+            break;
+          }
 
-        // Haiku flagged issues — ask Opus to revise
-        if (abort.signal.aborted) break;
-        setValidationPhase("revising");
-        setProgress(96 + round * 2);
+          // Haiku flagged issues — ask Opus to revise
+          if (abort.signal.aborted) break;
+          setValidationPhase("revising");
+          setProgress(96 + round * 2);
 
-        const revisionFeedback = [
-          "QA REVIEW FAILED. Fix these specific issues:",
-          ...validation.issues.map((issue, i) => `${i + 1}. ${issue}`),
-          "",
-          "Suggested fixes:",
-          ...validation.suggestions.map((s, i) => `${i + 1}. ${s}`),
-        ].join("\n");
+          const revisionFeedback = [
+            "QA REVIEW FAILED. Fix these specific issues:",
+            ...validation.issues.map((issue, i) => `${i + 1}. ${issue}`),
+            "",
+            "Suggested fixes:",
+            ...validation.suggestions.map((s, i) => `${i + 1}. ${s}`),
+          ].join("\n");
 
-        try {
           const cached = getCachedDetectionData();
           if (!cached.frames || !cached.scores) break;
 
@@ -595,10 +599,10 @@ export default function DetectingStep() {
             customCaptionGlowColor: c.customCaptionGlowColor,
             customCaptionGlowRadius: c.customCaptionGlowRadius,
           }));
-        } catch (err) {
-          console.warn("Tape revision error (non-blocking):", err);
-          break; // Accept current tape on revision error
         }
+      } catch (err) {
+        console.warn("Tape validation/revision error (non-blocking):", err);
+        // Accept current tape — validation failures never block the user
       }
 
       setValidationPhase("done");
@@ -741,8 +745,10 @@ export default function DetectingStep() {
         });
 
         // Submit task via API route (avoids React Flight serialization limits for large base64)
+        console.log(`[Animation] Starting animation for "${media.name}" (${media.id}), prompt: "${prompt.slice(0, 60)}..."`);
         const p = fileToDataUri(media.file)
           .then(async (dataUri) => {
+            console.log(`[Animation] "${media.name}" fileToDataUri done (${(dataUri.length / 1024).toFixed(0)} KB), submitting...`);
             const res = await fetch("/api/animate/submit", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -751,6 +757,7 @@ export default function DetectingStep() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Submit failed");
+            console.log(`[Animation] "${media.name}" submitted, predictionId: ${data.predictionId}`);
             return data.predictionId as string;
           })
           .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
@@ -759,8 +766,10 @@ export default function DetectingStep() {
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
             // Progress 92% → 99% as animations complete
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
+            console.log(`[Animation] "${media.name}" COMPLETED (${completedAnimations}/${totalAnimations})`);
           })
           .catch((err) => {
+            console.error(`[Animation] "${media.name}" CATCH handler, aborted=${abort.signal.aborted}:`, err);
             if (abort.signal.aborted) return;
             completedAnimations++;
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
