@@ -466,6 +466,12 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
+      console.log("[processResult] animatableClips:", animatableClips.length,
+        "| animatableSourceIds:", [...animatableSourceIds],
+        "| clips with animationPrompt:", detectedClips.filter(c => c.animationPrompt).map(c => c.sourceFileId),
+        "| all photos:", state.mediaFiles.filter(f => f.type === "photo").map(f => ({ id: f.id, name: f.name, animatePhoto: f.animatePhoto }))
+      );
+
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
@@ -710,6 +716,7 @@ export default function DetectingStep() {
       // This one is created lazily, long after Strict Mode cleanup, so it's alive.
       animationAbortRef.current = new AbortController();
       const animSignal = animationAbortRef.current.signal;
+      console.log("[triggerPhotoAnimations] called with", clips.length, "clips, animSignal.aborted:", animSignal.aborted);
 
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
       const seen = new Set<string>();
@@ -749,8 +756,10 @@ export default function DetectingStep() {
         });
 
         // Submit task via API route (avoids React Flight serialization limits for large base64)
+        console.log(`[triggerPhotoAnimations] queuing "${media.name}" (file exists: ${!!media.file}, file size: ${media.file?.size})`);
         const p = fileToDataUri(media.file)
           .then(async (dataUri) => {
+            console.log(`[triggerPhotoAnimations] "${media.name}" dataUri ready (${dataUri.length} bytes), fetching /api/animate/submit...`);
             const res = await fetch("/api/animate/submit", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -784,7 +793,10 @@ export default function DetectingStep() {
         promises.push(p);
       }
 
-      return Promise.all(promises).then(() => {});
+      console.log(`[triggerPhotoAnimations] waiting on ${promises.length} animation promises`);
+      return Promise.all(promises).then(() => {
+        console.log("[triggerPhotoAnimations] all promises resolved");
+      });
     }
 
     function handleError(err: unknown) {
