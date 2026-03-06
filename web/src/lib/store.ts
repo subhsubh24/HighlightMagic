@@ -25,7 +25,6 @@ export const initialState: AppState = {
   creativeDirection: "",
   aiMusicEnabled: false,
   aiMusicStatus: "idle",
-  aiMusicTaskId: null,
   aiMusicUrl: null,
   aiMusicPrompt: "",
 };
@@ -66,7 +65,6 @@ export type Action =
   | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
   | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
-  | { type: "SET_AI_MUSIC_TASK"; taskId: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
   | { type: "RESET" };
 
@@ -162,12 +160,10 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         aiMusicEnabled: action.enabled,
         // Reset music state when toggling off
-        ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicTaskId: null, aiMusicUrl: null }),
+        ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicUrl: null }),
       };
     case "SET_AI_MUSIC_PROMPT":
       return { ...state, aiMusicPrompt: action.prompt };
-    case "SET_AI_MUSIC_TASK":
-      return { ...state, aiMusicTaskId: action.taskId, aiMusicStatus: "generating" as const };
     case "SET_AI_MUSIC_RESULT":
       return { ...state, aiMusicStatus: action.status, aiMusicUrl: action.audioUrl ?? state.aiMusicUrl };
     case "RESET":

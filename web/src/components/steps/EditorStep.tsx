@@ -477,9 +477,6 @@ function TrimPanel({
   );
 }
 
-/** Poll interval for AI music generation status checks (ms). */
-const AI_MUSIC_POLL_INTERVAL = 5_000;
-
 function MusicPanel({
   selected,
   isPro,
@@ -504,14 +501,6 @@ function MusicPanel({
   dispatch: React.Dispatch<Action>;
 }) {
   const tracks = getAvailableTracks(isPro);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Clean up polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
 
   const handleGenerate = async () => {
     // Build prompt from user input or auto-generate from content context
@@ -526,53 +515,28 @@ function MusicPanel({
       const res = await fetch("/api/music/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, instrumental: true }),
+        body: JSON.stringify({ prompt }),
       });
       const data = await res.json();
 
-      if (!res.ok || !data.taskId) {
+      if (!res.ok || data.status !== "completed" || !data.audioUrl) {
         dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
         return;
       }
 
-      dispatch({ type: "SET_AI_MUSIC_TASK", taskId: data.taskId });
-
-      // Start polling
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
-          const checkRes = await fetch("/api/music/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskId: data.taskId }),
-          });
-          const checkData = await checkRes.json();
-
-          if (checkData.status === "completed" && checkData.audioUrl) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: checkData.audioUrl });
-            // Auto-select the AI track
-            onSelect({
-              id: "__ai_generated__",
-              name: "AI Generated",
-              fileName: "",
-              artist: "Suno AI",
-              mood: "Upbeat",
-              category: "General",
-              bpm: 120,
-              durationSeconds: checkData.duration ?? 60,
-              isPremium: true,
-            });
-          } else if (checkData.status === "failed") {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
-          }
-        } catch {
-          // Network error — keep polling, will retry
-        }
-      }, AI_MUSIC_POLL_INTERVAL);
+      dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+      // Auto-select the AI track
+      onSelect({
+        id: "__ai_generated__",
+        name: "AI Generated",
+        fileName: "",
+        artist: "ElevenLabs",
+        mood: "Upbeat",
+        category: "General",
+        bpm: 120,
+        durationSeconds: data.duration ?? 60,
+        isPremium: true,
+      });
     } catch {
       dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
     }

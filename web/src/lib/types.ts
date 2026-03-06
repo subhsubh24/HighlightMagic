@@ -163,10 +163,9 @@ export interface AppState {
   regenerateFeedback: string | null;
   // Creative direction — optional user-provided style instructions passed to Opus planner
   creativeDirection: string;
-  // AI-generated music (Suno V4.5-All) — opt-in, Pro only
+  // AI-generated music (ElevenLabs Eleven Music) — opt-in, Pro only
   aiMusicEnabled: boolean;
   aiMusicStatus: AiMusicStatus;
-  aiMusicTaskId: string | null;
   aiMusicUrl: string | null;
   aiMusicPrompt: string;
 }
