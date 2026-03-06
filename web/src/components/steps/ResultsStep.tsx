@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
 import { useRef, useState } from "react";
@@ -40,6 +40,28 @@ export default function ResultsStep() {
     dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: feedback.trim() });
     dispatch({ type: "SET_STEP", step: "detecting" });
   };
+
+  // Retry failed photo animations by re-running detection (animations trigger in processResult)
+  const handleRetryAnimations = () => {
+    haptic();
+    // Reset failed animations to idle so they'll be re-attempted
+    for (const media of state.mediaFiles) {
+      if (media.animationStatus === "failed" && media.animatePhoto) {
+        dispatch({
+          type: "SET_ANIMATION_RESULT",
+          fileId: media.id,
+          animatedVideoUrl: null,
+          animationStatus: "idle",
+        });
+      }
+    }
+    dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: "Re-run with same plan — retry photo animations" });
+    dispatch({ type: "SET_STEP", step: "detecting" });
+  };
+
+  const failedAnimations = state.mediaFiles.filter(
+    (f) => f.type === "photo" && f.animatePhoto && f.animationStatus === "failed"
+  );
 
   // Drag-to-reorder handlers
   const handleDragStart = (index: number) => {
@@ -145,6 +167,30 @@ export default function ResultsStep() {
         </div>
       )}
 
+      {/* Failed animation banner */}
+      {failedAnimations.length > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 animate-fade-in">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-300">
+              {failedAnimations.length === 1
+                ? `Animation failed for "${failedAnimations[0].name}"`
+                : `Animation failed for ${failedAnimations.length} photos`}
+            </p>
+            <p className="mt-0.5 text-xs text-red-400/70">
+              This usually means the animation API key is missing or the service is temporarily unavailable.
+            </p>
+          </div>
+          <button
+            onClick={handleRetryAnimations}
+            className="flex items-center gap-1.5 rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/30"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Empty state */}
       {sortedClips.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">
@@ -246,6 +292,8 @@ export default function ResultsStep() {
                 <div className="absolute right-1 top-1 flex items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] text-white">
                   {media?.animationStatus === "generating" ? (
                     <Loader2 className="h-2.5 w-2.5 animate-spin text-[var(--accent)]" />
+                  ) : media?.animationStatus === "failed" ? (
+                    <AlertTriangle className="h-2.5 w-2.5 text-red-400" />
                   ) : hasAnimatedVideo ? (
                     <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
                   ) : isPhoto ? <Image className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
@@ -257,9 +305,17 @@ export default function ResultsStep() {
                 <div>
                   <p className="font-semibold text-white">{clip.segment.label}</p>
                   <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-                    {isPhoto
+                    {hasAnimatedVideo
                       ? "Photo · 3s"
-                      : `${formatTime(clip.segment.startTime)} – ${formatTime(clip.segment.endTime)} · ${Math.round(clip.segment.endTime - clip.segment.startTime)}s`}
+                      : isPhoto
+                        ? "Photo · 3s"
+                        : `${formatTime(clip.segment.startTime)} – ${formatTime(clip.segment.endTime)} · ${Math.round(clip.segment.endTime - clip.segment.startTime)}s`}
+                    {media?.animationStatus === "failed" && (
+                      <span className="ml-1 text-red-400"> · animation failed</span>
+                    )}
+                    {media?.animationStatus === "generating" && (
+                      <span className="ml-1 text-[var(--accent)]"> · animating...</span>
+                    )}
                   </p>
                   {media && (
                     <p className="mt-0.5 truncate text-xs text-[var(--text-tertiary)]">

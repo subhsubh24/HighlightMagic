@@ -123,6 +123,7 @@ export default function DetectingStep() {
   const [error, setError] = useState<string | null>(null);
   const [isSlow, setIsSlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -459,6 +460,10 @@ export default function DetectingStep() {
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
+        const uniquePhotoCount = new Set(
+          animatableClips.filter((c) => state.mediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
+        ).size;
+        setAnimationProgress({ total: uniquePhotoCount, completed: 0, failed: 0 });
         setAnimatingPhotos(true);
         await triggerPhotoAnimations(animatableClips);
         setAnimatingPhotos(false);
@@ -618,14 +623,16 @@ export default function DetectingStep() {
           .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
           .then(() => {
             completedAnimations++;
+            setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
             // Progress 92% → 99% as animations complete
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
           })
           .catch((err) => {
             if (abort.signal.aborted) return;
             completedAnimations++;
+            setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
-            console.error(`Photo animation submit failed for "${media.name}":`, err);
+            console.error(`Photo animation failed for "${media.name}":`, err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
               fileId: media.id,
@@ -709,13 +716,17 @@ export default function DetectingStep() {
       {/* Pass label */}
       <p className="text-center text-[var(--text-secondary)]">
         {animatingPhotos
-          ? "Animating your photos..."
+          ? animationProgress.total > 1
+            ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
+            : "Animating your photo..."
           : (passes[passIndex] ?? passes[passes.length - 1])}
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
         {animatingPhotos
-          ? "Generating motion — this usually takes 1-2 minutes per photo"
+          ? animationProgress.failed > 0
+            ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
+            : "Generating motion with Kling 3.0 — this usually takes 1-2 minutes per photo"
           : isReplan
             ? "Re-generating with your creative direction..."
             : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
