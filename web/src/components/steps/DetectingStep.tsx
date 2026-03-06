@@ -132,6 +132,7 @@ export default function DetectingStep() {
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
   const abortRef = useRef<AbortController>(new AbortController());
+  const animationAbortRef = useRef<AbortController | null>(null);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -152,16 +153,12 @@ export default function DetectingStep() {
     hasStarted.current = true;
     const abort = abortRef.current;
 
-    // Separate AbortController for animations — the main `abort` gets fired by
-    // React Strict Mode's simulated unmount in dev, killing animation fetches
-    // before they start. This one is only aborted on real unmount.
-    const animationAbort = new AbortController();
-
     // Cleanup: abort in-flight fetches and polling when component unmounts
     // (e.g. user navigates back during detection)
     const cleanup = () => {
       abort.abort("DetectingStep unmounted");
-      animationAbort.abort("DetectingStep unmounted");
+      // Abort animations if they're running (created lazily in triggerPhotoAnimations)
+      animationAbortRef.current?.abort("DetectingStep unmounted");
     };
 
     // Build photo animation info from upload step selections
@@ -637,18 +634,19 @@ export default function DetectingStep() {
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
       const deadline = Date.now() + ANIMATION_TIMEOUT_MS;
       let consecutiveErrors = 0;
+      const signal = animationAbortRef.current?.signal;
 
       while (Date.now() < deadline) {
-        if (animationAbort.signal.aborted) return;
+        if (signal?.aborted) return;
         await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
-        if (animationAbort.signal.aborted) return;
+        if (signal?.aborted) return;
 
         try {
           const res = await fetch("/api/animate/check", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ predictionId }),
-            signal: animationAbort.signal,
+            signal: signal,
           });
           if (!res.ok) throw new Error("Check request failed");
           const result: AnimationPollResult = await res.json();
@@ -676,7 +674,7 @@ export default function DetectingStep() {
           }
           // status === "processing" — keep polling
         } catch (err) {
-          if (animationAbort.signal.aborted) return;
+          if (signal?.aborted) return;
           consecutiveErrors++;
           console.warn(`Photo animation poll error for "${mediaName}" (${consecutiveErrors}/${ANIMATION_MAX_TRANSIENT_ERRORS}):`, err);
           if (consecutiveErrors >= ANIMATION_MAX_TRANSIENT_ERRORS) {
@@ -707,6 +705,12 @@ export default function DetectingStep() {
 
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
     function triggerPhotoAnimations(clips: DetectedClip[]): Promise<void> {
+      // Create a fresh AbortController for animations — the main `abort` controller
+      // is already dead (fired by React Strict Mode's simulated unmount in dev).
+      // This one is created lazily, long after Strict Mode cleanup, so it's alive.
+      animationAbortRef.current = new AbortController();
+      const animSignal = animationAbortRef.current.signal;
+
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
       const seen = new Set<string>();
       const uniqueClips = clips.filter((c) => {
@@ -751,7 +755,7 @@ export default function DetectingStep() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ imageData: dataUri, prompt, duration: 5 }),
-              signal: animationAbort.signal,
+              signal: animSignal,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Submit failed");
@@ -765,7 +769,7 @@ export default function DetectingStep() {
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
           })
           .catch((err) => {
-            if (animationAbort.signal.aborted) return;
+            if (animSignal.aborted) return;
             completedAnimations++;
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
