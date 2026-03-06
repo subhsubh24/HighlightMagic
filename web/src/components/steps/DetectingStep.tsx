@@ -9,8 +9,10 @@ import {
   submitScoringBatch,
   pollScoringBatch,
   retrieveScoringResults,
+  validateTape,
   type DetectionResult,
   type DetectedClip,
+  type TapeValidationResult,
 } from "@/actions/detect";
 import type { AnimationPollResult } from "@/lib/kling";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
@@ -124,6 +126,8 @@ export default function DetectingStep() {
   const [isSlow, setIsSlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
+  const [validationPhase, setValidationPhase] = useState<"idle" | "reviewing" | "revising" | "done">("idle");
+  const [validationRound, setValidationRound] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -469,12 +473,141 @@ export default function DetectingStep() {
         setAnimatingPhotos(false);
       }
 
+      // ── Haiku QA validation loop (max 2 rounds) ──
+      const MAX_VALIDATION_ROUNDS = 2;
+      let finalHighlights = highlights;
+      let finalClips = clips;
+      let currentDetectedClips = detectedClips;
+
+      for (let round = 0; round < MAX_VALIDATION_ROUNDS; round++) {
+        if (abort.signal.aborted) break;
+
+        setValidationPhase("reviewing");
+        setValidationRound(round + 1);
+        setProgress(94 + round * 2);
+
+        const sourceFileInfo = state.mediaFiles.map((f) => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+        }));
+        const animatedFileIds = state.mediaFiles
+          .filter((f) => f.animationStatus === "completed" || f.animationStatus === "generating")
+          .map((f) => f.id);
+
+        let validation: TapeValidationResult;
+        try {
+          validation = await validateTape(
+            currentDetectedClips,
+            sourceFileInfo,
+            result.contentSummary,
+            animatedFileIds,
+          );
+        } catch (err) {
+          console.warn("Tape validation error (non-blocking):", err);
+          break; // Skip validation on error
+        }
+
+        console.log(`Tape validation round ${round + 1}:`, validation);
+
+        if (validation.passed) {
+          setValidationPhase("done");
+          break;
+        }
+
+        // Haiku flagged issues — ask Opus to revise
+        if (abort.signal.aborted) break;
+        setValidationPhase("revising");
+        setProgress(96 + round * 2);
+
+        const revisionFeedback = [
+          "QA REVIEW FAILED. Fix these specific issues:",
+          ...validation.issues.map((issue, i) => `${i + 1}. ${issue}`),
+          "",
+          "Suggested fixes:",
+          ...validation.suggestions.map((s, i) => `${i + 1}. ${s}`),
+        ].join("\n");
+
+        try {
+          const cached = getCachedDetectionData();
+          if (!cached.frames || !cached.scores) break;
+
+          const revisedResult = await callPlannerSSE(
+            cached.frames,
+            cached.scores,
+            state.selectedTemplate?.name,
+            revisionFeedback,
+            state.creativeDirection || undefined,
+            () => {}, // No phase progress for revision — it's fast
+            photoAnimations.length > 0 ? photoAnimations : undefined
+          );
+
+          // Rebuild clips from revised result
+          currentDetectedClips = revisedResult.clips.filter((c) => {
+            if (c.startTime >= c.endTime) return false;
+            return true;
+          });
+
+          finalHighlights = currentDetectedClips.map((c) => ({
+            id: c.id,
+            sourceFileId: c.sourceFileId,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            confidenceScore: c.confidenceScore,
+            label: c.label,
+            detectionSources: ["Cloud AI"],
+          }));
+
+          finalClips = currentDetectedClips.map((c, i) => ({
+            id: uuid(),
+            sourceFileId: c.sourceFileId,
+            segment: {
+              id: c.id,
+              sourceFileId: c.sourceFileId,
+              startTime: c.startTime,
+              endTime: c.endTime,
+              confidenceScore: c.confidenceScore,
+              label: c.label,
+              detectionSources: ["Cloud AI"],
+            },
+            trimStart: c.startTime,
+            trimEnd: c.endTime,
+            order: c.order ?? i,
+            selectedMusicTrack: null,
+            captionText: c.captionText ?? "",
+            captionStyle: (c.captionStyle ?? "Bold") as "Bold" | "Minimal" | "Neon" | "Classic",
+            selectedFilter: (c.filter ?? state.selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
+            velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
+              ? (c.velocityPreset as VelocityPreset)
+              : ("normal" as VelocityPreset),
+            transitionType: c.transitionType,
+            transitionDuration: c.transitionDuration,
+            entryPunchScale: c.entryPunchScale,
+            entryPunchDuration: c.entryPunchDuration,
+            kenBurnsIntensity: c.kenBurnsIntensity,
+            customVelocityKeyframes: c.customVelocityKeyframes,
+            customFilterCSS: c.customFilterCSS,
+            customCaptionFontWeight: c.customCaptionFontWeight,
+            customCaptionFontStyle: c.customCaptionFontStyle,
+            customCaptionFontFamily: c.customCaptionFontFamily,
+            customCaptionColor: c.customCaptionColor,
+            customCaptionAnimation: c.customCaptionAnimation,
+            customCaptionGlowColor: c.customCaptionGlowColor,
+            customCaptionGlowRadius: c.customCaptionGlowRadius,
+          }));
+        } catch (err) {
+          console.warn("Tape revision error (non-blocking):", err);
+          break; // Accept current tape on revision error
+        }
+      }
+
+      setValidationPhase("done");
       setProgress(100);
 
       // Brief pause for the 100% satisfaction, then navigate
       setTimeout(() => {
-        dispatch({ type: "SET_HIGHLIGHTS", highlights });
-        dispatch({ type: "SET_CLIPS", clips });
+        dispatch({ type: "SET_HIGHLIGHTS", highlights: finalHighlights });
+        dispatch({ type: "SET_CLIPS", clips: finalClips });
         dispatch({ type: "SET_STEP", step: "results" });
       }, 400);
     }
@@ -715,21 +848,29 @@ export default function DetectingStep() {
 
       {/* Pass label */}
       <p className="text-center text-[var(--text-secondary)]">
-        {animatingPhotos
-          ? animationProgress.total > 1
-            ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
-            : "Animating your photo..."
-          : (passes[passIndex] ?? passes[passes.length - 1])}
+        {validationPhase === "reviewing"
+          ? `Reviewing your tape (round ${validationRound})...`
+          : validationPhase === "revising"
+            ? "Refining based on review feedback..."
+            : animatingPhotos
+              ? animationProgress.total > 1
+                ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
+                : "Animating your photo..."
+              : (passes[passIndex] ?? passes[passes.length - 1])}
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
-        {animatingPhotos
-          ? animationProgress.failed > 0
-            ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
-            : "Generating motion with Kling 3.0 — this usually takes 1-2 minutes per photo"
-          : isReplan
-            ? "Re-generating with your creative direction..."
-            : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
+        {validationPhase === "reviewing"
+          ? "Haiku is checking pacing, transitions, and narrative coherence"
+          : validationPhase === "revising"
+            ? "Opus is adjusting the tape based on quality review notes"
+            : animatingPhotos
+              ? animationProgress.failed > 0
+                ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
+                : "Generating motion with Kling 3.0 — this usually takes 1-2 minutes per photo"
+              : isReplan
+                ? "Re-generating with your creative direction..."
+                : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
       </p>
 
       {isSlow && (

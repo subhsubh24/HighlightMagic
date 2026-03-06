@@ -432,6 +432,127 @@ export async function planFromScores(
   return result;
 }
 
+// ── Phase 3: Validate assembled tape (Haiku QA) ──
+
+export interface TapeValidationResult {
+  passed: boolean;
+  issues: string[];
+  suggestions: string[];
+}
+
+/**
+ * Haiku reviews the assembled tape and checks for quality issues.
+ * Fast and cheap — acts as a QA gate before showing results to user.
+ *
+ * Checks: narrative coherence, animation fit, pacing, transition logic,
+ * source coverage, hook quality, and cross-source connections.
+ */
+export async function validateTape(
+  clips: DetectedClip[],
+  sourceFiles: Array<{ id: string; name: string; type: "video" | "photo" }>,
+  contentSummary: string,
+  animatedFileIds: string[],
+): Promise<TapeValidationResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+
+  const clipSummaries = clips.map((c, i) => {
+    const src = sourceFiles.find((s) => s.id === c.sourceFileId);
+    const isAnimated = animatedFileIds.includes(c.sourceFileId);
+    return `  ${i + 1}. [${src?.type ?? "?"}${isAnimated ? " ANIMATED" : ""}] "${c.label}" from "${src?.name}" (${c.startTime.toFixed(1)}-${c.endTime.toFixed(1)}s, confidence: ${c.confidenceScore}) transition: ${c.transitionType ?? "none"}, velocity: ${c.velocityPreset}${c.captionText ? `, caption: "${c.captionText}"` : ""}${c.animationPrompt ? `, animationPrompt: "${c.animationPrompt.slice(0, 80)}..."` : ""}`;
+  }).join("\n");
+
+  const allSourceIds = new Set(sourceFiles.map((s) => s.id));
+  const coveredSourceIds = new Set(clips.map((c) => c.sourceFileId));
+  const missingSources = sourceFiles.filter((s) => !coveredSourceIds.has(s.id));
+
+  const prompt = `You are a quality assurance reviewer for Instagram Reels highlight tapes.
+You've been given the final assembled tape — clips in order with all editing decisions made.
+Some photos have been animated into 5-second videos via Kling 3.0 (marked [ANIMATED]).
+
+Your job: review the tape for issues that would hurt engagement or feel jarring.
+
+CONTENT SUMMARY:
+${contentSummary}
+
+SOURCE FILES (${sourceFiles.length} total):
+${sourceFiles.map((s) => `  - "${s.name}" (${s.type}${animatedFileIds.includes(s.id) ? ", will be animated" : ""})`).join("\n")}
+
+ASSEMBLED TAPE (${clips.length} clips):
+${clipSummaries}
+
+${missingSources.length > 0 ? `\nWARNING: These sources have NO clips: ${missingSources.map((s) => `"${s.name}"`).join(", ")}` : ""}
+
+CHECK THESE (answer each yes/no, flag issues):
+1. HOOK QUALITY: Is clip 1 truly the strongest opening? Would it stop a scroll?
+2. PACING: Does energy oscillate properly? Any dead stretches or monotonous runs?
+3. TRANSITIONS: Do transition types match the energy change between clips? (e.g., no "zoom_punch" between two slow dreamy clips)
+4. SOURCE COVERAGE: Does every source file appear at least once?
+5. ANIMATION FIT: For animated photos — do their animation prompts match the narrative arc? Would the motion feel natural in context?
+6. NARRATIVE ARC: Does the tape tell a coherent story? Is there build-up, climax, and resolution?
+7. CAPTION QUALITY: Are captions punchy, varied, and well-placed? No cliché or redundant captions?
+
+Respond with ONLY a JSON object:
+{
+  "passed": true/false,
+  "issues": ["specific issue 1", "specific issue 2"],
+  "suggestions": ["specific actionable fix 1", "specific actionable fix 2"]
+}
+
+Rules:
+- PASS if the tape is good enough to post. Minor imperfections are fine.
+- FAIL only for real problems: missing sources, jarring transitions, weak hook, broken pacing, animation prompts that contradict the mood.
+- Be specific in issues/suggestions — reference clip numbers and names.
+- Max 5 issues, max 5 suggestions. Empty arrays if none.`;
+
+  const response = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    },
+    "Tape validation",
+    30_000 // 30s timeout — Haiku is fast
+  );
+
+  if (!response.ok) {
+    console.warn("Tape validation failed (non-blocking):", response.status);
+    // Non-blocking — if validation fails, just pass
+    return { passed: true, issues: [], suggestions: [] };
+  }
+
+  const body = await response.json();
+  const text = body.content?.[0]?.text ?? "";
+
+  // Extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.warn("Tape validation: no JSON in response");
+    return { passed: true, issues: [], suggestions: [] };
+  }
+
+  try {
+    const result = JSON.parse(jsonMatch[0]);
+    return {
+      passed: !!result.passed,
+      issues: Array.isArray(result.issues) ? result.issues.slice(0, 5) : [],
+      suggestions: Array.isArray(result.suggestions) ? result.suggestions.slice(0, 5) : [],
+    };
+  } catch {
+    console.warn("Tape validation: JSON parse error");
+    return { passed: true, issues: [], suggestions: [] };
+  }
+}
+
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
 const MAX_BATCH_RETRIES = 2;
 
