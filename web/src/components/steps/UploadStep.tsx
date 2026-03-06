@@ -302,10 +302,10 @@ export default function UploadStep() {
                   dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled });
                   haptic(5);
                 }}
-                disabled={!state.isProUser}
+                disabled={false}
                 className={`relative h-6 w-11 rounded-full transition-colors ${
                   state.aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
-                } ${!state.isProUser ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                } cursor-pointer`}
               >
                 <div
                   className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
@@ -314,12 +314,7 @@ export default function UploadStep() {
                 />
               </button>
             </div>
-            {!state.isProUser && (
-              <p className="text-[11px] text-[var(--text-tertiary)]">
-                Upgrade to Pro to generate custom AI music for your tape.
-              </p>
-            )}
-            {state.aiMusicEnabled && state.isProUser && (
+            {state.aiMusicEnabled && (
               <p className="text-[11px] text-[var(--text-tertiary)]">
                 AI will compose a custom instrumental soundtrack after your tape is created. You can customize the style in the editor.
               </p>
