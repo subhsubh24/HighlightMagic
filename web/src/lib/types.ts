@@ -39,6 +39,8 @@ export type MediaType = "video" | "photo";
 
 export type AnimationStatus = "idle" | "generating" | "completed" | "failed";
 
+export type AiMusicStatus = "idle" | "generating" | "completed" | "failed";
+
 export interface MediaFile {
   id: string;
   file: File;
@@ -161,4 +163,10 @@ export interface AppState {
   regenerateFeedback: string | null;
   // Creative direction — optional user-provided style instructions passed to Opus planner
   creativeDirection: string;
+  // AI-generated music (Suno V4.5-All) — opt-in, Pro only
+  aiMusicEnabled: boolean;
+  aiMusicStatus: AiMusicStatus;
+  aiMusicTaskId: string | null;
+  aiMusicUrl: string | null;
+  aiMusicPrompt: string;
 }

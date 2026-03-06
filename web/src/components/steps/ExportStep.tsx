@@ -131,7 +131,8 @@ export default function ExportStep() {
         state.detectedTheme,
         state.viralOptions,
         mimeType,
-        (pct) => setProgress(pct)
+        (pct) => setProgress(pct),
+        state.aiMusicUrl,
       );
 
       const url = URL.createObjectURL(blob);
@@ -517,7 +518,8 @@ async function renderHighlightTape(
   theme: EditingTheme,
   viralOptions: ViralExportOptions,
   mimeType: string,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  aiMusicUrl?: string | null,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -556,7 +558,7 @@ async function renderHighlightTape(
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl);
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, ChevronRight, Film, Image, Play, Scissors, Gauge } from "lucide-react";
+import { ArrowLeft, Download, Type, Music, Palette, Trash2, ChevronLeft, ChevronRight, Film, Image, Play, Scissors, Gauge, Sparkles, Loader2 } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { ALL_FILTERS, VIDEO_FILTERS } from "@/lib/filters";
 import { getAvailableTracks, getSuggestedTrackForTemplate } from "@/lib/music";
@@ -9,7 +9,8 @@ import { getEditingStyle, ALL_THEMES } from "@/lib/editing-styles";
 import { formatTime, haptic } from "@/lib/utils";
 import TapePreviewPlayer from "@/components/TapePreviewPlayer";
 import { ALL_VELOCITY_PRESETS, VELOCITY_LABELS } from "@/lib/velocity";
-import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip, EditingTheme, VelocityPreset } from "@/lib/types";
+import type { VideoFilter, CaptionStyle, MusicTrack, EditedClip, EditingTheme, VelocityPreset, AiMusicStatus } from "@/lib/types";
+import type { Action } from "@/lib/store";
 
 const CAPTION_STYLES: { value: CaptionStyle; label: string; css: string }[] = [
   { value: "Bold", label: "Bold", css: "text-2xl font-black uppercase tracking-wider" },
@@ -390,6 +391,13 @@ export default function EditorStep() {
                 selected={clip.selectedMusicTrack}
                 isPro={state.isProUser}
                 onSelect={(track) => updateClip({ selectedMusicTrack: track })}
+                aiMusicEnabled={state.aiMusicEnabled}
+                aiMusicStatus={state.aiMusicStatus}
+                aiMusicUrl={state.aiMusicUrl}
+                aiMusicPrompt={state.aiMusicPrompt}
+                contentSummary={state.contentSummary}
+                detectedTheme={state.detectedTheme}
+                dispatch={dispatch}
               />
             )}
             {activeTab === "caption" && (
@@ -469,56 +477,246 @@ function TrimPanel({
   );
 }
 
+/** Poll interval for AI music generation status checks (ms). */
+const AI_MUSIC_POLL_INTERVAL = 5_000;
+
 function MusicPanel({
   selected,
   isPro,
   onSelect,
+  aiMusicEnabled,
+  aiMusicStatus,
+  aiMusicUrl,
+  aiMusicPrompt,
+  contentSummary,
+  detectedTheme,
+  dispatch,
 }: {
   selected: MusicTrack | null;
   isPro: boolean;
   onSelect: (track: MusicTrack | null) => void;
+  aiMusicEnabled: boolean;
+  aiMusicStatus: AiMusicStatus;
+  aiMusicUrl: string | null;
+  aiMusicPrompt: string;
+  contentSummary: string;
+  detectedTheme: EditingTheme;
+  dispatch: React.Dispatch<Action>;
 }) {
   const tracks = getAvailableTracks(isPro);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  const handleToggleAiMusic = () => {
+    const next = !aiMusicEnabled;
+    dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: next });
+    if (!next) {
+      // When disabling, also clear the AI music track selection if it was active
+      if (selected?.id === "__ai_generated__") {
+        onSelect(null);
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+    haptic(5);
+  };
+
+  const handleGenerate = async () => {
+    // Build prompt from user input or auto-generate from content context
+    const prompt = aiMusicPrompt.trim()
+      || `Instrumental background music for a ${detectedTheme} highlight reel. ${contentSummary}`.trim();
+
+    if (!prompt) return;
+
+    dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
+
+    try {
+      const res = await fetch("/api/music/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, instrumental: true }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.taskId) {
+        dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+        return;
+      }
+
+      dispatch({ type: "SET_AI_MUSIC_TASK", taskId: data.taskId });
+
+      // Start polling
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        try {
+          const checkRes = await fetch("/api/music/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId: data.taskId }),
+          });
+          const checkData = await checkRes.json();
+
+          if (checkData.status === "completed" && checkData.audioUrl) {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: checkData.audioUrl });
+            // Auto-select the AI track
+            onSelect({
+              id: "__ai_generated__",
+              name: "AI Generated",
+              fileName: "",
+              artist: "Suno AI",
+              mood: "Upbeat",
+              category: "General",
+              bpm: 120,
+              durationSeconds: checkData.duration ?? 60,
+              isPremium: true,
+            });
+          } else if (checkData.status === "failed") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            pollRef.current = null;
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+          }
+        } catch {
+          // Network error — keep polling, will retry
+        }
+      }, AI_MUSIC_POLL_INTERVAL);
+    } catch {
+      dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-      <button
-        onClick={() => onSelect(null)}
-        className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${
-          !selected ? "bg-[var(--accent)]/10 border border-[var(--accent)]" : "bg-white/5 hover:bg-white/10"
-        }`}
-      >
-        <Music className="h-4 w-4 text-[var(--text-tertiary)]" />
-        <span className="text-sm text-[var(--text-secondary)]">No Music</span>
-      </button>
+    <div className="flex flex-col gap-3">
+      {/* AI Music toggle — Pro only */}
+      <div className="flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-purple-400" />
+            <span className="text-sm font-medium text-white">AI Generated Music</span>
+            <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300">PRO</span>
+          </div>
+          <button
+            onClick={handleToggleAiMusic}
+            disabled={!isPro}
+            className={`relative h-6 w-11 rounded-full transition-colors ${
+              aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
+            } ${!isPro ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            <div
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                aiMusicEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
 
-      {tracks.map((track) => (
+        {!isPro && (
+          <p className="text-[11px] text-[var(--text-tertiary)]">
+            Upgrade to Pro to generate custom AI music for your tape.
+          </p>
+        )}
+
+        {aiMusicEnabled && isPro && (
+          <div className="flex flex-col gap-2 pt-1">
+            <input
+              type="text"
+              value={aiMusicPrompt}
+              onChange={(e) => dispatch({ type: "SET_AI_MUSIC_PROMPT", prompt: e.target.value })}
+              placeholder={`e.g. "Upbeat electronic for a ${detectedTheme} montage"`}
+              maxLength={500}
+              disabled={aiMusicStatus === "generating"}
+              className="w-full rounded-lg bg-white/5 px-3 py-2 text-sm text-white placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={aiMusicStatus === "generating"}
+              className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent)]/80 disabled:opacity-50"
+            >
+              {aiMusicStatus === "generating" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Composing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {aiMusicStatus === "completed" ? "Regenerate" : "Generate Music"}
+                </>
+              )}
+            </button>
+
+            {aiMusicStatus === "completed" && aiMusicUrl && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-2">
+                <Music className="h-4 w-4 text-green-400" />
+                <span className="text-xs text-green-400">AI music ready and applied to your tape</span>
+              </div>
+            )}
+
+            {aiMusicStatus === "failed" && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-2">
+                <span className="text-xs text-red-400">Generation failed. Try again with a different prompt.</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-2">
+        <div className="h-px flex-1 bg-white/10" />
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">or choose a track</span>
+        <div className="h-px flex-1 bg-white/10" />
+      </div>
+
+      {/* Existing curated tracks */}
+      <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
         <button
-          key={track.id}
-          onClick={() => {
-            onSelect(track);
-            haptic(5);
-          }}
+          onClick={() => onSelect(null)}
           className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${
-            selected?.id === track.id
-              ? "bg-[var(--accent)]/10 border border-[var(--accent)]"
-              : "bg-white/5 hover:bg-white/10"
+            !selected ? "bg-[var(--accent)]/10 border border-[var(--accent)]" : "bg-white/5 hover:bg-white/10"
           }`}
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
-            <Music className="h-4 w-4 text-[var(--accent)]" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">{track.name}</p>
-            <p className="text-xs text-[var(--text-tertiary)]">
-              {track.mood} · {track.bpm} BPM
-            </p>
-          </div>
-          {track.isPremium && !isPro && (
-            <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">PRO</span>
-          )}
+          <Music className="h-4 w-4 text-[var(--text-tertiary)]" />
+          <span className="text-sm text-[var(--text-secondary)]">No Music</span>
         </button>
-      ))}
+
+        {tracks.map((track) => (
+          <button
+            key={track.id}
+            onClick={() => {
+              onSelect(track);
+              haptic(5);
+            }}
+            className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${
+              selected?.id === track.id
+                ? "bg-[var(--accent)]/10 border border-[var(--accent)]"
+                : "bg-white/5 hover:bg-white/10"
+            }`}
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
+              <Music className="h-4 w-4 text-[var(--accent)]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white">{track.name}</p>
+              <p className="text-xs text-[var(--text-tertiary)]">
+                {track.mood} · {track.bpm} BPM
+              </p>
+            </div>
+            {track.isPremium && !isPro && (
+              <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">PRO</span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

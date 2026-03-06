@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AnimationStatus, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
+import type { AppState, AiMusicStatus, AnimationStatus, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -23,6 +23,11 @@ export const initialState: AppState = {
   viralOptions: { beatSync: true, seamlessLoop: false },
   regenerateFeedback: null,
   creativeDirection: "",
+  aiMusicEnabled: false,
+  aiMusicStatus: "idle",
+  aiMusicTaskId: null,
+  aiMusicUrl: null,
+  aiMusicPrompt: "",
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
@@ -59,6 +64,10 @@ export type Action =
   | { type: "SET_CREATIVE_DIRECTION"; direction: string }
   | { type: "UPDATE_MEDIA_ANIMATION"; fileId: string; animatePhoto: boolean; animationInstructions: string }
   | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
+  | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
+  | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
+  | { type: "SET_AI_MUSIC_TASK"; taskId: string }
+  | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -148,6 +157,19 @@ export function reducer(state: AppState, action: Action): AppState {
       );
       return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
     }
+    case "SET_AI_MUSIC_ENABLED":
+      return {
+        ...state,
+        aiMusicEnabled: action.enabled,
+        // Reset music state when toggling off
+        ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicTaskId: null, aiMusicUrl: null }),
+      };
+    case "SET_AI_MUSIC_PROMPT":
+      return { ...state, aiMusicPrompt: action.prompt };
+    case "SET_AI_MUSIC_TASK":
+      return { ...state, aiMusicTaskId: action.taskId, aiMusicStatus: "generating" as const };
+    case "SET_AI_MUSIC_RESULT":
+      return { ...state, aiMusicStatus: action.status, aiMusicUrl: action.audioUrl ?? state.aiMusicUrl };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const, contentSummary: "" };

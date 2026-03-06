@@ -11,13 +11,18 @@ import type { MusicTrack } from "./types";
 
 /**
  * Try to load an audio file for the given music track.
+ * Supports both local curated tracks (/audio/*.mp3) and AI-generated tracks (external URL).
  * Returns the AudioBuffer if found, null otherwise.
  */
 export async function loadTrackAudio(
   track: MusicTrack,
-  audioCtx: AudioContext
+  audioCtx: AudioContext,
+  aiMusicUrl?: string | null,
 ): Promise<AudioBuffer | null> {
-  const url = `/audio/${track.fileName}.mp3`;
+  // AI-generated tracks use an external URL instead of a local file
+  const url = track.id === "__ai_generated__" && aiMusicUrl
+    ? aiMusicUrl
+    : `/audio/${track.fileName}.mp3`;
 
   try {
     const response = await fetch(url);
@@ -54,6 +59,7 @@ const MUSIC_VOLUME_WITH_CLIPS = 0.25;
 export async function createAudioPipeline(
   canvasStream: MediaStream,
   track: MusicTrack | null,
+  aiMusicUrl?: string | null,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -68,7 +74,7 @@ export async function createAudioPipeline(
   // Load and start background music if available
   if (track) {
     try {
-      const buffer = await loadTrackAudio(track, audioCtx);
+      const buffer = await loadTrackAudio(track, audioCtx, aiMusicUrl);
       if (buffer) {
         musicSource = audioCtx.createBufferSource();
         musicSource.buffer = buffer;
