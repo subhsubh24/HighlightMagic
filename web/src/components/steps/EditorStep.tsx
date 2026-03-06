@@ -513,22 +513,6 @@ function MusicPanel({
     };
   }, []);
 
-  const handleToggleAiMusic = () => {
-    const next = !aiMusicEnabled;
-    dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: next });
-    if (!next) {
-      // When disabling, also clear the AI music track selection if it was active
-      if (selected?.id === "__ai_generated__") {
-        onSelect(null);
-      }
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }
-    haptic(5);
-  };
-
   const handleGenerate = async () => {
     // Build prompt from user input or auto-generate from content context
     const prompt = aiMusicPrompt.trim()
@@ -596,37 +580,14 @@ function MusicPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* AI Music toggle — Pro only */}
-      <div className="flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-purple-400" />
-            <span className="text-sm font-medium text-white">AI Generated Music</span>
-            <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300">PRO</span>
-          </div>
-          <button
-            onClick={handleToggleAiMusic}
-            disabled={!isPro}
-            className={`relative h-6 w-11 rounded-full transition-colors ${
-              aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
-            } ${!isPro ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
-          >
-            <div
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                aiMusicEnabled ? "translate-x-[22px]" : "translate-x-0.5"
-              }`}
-            />
-          </button>
-        </div>
-
-        {!isPro && (
-          <p className="text-[11px] text-[var(--text-tertiary)]">
-            Upgrade to Pro to generate custom AI music for your tape.
-          </p>
-        )}
-
-        {aiMusicEnabled && isPro && (
-          <div className="flex flex-col gap-2 pt-1">
+      {/* AI Music generation controls — shown when enabled on upload page */}
+      {aiMusicEnabled && (
+        <>
+          <div className="flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-medium text-white">AI Generated Music</span>
+            </div>
             <input
               type="text"
               value={aiMusicPrompt}
@@ -667,18 +628,18 @@ function MusicPanel({
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Divider */}
-      <div className="flex items-center gap-2">
-        <div className="h-px flex-1 bg-white/10" />
-        <span className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">or choose a track</span>
-        <div className="h-px flex-1 bg-white/10" />
-      </div>
+          {/* Divider */}
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)]">or choose a track</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
+        </>
+      )}
 
-      {/* Existing curated tracks */}
-      <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+      {/* Curated tracks */}
+      <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
         <button
           onClick={() => onSelect(null)}
           className={`flex items-center gap-3 rounded-lg p-3 text-left transition-colors ${

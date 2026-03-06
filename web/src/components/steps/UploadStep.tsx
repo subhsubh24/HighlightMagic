@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Music } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { formatFileSize, haptic, uuid } from "@/lib/utils";
@@ -287,6 +287,43 @@ export default function UploadStep() {
             <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
               Optional — tell the AI how you want your video styled
             </p>
+          </div>
+
+          {/* AI Music toggle — Pro only */}
+          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Music className="h-4 w-4 text-purple-400" />
+                <span className="text-sm font-medium text-white">AI Generated Music</span>
+                <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300">PRO</span>
+              </div>
+              <button
+                onClick={() => {
+                  dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled });
+                  haptic(5);
+                }}
+                disabled={!state.isProUser}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  state.aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
+                } ${!state.isProUser ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <div
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    state.aiMusicEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            {!state.isProUser && (
+              <p className="text-[11px] text-[var(--text-tertiary)]">
+                Upgrade to Pro to generate custom AI music for your tape.
+              </p>
+            )}
+            {state.aiMusicEnabled && state.isProUser && (
+              <p className="text-[11px] text-[var(--text-tertiary)]">
+                AI will compose a custom instrumental soundtrack after your tape is created. You can customize the style in the editor.
+              </p>
+            )}
           </div>
 
           {/* Continue button */}
