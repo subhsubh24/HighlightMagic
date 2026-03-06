@@ -16,18 +16,42 @@ export const runtime = "nodejs";
  * The final result (or error) is sent as an SSE event once the planner finishes.
  */
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations } = body;
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations } = body as {
+    frames: unknown;
+    scores: unknown;
+    templateName?: string;
+    userFeedback?: string;
+    creativeDirection?: string;
+    photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>;
+  };
+
+  if (!Array.isArray(frames) || !Array.isArray(scores)) {
+    return new Response(JSON.stringify({ error: "frames and scores must be arrays" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const encoder = new TextEncoder();
+  let keepalive: ReturnType<typeof setInterval> | undefined;
+  let closed = false;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const keepalive = setInterval(() => {
+      keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode("event: keepalive\ndata: {}\n\n"));
         } catch {
-          // Controller closed — stop pinging
           clearInterval(keepalive);
         }
       }, 15_000);
@@ -57,14 +81,26 @@ export async function POST(req: Request) {
       } catch (err) {
         clearInterval(keepalive);
         const message = err instanceof Error ? err.message : String(err);
-        controller.enqueue(
-          encoder.encode(
-            `event: error\ndata: ${JSON.stringify({ message })}\n\n`
-          )
-        );
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `event: error\ndata: ${JSON.stringify({ message })}\n\n`
+            )
+          );
+        } catch {
+          // Controller already closed — ignore
+        }
       } finally {
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try { controller.close(); } catch { /* already closed */ }
+        }
       }
+    },
+    cancel() {
+      // Client disconnected — clean up keepalive immediately
+      clearInterval(keepalive);
+      closed = true;
     },
   });
 

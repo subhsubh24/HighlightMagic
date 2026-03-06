@@ -51,7 +51,7 @@ export type Action =
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
   | { type: "UPDATE_CLIP"; clipId: string; updates: Partial<EditedClip> }
-  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number }
+  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number; clipId?: string; targetClipId?: string }
   | { type: "REMOVE_CLIP"; clipId: string }
   | { type: "INCREMENT_EXPORTS" }
   | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }
@@ -82,7 +82,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const arr = [...state.mediaFiles];
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
-      return { ...state, mediaFiles: arr };
+      return { ...state, mediaFiles: arr, ...deriveLegacyVideo(arr) };
     }
     case "CLEAR_MEDIA": {
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
@@ -108,7 +108,8 @@ export function reducer(state: AppState, action: Action): AppState {
         ),
       };
     case "REORDER_CLIPS": {
-      const arr = [...state.clips];
+      // Sort by order first so indices match the visual (sorted) order
+      const arr = [...state.clips].sort((a, b) => a.order - b.order);
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
       // Update order field

@@ -21,6 +21,60 @@ import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
 import { uuid } from "@/lib/utils";
 import { cacheDetectionData, getCachedDetectionData } from "@/lib/detection-cache";
 
+/** Convert DetectedClips to app-level highlights. */
+function buildHighlights(detectedClips: DetectedClip[]) {
+  return detectedClips.map((c) => ({
+    id: c.id,
+    sourceFileId: c.sourceFileId,
+    startTime: c.startTime,
+    endTime: c.endTime,
+    confidenceScore: c.confidenceScore,
+    label: c.label,
+    detectionSources: ["Cloud AI"],
+  }));
+}
+
+/** Convert DetectedClips to app-level EditedClips. */
+function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/lib/types").HighlightTemplate | null) {
+  return detectedClips.map((c, i) => ({
+    id: uuid(),
+    sourceFileId: c.sourceFileId,
+    segment: {
+      id: c.id,
+      sourceFileId: c.sourceFileId,
+      startTime: c.startTime,
+      endTime: c.endTime,
+      confidenceScore: c.confidenceScore,
+      label: c.label,
+      detectionSources: ["Cloud AI"],
+    },
+    trimStart: c.startTime,
+    trimEnd: c.endTime,
+    order: c.order ?? i,
+    selectedMusicTrack: null,
+    captionText: c.captionText ?? "",
+    captionStyle: (c.captionStyle ?? "Bold") as "Bold" | "Minimal" | "Neon" | "Classic",
+    selectedFilter: (c.filter ?? selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
+    velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
+      ? (c.velocityPreset as VelocityPreset)
+      : ("normal" as VelocityPreset),
+    transitionType: c.transitionType,
+    transitionDuration: c.transitionDuration,
+    entryPunchScale: c.entryPunchScale,
+    entryPunchDuration: c.entryPunchDuration,
+    kenBurnsIntensity: c.kenBurnsIntensity,
+    customVelocityKeyframes: c.customVelocityKeyframes,
+    customFilterCSS: c.customFilterCSS,
+    customCaptionFontWeight: c.customCaptionFontWeight,
+    customCaptionFontStyle: c.customCaptionFontStyle,
+    customCaptionFontFamily: c.customCaptionFontFamily,
+    customCaptionColor: c.customCaptionColor,
+    customCaptionAnimation: c.customCaptionAnimation,
+    customCaptionGlowColor: c.customCaptionGlowColor,
+    customCaptionGlowRadius: c.customCaptionGlowRadius,
+  }));
+}
+
 const DETECTION_PASSES = [
   "Extracting frames from all clips...",
   "Scoring the best moments...",
@@ -61,12 +115,14 @@ async function callPlannerSSE(
   userFeedback?: string,
   creativeDirection?: string,
   onPhase?: (phase: "thinking" | "generating") => void,
-  photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>
+  photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
+  signal?: AbortSignal
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
+    signal,
   });
 
   if (!response.ok) {
@@ -78,13 +134,7 @@ async function callPlannerSSE(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    // Parse complete SSE events (separated by double newlines)
+  function processBuffer(): DetectionResult | null {
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
 
@@ -113,6 +163,22 @@ async function callPlannerSSE(
       }
       // keepalive events — just ignore, they keep the connection alive
     }
+    return null;
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      // Flush any remaining bytes from the decoder
+      buffer += decoder.decode();
+      const finalResult = processBuffer();
+      if (finalResult) return finalResult;
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const result = processBuffer();
+    if (result) return result;
   }
 
   throw new Error("Planner stream ended without a result");
@@ -135,6 +201,10 @@ export default function DetectingStep() {
   const animationAbortRef = useRef<AbortController | null>(null);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Keep a ref to the latest mediaFiles so long-running async code
+  // (animations, validation) reads current state, not the stale closure.
+  const mediaFilesRef = useRef(state.mediaFiles);
+  mediaFilesRef.current = state.mediaFiles;
 
   const fileCount = state.mediaFiles.length;
   const isReplan = !!state.regenerateFeedback;
@@ -212,7 +282,8 @@ export default function DetectingStep() {
               setProgress(82);
             }
           },
-          photoAnimations.length > 0 ? photoAnimations : undefined
+          photoAnimations.length > 0 ? photoAnimations : undefined,
+          abort.signal
         );
 
         clearInterval(plannerTimer);
@@ -369,7 +440,8 @@ export default function DetectingStep() {
               setProgress(88);
             }
           },
-          photoAnimations.length > 0 ? photoAnimations : undefined
+          photoAnimations.length > 0 ? photoAnimations : undefined,
+          abort.signal
         );
 
         clearInterval(plannerTimer);
@@ -408,55 +480,8 @@ export default function DetectingStep() {
       });
 
       // Convert to app types
-      const highlights = detectedClips.map((c) => ({
-        id: c.id,
-        sourceFileId: c.sourceFileId,
-        startTime: c.startTime,
-        endTime: c.endTime,
-        confidenceScore: c.confidenceScore,
-        label: c.label,
-        detectionSources: ["Cloud AI"],
-      }));
-
-      const clips = detectedClips.map((c, i) => ({
-        id: uuid(),
-        sourceFileId: c.sourceFileId,
-        segment: {
-          id: c.id,
-          sourceFileId: c.sourceFileId,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          confidenceScore: c.confidenceScore,
-          label: c.label,
-          detectionSources: ["Cloud AI"],
-        },
-        trimStart: c.startTime,
-        trimEnd: c.endTime,
-        order: c.order ?? i,
-        selectedMusicTrack: null,
-        captionText: c.captionText ?? "",
-        captionStyle: (c.captionStyle ?? "Bold") as "Bold" | "Minimal" | "Neon" | "Classic",
-        selectedFilter: (c.filter ?? state.selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
-        velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
-          ? (c.velocityPreset as VelocityPreset)
-          : ("normal" as VelocityPreset),
-        transitionType: c.transitionType,
-        transitionDuration: c.transitionDuration,
-        entryPunchScale: c.entryPunchScale,
-        entryPunchDuration: c.entryPunchDuration,
-        kenBurnsIntensity: c.kenBurnsIntensity,
-        // Dynamic AI-authored styles
-        customVelocityKeyframes: c.customVelocityKeyframes,
-        customFilterCSS: c.customFilterCSS,
-        // Dynamic AI-authored caption styling
-        customCaptionFontWeight: c.customCaptionFontWeight,
-        customCaptionFontStyle: c.customCaptionFontStyle,
-        customCaptionFontFamily: c.customCaptionFontFamily,
-        customCaptionColor: c.customCaptionColor,
-        customCaptionAnimation: c.customCaptionAnimation,
-        customCaptionGlowColor: c.customCaptionGlowColor,
-        customCaptionGlowRadius: c.customCaptionGlowRadius,
-      }));
+      const highlights = buildHighlights(detectedClips);
+      const clips = buildClips(detectedClips, state.selectedTemplate);
 
       // Animate any photos that the user marked or that Opus gave an animationPrompt
       const animatableSourceIds = new Set(
@@ -494,12 +519,13 @@ export default function DetectingStep() {
           setValidationRound(round + 1);
           setProgress(94 + round * 2);
 
-          const sourceFileInfo = state.mediaFiles.map((f) => ({
+          const currentMedia = mediaFilesRef.current;
+          const sourceFileInfo = currentMedia.map((f) => ({
             id: f.id,
             name: f.name,
             type: f.type,
           }));
-          const animatedFileIds = state.mediaFiles
+          const animatedFileIds = currentMedia
             .filter((f) => f.animationStatus === "completed" || f.animationStatus === "generating")
             .map((f) => f.id);
 
@@ -540,7 +566,8 @@ export default function DetectingStep() {
             revisionFeedback,
             state.creativeDirection || undefined,
             () => {}, // No phase progress for revision — it's fast
-            photoAnimations.length > 0 ? photoAnimations : undefined
+            photoAnimations.length > 0 ? photoAnimations : undefined,
+            abort.signal
           );
 
           // Rebuild clips from revised result
@@ -549,53 +576,8 @@ export default function DetectingStep() {
             return true;
           });
 
-          finalHighlights = currentDetectedClips.map((c) => ({
-            id: c.id,
-            sourceFileId: c.sourceFileId,
-            startTime: c.startTime,
-            endTime: c.endTime,
-            confidenceScore: c.confidenceScore,
-            label: c.label,
-            detectionSources: ["Cloud AI"],
-          }));
-
-          finalClips = currentDetectedClips.map((c, i) => ({
-            id: uuid(),
-            sourceFileId: c.sourceFileId,
-            segment: {
-              id: c.id,
-              sourceFileId: c.sourceFileId,
-              startTime: c.startTime,
-              endTime: c.endTime,
-              confidenceScore: c.confidenceScore,
-              label: c.label,
-              detectionSources: ["Cloud AI"],
-            },
-            trimStart: c.startTime,
-            trimEnd: c.endTime,
-            order: c.order ?? i,
-            selectedMusicTrack: null,
-            captionText: c.captionText ?? "",
-            captionStyle: (c.captionStyle ?? "Bold") as "Bold" | "Minimal" | "Neon" | "Classic",
-            selectedFilter: (c.filter ?? state.selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
-            velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
-              ? (c.velocityPreset as VelocityPreset)
-              : ("normal" as VelocityPreset),
-            transitionType: c.transitionType,
-            transitionDuration: c.transitionDuration,
-            entryPunchScale: c.entryPunchScale,
-            entryPunchDuration: c.entryPunchDuration,
-            kenBurnsIntensity: c.kenBurnsIntensity,
-            customVelocityKeyframes: c.customVelocityKeyframes,
-            customFilterCSS: c.customFilterCSS,
-            customCaptionFontWeight: c.customCaptionFontWeight,
-            customCaptionFontStyle: c.customCaptionFontStyle,
-            customCaptionFontFamily: c.customCaptionFontFamily,
-            customCaptionColor: c.customCaptionColor,
-            customCaptionAnimation: c.customCaptionAnimation,
-            customCaptionGlowColor: c.customCaptionGlowColor,
-            customCaptionGlowRadius: c.customCaptionGlowRadius,
-          }));
+          finalHighlights = buildHighlights(currentDetectedClips);
+          finalClips = buildClips(currentDetectedClips, state.selectedTemplate);
         }
       } catch (err) {
         console.warn("Tape validation/revision error (non-blocking):", err);

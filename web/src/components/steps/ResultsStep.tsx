@@ -306,9 +306,9 @@ export default function ResultsStep() {
                   <p className="font-semibold text-white">{clip.segment.label}</p>
                   <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
                     {hasAnimatedVideo
-                      ? "Photo · 3s"
+                      ? `Photo · ${Math.round(clip.trimEnd - clip.trimStart)}s`
                       : isPhoto
-                        ? "Photo · 3s"
+                        ? `Photo · ${Math.round(clip.trimEnd - clip.trimStart)}s`
                         : `${formatTime(clip.segment.startTime)} – ${formatTime(clip.segment.endTime)} · ${Math.round(clip.segment.endTime - clip.segment.startTime)}s`}
                     {media?.animationStatus === "failed" && (
                       <span className="ml-1 text-red-400"> · animation failed</span>

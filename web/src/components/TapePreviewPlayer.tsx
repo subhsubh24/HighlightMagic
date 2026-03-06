@@ -114,7 +114,7 @@ export default function TapePreviewPlayer() {
       }
     }
     return entries;
-  }, [sortedClips, state, beatGrid]);
+  }, [sortedClips, state.mediaFiles, beatGrid]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -131,7 +131,7 @@ export default function TapePreviewPlayer() {
       if (entry.mediaType === "video" || useAnimatedVideo) {
         const v = document.createElement("video");
         v.src = useAnimatedVideo ? mediaFile!.animatedVideoUrl! : entry.mediaUrl;
-        v.muted = isMuted;
+        v.muted = true; // Start muted; the mute-sync effect will update to current state
         v.playsInline = true;
         v.preload = "auto";
         map.set(entry.clip.id, v);
@@ -151,7 +151,7 @@ export default function TapePreviewPlayer() {
         }
       }
     };
-  }, [timeline, isMuted, state.mediaFiles]);
+  }, [timeline, state.mediaFiles]);
 
   // Sync mute state to all active video elements
   useEffect(() => {
@@ -401,7 +401,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, fallbackTransition, style, drawMediaFrame, beatGrid, state.detectedTheme]
+    [timeline, fallbackTransition, drawMediaFrame, beatGrid]
   );
 
   // Animation loop with adaptive frame skipping for mobile performance

@@ -39,8 +39,9 @@ async function fetchWithRetry(
       if (response.status === 429 || response.status === 529) {
         // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
         const retryAfter = response.headers.get("retry-after");
-        const rawWaitMs = retryAfter
-          ? parseFloat(retryAfter) * 1000
+        const retryAfterSec = retryAfter ? parseFloat(retryAfter) : NaN;
+        const rawWaitMs = !isNaN(retryAfterSec) && retryAfterSec > 0
+          ? retryAfterSec * 1000
           : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
         console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
@@ -693,7 +694,7 @@ function buildScoringContent(
       ? `, audioOnset: ${frame.audioOnset.toFixed(2)}`
       : "";
     const specTag = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1)
-      ? `, spectrum: B${frame.audioBass!.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}`
+      ? `, spectrum: B${(frame.audioBass ?? 0).toFixed(2)}/M${(frame.audioMid ?? 0).toFixed(2)}/T${(frame.audioTreble ?? 0).toFixed(2)}`
       : "";
     content.push({
       type: "text",
@@ -1041,7 +1042,7 @@ async function planHighlightTape(
     const key = `${f.sourceFileId}::${f.timestamp.toFixed(1)}`;
     if (f.audioEnergy != null) audioLookup.set(key, f.audioEnergy);
     if (f.audioOnset != null) onsetLookup.set(key, f.audioOnset);
-    if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid!, treble: f.audioTreble! });
+    if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid ?? 0, treble: f.audioTreble ?? 0 });
   }
 
   const allScoresSummary = Array.from(scoresBySource.entries())
@@ -1440,7 +1441,7 @@ Respond with ONLY a JSON object:
 
     const audioVal = frame.audioEnergy != null ? ` | AUDIO: ${frame.audioEnergy.toFixed(2)}` : "";
     const onsetVal = frame.audioOnset != null && frame.audioOnset > 0.1 ? ` | ONSET: ${frame.audioOnset.toFixed(2)}` : "";
-    const specVal = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1) ? ` | SPECTRUM: B${frame.audioBass.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}` : "";
+    const specVal = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1) ? ` | SPECTRUM: B${frame.audioBass.toFixed(2)}/M${(frame.audioMid ?? 0).toFixed(2)}/T${(frame.audioTreble ?? 0).toFixed(2)}` : "";
     let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}${specVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
@@ -1639,7 +1640,7 @@ Respond with ONLY a JSON object:
           sourceFileId: p.sourceFileId,
           startTime: Math.max(0, p.startTime),
           endTime: p.endTime,
-          confidenceScore: Math.max(0, Math.min(1, p.confidenceScore)),
+          confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
           label: p.label || "Highlight",
           velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
             ? p.velocityPreset

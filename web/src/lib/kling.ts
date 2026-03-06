@@ -136,7 +136,10 @@ export async function pollAnimationResult(predictionId: string): Promise<string>
   while (Date.now() < deadline) {
     const result = await checkAnimationResult(predictionId);
 
-    if (result.status === "completed") return result.videoUrl!;
+    if (result.status === "completed") {
+      if (!result.videoUrl) throw new Error("Animation completed but returned no video URL");
+      return result.videoUrl;
+    }
     if (result.status === "failed") throw new Error(`Animation failed: ${result.error}`);
 
     // Still processing — wait before next poll
