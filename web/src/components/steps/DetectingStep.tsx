@@ -152,9 +152,17 @@ export default function DetectingStep() {
     hasStarted.current = true;
     const abort = abortRef.current;
 
+    // Separate AbortController for animations — the main `abort` gets fired by
+    // React Strict Mode's simulated unmount in dev, killing animation fetches
+    // before they start. This one is only aborted on real unmount.
+    const animationAbort = new AbortController();
+
     // Cleanup: abort in-flight fetches and polling when component unmounts
     // (e.g. user navigates back during detection)
-    const cleanup = () => abort.abort("DetectingStep unmounted");
+    const cleanup = () => {
+      abort.abort("DetectingStep unmounted");
+      animationAbort.abort("DetectingStep unmounted");
+    };
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -461,10 +469,6 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
-      console.log(`[Animation] animatableClips: ${animatableClips.length}, animatableSourceIds:`, [...animatableSourceIds]);
-      console.log(`[Animation] clips with animationPrompt:`, detectedClips.filter((c) => c.animationPrompt).length);
-      console.log(`[Animation] photos with animatePhoto:`, state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.name));
-
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
@@ -473,12 +477,8 @@ export default function DetectingStep() {
         ).size;
         setAnimationProgress({ total: uniquePhotoCount, completed: 0, failed: 0 });
         setAnimatingPhotos(true);
-        console.log(`[Animation] Starting triggerPhotoAnimations for ${uniquePhotoCount} photos...`);
         await triggerPhotoAnimations(animatableClips);
-        console.log(`[Animation] triggerPhotoAnimations completed`);
         setAnimatingPhotos(false);
-      } else {
-        console.log(`[Animation] SKIPPED — no animatable clips`);
       }
 
       // ── Haiku QA validation loop (max 2 rounds) ──
@@ -639,16 +639,16 @@ export default function DetectingStep() {
       let consecutiveErrors = 0;
 
       while (Date.now() < deadline) {
-        if (abort.signal.aborted) return;
+        if (animationAbort.signal.aborted) return;
         await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
-        if (abort.signal.aborted) return;
+        if (animationAbort.signal.aborted) return;
 
         try {
           const res = await fetch("/api/animate/check", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ predictionId }),
-            signal: abort.signal,
+            signal: animationAbort.signal,
           });
           if (!res.ok) throw new Error("Check request failed");
           const result: AnimationPollResult = await res.json();
@@ -676,7 +676,7 @@ export default function DetectingStep() {
           }
           // status === "processing" — keep polling
         } catch (err) {
-          if (abort.signal.aborted) return;
+          if (animationAbort.signal.aborted) return;
           consecutiveErrors++;
           console.warn(`Photo animation poll error for "${mediaName}" (${consecutiveErrors}/${ANIMATION_MAX_TRANSIENT_ERRORS}):`, err);
           if (consecutiveErrors >= ANIMATION_MAX_TRANSIENT_ERRORS) {
@@ -745,19 +745,16 @@ export default function DetectingStep() {
         });
 
         // Submit task via API route (avoids React Flight serialization limits for large base64)
-        console.log(`[Animation] Starting animation for "${media.name}" (${media.id}), prompt: "${prompt.slice(0, 60)}..."`);
         const p = fileToDataUri(media.file)
           .then(async (dataUri) => {
-            console.log(`[Animation] "${media.name}" fileToDataUri done (${(dataUri.length / 1024).toFixed(0)} KB), submitting...`);
             const res = await fetch("/api/animate/submit", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ imageData: dataUri, prompt, duration: 5 }),
-              signal: abort.signal,
+              signal: animationAbort.signal,
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error ?? "Submit failed");
-            console.log(`[Animation] "${media.name}" submitted, predictionId: ${data.predictionId}`);
             return data.predictionId as string;
           })
           .then((predictionId) => pollAnimationOnClient(predictionId, media.id, media.name))
@@ -766,11 +763,9 @@ export default function DetectingStep() {
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
             // Progress 92% → 99% as animations complete
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
-            console.log(`[Animation] "${media.name}" COMPLETED (${completedAnimations}/${totalAnimations})`);
           })
           .catch((err) => {
-            console.error(`[Animation] "${media.name}" CATCH handler, aborted=${abort.signal.aborted}:`, err);
-            if (abort.signal.aborted) return;
+            if (animationAbort.signal.aborted) return;
             completedAnimations++;
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
             setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
