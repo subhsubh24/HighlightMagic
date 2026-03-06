@@ -1,10 +1,12 @@
 /**
- * Atlas Cloud API client for Kling 3.0 image-to-video generation.
+ * Atlas Cloud API client for Kling image-to-video generation.
+ * Uses Kling v2.5 Turbo Pro — cheapest option at ~$0.06/1M tokens
+ * (vs v3.0 Pro at $0.168/1M tokens, nearly 3x more expensive).
  * Server-side only — requires ATLASCLOUD_API_KEY env var.
  */
 
 const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
-const MODEL_ID = "kwaivgi/kling-v3.0-pro/image-to-video";
+const MODEL_ID = "kwaivgi/kling-v2.5-turbo-pro/image-to-video";
 
 /** How often to poll for results (ms) */
 const POLL_INTERVAL_MS = 5_000;

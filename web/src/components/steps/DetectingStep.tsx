@@ -149,17 +149,17 @@ export default function DetectingStep() {
   }, [passIndex]);
 
   useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-    const abort = abortRef.current;
-
-    // Cleanup: abort in-flight fetches and polling when component unmounts
-    // (e.g. user navigates back during detection)
-    const cleanup = () => {
-      abort.abort("DetectingStep unmounted");
-      // Abort animations if they're running (created lazily in triggerPhotoAnimations)
+    // Always register cleanup for real unmount — React Strict Mode fires the
+    // first cleanup during its simulated unmount, but the second mount still
+    // needs a cleanup for when the component ACTUALLY unmounts.
+    const cleanupFn = () => {
+      abortRef.current.abort("DetectingStep unmounted");
       animationAbortRef.current?.abort("DetectingStep unmounted");
     };
+
+    if (hasStarted.current) return cleanupFn;
+    hasStarted.current = true;
+    const abort = abortRef.current;
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -466,12 +466,6 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
-      console.log("[processResult] animatableClips:", animatableClips.length,
-        "| animatableSourceIds:", [...animatableSourceIds],
-        "| clips with animationPrompt:", detectedClips.filter(c => c.animationPrompt).map(c => c.sourceFileId),
-        "| all photos:", state.mediaFiles.filter(f => f.type === "photo").map(f => ({ id: f.id, name: f.name, animatePhoto: f.animatePhoto }))
-      );
-
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
@@ -698,7 +692,7 @@ export default function DetectingStep() {
       }
 
       // Timed out
-      if (!abort.signal.aborted) {
+      if (!signal?.aborted) {
         console.error(`Photo animation timed out for "${mediaName}"`);
         dispatch({
           type: "SET_ANIMATION_RESULT",
@@ -716,7 +710,6 @@ export default function DetectingStep() {
       // This one is created lazily, long after Strict Mode cleanup, so it's alive.
       animationAbortRef.current = new AbortController();
       const animSignal = animationAbortRef.current.signal;
-      console.log("[triggerPhotoAnimations] called with", clips.length, "clips, animSignal.aborted:", animSignal.aborted);
 
       // Deduplicate by sourceFileId (one animation per photo, not per clip)
       const seen = new Set<string>();
@@ -756,10 +749,8 @@ export default function DetectingStep() {
         });
 
         // Submit task via API route (avoids React Flight serialization limits for large base64)
-        console.log(`[triggerPhotoAnimations] queuing "${media.name}" (file exists: ${!!media.file}, file size: ${media.file?.size})`);
         const p = fileToDataUri(media.file)
           .then(async (dataUri) => {
-            console.log(`[triggerPhotoAnimations] "${media.name}" dataUri ready (${dataUri.length} bytes), fetching /api/animate/submit...`);
             const res = await fetch("/api/animate/submit", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -793,10 +784,7 @@ export default function DetectingStep() {
         promises.push(p);
       }
 
-      console.log(`[triggerPhotoAnimations] waiting on ${promises.length} animation promises`);
-      return Promise.all(promises).then(() => {
-        console.log("[triggerPhotoAnimations] all promises resolved");
-      });
+      return Promise.all(promises).then(() => {});
     }
 
     function handleError(err: unknown) {
@@ -820,7 +808,7 @@ export default function DetectingStep() {
         setError(`Detection failed: ${message.slice(0, 150)}`);
       }
     }
-    return cleanup;
+    return cleanupFn;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -887,7 +875,7 @@ export default function DetectingStep() {
             : animatingPhotos
               ? animationProgress.failed > 0
                 ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
-                : "Generating motion with Kling 3.0 — this usually takes 1-2 minutes per photo"
+                : "Generating motion with Kling — this usually takes 1-2 minutes per photo"
               : isReplan
                 ? "Re-generating with your creative direction..."
                 : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}

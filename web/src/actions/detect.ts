@@ -303,7 +303,7 @@ export interface DetectedClip {
   customCaptionAnimation?: string;
   customCaptionGlowColor?: string;
   customCaptionGlowRadius?: number;
-  // Photo animation — AI-generated motion prompt for Kling 3.0
+  // Photo animation — AI-generated motion prompt for Kling
   animationPrompt?: string;
 }
 
@@ -468,7 +468,7 @@ export async function validateTape(
 
   const prompt = `You are a quality assurance reviewer for Instagram Reels highlight tapes.
 You've been given the final assembled tape — clips in order with all editing decisions made.
-Some photos have been animated into 5-second videos via Kling 3.0 (marked [ANIMATED]).
+Some photos have been animated into 5-second videos via Kling (marked [ANIMATED]).
 
 Your job: review the tape for issues that would hurt engagement or feel jarring.
 
@@ -1380,7 +1380,7 @@ KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 
 PHOTO ANIMATION — some photos are marked [ANIMATE] in the source list above.
 For these photos, you MUST include an "animationPrompt" field in the clip JSON.
-This prompt will be sent to Kling 3.0 (image-to-video AI) to BRING THE PHOTO TO LIFE.
+This prompt will be sent to Kling (image-to-video AI) to BRING THE PHOTO TO LIFE.
 The goal is realistic subject motion — people move, animals react, nature flows — not just camera tricks.
 Think about what would ACTUALLY HAPPEN next if the photo unfroze. Make it feel alive.
 Analyze the photo holistically: the subjects, their poses, the environment, the mood, and the edit context.
@@ -1405,7 +1405,7 @@ filterCSS (REQUIRED — custom CSS color grade for this clip),
 entryPunchScale (REQUIRED — 1.0 = none, up to 1.1),
 entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
 kenBurnsIntensity (photos only, 0-0.08),
-animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling 3.0),
+animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling),
 captionText (optional — only 30-50% of clips),
 captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
 
