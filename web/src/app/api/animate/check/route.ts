@@ -23,8 +23,14 @@ export async function POST(req: Request) {
     }
 
     const result = await checkAnimationResult(predictionId);
-    console.log(`[animate/check] predictionId=${predictionId} → status=${result.status}${result.videoUrl ? ` videoUrl=${result.videoUrl}` : ""}${result.error ? ` error=${result.error}` : ""}`);
-    return Response.json(result);
+    // Map outputUrl → videoUrl for backward compatibility with client code
+    const clientResult = {
+      status: result.status,
+      videoUrl: result.outputUrl,
+      error: result.error,
+    };
+    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl}` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
+    return Response.json(clientResult);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[animate/check] Error:", message);

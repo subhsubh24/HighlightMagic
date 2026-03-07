@@ -336,10 +336,22 @@ export interface DetectedClip {
   animationPrompt?: string;
 }
 
+export interface ProductionPlan {
+  intro: { text: string; stylePrompt: string } | null;
+  outro: { text: string; stylePrompt: string } | null;
+  sfx: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
+  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+  musicPrompt: string;
+  musicDurationMs: number;
+  thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
+}
+
 export interface DetectionResult {
   clips: DetectedClip[];
   detectedTheme: DetectedTheme;
   contentSummary: string;
+  /** AI production plan — drives SFX, voiceover, intro/outro, music, and thumbnail generation */
+  productionPlan?: ProductionPlan;
 }
 
 // ── Helpers ──
@@ -1023,7 +1035,7 @@ async function planHighlightTape(
   creativeDirection?: string,
   onPhase?: (phase: SSEStreamPhase) => void,
   photoAnimations?: PhotoAnimationInfo[]
-): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
+): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
   for (const f of allFrames) {
@@ -1438,8 +1450,36 @@ animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling)
 captionText (optional — only 30-50% of clips),
 captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
 
+═══════════════════════════════════════════════
+STEP 5: AI PRODUCTION PLAN — You are the CREATIVE DIRECTOR
+═══════════════════════════════════════════════
+Beyond clip selection and visual style, you direct the FULL AUDIO-VISUAL PRODUCTION.
+Your plan drives automated generation of intro/outro cards, sound effects, voiceover, music, and thumbnails.
+Every decision cascades from the content's theme AND the user's creative direction (if any).
+
+INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
+Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
+The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
+
+OUTRO CARD — A matching closing card appended after the last clip.
+Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
+
+SOUND EFFECTS — Transition whooshes, impact hits, crowd accents.
+Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
+Match SFX style to content mood. 3-8 cues total.
+
+VOICEOVER — AI-generated narration on key moments.
+Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic"}.
+2-5 segments max. Don't over-narrate.
+
+MUSIC — AI instrumental soundtrack.
+Set "musicPrompt" (genre, energy, instruments, mood, tempo). Set "musicDurationMs" to total tape length in ms.
+
+THUMBNAIL — Best frame for social sharing.
+Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
+
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description"}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description"}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype"}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1579,6 +1619,14 @@ Respond with ONLY a JSON object:
           captionGlowRadius?: number;
           animationPrompt?: string;
         }>;
+        // AI Production plan fields
+        intro?: { text: string; stylePrompt: string } | null;
+        outro?: { text: string; stylePrompt: string } | null;
+        sfx?: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
+        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+        musicPrompt?: string;
+        musicDurationMs?: number;
+        thumbnail?: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
       };
 
       if (!parsed.contentSummary) {
@@ -1774,7 +1822,66 @@ Respond with ONLY a JSON object:
         sourceClipCount.set(clip.sourceFileId, srcCount + 1);
       }
 
-      return { clips: spacedClips, detectedTheme: theme, contentSummary };
+      // Extract AI production plan from Claude's output
+      const VALID_SFX_TIMINGS = ["before", "on", "after"];
+      const VALID_VOICE_CHARS = [
+        "male-broadcaster-hype", "male-narrator-warm", "male-young-energetic",
+        "female-narrator-warm", "female-broadcaster-hype", "female-young-energetic",
+      ];
+
+      const productionPlan: ProductionPlan = {
+        intro: (parsed.intro && typeof parsed.intro.text === "string" && typeof parsed.intro.stylePrompt === "string")
+          ? { text: parsed.intro.text.slice(0, 200), stylePrompt: parsed.intro.stylePrompt.slice(0, 500) }
+          : null,
+        outro: (parsed.outro && typeof parsed.outro.text === "string" && typeof parsed.outro.stylePrompt === "string")
+          ? { text: parsed.outro.text.slice(0, 200), stylePrompt: parsed.outro.stylePrompt.slice(0, 500) }
+          : null,
+        sfx: Array.isArray(parsed.sfx)
+          ? parsed.sfx
+              .filter((s) =>
+                typeof s.clipIndex === "number" &&
+                VALID_SFX_TIMINGS.includes(s.timing) &&
+                typeof s.prompt === "string" &&
+                typeof s.durationMs === "number"
+              )
+              .slice(0, 12)
+              .map((s) => ({
+                clipIndex: s.clipIndex,
+                timing: s.timing,
+                prompt: s.prompt.slice(0, 300),
+                durationMs: Math.max(500, Math.min(5000, s.durationMs)),
+              }))
+          : [],
+        voiceover: (parsed.voiceover && typeof parsed.voiceover.enabled === "boolean")
+          ? {
+              enabled: parsed.voiceover.enabled,
+              segments: Array.isArray(parsed.voiceover.segments)
+                ? parsed.voiceover.segments
+                    .filter((seg) => typeof seg.clipIndex === "number" && typeof seg.text === "string")
+                    .slice(0, 8)
+                    .map((seg) => ({ clipIndex: seg.clipIndex, text: seg.text.slice(0, 200) }))
+                : [],
+              voiceCharacter: VALID_VOICE_CHARS.includes(parsed.voiceover.voiceCharacter)
+                ? parsed.voiceover.voiceCharacter
+                : "male-broadcaster-hype",
+            }
+          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype" },
+        musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
+        musicDurationMs: typeof parsed.musicDurationMs === "number"
+          ? Math.max(3000, Math.min(300000, parsed.musicDurationMs))
+          : 60000,
+        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number")
+          ? {
+              sourceClipIndex: parsed.thumbnail.sourceClipIndex,
+              frameTime: typeof parsed.thumbnail.frameTime === "number" ? parsed.thumbnail.frameTime : 0,
+              stylePrompt: typeof parsed.thumbnail.stylePrompt === "string" ? parsed.thumbnail.stylePrompt.slice(0, 300) : "",
+            }
+          : null,
+      };
+
+      console.log(`[Planner] Production plan: intro=${!!productionPlan.intro}, outro=${!!productionPlan.outro}, sfx=${productionPlan.sfx.length}, voiceover=${productionPlan.voiceover.enabled ? productionPlan.voiceover.segments.length + " segments" : "disabled"}, music=${productionPlan.musicPrompt.length > 0 ? "yes" : "no"}, thumbnail=${!!productionPlan.thumbnail}`);
+
+      return { clips: spacedClips, detectedTheme: theme, contentSummary, productionPlan };
   }
 
   throw new Error("Planner response could not be parsed as JSON");

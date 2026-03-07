@@ -570,10 +570,38 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
-      // Start music generation in parallel with animations (if enabled)
+      // ══════════════════════════════════════════════════════════
+      // AI PRODUCTION PIPELINE — all generators run in parallel
+      // ══════════════════════════════════════════════════════════
+      const productionPlan = result.productionPlan;
+
+      // Store the production plan in state
+      if (productionPlan) {
+        dispatch({
+          type: "SET_AI_PRODUCTION_PLAN",
+          plan: {
+            intro: productionPlan.intro,
+            outro: productionPlan.outro,
+            sfx: productionPlan.sfx.map((s) => ({
+              clipIndex: s.clipIndex,
+              timing: s.timing as "before" | "on" | "after",
+              prompt: s.prompt,
+              durationMs: s.durationMs,
+            })),
+            voiceover: productionPlan.voiceover,
+            musicPrompt: productionPlan.musicPrompt,
+            musicDurationMs: productionPlan.musicDurationMs,
+            thumbnail: productionPlan.thumbnail,
+            photoAnimationPrompts: {},
+          },
+        });
+      }
+
+      // 1. Music — use Claude's prompt if available, fallback to legacy
       const musicPromise = (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
         ? (async () => {
-            const prompt = state.aiMusicPrompt?.trim()
+            const prompt = productionPlan?.musicPrompt
+              || state.aiMusicPrompt?.trim()
               || `Instrumental background music for a ${theme} highlight reel. ${result.contentSummary ?? ""}`.trim();
             if (!prompt) return;
             dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
@@ -581,7 +609,10 @@ export default function DetectingStep() {
               const res = await fetch("/api/music/submit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt }),
+                body: JSON.stringify({
+                  prompt,
+                  durationMs: productionPlan?.musicDurationMs,
+                }),
               });
               const data = await res.json();
               if (!res.ok || data.status !== "completed" || !data.audioUrl) {
@@ -595,8 +626,207 @@ export default function DetectingStep() {
           })()
         : null;
 
+      // 2. SFX generation — batch all sound effects in parallel
+      const sfxPromise = (productionPlan && productionPlan.sfx.length > 0)
+        ? (async () => {
+            dispatch({ type: "SET_SFX_STATUS", status: "generating" });
+            dispatch({
+              type: "SET_SFX_TRACKS",
+              tracks: productionPlan.sfx.map((s) => ({
+                clipIndex: s.clipIndex,
+                timing: s.timing as "before" | "on" | "after",
+                prompt: s.prompt,
+                durationMs: s.durationMs,
+                status: "generating" as const,
+              })),
+            });
+            try {
+              await Promise.all(
+                productionPlan.sfx.map(async (sfxCue) => {
+                  try {
+                    const res = await fetch("/api/sfx", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        prompt: sfxCue.prompt,
+                        durationMs: sfxCue.durationMs,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.status === "completed" && data.audioUrl) {
+                      dispatch({
+                        type: "UPDATE_SFX_TRACK",
+                        clipIndex: sfxCue.clipIndex,
+                        audioUrl: data.audioUrl,
+                        status: "completed",
+                      });
+                    } else {
+                      dispatch({
+                        type: "UPDATE_SFX_TRACK",
+                        clipIndex: sfxCue.clipIndex,
+                        audioUrl: "",
+                        status: "failed",
+                      });
+                    }
+                  } catch {
+                    dispatch({
+                      type: "UPDATE_SFX_TRACK",
+                      clipIndex: sfxCue.clipIndex,
+                      audioUrl: "",
+                      status: "failed",
+                    });
+                  }
+                })
+              );
+              dispatch({ type: "SET_SFX_STATUS", status: "completed" });
+            } catch {
+              dispatch({ type: "SET_SFX_STATUS", status: "failed" });
+            }
+          })()
+        : null;
+
+      // 3. Voiceover generation — sequential for voice consistency
+      const voiceoverPromise = (productionPlan?.voiceover?.enabled && productionPlan.voiceover.segments.length > 0)
+        ? (async () => {
+            const vo = productionPlan.voiceover;
+            dispatch({ type: "SET_VOICEOVER_STATUS", status: "generating" });
+            dispatch({
+              type: "SET_VOICEOVER_SEGMENTS",
+              segments: vo.segments.map((s) => ({
+                clipIndex: s.clipIndex,
+                text: s.text,
+                status: "generating" as const,
+              })),
+            });
+            try {
+              for (const segment of vo.segments) {
+                try {
+                  const res = await fetch("/api/voiceover", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      text: segment.text,
+                      voiceCharacter: vo.voiceCharacter,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.status === "completed" && data.audioUrl) {
+                    dispatch({
+                      type: "UPDATE_VOICEOVER_SEGMENT",
+                      clipIndex: segment.clipIndex,
+                      audioUrl: data.audioUrl,
+                      duration: data.duration ?? 2,
+                      status: "completed",
+                    });
+                  } else {
+                    dispatch({
+                      type: "UPDATE_VOICEOVER_SEGMENT",
+                      clipIndex: segment.clipIndex,
+                      audioUrl: "",
+                      duration: 0,
+                      status: "failed",
+                    });
+                  }
+                } catch {
+                  dispatch({
+                    type: "UPDATE_VOICEOVER_SEGMENT",
+                    clipIndex: segment.clipIndex,
+                    audioUrl: "",
+                    duration: 0,
+                    status: "failed",
+                  });
+                }
+              }
+              dispatch({ type: "SET_VOICEOVER_STATUS", status: "completed" });
+            } catch {
+              dispatch({ type: "SET_VOICEOVER_STATUS", status: "failed" });
+            }
+          })()
+        : null;
+
+      // 4. Intro card generation (Atlas Cloud T2V)
+      const introPromise = productionPlan?.intro
+        ? (async () => {
+            dispatch({
+              type: "SET_INTRO_CARD",
+              card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "generating" },
+            });
+            try {
+              const submitRes = await fetch("/api/intro", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: 5 }),
+              });
+              const submitData = await submitRes.json();
+              if (!submitRes.ok || !submitData.predictionId) {
+                dispatch({
+                  type: "SET_INTRO_CARD",
+                  card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+                });
+                return;
+              }
+              // Poll using the same animate/check endpoint (Atlas Cloud uses same prediction API)
+              const videoUrl = await pollAtlasTask(submitData.predictionId);
+              dispatch({
+                type: "SET_INTRO_CARD",
+                card: {
+                  text: productionPlan.intro!.text,
+                  stylePrompt: productionPlan.intro!.stylePrompt,
+                  videoUrl,
+                  status: videoUrl ? "completed" : "failed",
+                },
+              });
+            } catch {
+              dispatch({
+                type: "SET_INTRO_CARD",
+                card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+              });
+            }
+          })()
+        : null;
+
+      // 5. Outro card generation (Atlas Cloud T2V)
+      const outroPromise = productionPlan?.outro
+        ? (async () => {
+            dispatch({
+              type: "SET_OUTRO_CARD",
+              card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "generating" },
+            });
+            try {
+              const submitRes = await fetch("/api/outro", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: 5 }),
+              });
+              const submitData = await submitRes.json();
+              if (!submitRes.ok || !submitData.predictionId) {
+                dispatch({
+                  type: "SET_OUTRO_CARD",
+                  card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+                });
+                return;
+              }
+              const videoUrl = await pollAtlasTask(submitData.predictionId);
+              dispatch({
+                type: "SET_OUTRO_CARD",
+                card: {
+                  text: productionPlan.outro!.text,
+                  stylePrompt: productionPlan.outro!.stylePrompt,
+                  videoUrl,
+                  status: videoUrl ? "completed" : "failed",
+                },
+              });
+            } catch {
+              dispatch({
+                type: "SET_OUTRO_CARD",
+                card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+              });
+            }
+          })()
+        : null;
+
+      // 6. Photo animations (existing — already built)
       if (animatableClips.length > 0) {
-        // Hold progress at 92% — animation phase takes over
         setProgress(92);
         const uniquePhotoCount = new Set(
           animatableClips.filter((c) => state.mediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
@@ -607,8 +837,10 @@ export default function DetectingStep() {
         setAnimatingPhotos(false);
       }
 
-      // Wait for music generation if it was started
-      if (musicPromise) await musicPromise;
+      // Wait for all parallel generators to complete (non-blocking — failures are OK)
+      await Promise.allSettled(
+        [musicPromise, sfxPromise, voiceoverPromise, introPromise, outroPromise].filter(Boolean)
+      );
 
       const finalHighlights = highlights;
       const finalClips = clips;
@@ -621,6 +853,28 @@ export default function DetectingStep() {
         dispatch({ type: "SET_CLIPS", clips: finalClips });
         dispatch({ type: "SET_STEP", step: "results" });
       }, 400);
+    }
+
+    /** Poll an Atlas Cloud task via /api/animate/check until done. Returns output URL or empty string on failure. */
+    async function pollAtlasTask(predictionId: string): Promise<string> {
+      const deadline = Date.now() + 300_000; // 5 min timeout
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5_000));
+        try {
+          const res = await fetch("/api/animate/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ predictionId }),
+          });
+          const data = await res.json();
+          if (data.status === "completed" && data.videoUrl) return data.videoUrl;
+          if (data.status === "failed") return "";
+          // Still processing — continue polling
+        } catch {
+          // Transient error — continue polling
+        }
+      }
+      return ""; // Timeout
     }
 
     /** Convert a File to a base64 data URI for server-side API calls. */

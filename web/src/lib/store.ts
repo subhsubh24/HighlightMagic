@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AiMusicStatus, AnimationStatus, AppStep, EditedClip, EditingTheme, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, VideoFilter, CaptionStyle, ViralExportOptions } from "./types";
+import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -27,6 +27,16 @@ export const initialState: AppState = {
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
+  // AI Production pipeline
+  aiProductionPlan: null,
+  introCard: null,
+  outroCard: null,
+  sfxTracks: [],
+  sfxStatus: "idle",
+  voiceoverSegments: [],
+  voiceoverStatus: "idle",
+  thumbnail: null,
+  audioTranscript: null,
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
@@ -66,6 +76,18 @@ export type Action =
   | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
+  // ── AI Production pipeline actions ──
+  | { type: "SET_AI_PRODUCTION_PLAN"; plan: AiProductionPlan }
+  | { type: "SET_INTRO_CARD"; card: GeneratedCard }
+  | { type: "SET_OUTRO_CARD"; card: GeneratedCard }
+  | { type: "SET_SFX_TRACKS"; tracks: SfxTrack[] }
+  | { type: "SET_SFX_STATUS"; status: GenerationStatus }
+  | { type: "UPDATE_SFX_TRACK"; clipIndex: number; audioUrl: string; status: GenerationStatus }
+  | { type: "SET_VOICEOVER_SEGMENTS"; segments: VoiceoverSegment[] }
+  | { type: "SET_VOICEOVER_STATUS"; status: GenerationStatus }
+  | { type: "UPDATE_VOICEOVER_SEGMENT"; clipIndex: number; audioUrl: string; duration: number; status: GenerationStatus }
+  | { type: "SET_THUMBNAIL"; thumbnail: GeneratedThumbnail }
+  | { type: "SET_AUDIO_TRANSCRIPT"; transcript: string }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -166,9 +188,50 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, aiMusicPrompt: action.prompt };
     case "SET_AI_MUSIC_RESULT":
       return { ...state, aiMusicStatus: action.status, aiMusicUrl: action.audioUrl ?? state.aiMusicUrl };
+    // ── AI Production pipeline ──
+    case "SET_AI_PRODUCTION_PLAN":
+      return { ...state, aiProductionPlan: action.plan };
+    case "SET_INTRO_CARD":
+      return { ...state, introCard: action.card };
+    case "SET_OUTRO_CARD":
+      return { ...state, outroCard: action.card };
+    case "SET_SFX_TRACKS":
+      return { ...state, sfxTracks: action.tracks };
+    case "SET_SFX_STATUS":
+      return { ...state, sfxStatus: action.status };
+    case "UPDATE_SFX_TRACK":
+      return {
+        ...state,
+        sfxTracks: state.sfxTracks.map((t) =>
+          t.clipIndex === action.clipIndex ? { ...t, audioUrl: action.audioUrl, status: action.status } : t
+        ),
+      };
+    case "SET_VOICEOVER_SEGMENTS":
+      return { ...state, voiceoverSegments: action.segments };
+    case "SET_VOICEOVER_STATUS":
+      return { ...state, voiceoverStatus: action.status };
+    case "UPDATE_VOICEOVER_SEGMENT":
+      return {
+        ...state,
+        voiceoverSegments: state.voiceoverSegments.map((s) =>
+          s.clipIndex === action.clipIndex
+            ? { ...s, audioUrl: action.audioUrl, duration: action.duration, status: action.status }
+            : s
+        ),
+      };
+    case "SET_THUMBNAIL":
+      return { ...state, thumbnail: action.thumbnail };
+    case "SET_AUDIO_TRANSCRIPT":
+      return { ...state, audioTranscript: action.transcript };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
-      return { ...initialState, isProUser: state.isProUser, exportsUsed: state.exportsUsed, detectedTheme: "cinematic" as const, contentSummary: "" };
+      return {
+        ...initialState,
+        isProUser: state.isProUser,
+        exportsUsed: state.exportsUsed,
+        detectedTheme: "cinematic" as const,
+        contentSummary: "",
+      };
     default:
       return state;
   }
