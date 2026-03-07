@@ -570,6 +570,31 @@ export default function DetectingStep() {
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
       );
 
+      // Start music generation in parallel with animations (if enabled)
+      const musicPromise = (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
+        ? (async () => {
+            const prompt = state.aiMusicPrompt?.trim()
+              || `Instrumental background music for a ${theme} highlight reel. ${result.contentSummary ?? ""}`.trim();
+            if (!prompt) return;
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
+            try {
+              const res = await fetch("/api/music/submit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt }),
+              });
+              const data = await res.json();
+              if (!res.ok || data.status !== "completed" || !data.audioUrl) {
+                dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+                return;
+              }
+              dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+            } catch {
+              dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+            }
+          })()
+        : null;
+
       if (animatableClips.length > 0) {
         // Hold progress at 92% — animation phase takes over
         setProgress(92);
@@ -581,6 +606,9 @@ export default function DetectingStep() {
         await triggerPhotoAnimations(animatableClips);
         setAnimatingPhotos(false);
       }
+
+      // Wait for music generation if it was started
+      if (musicPromise) await musicPromise;
 
       const finalHighlights = highlights;
       const finalClips = clips;
