@@ -1478,6 +1478,13 @@ Respond with ONLY a JSON object:
     }\n\nNow create the highlight tape.`,
   });
 
+  // Total wall-clock abort: covers both the fetch AND the full stream read.
+  // AbortSignal.timeout only guards the initial connection — once headers arrive
+  // the stream can run forever. This controller ensures we abort everything
+  // (including extended thinking) after 5 minutes.
+  const plannerAbort = new AbortController();
+  const wallClockTimer = setTimeout(() => plannerAbort.abort("Planner timed out after 5 minutes"), 300_000);
+
   try {
     const response = await fetchWithRetry(
       "https://api.anthropic.com/v1/messages",
@@ -1490,13 +1497,11 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 32000,
+          max_tokens: 16384,
           stream: true,
           thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "medium",
+            type: "enabled",
+            budget_tokens: 8192,
           },
           system: [
             {
@@ -1507,9 +1512,9 @@ Respond with ONLY a JSON object:
           ],
           messages: [{ role: "user", content: userContent }],
         }),
+        signal: plannerAbort.signal,
       },
-      "Planner",
-      300_000 // 5 minute timeout — Opus multimodal requests can take 2-3 mins
+      "Planner"
     );
 
     if (!response.ok) {
@@ -1763,8 +1768,13 @@ Respond with ONLY a JSON object:
 
     throw new Error("Planner response could not be parsed as JSON");
   } catch (err) {
+    if (plannerAbort.signal.aborted) {
+      throw new Error("Planner timed out — the AI model took too long. Please try again.");
+    }
     // Re-throw so the retry loop in detectMultiClipHighlights can handle it
     throw err instanceof Error ? err : new Error(String(err));
+  } finally {
+    clearTimeout(wallClockTimer);
   }
 }
 
