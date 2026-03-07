@@ -122,12 +122,15 @@ async function callPlannerSSE(
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal
 ): Promise<DetectionResult> {
+  const bodyStr = JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations });
+  console.log(`[callPlannerSSE] Sending fetch to /api/plan — body size: ${(bodyStr.length / 1024).toFixed(0)}KB, frames: ${frames.length}, scores: ${scores.length}`);
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
+    body: bodyStr,
     signal,
   });
+  console.log(`[callPlannerSSE] Got response — status: ${response.status}`);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");

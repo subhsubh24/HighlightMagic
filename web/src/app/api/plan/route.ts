@@ -16,10 +16,13 @@ export const runtime = "nodejs";
  * The final result (or error) is sent as an SSE event once the planner finishes.
  */
 export async function POST(req: Request) {
+  console.log(`[/api/plan] POST handler entered — content-length: ${req.headers.get("content-length")}`);
   let body: Record<string, unknown>;
   try {
     body = await req.json();
-  } catch {
+    console.log(`[/api/plan] Body parsed successfully`);
+  } catch (parseErr) {
+    console.error(`[/api/plan] Body parse FAILED:`, parseErr instanceof Error ? parseErr.message : parseErr);
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
