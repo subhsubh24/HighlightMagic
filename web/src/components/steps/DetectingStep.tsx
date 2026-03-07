@@ -9,10 +9,8 @@ import {
   submitScoringBatch,
   pollScoringBatch,
   retrieveScoringResults,
-  validateTape,
   type DetectionResult,
   type DetectedClip,
-  type TapeValidationResult,
 } from "@/actions/detect";
 import type { AnimationPollResult } from "@/lib/kling";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
@@ -210,8 +208,6 @@ export default function DetectingStep() {
   const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
-  const [validationPhase, setValidationPhase] = useState<"idle" | "reviewing" | "revising" | "done">("idle");
-  const [validationRound, setValidationRound] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -538,88 +534,9 @@ export default function DetectingStep() {
         setAnimatingPhotos(false);
       }
 
-      // ── Haiku QA validation loop (max 2 rounds) ──
-      // Wrapped in try/catch — validation is non-blocking and must never prevent navigation.
-      let finalHighlights = highlights;
-      let finalClips = clips;
+      const finalHighlights = highlights;
+      const finalClips = clips;
 
-      try {
-        const MAX_VALIDATION_ROUNDS = 2;
-        let currentDetectedClips = detectedClips;
-
-        for (let round = 0; round < MAX_VALIDATION_ROUNDS; round++) {
-          if (abort.signal.aborted) break;
-
-          setValidationPhase("reviewing");
-          setValidationRound(round + 1);
-          setProgress(94 + round * 2);
-
-          const currentMedia = mediaFilesRef.current;
-          const sourceFileInfo = currentMedia.map((f) => ({
-            id: f.id,
-            name: f.name,
-            type: f.type,
-          }));
-          const animatedFileIds = currentMedia
-            .filter((f) => f.animationStatus === "completed" || f.animationStatus === "generating")
-            .map((f) => f.id);
-
-          const validation = await validateTape(
-            currentDetectedClips,
-            sourceFileInfo,
-            result.contentSummary,
-            animatedFileIds,
-          );
-
-          console.log(`Tape validation round ${round + 1}:`, validation);
-
-          if (validation.passed) {
-            setValidationPhase("done");
-            break;
-          }
-
-          // Haiku flagged issues — ask Opus to revise
-          if (abort.signal.aborted) break;
-          setValidationPhase("revising");
-          setProgress(96 + round * 2);
-
-          const revisionFeedback = [
-            "QA REVIEW FAILED. Fix these specific issues:",
-            ...validation.issues.map((issue, i) => `${i + 1}. ${issue}`),
-            "",
-            "Suggested fixes:",
-            ...validation.suggestions.map((s, i) => `${i + 1}. ${s}`),
-          ].join("\n");
-
-          const cached = getCachedDetectionData();
-          if (!cached.frames || !cached.scores) break;
-
-          const revisedResult = await callPlannerSSE(
-            cached.frames,
-            cached.scores,
-            state.selectedTemplate?.name,
-            revisionFeedback,
-            state.creativeDirection || undefined,
-            () => {}, // No phase progress for revision — it's fast
-            photoAnimations.length > 0 ? photoAnimations : undefined,
-            abort.signal
-          );
-
-          // Rebuild clips from revised result
-          currentDetectedClips = revisedResult.clips.filter((c) => {
-            if (c.startTime >= c.endTime) return false;
-            return true;
-          });
-
-          finalHighlights = buildHighlights(currentDetectedClips);
-          finalClips = buildClips(currentDetectedClips, state.selectedTemplate);
-        }
-      } catch (err) {
-        console.warn("Tape validation/revision error (non-blocking):", err);
-        // Accept current tape — validation failures never block the user
-      }
-
-      setValidationPhase("done");
       setProgress(100);
 
       // Brief pause for the 100% satisfaction, then navigate
@@ -873,11 +790,7 @@ export default function DetectingStep() {
 
       {/* Pass label */}
       <p className="text-center text-[var(--text-secondary)]">
-        {validationPhase === "reviewing"
-          ? `Reviewing your tape (round ${validationRound})...`
-          : validationPhase === "revising"
-            ? "Refining based on review feedback..."
-            : animatingPhotos
+        {animatingPhotos
               ? animationProgress.total > 1
                 ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
                 : "Animating your photo..."
@@ -885,11 +798,7 @@ export default function DetectingStep() {
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
-        {validationPhase === "reviewing"
-          ? "Haiku is checking pacing, transitions, and narrative coherence"
-          : validationPhase === "revising"
-            ? "Opus is adjusting the tape based on quality review notes"
-            : animatingPhotos
+        {animatingPhotos
               ? animationProgress.failed > 0
                 ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
                 : "Generating motion with Kling — this usually takes 1-2 minutes per photo"
