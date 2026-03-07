@@ -100,9 +100,9 @@ const REPLAN_PASSES = [
 ];
 
 /** Threshold in seconds before showing "taking longer than expected". */
-const SLOW_THRESHOLD_S = 45;
+const SLOW_THRESHOLD_S = 90;
 /** Threshold in seconds before showing a more detailed warning. */
-const VERY_SLOW_THRESHOLD_S = 120;
+const VERY_SLOW_THRESHOLD_S = 240;
 
 /** Max time (ms) to wait for the next SSE chunk from the server before aborting. */
 const SSE_READ_TIMEOUT_MS = 90_000;
@@ -840,7 +840,13 @@ export default function DetectingStep() {
               ? animationProgress.total > 1
                 ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
                 : "Animating your photo..."
-              : (passes[passIndex] ?? passes[passes.length - 1])}
+              : plannerElapsed > 0
+                ? plannerStatus === "thinking"
+                  ? `AI is analyzing your footage (${plannerElapsed}s)...`
+                  : plannerStatus === "generating"
+                    ? `Building your edit plan (${plannerElapsed}s)...`
+                    : `Planning your highlight tape (${plannerElapsed}s)...`
+                : (passes[passIndex] ?? passes[passes.length - 1])}
       </p>
 
       <p className="text-center text-xs text-[var(--text-tertiary)]">
@@ -861,9 +867,13 @@ export default function DetectingStep() {
 
       {isSlow && (
         <p className="text-center text-xs text-amber-400/80 animate-fade-in">
-          {isVerySlow
-            ? "This is taking unusually long — the AI model may be overloaded. You can wait or go back and try again."
-            : "Taking longer than expected — still working, hang tight..."}
+          {plannerStatus !== "idle"
+            ? isVerySlow
+              ? "The AI planner is still working — complex footage takes longer to analyze. You can wait or go back and try again."
+              : "The AI planner needs extra time for your footage — still processing..."
+            : isVerySlow
+              ? "This is taking unusually long — the AI model may be overloaded. You can wait or go back and try again."
+              : "Taking longer than expected — still working, hang tight..."}
         </p>
       )}
     </div>
