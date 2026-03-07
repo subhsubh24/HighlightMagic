@@ -46,8 +46,11 @@ export async function POST(req: Request) {
   let keepalive: ReturnType<typeof setInterval> | undefined;
   let closed = false;
 
+  console.log(`[/api/plan] Request received — frames=${(frames as unknown[]).length}, scores=${(scores as unknown[]).length}`);
+
   const stream = new ReadableStream({
     async start(controller) {
+      console.log(`[/api/plan] Stream started, calling planFromScores...`);
       keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode("event: keepalive\ndata: {}\n\n"));
@@ -56,6 +59,7 @@ export async function POST(req: Request) {
         }
       }, 15_000);
 
+      const planStartMs = Date.now();
       try {
         const result = await planFromScores(
           frames,
@@ -64,6 +68,7 @@ export async function POST(req: Request) {
           userFeedback ?? undefined,
           creativeDirection ?? undefined,
           (phase) => {
+            console.log(`[/api/plan] Phase: ${phase} (+${((Date.now() - planStartMs) / 1000).toFixed(1)}s)`);
             try {
               controller.enqueue(
                 encoder.encode(`event: phase\ndata: ${JSON.stringify({ phase })}\n\n`)
@@ -74,11 +79,13 @@ export async function POST(req: Request) {
           },
           photoAnimations ?? undefined
         );
+        console.log(`[/api/plan] planFromScores complete — ${result.clips.length} clips in ${((Date.now() - planStartMs) / 1000).toFixed(1)}s`);
         clearInterval(keepalive);
         controller.enqueue(
           encoder.encode(`event: result\ndata: ${JSON.stringify(result)}\n\n`)
         );
       } catch (err) {
+        console.error(`[/api/plan] planFromScores FAILED after ${((Date.now() - planStartMs) / 1000).toFixed(1)}s:`, err instanceof Error ? err.message : err);
         clearInterval(keepalive);
         const message = err instanceof Error ? err.message : String(err);
         try {
