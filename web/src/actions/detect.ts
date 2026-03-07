@@ -1478,303 +1478,288 @@ Respond with ONLY a JSON object:
     }\n\nNow create the highlight tape.`,
   });
 
-  // Total wall-clock abort: covers both the fetch AND the full stream read.
-  // AbortSignal.timeout only guards the initial connection — once headers arrive
-  // the stream can run forever. This controller ensures we abort everything
-  // (including extended thinking) after 5 minutes.
-  const plannerAbort = new AbortController();
-  const wallClockTimer = setTimeout(() => plannerAbort.abort("Planner timed out after 5 minutes"), 300_000);
-
-  try {
-    const response = await fetchWithRetry(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-opus-4-6",
-          max_tokens: 32000,
-          stream: true,
-          thinking: {
-            type: "adaptive",
-          },
-          system: [
-            {
-              type: "text",
-              text: systemPrompt,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          messages: [{ role: "user", content: userContent }],
-        }),
-        signal: plannerAbort.signal,
+  const response = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
-      "Planner"
-    );
+      body: JSON.stringify({
+        model: "claude-opus-4-6",
+        max_tokens: 32000,
+        stream: true,
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "medium",
+        },
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userContent }],
+      }),
+    },
+    "Planner"
+  );
 
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => "");
-      throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
-    }
-
-    // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
-    const { text, stopReason } = await consumeSSEStream(response, onPhase);
-
-    if (stopReason === "max_tokens") {
-      console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
-    }
-
-    if (!text) {
-      console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
-      throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
-    }
-
-    // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
-    const objMatch = text.match(/\{[\s\S]*\}/);
-    if (objMatch) {
-      const parsed = JSON.parse(objMatch[0]) as {
-          contentSummary?: string;
-          theme?: string;
-          clips?: Array<{
-            sourceFileId: string;
-            startTime: number;
-            endTime: number;
-            label: string;
-            confidenceScore: number;
-            velocityPreset?: string;
-            transitionType?: string;
-            transitionDuration?: number;
-            filter?: string;
-            captionText?: string;
-            captionStyle?: string;
-            entryPunchScale?: number;
-            entryPunchDuration?: number;
-            kenBurnsIntensity?: number;
-            // Dynamic AI-authored styles
-            velocityKeyframes?: Array<{ position: number; speed: number }>;
-            filterCSS?: string;
-            // Dynamic AI-authored caption styling
-            captionFontWeight?: number;
-            captionFontStyle?: string;
-            captionFontFamily?: string;
-            captionColor?: string;
-            captionAnimation?: string;
-            captionGlowColor?: string;
-            captionGlowRadius?: number;
-            animationPrompt?: string;
-          }>;
-        };
-
-        if (!parsed.contentSummary) {
-          console.warn("Planner: AI returned no contentSummary");
-        }
-        const contentSummary = parsed.contentSummary ?? "";
-
-        const theme: DetectedTheme =
-          parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
-            ? (parsed.theme as DetectedTheme)
-            : "cinematic";
-        if (parsed.theme && !VALID_THEMES.includes(parsed.theme as DetectedTheme)) {
-          console.warn(`Planner: unrecognized theme "${parsed.theme}", falling back to "cinematic"`);
-        }
-
-        const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
-        const VALID_TRANSITIONS = [
-          "flash", "zoom_punch", "whip", "hard_flash", "glitch",
-          "crossfade", "light_leak", "soft_zoom",
-          "color_flash", "strobe", "hard_cut", "dip_to_black",
-        ];
-        const VALID_FILTERS = [
-          "None", "Vibrant", "Warm", "Cool", "Noir", "Fade",
-          "GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm",
-        ];
-        const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
-
-        if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
-          console.warn("Planner: AI returned no clips array or empty clips");
-          return { clips: [], detectedTheme: theme, contentSummary };
-        }
-
-        const clips = parsed.clips.filter((p, i) => {
-          // Validate required fields
-          if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
-            console.warn(`Planner: clip ${i} missing required fields, skipping`);
-            return false;
-          }
-          // Validate time range
-          if (p.startTime >= p.endTime) {
-            console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
-            return false;
-          }
-          // Minimum clip duration guard — clips under 2s feel like errors
-          const MIN_CLIP_DURATION_S = 2.0;
-          if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
-            console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
-            return false;
-          }
-          return true;
-        }).map((p, i) => {
-          if (p.velocityPreset && !VALID_VELOCITIES.includes(p.velocityPreset)) {
-            console.warn(`Planner: clip ${i} unrecognized velocity "${p.velocityPreset}", defaulting to "normal"`);
-          }
-          if (p.filter && !VALID_FILTERS.includes(p.filter)) {
-            console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
-          }
-
-          // Validate custom velocity keyframes from AI
-          let customVelocityKeyframes: Array<{ position: number; speed: number }> | undefined;
-          if (Array.isArray(p.velocityKeyframes) && p.velocityKeyframes.length >= 2) {
-            const valid = p.velocityKeyframes.every((kf: { position?: number; speed?: number }) =>
-              typeof kf.position === "number" && typeof kf.speed === "number" &&
-              kf.position >= 0 && kf.position <= 1 && kf.speed >= 0.1 && kf.speed <= 5.0
-            );
-            if (valid) {
-              customVelocityKeyframes = p.velocityKeyframes
-                .map((kf: { position: number; speed: number }) => ({
-                  position: kf.position,
-                  speed: Math.max(0.1, Math.min(5.0, kf.speed)),
-                }))
-                .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
-            } else {
-              console.warn(`Planner: clip ${i} invalid velocityKeyframes, ignoring`);
-            }
-          }
-
-          // Validate custom CSS filter string — allow only safe CSS filter functions
-          let customFilterCSS: string | undefined;
-          if (typeof p.filterCSS === "string" && p.filterCSS.trim()) {
-            const safeFilterPattern = /^(\s*(saturate|contrast|brightness|sepia|hue-rotate|grayscale|blur|invert|opacity)\([^)]+\)\s*)+$/i;
-            if (safeFilterPattern.test(p.filterCSS.trim())) {
-              customFilterCSS = p.filterCSS.trim();
-            } else {
-              console.warn(`Planner: clip ${i} unsafe filterCSS "${p.filterCSS.slice(0, 60)}", ignoring`);
-            }
-          }
-
-          return {
-          id: crypto.randomUUID(),
-          sourceFileId: p.sourceFileId,
-          startTime: Math.max(0, p.startTime),
-          endTime: p.endTime,
-          confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
-          label: p.label || "Highlight",
-          velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
-            ? p.velocityPreset
-            : "normal",
-          order: i,
-          // Per-clip visual style from AI
-          transitionType: (p.transitionType && VALID_TRANSITIONS.includes(p.transitionType))
-            ? p.transitionType : undefined,
-          transitionDuration: (typeof p.transitionDuration === "number" && p.transitionDuration >= 0.1 && p.transitionDuration <= 2.0)
-            ? p.transitionDuration : undefined,
-          filter: (p.filter && VALID_FILTERS.includes(p.filter))
-            ? p.filter : undefined,
-          captionText: p.captionText || undefined,
-          captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
-            ? p.captionStyle : undefined,
-          entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
-            ? p.entryPunchScale : undefined,
-          entryPunchDuration: (typeof p.entryPunchDuration === "number" && p.entryPunchDuration >= 0 && p.entryPunchDuration <= 0.5)
-            ? p.entryPunchDuration : undefined,
-          kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
-            ? p.kenBurnsIntensity : undefined,
-          // Dynamic AI-authored styles
-          customVelocityKeyframes,
-          customFilterCSS,
-          // Dynamic AI-authored caption styling
-          customCaptionFontWeight: (typeof p.captionFontWeight === "number" && p.captionFontWeight >= 100 && p.captionFontWeight <= 900)
-            ? p.captionFontWeight : undefined,
-          customCaptionFontStyle: (p.captionFontStyle === "italic" || p.captionFontStyle === "normal")
-            ? p.captionFontStyle : undefined,
-          customCaptionFontFamily: (p.captionFontFamily === "sans-serif" || p.captionFontFamily === "serif" || p.captionFontFamily === "mono")
-            ? p.captionFontFamily : undefined,
-          customCaptionColor: (typeof p.captionColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionColor))
-            ? p.captionColor : undefined,
-          customCaptionAnimation: (typeof p.captionAnimation === "string" && ["pop", "slide", "flicker", "typewriter", "fade", "none"].includes(p.captionAnimation))
-            ? p.captionAnimation : undefined,
-          customCaptionGlowColor: (typeof p.captionGlowColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionGlowColor))
-            ? p.captionGlowColor : undefined,
-          customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
-            ? p.captionGlowRadius : undefined,
-          // Photo animation prompt from AI
-          animationPrompt: (typeof p.animationPrompt === "string" && p.animationPrompt.trim())
-            ? p.animationPrompt.trim().slice(0, 500) : undefined,
-        }; });
-
-        // Deduplicate: drop clips with identical or overlapping time ranges from the same source
-        const uniqueClips: typeof clips = [];
-        for (const clip of clips) {
-          // Check for overlap with already-accepted clips from the same source
-          const dominated = uniqueClips.some((existing) => {
-            if (existing.sourceFileId !== clip.sourceFileId) return false;
-            // Compute overlap between existing and candidate
-            const overlapStart = Math.max(existing.startTime, clip.startTime);
-            const overlapEnd = Math.min(existing.endTime, clip.endTime);
-            const overlap = Math.max(0, overlapEnd - overlapStart);
-            const candidateDuration = clip.endTime - clip.startTime;
-            // Drop if >50% of the candidate's duration overlaps an existing clip
-            return candidateDuration > 0 && overlap / candidateDuration > 0.5;
-          });
-          if (dominated) {
-            console.warn(
-              `Planner: dropping overlapping clip ${clip.sourceFileId} [${clip.startTime}-${clip.endTime}]`
-            );
-            continue;
-          }
-          uniqueClips.push(clip);
-        }
-
-        // Enforce minimum temporal gap between clips from the same source.
-        // Clips that are too close (within 5s) to an already-accepted clip get dropped.
-        const MIN_CLIP_GAP_S = 5;
-        const MAX_CLIPS_PER_SOURCE = 6;
-        const spacedClips: typeof uniqueClips = [];
-        const sourceClipCount = new Map<string, number>();
-        for (const clip of uniqueClips) {
-          // Cap clips per source to prevent visual repetition
-          const srcCount = sourceClipCount.get(clip.sourceFileId) ?? 0;
-          if (srcCount >= MAX_CLIPS_PER_SOURCE) {
-            console.warn(
-              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — max ${MAX_CLIPS_PER_SOURCE} clips per source reached`
-            );
-            continue;
-          }
-          const tooClose = spacedClips.some((existing) => {
-            if (existing.sourceFileId !== clip.sourceFileId) return false;
-            // Check gap between the clips (gap = space between one's end and other's start)
-            const gap = Math.min(
-              Math.abs(clip.startTime - existing.endTime),
-              Math.abs(existing.startTime - clip.endTime)
-            );
-            return gap < MIN_CLIP_GAP_S;
-          });
-          if (tooClose) {
-            console.warn(
-              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — too close to existing clip from same source (min gap: ${MIN_CLIP_GAP_S}s)`
-            );
-            continue;
-          }
-          spacedClips.push(clip);
-          sourceClipCount.set(clip.sourceFileId, srcCount + 1);
-        }
-
-        return { clips: spacedClips, detectedTheme: theme, contentSummary };
-    }
-
-    throw new Error("Planner response could not be parsed as JSON");
-  } catch (err) {
-    if (plannerAbort.signal.aborted) {
-      throw new Error("Planner timed out — the AI model took too long. Please try again.");
-    }
-    // Re-throw so the retry loop in detectMultiClipHighlights can handle it
-    throw err instanceof Error ? err : new Error(String(err));
-  } finally {
-    clearTimeout(wallClockTimer);
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
   }
+
+  // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
+  const { text, stopReason } = await consumeSSEStream(response, onPhase);
+
+  if (stopReason === "max_tokens") {
+    console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
+  }
+
+  if (!text) {
+    console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
+    throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
+  }
+
+  // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
+  const objMatch = text.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    const parsed = JSON.parse(objMatch[0]) as {
+        contentSummary?: string;
+        theme?: string;
+        clips?: Array<{
+          sourceFileId: string;
+          startTime: number;
+          endTime: number;
+          label: string;
+          confidenceScore: number;
+          velocityPreset?: string;
+          transitionType?: string;
+          transitionDuration?: number;
+          filter?: string;
+          captionText?: string;
+          captionStyle?: string;
+          entryPunchScale?: number;
+          entryPunchDuration?: number;
+          kenBurnsIntensity?: number;
+          // Dynamic AI-authored styles
+          velocityKeyframes?: Array<{ position: number; speed: number }>;
+          filterCSS?: string;
+          // Dynamic AI-authored caption styling
+          captionFontWeight?: number;
+          captionFontStyle?: string;
+          captionFontFamily?: string;
+          captionColor?: string;
+          captionAnimation?: string;
+          captionGlowColor?: string;
+          captionGlowRadius?: number;
+          animationPrompt?: string;
+        }>;
+      };
+
+      if (!parsed.contentSummary) {
+        console.warn("Planner: AI returned no contentSummary");
+      }
+      const contentSummary = parsed.contentSummary ?? "";
+
+      const theme: DetectedTheme =
+        parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
+          ? (parsed.theme as DetectedTheme)
+          : "cinematic";
+      if (parsed.theme && !VALID_THEMES.includes(parsed.theme as DetectedTheme)) {
+        console.warn(`Planner: unrecognized theme "${parsed.theme}", falling back to "cinematic"`);
+      }
+
+      const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
+      const VALID_TRANSITIONS = [
+        "flash", "zoom_punch", "whip", "hard_flash", "glitch",
+        "crossfade", "light_leak", "soft_zoom",
+        "color_flash", "strobe", "hard_cut", "dip_to_black",
+      ];
+      const VALID_FILTERS = [
+        "None", "Vibrant", "Warm", "Cool", "Noir", "Fade",
+        "GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm",
+      ];
+      const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
+
+      if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
+        console.warn("Planner: AI returned no clips array or empty clips");
+        return { clips: [], detectedTheme: theme, contentSummary };
+      }
+
+      const clips = parsed.clips.filter((p, i) => {
+        // Validate required fields
+        if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
+          console.warn(`Planner: clip ${i} missing required fields, skipping`);
+          return false;
+        }
+        // Validate time range
+        if (p.startTime >= p.endTime) {
+          console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
+          return false;
+        }
+        // Minimum clip duration guard — clips under 2s feel like errors
+        const MIN_CLIP_DURATION_S = 2.0;
+        if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
+          console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
+          return false;
+        }
+        return true;
+      }).map((p, i) => {
+        if (p.velocityPreset && !VALID_VELOCITIES.includes(p.velocityPreset)) {
+          console.warn(`Planner: clip ${i} unrecognized velocity "${p.velocityPreset}", defaulting to "normal"`);
+        }
+        if (p.filter && !VALID_FILTERS.includes(p.filter)) {
+          console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
+        }
+
+        // Validate custom velocity keyframes from AI
+        let customVelocityKeyframes: Array<{ position: number; speed: number }> | undefined;
+        if (Array.isArray(p.velocityKeyframes) && p.velocityKeyframes.length >= 2) {
+          const valid = p.velocityKeyframes.every((kf: { position?: number; speed?: number }) =>
+            typeof kf.position === "number" && typeof kf.speed === "number" &&
+            kf.position >= 0 && kf.position <= 1 && kf.speed >= 0.1 && kf.speed <= 5.0
+          );
+          if (valid) {
+            customVelocityKeyframes = p.velocityKeyframes
+              .map((kf: { position: number; speed: number }) => ({
+                position: kf.position,
+                speed: Math.max(0.1, Math.min(5.0, kf.speed)),
+              }))
+              .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
+          } else {
+            console.warn(`Planner: clip ${i} invalid velocityKeyframes, ignoring`);
+          }
+        }
+
+        // Validate custom CSS filter string — allow only safe CSS filter functions
+        let customFilterCSS: string | undefined;
+        if (typeof p.filterCSS === "string" && p.filterCSS.trim()) {
+          const safeFilterPattern = /^(\s*(saturate|contrast|brightness|sepia|hue-rotate|grayscale|blur|invert|opacity)\([^)]+\)\s*)+$/i;
+          if (safeFilterPattern.test(p.filterCSS.trim())) {
+            customFilterCSS = p.filterCSS.trim();
+          } else {
+            console.warn(`Planner: clip ${i} unsafe filterCSS "${p.filterCSS.slice(0, 60)}", ignoring`);
+          }
+        }
+
+        return {
+        id: crypto.randomUUID(),
+        sourceFileId: p.sourceFileId,
+        startTime: Math.max(0, p.startTime),
+        endTime: p.endTime,
+        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
+        label: p.label || "Highlight",
+        velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
+          ? p.velocityPreset
+          : "normal",
+        order: i,
+        // Per-clip visual style from AI
+        transitionType: (p.transitionType && VALID_TRANSITIONS.includes(p.transitionType))
+          ? p.transitionType : undefined,
+        transitionDuration: (typeof p.transitionDuration === "number" && p.transitionDuration >= 0.1 && p.transitionDuration <= 2.0)
+          ? p.transitionDuration : undefined,
+        filter: (p.filter && VALID_FILTERS.includes(p.filter))
+          ? p.filter : undefined,
+        captionText: p.captionText || undefined,
+        captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
+          ? p.captionStyle : undefined,
+        entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
+          ? p.entryPunchScale : undefined,
+        entryPunchDuration: (typeof p.entryPunchDuration === "number" && p.entryPunchDuration >= 0 && p.entryPunchDuration <= 0.5)
+          ? p.entryPunchDuration : undefined,
+        kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
+          ? p.kenBurnsIntensity : undefined,
+        // Dynamic AI-authored styles
+        customVelocityKeyframes,
+        customFilterCSS,
+        // Dynamic AI-authored caption styling
+        customCaptionFontWeight: (typeof p.captionFontWeight === "number" && p.captionFontWeight >= 100 && p.captionFontWeight <= 900)
+          ? p.captionFontWeight : undefined,
+        customCaptionFontStyle: (p.captionFontStyle === "italic" || p.captionFontStyle === "normal")
+          ? p.captionFontStyle : undefined,
+        customCaptionFontFamily: (p.captionFontFamily === "sans-serif" || p.captionFontFamily === "serif" || p.captionFontFamily === "mono")
+          ? p.captionFontFamily : undefined,
+        customCaptionColor: (typeof p.captionColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionColor))
+          ? p.captionColor : undefined,
+        customCaptionAnimation: (typeof p.captionAnimation === "string" && ["pop", "slide", "flicker", "typewriter", "fade", "none"].includes(p.captionAnimation))
+          ? p.captionAnimation : undefined,
+        customCaptionGlowColor: (typeof p.captionGlowColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionGlowColor))
+          ? p.captionGlowColor : undefined,
+        customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
+          ? p.captionGlowRadius : undefined,
+        // Photo animation prompt from AI
+        animationPrompt: (typeof p.animationPrompt === "string" && p.animationPrompt.trim())
+          ? p.animationPrompt.trim().slice(0, 500) : undefined,
+      }; });
+
+      // Deduplicate: drop clips with identical or overlapping time ranges from the same source
+      const uniqueClips: typeof clips = [];
+      for (const clip of clips) {
+        // Check for overlap with already-accepted clips from the same source
+        const dominated = uniqueClips.some((existing) => {
+          if (existing.sourceFileId !== clip.sourceFileId) return false;
+          // Compute overlap between existing and candidate
+          const overlapStart = Math.max(existing.startTime, clip.startTime);
+          const overlapEnd = Math.min(existing.endTime, clip.endTime);
+          const overlap = Math.max(0, overlapEnd - overlapStart);
+          const candidateDuration = clip.endTime - clip.startTime;
+          // Drop if >50% of the candidate's duration overlaps an existing clip
+          return candidateDuration > 0 && overlap / candidateDuration > 0.5;
+        });
+        if (dominated) {
+          console.warn(
+            `Planner: dropping overlapping clip ${clip.sourceFileId} [${clip.startTime}-${clip.endTime}]`
+          );
+          continue;
+        }
+        uniqueClips.push(clip);
+      }
+
+      // Enforce minimum temporal gap between clips from the same source.
+      // Clips that are too close (within 5s) to an already-accepted clip get dropped.
+      const MIN_CLIP_GAP_S = 5;
+      const MAX_CLIPS_PER_SOURCE = 6;
+      const spacedClips: typeof uniqueClips = [];
+      const sourceClipCount = new Map<string, number>();
+      for (const clip of uniqueClips) {
+        // Cap clips per source to prevent visual repetition
+        const srcCount = sourceClipCount.get(clip.sourceFileId) ?? 0;
+        if (srcCount >= MAX_CLIPS_PER_SOURCE) {
+          console.warn(
+            `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — max ${MAX_CLIPS_PER_SOURCE} clips per source reached`
+          );
+          continue;
+        }
+        const tooClose = spacedClips.some((existing) => {
+          if (existing.sourceFileId !== clip.sourceFileId) return false;
+          // Check gap between the clips (gap = space between one's end and other's start)
+          const gap = Math.min(
+            Math.abs(clip.startTime - existing.endTime),
+            Math.abs(existing.startTime - clip.endTime)
+          );
+          return gap < MIN_CLIP_GAP_S;
+        });
+        if (tooClose) {
+          console.warn(
+            `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — too close to existing clip from same source (min gap: ${MIN_CLIP_GAP_S}s)`
+          );
+          continue;
+        }
+        spacedClips.push(clip);
+        sourceClipCount.set(clip.sourceFileId, srcCount + 1);
+      }
+
+      return { clips: spacedClips, detectedTheme: theme, contentSummary };
+  }
+
+  throw new Error("Planner response could not be parsed as JSON");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
