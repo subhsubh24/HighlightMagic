@@ -13,6 +13,10 @@ const POLL_INTERVAL_MS = 5_000;
 /** Max time to wait for generation (ms) */
 const POLL_TIMEOUT_MS = 300_000; // 5 minutes
 
+/** Retry config for transient API errors (502/503/504) */
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 2_000; // 2s, 4s, 8s exponential backoff
+
 interface GenerateVideoResponse {
   data: {
     id: string;
@@ -55,34 +59,53 @@ export async function submitPhotoAnimation(
   // Strip the data URI prefix if present.
   const image = imageUrl.replace(/^data:image\/[^;]+;base64,/, "");
 
-  const response = await fetch(`${ATLAS_API_BASE}/generateVideo`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL_ID,
-      image,
-      prompt,
-      duration,
-      cfg_scale: 0.5,
-      sound: false,
-    }),
+  const requestBody = JSON.stringify({
+    model: MODEL_ID,
+    image,
+    prompt,
+    duration,
+    cfg_scale: 0.5,
+    sound: false,
   });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Atlas Cloud API error (${response.status}): ${text}`);
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      console.log(`[kling] Retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const response = await fetch(`${ATLAS_API_BASE}/generateVideo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: requestBody,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      lastError = new Error(`Atlas Cloud API error (${response.status}): ${text}`);
+      // Retry on gateway errors (502, 503, 504)
+      if ([502, 503, 504].includes(response.status) && attempt < MAX_RETRIES) {
+        console.warn(`[kling] Got ${response.status}, will retry...`);
+        continue;
+      }
+      throw lastError;
+    }
+
+    const data = (await response.json()) as GenerateVideoResponse;
+    console.log(`[kling] submit response:`, JSON.stringify(data));
+    if (!data?.data?.id) {
+      throw new Error("Atlas Cloud API returned no prediction ID");
+    }
+
+    return data.data.id;
   }
 
-  const data = (await response.json()) as GenerateVideoResponse;
-  console.log(`[kling] submit response:`, JSON.stringify(data));
-  if (!data?.data?.id) {
-    throw new Error("Atlas Cloud API returned no prediction ID");
-  }
-
-  return data.data.id;
+  throw lastError ?? new Error("Atlas Cloud API failed after retries");
 }
 
 export interface AnimationPollResult {
@@ -98,16 +121,37 @@ export interface AnimationPollResult {
 export async function checkAnimationResult(predictionId: string): Promise<AnimationPollResult> {
   const apiKey = getApiKey();
 
-  const response = await fetch(`${ATLAS_API_BASE}/prediction/${predictionId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
+  let lastError: Error | null = null;
+  let envelope: AtlasEnvelope<PredictionData> | null = null;
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Atlas Cloud poll error (${response.status}): ${text}`);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      console.log(`[kling] Poll retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const response = await fetch(`${ATLAS_API_BASE}/prediction/${predictionId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      lastError = new Error(`Atlas Cloud poll error (${response.status}): ${text}`);
+      if ([502, 503, 504].includes(response.status) && attempt < MAX_RETRIES) {
+        console.warn(`[kling] Poll got ${response.status}, will retry...`);
+        continue;
+      }
+      throw lastError;
+    }
+
+    envelope = (await response.json()) as AtlasEnvelope<PredictionData>;
+    break;
   }
 
-  const envelope = (await response.json()) as AtlasEnvelope<PredictionData>;
+  if (!envelope) {
+    throw lastError ?? new Error("Atlas Cloud poll failed after retries");
+  }
   const prediction = envelope.data;
   console.log(`[kling] prediction ${predictionId}: status=${prediction.status}, outputs=${JSON.stringify(prediction.outputs)}`);
 
