@@ -209,8 +209,6 @@ export default function DetectingStep() {
   const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
-  const [plannerStatus, setPlannerStatus] = useState<"idle" | "waiting" | "thinking" | "generating">("idle");
-  const [plannerStartTime, setPlannerStartTime] = useState<number | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
@@ -243,18 +241,24 @@ export default function DetectingStep() {
     };
   }, [passIndex]);
 
-  // Tick the planner elapsed timer every second while planner is active
+  // Tick the planner elapsed timer every second while on the planner pass.
+  // Normal mode = pass 2, batch mode = pass 3, replan = pass 0.
+  const isPlannerPass =
+    (isReplan && passIndex === 0) ||
+    (!isReplan && !batchMode && passIndex === 2) ||
+    (!isReplan && batchMode && passIndex === 3);
   useEffect(() => {
-    if (plannerStartTime === null) {
+    if (!isPlannerPass) {
       setPlannerElapsed(0);
       return;
     }
-    setPlannerElapsed(Math.floor((Date.now() - plannerStartTime) / 1000));
+    const start = Date.now();
+    setPlannerElapsed(0);
     const id = setInterval(() => {
-      setPlannerElapsed(Math.floor((Date.now() - plannerStartTime) / 1000));
+      setPlannerElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
     return () => clearInterval(id);
-  }, [plannerStartTime]);
+  }, [isPlannerPass]);
 
   useEffect(() => {
     // Always register cleanup for real unmount — React Strict Mode fires the
@@ -309,9 +313,6 @@ export default function DetectingStep() {
           });
         }, 500);
 
-        setPlannerStatus("waiting");
-        setPlannerStartTime(Date.now());
-
         const result = await callPlannerSSE(
           cached.frames,
           cached.scores,
@@ -321,7 +322,6 @@ export default function DetectingStep() {
           (phase) => {
             replanPhaseReceived = true;
             clearInterval(plannerTimer);
-            setPlannerStatus(phase);
             if (phase === "thinking") {
               setProgress((prev) => Math.max(prev, 45));
             } else if (phase === "generating") {
@@ -333,8 +333,6 @@ export default function DetectingStep() {
         );
 
         clearInterval(plannerTimer);
-        setPlannerStatus("idle");
-        setPlannerStartTime(null);
 
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
@@ -485,9 +483,6 @@ export default function DetectingStep() {
 
         console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         const plannerClientStart = Date.now();
-        setPlannerStatus("waiting");
-        setPlannerStartTime(Date.now());
-
         const result = await callPlannerSSE(
           frames,
           scores,
@@ -498,7 +493,6 @@ export default function DetectingStep() {
             console.log(`[Detection] Planner phase: ${phase} (+${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s)`);
             phaseReceived = true;
             clearInterval(plannerTimer);
-            setPlannerStatus(phase);
             if (phase === "thinking") {
               // Model is thinking — jump to 68% and creep slowly
               setProgress((prev) => Math.max(prev, 68));
@@ -513,8 +507,6 @@ export default function DetectingStep() {
         console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
-        setPlannerStatus("idle");
-        setPlannerStartTime(null);
         await processResult(result);
       } catch (err) {
         handleError(err);
@@ -769,8 +761,6 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
-      setPlannerStatus("idle");
-      setPlannerStartTime(null);
       if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
       console.error("Detection failed:", message);
@@ -844,11 +834,7 @@ export default function DetectingStep() {
                 ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
                 : "Animating your photo..."
               : plannerElapsed > 0
-                ? plannerStatus === "thinking"
-                  ? `AI is analyzing your footage (${plannerElapsed}s)...`
-                  : plannerStatus === "generating"
-                    ? `Building your edit plan (${plannerElapsed}s)...`
-                    : `Planning your highlight tape (${plannerElapsed}s)...`
+                ? `Planning your highlight tape (${plannerElapsed}s)...`
                 : (passes[passIndex] ?? passes[passes.length - 1])}
       </p>
 
@@ -857,12 +843,8 @@ export default function DetectingStep() {
               ? animationProgress.failed > 0
                 ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
                 : "Generating motion with Kling — this usually takes 1-2 minutes per photo"
-              : plannerStatus !== "idle"
-                ? plannerStatus === "thinking"
-                  ? `AI is deeply analyzing your content (${plannerElapsed}s)...`
-                  : plannerStatus === "generating"
-                    ? `AI is writing the edit plan (${plannerElapsed}s)...`
-                    : `Waiting for AI response (${plannerElapsed}s)...`
+              : isPlannerPass
+                ? `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} — waiting for response (${plannerElapsed}s)`
                 : isReplan
                   ? "Re-generating with your creative direction..."
                   : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
@@ -870,7 +852,7 @@ export default function DetectingStep() {
 
       {isSlow && (
         <p className="text-center text-xs text-amber-400/80 animate-fade-in">
-          {plannerStatus !== "idle"
+          {isPlannerPass
             ? isVerySlow
               ? "The AI planner is still working — complex footage takes longer to analyze. You can wait or go back and try again."
               : "The AI planner needs extra time for your footage — still processing..."
