@@ -210,8 +210,8 @@ export default function DetectingStep() {
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
   const [plannerStatus, setPlannerStatus] = useState<"idle" | "waiting" | "thinking" | "generating">("idle");
+  const [plannerStartTime, setPlannerStartTime] = useState<number | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
-  const plannerTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -243,6 +243,19 @@ export default function DetectingStep() {
     };
   }, [passIndex]);
 
+  // Tick the planner elapsed timer every second while planner is active
+  useEffect(() => {
+    if (plannerStartTime === null) {
+      setPlannerElapsed(0);
+      return;
+    }
+    setPlannerElapsed(Math.floor((Date.now() - plannerStartTime) / 1000));
+    const id = setInterval(() => {
+      setPlannerElapsed(Math.floor((Date.now() - plannerStartTime) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [plannerStartTime]);
+
   useEffect(() => {
     // Always register cleanup for real unmount — React Strict Mode fires the
     // first cleanup during its simulated unmount, but the second mount still
@@ -250,7 +263,6 @@ export default function DetectingStep() {
     const cleanupFn = () => {
       abortRef.current.abort("DetectingStep unmounted");
       animationAbortRef.current?.abort("DetectingStep unmounted");
-      clearInterval(plannerTimerRef.current);
     };
 
     if (hasStarted.current) return cleanupFn;
@@ -297,13 +309,8 @@ export default function DetectingStep() {
           });
         }, 500);
 
-        const replanStart = Date.now();
         setPlannerStatus("waiting");
-        setPlannerElapsed(0);
-        clearInterval(plannerTimerRef.current);
-        plannerTimerRef.current = setInterval(() => {
-          setPlannerElapsed(Math.floor((Date.now() - replanStart) / 1000));
-        }, 1000);
+        setPlannerStartTime(Date.now());
 
         const result = await callPlannerSSE(
           cached.frames,
@@ -326,8 +333,8 @@ export default function DetectingStep() {
         );
 
         clearInterval(plannerTimer);
-        clearInterval(plannerTimerRef.current);
         setPlannerStatus("idle");
+        setPlannerStartTime(null);
 
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
@@ -479,11 +486,7 @@ export default function DetectingStep() {
         console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         const plannerClientStart = Date.now();
         setPlannerStatus("waiting");
-        setPlannerElapsed(0);
-        clearInterval(plannerTimerRef.current);
-        plannerTimerRef.current = setInterval(() => {
-          setPlannerElapsed(Math.floor((Date.now() - plannerClientStart) / 1000));
-        }, 1000);
+        setPlannerStartTime(Date.now());
 
         const result = await callPlannerSSE(
           frames,
@@ -510,8 +513,8 @@ export default function DetectingStep() {
         console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
-        clearInterval(plannerTimerRef.current);
         setPlannerStatus("idle");
+        setPlannerStartTime(null);
         await processResult(result);
       } catch (err) {
         handleError(err);
@@ -766,8 +769,8 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
-      clearInterval(plannerTimerRef.current);
       setPlannerStatus("idle");
+      setPlannerStartTime(null);
       if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
       console.error("Detection failed:", message);
