@@ -2,6 +2,14 @@ import { planFromScores } from "@/actions/detect";
 
 export const runtime = "nodejs";
 
+// GET handler for testing that this route compiles and is routable
+export async function GET() {
+  console.log("[/api/plan] GET handler hit");
+  return new Response(JSON.stringify({ ok: true, timestamp: Date.now() }), {
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 /**
  * SSE route handler for the planner.
  *
