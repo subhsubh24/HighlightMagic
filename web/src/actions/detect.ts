@@ -1497,13 +1497,11 @@ Respond with ONLY a JSON object:
         },
         body: JSON.stringify({
           model: "claude-opus-4-6",
-          max_tokens: 32000,
+          max_tokens: 16384,
           stream: true,
           thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "medium",
+            type: "enabled",
+            budget_tokens: 8192,
           },
           system: [
             {
