@@ -259,12 +259,15 @@ export default function DetectingStep() {
         setPassIndex(0); // "Re-planning with your direction..."
         setProgress(10);
 
-        // Slow fallback timer — only creeps if no phase events arrive
+        // Slow fallback timer — creeps toward 75% so progress never looks stuck
+        let replanPhaseReceived = false;
         const plannerTimer = setInterval(() => {
+          if (replanPhaseReceived) return;
           setProgress((prev) => {
-            const remaining = 50 - prev;
-            const increment = Math.max(0.05, remaining * 0.01);
-            return Math.min(prev + increment, 50);
+            const ceiling = 75;
+            const remaining = ceiling - prev;
+            const increment = Math.max(0.05, remaining * 0.008);
+            return Math.min(prev + increment, ceiling);
           });
         }, 500);
 
@@ -275,6 +278,7 @@ export default function DetectingStep() {
           state.regenerateFeedback ?? undefined,
           state.creativeDirection || undefined,
           (phase) => {
+            replanPhaseReceived = true;
             clearInterval(plannerTimer);
             if (phase === "thinking") {
               setProgress((prev) => Math.max(prev, 45));
@@ -415,12 +419,17 @@ export default function DetectingStep() {
         setPassIndex(useBatchMode ? 3 : 2);
         setProgress(60);
 
-        // Slow fallback timer — only creeps if no phase events arrive
+        // Slow fallback timer — creeps toward 85% so progress never looks stuck.
+        // Phase events will jump ahead when they arrive.
+        let phaseReceived = false;
         const plannerTimer = setInterval(() => {
+          if (phaseReceived) return;
           setProgress((prev) => {
-            const remaining = 72 - prev;
-            const increment = Math.max(0.05, remaining * 0.01);
-            return Math.min(prev + increment, 72);
+            // Creep toward 85% — slow down as we approach it
+            const ceiling = 85;
+            const remaining = ceiling - prev;
+            const increment = Math.max(0.05, remaining * 0.008);
+            return Math.min(prev + increment, ceiling);
           });
         }, 500);
 
@@ -431,6 +440,7 @@ export default function DetectingStep() {
           undefined,
           state.creativeDirection || undefined,
           (phase) => {
+            phaseReceived = true;
             clearInterval(plannerTimer);
             if (phase === "thinking") {
               // Model is thinking — jump to 68% and creep slowly

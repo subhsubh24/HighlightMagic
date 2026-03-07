@@ -1493,7 +1493,8 @@ Respond with ONLY a JSON object:
           messages: [{ role: "user", content: userContent }],
         }),
       },
-      "Planner"
+      "Planner",
+      300_000 // 5 minute timeout — Opus multimodal requests can take 2-3 mins
     );
 
     if (!response.ok) {
