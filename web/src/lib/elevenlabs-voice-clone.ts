@@ -59,6 +59,7 @@ export async function createVoiceClone(
       "xi-api-key": apiKey,
     },
     body: formData,
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
@@ -131,6 +132,7 @@ export async function generateWithClonedVoice(
           use_speaker_boost: true,
         },
       }),
+      signal: AbortSignal.timeout(30_000),
     }
   );
 

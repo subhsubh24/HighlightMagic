@@ -430,7 +430,7 @@ function normalizeScoresAcrossBatches(scores: ScoredFrame[]): ScoredFrame[] {
 
   return scores.map((s) => ({
     ...s,
-    score: range > 0.001 ? (zScores.get(s)! - minZ) / range : s.score,
+    score: Math.max(0, Math.min(1, range > 0.001 ? (zScores.get(s)! - minZ) / range : 0.5)),
   }));
 }
 
@@ -896,6 +896,12 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
+/** Build a lookup key from source file ID + timestamp with enough precision to avoid collisions.
+ * Using 3 decimal places (ms precision) prevents the collisions that .toFixed(1) caused. */
+function frameKey(sourceFileId: string, timestamp: number): string {
+  return `${sourceFileId}::${timestamp.toFixed(3)}`;
+}
+
 const API_MAX_IMAGES = 60; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
 const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
@@ -907,7 +913,7 @@ function selectPlannerFrames(
   // Build a lookup from (sourceFileId, timestamp) → frame
   const frameLookup = new Map<string, MultiFrameInput>();
   for (const f of frames) {
-    frameLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f);
+    frameLookup.set(frameKey(f.sourceFileId, f.timestamp), f);
   }
 
   // Group scores by source, sorted best-first
@@ -930,7 +936,7 @@ function selectPlannerFrames(
 
   function addFrame(score: ScoredFrame, enforceGap: boolean): boolean {
     if (selected.length >= API_MAX_IMAGES) return false;
-    const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
+    const key = frameKey(score.sourceFileId, score.timestamp);
     const frame = frameLookup.get(key);
     if (!frame || usedKeys.has(key)) return false;
 
@@ -993,13 +999,13 @@ function selectPlannerFrames(
     // Build per-source score lookup for shedding lowest-scored frames
     const scoreLookup = new Map<string, number>();
     for (const s of scores) {
-      scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s.score);
+      scoreLookup.set(frameKey(s.sourceFileId, s.timestamp), s.score);
     }
     // Sort selected frames from that source by score ascending (shed worst first)
     const toShed: number[] = [];
     for (const src of overRepresented) {
       const indices = selected
-        .map((f, i) => ({ i, score: scoreLookup.get(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`) ?? 0 }))
+        .map((f, i) => ({ i, score: scoreLookup.get(frameKey(f.sourceFileId, f.timestamp)) ?? 0 }))
         .filter((_, idx) => selected[idx].sourceFileId === src)
         .sort((a, b) => a.score - b.score);
       const excess = (countBySource.get(src) ?? 0) - maxPerSource;
@@ -1081,7 +1087,7 @@ async function planHighlightTape(
   const onsetLookup = new Map<string, number>();
   const specLookup = new Map<string, { bass: number; mid: number; treble: number }>();
   for (const f of allFrames) {
-    const key = `${f.sourceFileId}::${f.timestamp.toFixed(1)}`;
+    const key = frameKey(f.sourceFileId, f.timestamp);
     if (f.audioEnergy != null) audioLookup.set(key, f.audioEnergy);
     if (f.audioOnset != null) onsetLookup.set(key, f.audioOnset);
     if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid ?? 0, treble: f.audioTreble ?? 0 });
@@ -1095,7 +1101,7 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
-          const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
+          const key = frameKey(s.sourceFileId, s.timestamp);
           const audioVal = audioLookup.get(key);
           const onsetVal = onsetLookup.get(key);
           const audioTag = audioVal != null ? `  audio:${audioVal.toFixed(2)}` : "";
@@ -1108,8 +1114,8 @@ async function planHighlightTape(
 
       // Build ASCII audio visualizations for this source
       const bars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
-      const audioVals = sorted.map((s) => audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
-      const onsetVals = sorted.map((s) => onsetLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
+      const audioVals = sorted.map((s) => audioLookup.get(frameKey(s.sourceFileId, s.timestamp))).filter((v): v is number => v != null);
+      const onsetVals = sorted.map((s) => onsetLookup.get(frameKey(s.sourceFileId, s.timestamp))).filter((v): v is number => v != null);
       const audioViz = audioVals.length > 0
         ? `  Audio energy:  ${audioVals.map((v) => bars[Math.min(7, Math.floor(v * 8))]).join("")}`
         : "";
@@ -1509,7 +1515,7 @@ Respond with ONLY a JSON object:
   // Build a score lookup so we can annotate each frame with its score + label
   const scoreLookup = new Map<string, ScoredFrame>();
   for (const s of scores) {
-    scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s);
+    scoreLookup.set(frameKey(s.sourceFileId, s.timestamp), s);
   }
 
   userContent.push({
@@ -1523,7 +1529,7 @@ Respond with ONLY a JSON object:
       source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
     });
 
-    const scoreData = scoreLookup.get(`${frame.sourceFileId}::${frame.timestamp.toFixed(1)}`);
+    const scoreData = scoreLookup.get(frameKey(frame.sourceFileId, frame.timestamp));
     const approxDuration = (sourceDurations.get(frame.sourceFileId) ?? 0) + 2;
     const position = approxDuration > 0
       ? `${((frame.timestamp / approxDuration) * 100).toFixed(0)}% through`

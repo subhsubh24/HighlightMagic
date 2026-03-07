@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music, CheckCircle, AlertTriangle } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
@@ -64,6 +64,13 @@ export default function ExportStep() {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Cleanup blob URL on unmount or when a new one is created
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);

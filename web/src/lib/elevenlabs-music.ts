@@ -57,6 +57,7 @@ export async function generateMusic(
       music_length_ms: clampedDuration,
       output_format: "mp3_44100_128",
     }),
+    signal: AbortSignal.timeout(120_000), // Music generation can take 30-60s
   });
 
   if (!response.ok) {

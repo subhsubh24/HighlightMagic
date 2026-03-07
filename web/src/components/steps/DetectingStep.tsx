@@ -104,8 +104,10 @@ const SLOW_THRESHOLD_S = 90;
 /** Threshold in seconds before showing a more detailed warning. */
 const VERY_SLOW_THRESHOLD_S = 240;
 
-/** Max time (ms) to wait for the next SSE chunk from the server before aborting. */
-const SSE_READ_TIMEOUT_MS = 90_000;
+/** Max time (ms) to wait for the next SSE chunk from the server before aborting.
+ * Set high to allow for Opus extended thinking (can take 2-3 min on complex edits).
+ * Keepalive pings every 15s ensure the connection stays alive. */
+const SSE_READ_TIMEOUT_MS = 300_000;
 
 /**
  * Call the planner via SSE route handler (/api/plan).
@@ -153,10 +155,15 @@ async function callPlannerSSE(
       }
 
       if (eventType === "result") {
-        return JSON.parse(data) as DetectionResult;
+        try {
+          return JSON.parse(data) as DetectionResult;
+        } catch {
+          throw new Error("Failed to parse planner result — server returned invalid JSON");
+        }
       }
       if (eventType === "error") {
-        const { message } = JSON.parse(data);
+        let message = data || "Unknown planner error";
+        try { message = JSON.parse(data).message || message; } catch { /* use raw data */ }
         throw new Error(message);
       }
       if (eventType === "phase") {
@@ -289,6 +296,7 @@ export default function DetectingStep() {
     }
 
     async function runReplan() {
+      let plannerTimer: ReturnType<typeof setInterval> | undefined;
       try {
         const cached = getCachedDetectionData();
         if (!cached.frames || !cached.scores) {
@@ -303,7 +311,7 @@ export default function DetectingStep() {
 
         // Slow fallback timer — creeps toward 75% so progress never looks stuck
         let replanPhaseReceived = false;
-        const plannerTimer = setInterval(() => {
+        plannerTimer = setInterval(() => {
           if (replanPhaseReceived) return;
           setProgress((prev) => {
             const ceiling = 75;
@@ -345,6 +353,7 @@ export default function DetectingStep() {
 
         await processResult(result);
       } catch (err) {
+        clearInterval(plannerTimer);
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
         handleError(err);
       }
@@ -434,6 +443,7 @@ export default function DetectingStep() {
     }
 
     async function runDetection() {
+      let plannerTimer: ReturnType<typeof setInterval> | undefined;
       try {
         // Phase 1: Extract frames from all media files (0-30%)
         setPassIndex(0);
@@ -476,7 +486,7 @@ export default function DetectingStep() {
         // Slow fallback timer — creeps toward 85% so progress never looks stuck.
         // Phase events will jump ahead when they arrive.
         let phaseReceived = false;
-        const plannerTimer = setInterval(() => {
+        plannerTimer = setInterval(() => {
           if (phaseReceived) return;
           setProgress((prev) => {
             // Creep toward 85% — slow down as we approach it
@@ -515,7 +525,7 @@ export default function DetectingStep() {
               setProgress((prev) => Math.max(prev, 68));
             } else if (phase === "generating") {
               // Model is outputting text — we're nearly done
-              setProgress(88);
+              setProgress((prev) => Math.max(prev, 88));
             }
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
@@ -526,6 +536,7 @@ export default function DetectingStep() {
         clearInterval(plannerTimer);
         await processResult(result);
       } catch (err) {
+        clearInterval(plannerTimer);
         handleError(err);
       }
     }
@@ -600,12 +611,13 @@ export default function DetectingStep() {
       }
 
       // 1. Music — use Claude's prompt if available, fallback to legacy
-      const musicPromise = (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
-        ? (async () => {
+      // Returns the audio URL so downstream promises (stems) can use it without stale state
+      const musicPromise: Promise<string | null> | null = (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
+        ? (async (): Promise<string | null> => {
             const prompt = productionPlan?.musicPrompt
               || state.aiMusicPrompt?.trim()
               || `Instrumental background music for a ${theme} highlight reel. ${result.contentSummary ?? ""}`.trim();
-            if (!prompt) return;
+            if (!prompt) return null;
             dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
             try {
               const res = await fetch("/api/music/submit", {
@@ -619,11 +631,13 @@ export default function DetectingStep() {
               const data = await res.json();
               if (!res.ok || data.status !== "completed" || !data.audioUrl) {
                 dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
-                return;
+                return null;
               }
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+              return data.audioUrl as string;
             } catch {
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+              return null;
             }
           })()
         : null;
@@ -860,33 +874,27 @@ export default function DetectingStep() {
         : null;
 
       // 7. Stem separation — isolate instrumental from AI music for smarter ducking
+      // Uses musicPromise's returned URL directly (not stale state)
       const stemPromise = (state.aiMusicEnabled && productionPlan?.voiceover?.enabled)
         ? (async () => {
-            // Wait for music to complete first
-            if (musicPromise) await musicPromise;
-            if (state.aiMusicUrl || state.aiMusicStatus === "completed") {
-              dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "generating" });
-              try {
-                // Get the music URL from state (may have been set by musicPromise)
-                const musicUrl = state.aiMusicUrl;
-                if (!musicUrl) {
-                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
-                  return;
-                }
-                const res = await fetch("/api/stems", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ musicDataUri: musicUrl }),
-                });
-                const data = await res.json();
-                if (res.ok && data.status === "completed" && data.instrumentalUrl) {
-                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: data.instrumentalUrl, status: "completed" });
-                } else {
-                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
-                }
-              } catch {
+            // Wait for music and capture its URL directly from the promise result
+            const musicUrl = musicPromise ? await musicPromise : state.aiMusicUrl;
+            if (!musicUrl) return; // Music didn't complete — can't separate stems
+            dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "generating" });
+            try {
+              const res = await fetch("/api/stems", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ musicDataUri: musicUrl }),
+              });
+              const data = await res.json();
+              if (res.ok && data.status === "completed" && data.instrumentalUrl) {
+                dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: data.instrumentalUrl, status: "completed" });
+              } else {
                 dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
               }
+            } catch {
+              dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
             }
           })()
         : null;
@@ -980,14 +988,15 @@ export default function DetectingStep() {
         : null;
 
       // 9. Auto-upscale low-res photos before animation
+      // Map of mediaId → upscaled URL, shared with animation pipeline
+      const upscaledUrls = new Map<string, string>();
       const upscalePromises = state.mediaFiles
         .filter((m) => m.type === "photo" && m.animatePhoto)
         .map(async (media) => {
           try {
-            const dataUri = await fileToDataUri(media.file);
-            // Check if image is small (< 1024px wide by checking file size as heuristic)
-            // Photos under ~500KB are likely low-res
+            // Photos under ~500KB are likely low-res — auto-upscale before animation
             if (media.file.size < 500_000) {
+              const dataUri = await fileToDataUri(media.file);
               const res = await fetch("/api/upscale", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -997,8 +1006,8 @@ export default function DetectingStep() {
               if (res.ok && data.predictionId) {
                 const upscaledUrl = await pollAtlasTask(data.predictionId);
                 if (upscaledUrl) {
+                  upscaledUrls.set(media.id, upscaledUrl);
                   console.log(`[auto-upscale] Upscaled ${media.name}`);
-                  // The upscaled URL can be used by the animation pipeline
                 }
               }
             }
@@ -1006,6 +1015,9 @@ export default function DetectingStep() {
             // Non-blocking — if upscale fails, animation uses original
           }
         });
+
+      // Wait for upscales to finish before animations so animations can use upscaled images
+      await Promise.allSettled(upscalePromises);
 
       // 10. Store style transfer prompt if Claude chose one
       if (productionPlan?.styleTransfer) {
@@ -1020,14 +1032,14 @@ export default function DetectingStep() {
         ).size;
         setAnimationProgress({ total: uniquePhotoCount, completed: 0, failed: 0 });
         setAnimatingPhotos(true);
-        await triggerPhotoAnimations(animatableClips);
+        await triggerPhotoAnimations(animatableClips, upscaledUrls);
         setAnimatingPhotos(false);
       }
 
       // Wait for all parallel generators to complete (non-blocking — failures are OK)
       await Promise.allSettled(
         [musicPromise, sfxPromise, voiceoverPromise, introPromise, outroPromise,
-         voiceClonePromise, stemPromise, talkingHeadPromise, ...upscalePromises].filter(Boolean)
+         voiceClonePromise, stemPromise, talkingHeadPromise].filter(Boolean)
       );
 
       const finalHighlights = highlights;
@@ -1156,7 +1168,7 @@ export default function DetectingStep() {
     }
 
     /** Fire Kling animation calls in parallel — results update MediaFile state as they complete. */
-    function triggerPhotoAnimations(clips: DetectedClip[]): Promise<void> {
+    function triggerPhotoAnimations(clips: DetectedClip[], upscaledUrls?: Map<string, string>): Promise<void> {
       // Create a fresh AbortController for animations — the main `abort` controller
       // is already dead (fired by React Strict Mode's simulated unmount in dev).
       // This one is created lazily, long after Strict Mode cleanup, so it's alive.
@@ -1206,8 +1218,11 @@ export default function DetectingStep() {
           animationStatus: "generating",
         });
 
-        // Submit task via API route (avoids React Flight serialization limits for large base64)
-        const p = fileToDataUri(media.file)
+        // Submit task — use upscaled image if available, otherwise original
+        const imagePromise = upscaledUrls?.get(media.id)
+          ? Promise.resolve(upscaledUrls.get(media.id)!)
+          : fileToDataUri(media.file);
+        const p = imagePromise
           .then(async (dataUri) => {
             const res = await fetch("/api/animate/submit", {
               method: "POST",

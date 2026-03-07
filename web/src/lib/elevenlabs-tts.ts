@@ -89,6 +89,7 @@ export async function generateVoiceover(
           use_speaker_boost: true,
         },
       }),
+      signal: AbortSignal.timeout(30_000),
     }
   );
 

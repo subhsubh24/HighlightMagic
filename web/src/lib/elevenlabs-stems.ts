@@ -68,6 +68,7 @@ export async function separateStems(
         "xi-api-key": apiKey,
       },
       body: formData,
+      signal: AbortSignal.timeout(60_000),
     }
   );
 

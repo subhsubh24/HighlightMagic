@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "audioData is required" }, { status: 400 });
     }
 
-    const dur = typeof duration === "number" ? Math.max(2, Math.min(10, duration)) : 5;
+    const dur = typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;
     const predictionId = await submitLipSync(imageData, audioData, dur);
     return Response.json({ predictionId });
   } catch (err) {

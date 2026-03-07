@@ -59,6 +59,7 @@ export async function generateSoundEffect(
         text: prompt,
         duration_seconds: clampedDuration / 1000,
       }),
+      signal: AbortSignal.timeout(30_000),
     }
   );
 

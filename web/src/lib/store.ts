@@ -259,8 +259,6 @@ export function reducer(state: AppState, action: Action): AppState {
         ...initialState,
         isProUser: state.isProUser,
         exportsUsed: state.exportsUsed,
-        detectedTheme: "cinematic" as const,
-        contentSummary: "",
       };
     default:
       return state;

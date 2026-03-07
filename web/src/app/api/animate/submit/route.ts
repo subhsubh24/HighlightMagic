@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     // Validate duration is a number in acceptable range
-    const dur = typeof duration === "number" ? Math.max(2, Math.min(10, duration)) : 5;
+    const dur = typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;
 
     const predictionId = await submitPhotoAnimation(imageData, prompt, dur);
     return Response.json({ predictionId });
