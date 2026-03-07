@@ -209,6 +209,9 @@ export default function DetectingStep() {
   const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
+  const [plannerStatus, setPlannerStatus] = useState<"idle" | "waiting" | "thinking" | "generating">("idle");
+  const [plannerElapsed, setPlannerElapsed] = useState(0);
+  const plannerTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
@@ -247,6 +250,7 @@ export default function DetectingStep() {
     const cleanupFn = () => {
       abortRef.current.abort("DetectingStep unmounted");
       animationAbortRef.current?.abort("DetectingStep unmounted");
+      clearInterval(plannerTimerRef.current);
     };
 
     if (hasStarted.current) return cleanupFn;
@@ -293,6 +297,14 @@ export default function DetectingStep() {
           });
         }, 500);
 
+        const replanStart = Date.now();
+        setPlannerStatus("waiting");
+        setPlannerElapsed(0);
+        clearInterval(plannerTimerRef.current);
+        plannerTimerRef.current = setInterval(() => {
+          setPlannerElapsed(Math.floor((Date.now() - replanStart) / 1000));
+        }, 1000);
+
         const result = await callPlannerSSE(
           cached.frames,
           cached.scores,
@@ -302,6 +314,7 @@ export default function DetectingStep() {
           (phase) => {
             replanPhaseReceived = true;
             clearInterval(plannerTimer);
+            setPlannerStatus(phase);
             if (phase === "thinking") {
               setProgress((prev) => Math.max(prev, 45));
             } else if (phase === "generating") {
@@ -313,6 +326,8 @@ export default function DetectingStep() {
         );
 
         clearInterval(plannerTimer);
+        clearInterval(plannerTimerRef.current);
+        setPlannerStatus("idle");
 
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
@@ -463,6 +478,13 @@ export default function DetectingStep() {
 
         console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         const plannerClientStart = Date.now();
+        setPlannerStatus("waiting");
+        setPlannerElapsed(0);
+        clearInterval(plannerTimerRef.current);
+        plannerTimerRef.current = setInterval(() => {
+          setPlannerElapsed(Math.floor((Date.now() - plannerClientStart) / 1000));
+        }, 1000);
+
         const result = await callPlannerSSE(
           frames,
           scores,
@@ -473,6 +495,7 @@ export default function DetectingStep() {
             console.log(`[Detection] Planner phase: ${phase} (+${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s)`);
             phaseReceived = true;
             clearInterval(plannerTimer);
+            setPlannerStatus(phase);
             if (phase === "thinking") {
               // Model is thinking — jump to 68% and creep slowly
               setProgress((prev) => Math.max(prev, 68));
@@ -487,6 +510,8 @@ export default function DetectingStep() {
         console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
+        clearInterval(plannerTimerRef.current);
+        setPlannerStatus("idle");
         await processResult(result);
       } catch (err) {
         handleError(err);
@@ -741,6 +766,8 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
+      clearInterval(plannerTimerRef.current);
+      setPlannerStatus("idle");
       if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
       console.error("Detection failed:", message);
@@ -821,9 +848,15 @@ export default function DetectingStep() {
               ? animationProgress.failed > 0
                 ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
                 : "Generating motion with Kling — this usually takes 1-2 minutes per photo"
-              : isReplan
-                ? "Re-generating with your creative direction..."
-                : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
+              : plannerStatus !== "idle"
+                ? plannerStatus === "thinking"
+                  ? `AI is deeply analyzing your content (${plannerElapsed}s)...`
+                  : plannerStatus === "generating"
+                    ? `AI is writing the edit plan (${plannerElapsed}s)...`
+                    : `Waiting for AI response (${plannerElapsed}s)...`
+                : isReplan
+                  ? "Re-generating with your creative direction..."
+                  : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
       </p>
 
       {isSlow && (
