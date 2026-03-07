@@ -116,6 +116,15 @@ export interface AiProductionPlan {
 
   // Enhanced photo animation prompts (Claude improves user's vague instructions)
   photoAnimationPrompts: Record<string, string>;
+
+  // Style transfer — AI-chosen visual post-processing look
+  styleTransfer: {
+    prompt: string;
+    strength: number; // 0.1-1.0
+  } | null;
+
+  // Talking head intro — Claude writes the intro speech
+  talkingHeadSpeech: string | null;
 }
 
 export interface MediaFile {
@@ -268,4 +277,30 @@ export interface AppState {
 
   // Audio transcript from Scribe (enhances detection)
   audioTranscript: string | null;
+
+  // ── Voice cloning (Pro) ──
+  /** Base64 data URI of the voice sample uploaded by user */
+  voiceSampleUrl: string | null;
+  /** ElevenLabs voice ID after cloning */
+  clonedVoiceId: string | null;
+  voiceCloneStatus: GenerationStatus;
+
+  // ── Stem separation (Pro) — instrumental-only track for ducking under voiceover ──
+  instrumentalMusicUrl: string | null;
+  stemSeparationStatus: GenerationStatus;
+
+  // ── Style transfer (Pro) — visual post-processing ──
+  /** AI-chosen style prompt for the final tape look */
+  styleTransferPrompt: string | null;
+
+  // ── Talking head intro (Pro) — lip-sync video from photo + voice ──
+  talkingHead: {
+    /** Source photo (data URI) */
+    photoUrl: string | null;
+    /** Intro speech text (AI-generated or user-provided) */
+    speechText: string | null;
+    /** Generated video URL */
+    videoUrl: string | null;
+    status: GenerationStatus;
+  } | null;
 }

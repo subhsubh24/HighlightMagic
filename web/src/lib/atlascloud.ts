@@ -25,6 +25,10 @@ export const MODELS = {
   IMAGE_UPSCALER: "atlascloud/image-upscaler",
   /** Background remover */
   BG_REMOVER: "atlascloud/image-background-remover",
+  /** Lip sync — Wan 2.2 (photo + audio → talking head video) */
+  WAN_LIPSYNC: "alibaba/wan-2.2/lip-sync",
+  /** Video-to-video style transfer — Wan 2.6 */
+  WAN_V2V: "alibaba/wan-2.6/video-to-video",
 } as const;
 
 export type AtlasModelId = (typeof MODELS)[keyof typeof MODELS];
@@ -347,5 +351,59 @@ export async function submitBackgroundRemoval(
 /** One-shot BG removal (submit + poll). Returns image URL. */
 export async function removeBackground(imageUrl: string): Promise<string> {
   const predictionId = await submitBackgroundRemoval(imageUrl);
+  return pollTaskResult(predictionId);
+}
+
+/**
+ * Lip sync — generates a talking head video from a photo + audio.
+ * Used for "talking head intro" where athlete narrates their own tape.
+ */
+export async function submitLipSync(
+  imageUrl: string,
+  audioUrl: string,
+  duration: number = 5
+): Promise<string> {
+  const image = imageUrl.replace(/^data:image\/[^;]+;base64,/, "");
+  const audio = audioUrl.replace(/^data:audio\/[^;]+;base64,/, "");
+  return submitTask(MODELS.WAN_LIPSYNC, {
+    image,
+    audio,
+    duration: Math.max(2, Math.min(10, duration)),
+  });
+}
+
+/** One-shot lip sync (submit + poll). Returns video URL. */
+export async function generateLipSync(
+  imageUrl: string,
+  audioUrl: string,
+  duration: number = 5
+): Promise<string> {
+  const predictionId = await submitLipSync(imageUrl, audioUrl, duration);
+  return pollTaskResult(predictionId);
+}
+
+/**
+ * Style transfer — applies a visual style to a video via video-to-video.
+ * Used as a post-processing pass on the assembled tape.
+ */
+export async function submitStyleTransfer(
+  videoUrl: string,
+  stylePrompt: string,
+  strength: number = 0.5
+): Promise<string> {
+  return submitTask(MODELS.WAN_V2V, {
+    video: videoUrl,
+    prompt: stylePrompt,
+    strength: Math.max(0.1, Math.min(1.0, strength)),
+  });
+}
+
+/** One-shot style transfer (submit + poll). Returns styled video URL. */
+export async function generateStyleTransfer(
+  videoUrl: string,
+  stylePrompt: string,
+  strength: number = 0.5
+): Promise<string> {
+  const predictionId = await submitStyleTransfer(videoUrl, stylePrompt, strength);
   return pollTaskResult(predictionId);
 }

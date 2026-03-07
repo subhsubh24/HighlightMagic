@@ -30,6 +30,7 @@ import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
+type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
 
 /** Try codecs in preference order. */
 function pickMimeType(): { mimeType: string; ext: string } {
@@ -60,6 +61,8 @@ export default function ExportStep() {
   const [progress, setProgress] = useState(0);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [exportExt, setExportExt] = useState("webm");
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
@@ -94,6 +97,65 @@ export default function ExportStep() {
       beatGrid
     );
   }, [sortedClips, state]);
+
+  const generateThumbnail = useCallback(async () => {
+    const plan = state.aiProductionPlan;
+    if (!plan?.thumbnail) return;
+
+    setThumbnailPhase("generating");
+    try {
+      // Find the source clip for the thumbnail
+      const clip = sortedClips[plan.thumbnail.sourceClipIndex];
+      if (!clip) { setThumbnailPhase("failed"); return; }
+
+      const media = getMediaFile(state, clip.sourceFileId);
+      if (!media) { setThumbnailPhase("failed"); return; }
+
+      // Extract frame at the specified time using canvas
+      if (media.type === "video") {
+        const video = document.createElement("video");
+        video.crossOrigin = "anonymous";
+        video.src = media.url;
+        video.currentTime = plan.thumbnail.frameTime;
+        await new Promise<void>((resolve) => { video.onseeked = () => resolve(); video.load(); });
+        const c = document.createElement("canvas");
+        c.width = 1080; c.height = 1920;
+        const ctx = c.getContext("2d")!;
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        const frameDataUri = c.toDataURL("image/jpeg", 0.9);
+
+        // Submit to BG removal
+        const res = await fetch("/api/thumbnail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageData: frameDataUri }),
+        });
+        const data = await res.json();
+        if (res.ok && data.predictionId) {
+          // Poll for result
+          const deadline = Date.now() + 120_000;
+          while (Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 5000));
+            const checkRes = await fetch("/api/animate/check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ predictionId: data.predictionId }),
+            });
+            const checkData = await checkRes.json();
+            if (checkData.status === "completed" && checkData.videoUrl) {
+              setThumbnailUrl(checkData.videoUrl);
+              setThumbnailPhase("done");
+              return;
+            }
+            if (checkData.status === "failed") break;
+          }
+        }
+      }
+      setThumbnailPhase("failed");
+    } catch {
+      setThumbnailPhase("failed");
+    }
+  }, [state, sortedClips]);
 
   const handleExport = useCallback(async () => {
     if (!canExport) {
@@ -140,6 +202,11 @@ export default function ExportStep() {
       dispatch({ type: "INCREMENT_EXPORTS" });
       setPhase("done");
       haptic([10, 50, 10]);
+
+      // Auto-generate thumbnail from AI's chosen frame (non-blocking)
+      if (state.thumbnail && state.thumbnail.status !== "completed") {
+        generateThumbnail();
+      }
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
@@ -415,6 +482,24 @@ export default function ExportStep() {
               Start Over
             </button>
           </div>
+
+          {/* Auto-generated thumbnail */}
+          {thumbnailPhase === "generating" && (
+            <div className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-xs text-[var(--text-tertiary)]">
+              <RotateCcw className="h-3.5 w-3.5 animate-spin" />
+              Generating social thumbnail...
+            </div>
+          )}
+          {thumbnailPhase === "done" && thumbnailUrl && (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-[var(--text-tertiary)]">Social Thumbnail</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={thumbnailUrl} alt="Generated thumbnail" className="w-32 rounded-lg border border-white/10" />
+              <a href={thumbnailUrl} download="thumbnail.png" className="text-xs text-[var(--accent)] hover:underline">
+                Download Thumbnail
+              </a>
+            </div>
+          )}
 
           <p className="text-xs text-[var(--text-tertiary)]">Made with Highlight Magic</p>
 

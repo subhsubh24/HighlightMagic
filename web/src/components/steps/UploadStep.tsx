@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Music } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { formatFileSize, haptic, uuid } from "@/lib/utils";
@@ -11,9 +11,11 @@ import type { MediaFile } from "@/lib/types";
 export default function UploadStep() {
   const { state, dispatch } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
+  const voiceInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [voiceUploading, setVoiceUploading] = useState(false);
   const dragItemIndex = useRef<number | null>(null);
 
   const hasFiles = state.mediaFiles.length > 0;
@@ -104,6 +106,31 @@ export default function UploadStep() {
 
   const handleRemove = (fileId: string) => {
     dispatch({ type: "REMOVE_MEDIA", fileId });
+  };
+
+  const handleVoiceSample = async (file: File) => {
+    if (!file.type.startsWith("audio/") && !file.type.startsWith("video/")) {
+      setError("Voice sample must be an audio file (MP3, WAV, M4A).");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Voice sample must be under 10 MB.");
+      return;
+    }
+    setVoiceUploading(true);
+    try {
+      // Store as data URI for display + later upload to clone API
+      const reader = new FileReader();
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Failed to read voice sample"));
+        reader.readAsDataURL(file);
+      });
+      dispatch({ type: "SET_VOICE_SAMPLE", url: dataUri });
+    } catch {
+      setError("Failed to process voice sample.");
+    }
+    setVoiceUploading(false);
   };
 
   // Drag-to-reorder handlers
@@ -369,6 +396,59 @@ export default function UploadStep() {
               </p>
             )}
           </div>
+
+          {/* Voice clone sample (Pro) */}
+          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/10 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mic className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-medium text-white">Voice Clone</span>
+                <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-300">PRO</span>
+              </div>
+              {state.voiceSampleUrl && (
+                <button
+                  onClick={() => dispatch({ type: "SET_VOICE_SAMPLE", url: null })}
+                  className="text-xs text-red-400/60 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {state.voiceSampleUrl ? (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2">
+                <Mic className="h-4 w-4 text-emerald-400" />
+                <span className="text-xs text-emerald-400">Voice sample ready — AI will clone your voice for narration</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-[var(--text-tertiary)]">
+                  Upload a 10-30 second voice sample — AI narrates your tape in your own voice.
+                </p>
+                <button
+                  onClick={() => voiceInputRef.current?.click()}
+                  disabled={voiceUploading}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/20 bg-white/5 px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-white/10 disabled:opacity-50"
+                >
+                  {voiceUploading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> Upload Voice Sample</>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+          <input
+            ref={voiceInputRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleVoiceSample(file);
+              e.target.value = "";
+            }}
+          />
 
           {/* Continue button */}
           <button

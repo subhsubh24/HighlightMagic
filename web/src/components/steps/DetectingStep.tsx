@@ -593,6 +593,8 @@ export default function DetectingStep() {
             musicDurationMs: productionPlan.musicDurationMs,
             thumbnail: productionPlan.thumbnail,
             photoAnimationPrompts: {},
+            styleTransfer: productionPlan.styleTransfer ?? null,
+            talkingHeadSpeech: productionPlan.talkingHeadSpeech ?? null,
           },
         });
       }
@@ -825,7 +827,192 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 6. Photo animations (existing — already built)
+      // 6. Voice cloning — if user provided a voice sample, clone it and use for voiceover
+      const voiceClonePromise = (state.voiceSampleUrl && productionPlan?.voiceover?.enabled)
+        ? (async () => {
+            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
+            try {
+              // Upload voice sample to clone API
+              const [, b64] = state.voiceSampleUrl!.split(",");
+              const binary = atob(b64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              const blob = new Blob([bytes], { type: "audio/mpeg" });
+
+              const formData = new FormData();
+              formData.append("audio", blob, "voice-sample.mp3");
+              formData.append("name", "Highlight Tape Voice");
+
+              const res = await fetch("/api/voice-clone", {
+                method: "POST",
+                body: formData,
+              });
+              const data = await res.json();
+              if (res.ok && data.status === "completed" && data.voiceId) {
+                dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
+              } else {
+                dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+              }
+            } catch {
+              dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+            }
+          })()
+        : null;
+
+      // 7. Stem separation — isolate instrumental from AI music for smarter ducking
+      const stemPromise = (state.aiMusicEnabled && productionPlan?.voiceover?.enabled)
+        ? (async () => {
+            // Wait for music to complete first
+            if (musicPromise) await musicPromise;
+            if (state.aiMusicUrl || state.aiMusicStatus === "completed") {
+              dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "generating" });
+              try {
+                // Get the music URL from state (may have been set by musicPromise)
+                const musicUrl = state.aiMusicUrl;
+                if (!musicUrl) {
+                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
+                  return;
+                }
+                const res = await fetch("/api/stems", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ musicDataUri: musicUrl }),
+                });
+                const data = await res.json();
+                if (res.ok && data.status === "completed" && data.instrumentalUrl) {
+                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: data.instrumentalUrl, status: "completed" });
+                } else {
+                  dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
+                }
+              } catch {
+                dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
+              }
+            }
+          })()
+        : null;
+
+      // 8. Talking head intro — if voice clone sample exists and Claude wrote speech
+      const talkingHeadPromise = (state.voiceSampleUrl && productionPlan?.talkingHeadSpeech)
+        ? (async () => {
+            dispatch({
+              type: "SET_TALKING_HEAD",
+              talkingHead: {
+                photoUrl: null,
+                speechText: productionPlan.talkingHeadSpeech,
+                videoUrl: null,
+                status: "generating",
+              },
+            });
+            try {
+              // Wait for voice clone to complete
+              if (voiceClonePromise) await voiceClonePromise;
+
+              // Find a photo to use as the talking head source (first uploaded photo)
+              const photoMedia = state.mediaFiles.find((m) => m.type === "photo");
+              if (!photoMedia) {
+                dispatch({
+                  type: "SET_TALKING_HEAD",
+                  talkingHead: { photoUrl: null, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
+                });
+                return;
+              }
+
+              // Generate TTS for the speech (using cloned voice if available)
+              const voiceId = state.clonedVoiceId;
+              const ttsRes = await fetch("/api/voiceover", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: productionPlan.talkingHeadSpeech,
+                  voiceCharacter: voiceId ? undefined : "male-broadcaster-hype",
+                  voiceId,
+                }),
+              });
+              const ttsData = await ttsRes.json();
+              if (!ttsRes.ok || ttsData.status !== "completed" || !ttsData.audioUrl) {
+                dispatch({
+                  type: "SET_TALKING_HEAD",
+                  talkingHead: { photoUrl: photoMedia.url, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
+                });
+                return;
+              }
+
+              // Convert photo to data URI
+              const photoDataUri = await fileToDataUri(photoMedia.file);
+
+              // Submit lip sync task
+              const lipRes = await fetch("/api/talking-head", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  imageData: photoDataUri,
+                  audioData: ttsData.audioUrl,
+                  duration: Math.min(10, ttsData.duration ?? 5),
+                }),
+              });
+              const lipData = await lipRes.json();
+              if (!lipRes.ok || !lipData.predictionId) {
+                dispatch({
+                  type: "SET_TALKING_HEAD",
+                  talkingHead: { photoUrl: photoMedia.url, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
+                });
+                return;
+              }
+
+              // Poll for lip sync completion
+              const videoUrl = await pollAtlasTask(lipData.predictionId);
+              dispatch({
+                type: "SET_TALKING_HEAD",
+                talkingHead: {
+                  photoUrl: photoMedia.url,
+                  speechText: productionPlan.talkingHeadSpeech,
+                  videoUrl: videoUrl || null,
+                  status: videoUrl ? "completed" : "failed",
+                },
+              });
+            } catch {
+              dispatch({
+                type: "SET_TALKING_HEAD",
+                talkingHead: { photoUrl: null, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
+              });
+            }
+          })()
+        : null;
+
+      // 9. Auto-upscale low-res photos before animation
+      const upscalePromises = state.mediaFiles
+        .filter((m) => m.type === "photo" && m.animatePhoto)
+        .map(async (media) => {
+          try {
+            const dataUri = await fileToDataUri(media.file);
+            // Check if image is small (< 1024px wide by checking file size as heuristic)
+            // Photos under ~500KB are likely low-res
+            if (media.file.size < 500_000) {
+              const res = await fetch("/api/upscale", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageData: dataUri }),
+              });
+              const data = await res.json();
+              if (res.ok && data.predictionId) {
+                const upscaledUrl = await pollAtlasTask(data.predictionId);
+                if (upscaledUrl) {
+                  console.log(`[auto-upscale] Upscaled ${media.name}`);
+                  // The upscaled URL can be used by the animation pipeline
+                }
+              }
+            }
+          } catch {
+            // Non-blocking — if upscale fails, animation uses original
+          }
+        });
+
+      // 10. Store style transfer prompt if Claude chose one
+      if (productionPlan?.styleTransfer) {
+        dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt });
+      }
+
+      // 11. Photo animations (existing — already built)
       if (animatableClips.length > 0) {
         setProgress(92);
         const uniquePhotoCount = new Set(
@@ -839,7 +1026,8 @@ export default function DetectingStep() {
 
       // Wait for all parallel generators to complete (non-blocking — failures are OK)
       await Promise.allSettled(
-        [musicPromise, sfxPromise, voiceoverPromise, introPromise, outroPromise].filter(Boolean)
+        [musicPromise, sfxPromise, voiceoverPromise, introPromise, outroPromise,
+         voiceClonePromise, stemPromise, talkingHeadPromise, ...upscalePromises].filter(Boolean)
       );
 
       const finalHighlights = highlights;

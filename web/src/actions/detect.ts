@@ -344,6 +344,8 @@ export interface ProductionPlan {
   musicPrompt: string;
   musicDurationMs: number;
   thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
+  styleTransfer: { prompt: string; strength: number } | null;
+  talkingHeadSpeech: string | null;
 }
 
 export interface DetectionResult {
@@ -1489,8 +1491,17 @@ Be specific about instrumentation and energy arc, not generic. The music should 
 THUMBNAIL — Best frame for social sharing.
 Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
 
+STYLE TRANSFER — Optional visual post-processing look applied to the entire tape.
+Set "styleTransfer": {"prompt": "cinematic film grain, warm tones, subtle vignette", "strength": 0.4} or null.
+Only use when a specific look would elevate the content (cinematic, neon, vintage, etc.).
+null means no post-processing — the per-clip filters are enough. Most content should be null.
+
+TALKING HEAD INTRO — If a voice clone sample is provided, write a short intro speech (5-10 words).
+Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or null.
+null if no voice sample was provided or a talking head intro doesn't fit the content.
+
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description"}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description"}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype"}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description"}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description"}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype"}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1638,6 +1649,8 @@ Respond with ONLY a JSON object:
         musicPrompt?: string;
         musicDurationMs?: number;
         thumbnail?: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
+        styleTransfer?: { prompt: string; strength: number } | null;
+        talkingHeadSpeech?: string | null;
       };
 
       if (!parsed.contentSummary) {
@@ -1887,6 +1900,17 @@ Respond with ONLY a JSON object:
               frameTime: typeof parsed.thumbnail.frameTime === "number" ? parsed.thumbnail.frameTime : 0,
               stylePrompt: typeof parsed.thumbnail.stylePrompt === "string" ? parsed.thumbnail.stylePrompt.slice(0, 300) : "",
             }
+          : null,
+        styleTransfer: (parsed.styleTransfer && typeof parsed.styleTransfer.prompt === "string")
+          ? {
+              prompt: parsed.styleTransfer.prompt.slice(0, 500),
+              strength: typeof parsed.styleTransfer.strength === "number"
+                ? Math.max(0.1, Math.min(1.0, parsed.styleTransfer.strength))
+                : 0.5,
+            }
+          : null,
+        talkingHeadSpeech: typeof parsed.talkingHeadSpeech === "string"
+          ? parsed.talkingHeadSpeech.slice(0, 200)
           : null,
       };
 

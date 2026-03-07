@@ -37,6 +37,17 @@ export const initialState: AppState = {
   voiceoverStatus: "idle",
   thumbnail: null,
   audioTranscript: null,
+  // Voice cloning
+  voiceSampleUrl: null,
+  clonedVoiceId: null,
+  voiceCloneStatus: "idle",
+  // Stem separation
+  instrumentalMusicUrl: null,
+  stemSeparationStatus: "idle",
+  // Style transfer
+  styleTransferPrompt: null,
+  // Talking head
+  talkingHead: null,
 };
 
 // ── Helper: derive legacy single-video fields from mediaFiles ──
@@ -88,6 +99,15 @@ export type Action =
   | { type: "UPDATE_VOICEOVER_SEGMENT"; clipIndex: number; audioUrl: string; duration: number; status: GenerationStatus }
   | { type: "SET_THUMBNAIL"; thumbnail: GeneratedThumbnail }
   | { type: "SET_AUDIO_TRANSCRIPT"; transcript: string }
+  // Voice cloning
+  | { type: "SET_VOICE_SAMPLE"; url: string | null }
+  | { type: "SET_CLONED_VOICE"; voiceId: string | null; status: GenerationStatus }
+  // Stem separation
+  | { type: "SET_INSTRUMENTAL_MUSIC"; url: string | null; status: GenerationStatus }
+  // Style transfer
+  | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null }
+  // Talking head
+  | { type: "SET_TALKING_HEAD"; talkingHead: AppState["talkingHead"] }
   | { type: "RESET" };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -223,6 +243,16 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, thumbnail: action.thumbnail };
     case "SET_AUDIO_TRANSCRIPT":
       return { ...state, audioTranscript: action.transcript };
+    case "SET_VOICE_SAMPLE":
+      return { ...state, voiceSampleUrl: action.url };
+    case "SET_CLONED_VOICE":
+      return { ...state, clonedVoiceId: action.voiceId, voiceCloneStatus: action.status };
+    case "SET_INSTRUMENTAL_MUSIC":
+      return { ...state, instrumentalMusicUrl: action.url, stemSeparationStatus: action.status };
+    case "SET_STYLE_TRANSFER_PROMPT":
+      return { ...state, styleTransferPrompt: action.prompt };
+    case "SET_TALKING_HEAD":
+      return { ...state, talkingHead: action.talkingHead };
     case "RESET":
       state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
       return {
