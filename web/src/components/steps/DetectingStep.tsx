@@ -102,6 +102,8 @@ const REPLAN_PASSES = [
 
 /** Threshold in seconds before showing "taking longer than expected". */
 const SLOW_THRESHOLD_S = 45;
+/** Threshold in seconds before showing a more detailed warning. */
+const VERY_SLOW_THRESHOLD_S = 120;
 
 /**
  * Call the planner via SSE route handler (/api/plan).
@@ -190,6 +192,7 @@ export default function DetectingStep() {
   const [passIndex, setPassIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSlow, setIsSlow] = useState(false);
+  const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
   const [validationPhase, setValidationPhase] = useState<"idle" | "reviewing" | "revising" | "done">("idle");
@@ -209,13 +212,20 @@ export default function DetectingStep() {
   const fileCount = state.mediaFiles.length;
   const isReplan = !!state.regenerateFeedback;
 
-  // Reset the slow timer whenever the pass/phase changes
+  // Reset the slow timers whenever the pass/phase changes
+  const verySlowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     setIsSlow(false);
+    setIsVerySlow(false);
     phaseStartRef.current = Date.now();
     clearTimeout(slowTimerRef.current);
+    clearTimeout(verySlowTimerRef.current);
     slowTimerRef.current = setTimeout(() => setIsSlow(true), SLOW_THRESHOLD_S * 1000);
-    return () => clearTimeout(slowTimerRef.current);
+    verySlowTimerRef.current = setTimeout(() => setIsVerySlow(true), VERY_SLOW_THRESHOLD_S * 1000);
+    return () => {
+      clearTimeout(slowTimerRef.current);
+      clearTimeout(verySlowTimerRef.current);
+    };
   }, [passIndex]);
 
   useEffect(() => {
@@ -875,7 +885,9 @@ export default function DetectingStep() {
 
       {isSlow && (
         <p className="text-center text-xs text-amber-400/80 animate-fade-in">
-          Taking longer than expected — still working, hang tight...
+          {isVerySlow
+            ? "This is taking unusually long — the AI model may be overloaded. You can wait or go back and try again."
+            : "Taking longer than expected — still working, hang tight..."}
         </p>
       )}
     </div>
