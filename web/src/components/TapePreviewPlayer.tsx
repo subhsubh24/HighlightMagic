@@ -16,7 +16,27 @@ import {
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
-import type { EditedClip } from "@/lib/types";
+import type { EditedClip, SfxTrack, VoiceoverSegment } from "@/lib/types";
+
+// ── Web Audio mixing types ──
+
+interface AudioLayer {
+  buffer: AudioBuffer;
+  /** Global timeline start in seconds */
+  startTime: number;
+  /** Gain level (0-1). Voiceover=1, SFX=0.8, Music=0.6 default, ducked=0.2 */
+  gain: number;
+  type: "music" | "sfx" | "voiceover";
+}
+
+interface AudioMixer {
+  ctx: AudioContext;
+  layers: AudioLayer[];
+  sources: AudioBufferSourceNode[];
+  gains: GainNode[];
+  masterGain: GainNode;
+  musicGain: GainNode | null;
+}
 
 // ── Adaptive resolution: lower on mobile for smoother playback ──
 const DESKTOP_WIDTH = 540;
@@ -59,6 +79,8 @@ export default function TapePreviewPlayer() {
   /** Tracks the last frame draw timestamp for frame budget/skipping. */
   const lastDrawRef = useRef(0);
   const isMobileRef = useRef(false);
+  /** Web Audio mixer for SFX + voiceover + music layers */
+  const mixerRef = useRef<AudioMixer | null>(null);
 
   // Get the editing style for the detected theme
   const style = useMemo(() => getEditingStyle(state.detectedTheme), [state.detectedTheme]);
@@ -84,6 +106,35 @@ export default function TapePreviewPlayer() {
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
     let t = 0;
+
+    // Prepend intro card if available
+    if (state.introCard?.status === "completed" && state.introCard.videoUrl) {
+      const introClip: EditedClip = {
+        id: "__intro__",
+        sourceFileId: "__intro__",
+        segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Intro", detectionSources: [] },
+        trimStart: 0,
+        trimEnd: 5,
+        order: -1,
+        selectedMusicTrack: null,
+        captionText: "",
+        captionStyle: "Bold",
+        selectedFilter: "None",
+        velocityPreset: "normal",
+      };
+      entries.push({
+        clip: introClip,
+        mediaUrl: state.introCard.videoUrl,
+        mediaType: "video",
+        filterCSS: "",
+        captionText: "",
+        globalStart: 0,
+        globalEnd: 5,
+        clipDuration: 5,
+      });
+      t = 5;
+    }
+
     for (let i = 0; i < sortedClips.length; i++) {
       const clip = sortedClips[i];
       const media = getMediaFile(state, clip.sourceFileId);
@@ -113,8 +164,36 @@ export default function TapePreviewPlayer() {
         t -= nextClip?.transitionDuration ?? 0.3;
       }
     }
+
+    // Append outro card if available
+    if (state.outroCard?.status === "completed" && state.outroCard.videoUrl) {
+      const outroClip: EditedClip = {
+        id: "__outro__",
+        sourceFileId: "__outro__",
+        segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Outro", detectionSources: [] },
+        trimStart: 0,
+        trimEnd: 5,
+        order: 9999,
+        selectedMusicTrack: null,
+        captionText: "",
+        captionStyle: "Bold",
+        selectedFilter: "None",
+        velocityPreset: "normal",
+      };
+      entries.push({
+        clip: outroClip,
+        mediaUrl: state.outroCard.videoUrl,
+        mediaType: "video",
+        filterCSS: "",
+        captionText: "",
+        globalStart: t,
+        globalEnd: t + 5,
+        clipDuration: 5,
+      });
+    }
+
     return entries;
-  }, [sortedClips, state.mediaFiles, beatGrid]);
+  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -153,14 +232,200 @@ export default function TapePreviewPlayer() {
     };
   }, [timeline, state.mediaFiles]);
 
-  // Sync mute state to all active video elements
+  // Sync mute state to all active video elements + audio mixer
   useEffect(() => {
     for (const [, el] of mediaMapRef.current) {
       if (el instanceof HTMLVideoElement) {
         el.muted = isMuted;
       }
     }
+    // Mute/unmute the audio mixer master gain
+    if (mixerRef.current) {
+      mixerRef.current.masterGain.gain.setValueAtTime(
+        isMuted ? 0 : 1,
+        mixerRef.current.ctx.currentTime
+      );
+    }
   }, [isMuted]);
+
+  // ── Web Audio mixer: load SFX + voiceover + music as audio layers ──
+  useEffect(() => {
+    if (timeline.length === 0) return;
+
+    const sfxTracks = state.sfxTracks.filter(
+      (t) => t.status === "completed" && t.audioUrl
+    );
+    const voSegments = state.voiceoverSegments.filter(
+      (s) => s.status === "completed" && s.audioUrl
+    );
+    const hasMusicUrl = state.aiMusicStatus === "completed" && state.aiMusicUrl;
+    if (sfxTracks.length === 0 && voSegments.length === 0 && !hasMusicUrl) return;
+
+    let cancelled = false;
+    const audioCtx = new AudioContext();
+
+    async function fetchBuffer(url: string): Promise<AudioBuffer | null> {
+      try {
+        // Handle data URIs (base64 from ElevenLabs)
+        if (url.startsWith("data:")) {
+          const [header, b64] = url.split(",");
+          const binary = atob(b64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return await audioCtx.decodeAudioData(bytes.buffer);
+        }
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        return await audioCtx.decodeAudioData(buf);
+      } catch (e) {
+        console.warn("[audio-mixer] Failed to decode audio:", e);
+        return null;
+      }
+    }
+
+    async function buildMixer() {
+      const layers: AudioLayer[] = [];
+
+      // Load SFX tracks — positioned relative to their clip's timeline position
+      for (const sfx of sfxTracks) {
+        const clipEntry = timeline.find(
+          (e, i) => i === sfx.clipIndex || e.clip.id === `clip-${sfx.clipIndex}`
+        ) ?? timeline[sfx.clipIndex];
+        if (!clipEntry || !sfx.audioUrl) continue;
+        const buffer = await fetchBuffer(sfx.audioUrl);
+        if (!buffer || cancelled) continue;
+
+        let startTime = clipEntry.globalStart;
+        if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - 0.5);
+        else if (sfx.timing === "after") startTime = clipEntry.globalEnd - 0.3;
+
+        layers.push({ buffer, startTime, gain: 0.8, type: "sfx" });
+      }
+
+      // Load voiceover segments — timed to their clip
+      for (const vo of voSegments) {
+        const clipEntry = timeline.find(
+          (e, i) => i === vo.clipIndex || e.clip.id === `clip-${vo.clipIndex}`
+        ) ?? timeline[vo.clipIndex];
+        if (!clipEntry || !vo.audioUrl) continue;
+        const buffer = await fetchBuffer(vo.audioUrl);
+        if (!buffer || cancelled) continue;
+
+        layers.push({
+          buffer,
+          startTime: clipEntry.globalStart + 0.3,
+          gain: 1.0,
+          type: "voiceover",
+        });
+      }
+
+      // Load AI music — spans entire timeline
+      if (hasMusicUrl && state.aiMusicUrl) {
+        const buffer = await fetchBuffer(state.aiMusicUrl);
+        if (buffer && !cancelled) {
+          layers.push({ buffer, startTime: 0, gain: 0.5, type: "music" });
+        }
+      }
+
+      if (cancelled || layers.length === 0) {
+        audioCtx.close();
+        return;
+      }
+
+      // Create master gain
+      const masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(isMuted ? 0 : 1, audioCtx.currentTime);
+      masterGain.connect(audioCtx.destination);
+
+      // Find music gain for auto-ducking
+      let musicGain: GainNode | null = null;
+
+      const gains: GainNode[] = [];
+      for (const layer of layers) {
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(layer.gain, audioCtx.currentTime);
+        gain.connect(masterGain);
+        gains.push(gain);
+        if (layer.type === "music") musicGain = gain;
+      }
+
+      // Auto-duck music when voiceover is playing
+      if (musicGain) {
+        const voLayers = layers.filter((l) => l.type === "voiceover");
+        for (const vo of voLayers) {
+          const voEnd = vo.startTime + vo.buffer.duration;
+          // Duck music 0.2s before voiceover, restore 0.3s after
+          musicGain.gain.linearRampToValueAtTime(0.5, Math.max(0, vo.startTime - 0.2));
+          musicGain.gain.linearRampToValueAtTime(0.15, vo.startTime);
+          musicGain.gain.linearRampToValueAtTime(0.15, voEnd);
+          musicGain.gain.linearRampToValueAtTime(0.5, voEnd + 0.3);
+        }
+      }
+
+      mixerRef.current = {
+        ctx: audioCtx,
+        layers,
+        sources: [],
+        gains,
+        masterGain,
+        musicGain,
+      };
+    }
+
+    buildMixer();
+
+    return () => {
+      cancelled = true;
+      if (mixerRef.current) {
+        mixerRef.current.sources.forEach((s) => { try { s.stop(); } catch {} });
+        mixerRef.current.ctx.close();
+        mixerRef.current = null;
+      }
+    };
+  }, [timeline, state.sfxTracks, state.voiceoverSegments, state.aiMusicStatus, state.aiMusicUrl]);
+
+  /** Start all audio layers at the correct offset from the given playback time */
+  const startAudioMixer = useCallback((fromTime: number) => {
+    const mixer = mixerRef.current;
+    if (!mixer) return;
+
+    // Stop any existing sources
+    mixer.sources.forEach((s) => { try { s.stop(); } catch {} });
+    mixer.sources = [];
+
+    const now = mixer.ctx.currentTime;
+
+    for (let i = 0; i < mixer.layers.length; i++) {
+      const layer = mixer.layers[i];
+      const gain = mixer.gains[i];
+      const source = mixer.ctx.createBufferSource();
+      source.buffer = layer.buffer;
+      source.connect(gain);
+
+      const offset = fromTime - layer.startTime;
+      if (offset >= layer.buffer.duration) continue; // already past this layer
+
+      if (offset > 0) {
+        // We're partway through — start from offset
+        source.start(now, offset);
+      } else {
+        // Schedule in the future
+        source.start(now + (-offset));
+      }
+      mixer.sources.push(source);
+    }
+
+    // Resume AudioContext if suspended (browser autoplay policy)
+    if (mixer.ctx.state === "suspended") mixer.ctx.resume();
+  }, []);
+
+  /** Stop all audio sources */
+  const stopAudioMixer = useCallback(() => {
+    const mixer = mixerRef.current;
+    if (!mixer) return;
+    mixer.sources.forEach((s) => { try { s.stop(); } catch {} });
+    mixer.sources = [];
+  }, []);
 
   // Set canvas size — lower resolution on mobile for smoother playback
   useEffect(() => {
@@ -419,6 +684,7 @@ export default function TapePreviewPlayer() {
         if (el instanceof HTMLVideoElement) el.pause();
       }
       activeClipsRef.current = new Set();
+      stopAudioMixer();
       return;
     }
 
@@ -433,7 +699,7 @@ export default function TapePreviewPlayer() {
     }
 
     pb.raf = requestAnimationFrame(tick);
-  }, [totalDuration, drawAtTime]);
+  }, [totalDuration, drawAtTime, stopAudioMixer]);
 
   const play = useCallback(() => {
     const pb = pbRef.current;
@@ -444,7 +710,9 @@ export default function TapePreviewPlayer() {
     pb.startWall = performance.now() / 1000;
     setPlayerState("playing");
     pb.raf = requestAnimationFrame(tick);
-  }, [tick, progress]);
+    // Start audio layers from current position
+    startAudioMixer(pb.elapsed);
+  }, [tick, progress, startAudioMixer]);
 
   const pause = useCallback(() => {
     const pb = pbRef.current;
@@ -455,7 +723,8 @@ export default function TapePreviewPlayer() {
     for (const [, el] of mediaMapRef.current) {
       if (el instanceof HTMLVideoElement) el.pause();
     }
-  }, []);
+    stopAudioMixer();
+  }, [stopAudioMixer]);
 
   const restart = useCallback(() => {
     const pb = pbRef.current;
@@ -481,6 +750,11 @@ export default function TapePreviewPlayer() {
       cancelAnimationFrame(pbRef.current.raf);
       for (const [, el] of mediaMapRef.current) {
         if (el instanceof HTMLVideoElement) el.pause();
+      }
+      if (mixerRef.current) {
+        mixerRef.current.sources.forEach((s) => { try { s.stop(); } catch {} });
+        mixerRef.current.ctx.close();
+        mixerRef.current = null;
       }
     };
   }, []);
