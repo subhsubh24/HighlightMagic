@@ -80,8 +80,8 @@ export async function generateVoiceover(
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_multilingual_v2",
-        output_format: "mp3_44100_128",
+        model_id: "eleven_flash_v2_5",
+        output_format: "mp3_44100_64",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -111,8 +111,8 @@ export async function generateVoiceover(
 
   const base64 = Buffer.from(audioBuffer).toString("base64");
   const audioUrl = `data:audio/mpeg;base64,${base64}`;
-  // MP3 128kbps ≈ 16KB/s
-  const estimatedDuration = Math.round(audioBuffer.byteLength / 16_000);
+  // MP3 64kbps ≈ 8KB/s
+  const estimatedDuration = Math.round(audioBuffer.byteLength / 8_000);
 
   console.log(
     `[elevenlabs-tts] Generated ${audioBuffer.byteLength} bytes (~${estimatedDuration}s)`

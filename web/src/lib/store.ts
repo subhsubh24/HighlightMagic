@@ -23,7 +23,7 @@ export const initialState: AppState = {
   viralOptions: { beatSync: true, seamlessLoop: false },
   regenerateFeedback: null,
   creativeDirection: "",
-  aiMusicEnabled: false,
+  aiMusicEnabled: true,
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
