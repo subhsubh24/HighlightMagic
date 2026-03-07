@@ -125,19 +125,41 @@ export default function UploadStep() {
   };
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 animate-fade-in">
-      {/* Hero text */}
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
+      {/* Hero text — scales down once files are added to shift focus to content */}
       <div className="text-center">
-        <h1 className="mb-3 text-4xl font-bold leading-tight md:text-5xl">
-          Turn raw footage into{" "}
-          <span className="bg-accent-gradient bg-clip-text text-transparent">viral Reels</span>
-        </h1>
-        <p className="mx-auto max-w-md text-[var(--text-secondary)]">
-          {hasFiles
-            ? "Add more clips or photos, then let AI create your highlight tape."
-            : "Upload videos & photos — AI finds the best moments and creates one highlight tape."}
-        </p>
+        {hasFiles ? (
+          <>
+            <h1 className="mb-1 text-2xl font-bold leading-tight md:text-3xl">
+              Your media is ready
+            </h1>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Drag to reorder, add more, or hit continue.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="mb-3 text-4xl font-bold leading-tight md:text-5xl">
+              Turn raw footage into{" "}
+              <span className="bg-accent-gradient bg-clip-text text-transparent">viral Reels</span>
+            </h1>
+            <p className="mx-auto max-w-md text-[var(--text-secondary)]">
+              Upload videos & photos — AI finds the best moments and creates one highlight tape.
+            </p>
+          </>
+        )}
       </div>
+
+      {/* Error — placed high so it's immediately visible */}
+      {error && (
+        <div className="flex w-full max-w-lg items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Uploaded files grid */}
       {hasFiles && (
@@ -145,6 +167,9 @@ export default function UploadStep() {
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-medium text-white">
               {state.mediaFiles.length} file{state.mediaFiles.length !== 1 ? "s" : ""} added
+              <span className="ml-2 text-xs text-[var(--text-tertiary)]">
+                ({MAX_FILES - state.mediaFiles.length} remaining)
+              </span>
             </p>
             <button
               onClick={() => dispatch({ type: "CLEAR_MEDIA" })}
@@ -181,10 +206,10 @@ export default function UploadStep() {
                     <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
                   )}
 
-                  {/* Overlay info */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                  {/* Type badge */}
+                  {/* Type badge + duration */}
                   <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
                     {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <Image className="h-2.5 w-2.5" />}
                     {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
@@ -195,7 +220,7 @@ export default function UploadStep() {
                     {index + 1}
                   </div>
 
-                  {/* Drag handle */}
+                  {/* Drag handle — visible on hover */}
                   <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <GripVertical className="h-3.5 w-3.5 text-white/70" />
                   </div>
@@ -207,53 +232,47 @@ export default function UploadStep() {
                       handleRemove(media.id);
                     }}
                     className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                    aria-label={`Remove ${media.name}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
-
-                  {/* Filename */}
-                  <p className="absolute bottom-1.5 left-7 right-7 truncate text-[9px] text-white/70">
-                    {media.name}
-                  </p>
                 </div>
 
-                {/* Photo animation controls */}
+                {/* Photo animation controls — improved sizing and touch targets */}
                 {media.type === "photo" && (
-                  <div className="flex flex-col gap-1">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={media.animatePhoto ?? false}
-                        onChange={(e) => {
-                          dispatch({
-                            type: "UPDATE_MEDIA_ANIMATION",
-                            fileId: media.id,
-                            animatePhoto: e.target.checked,
-                            animationInstructions: media.animationInstructions ?? "",
-                          });
-                        }}
-                        className="h-3 w-3 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
-                      />
-                      <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
-                      <span className="text-[10px] text-[var(--text-secondary)]">Animate</span>
-                    </label>
-                    {media.animatePhoto && (
-                      <input
-                        type="text"
-                        value={media.animationInstructions ?? ""}
-                        onChange={(e) => {
-                          dispatch({
-                            type: "UPDATE_MEDIA_ANIMATION",
-                            fileId: media.id,
-                            animatePhoto: true,
-                            animationInstructions: e.target.value.slice(0, 500),
-                          });
-                        }}
-                        placeholder="Motion instructions... (AI decides if blank)"
-                        className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)]"
-                      />
-                    )}
-                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={media.animatePhoto ?? false}
+                      onChange={(e) => {
+                        dispatch({
+                          type: "UPDATE_MEDIA_ANIMATION",
+                          fileId: media.id,
+                          animatePhoto: e.target.checked,
+                          animationInstructions: media.animationInstructions ?? "",
+                        });
+                      }}
+                      className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
+                    />
+                    <Sparkles className="h-3 w-3 text-[var(--accent)]" />
+                    <span className="text-[11px] text-[var(--text-secondary)]">Animate</span>
+                  </label>
+                )}
+                {media.type === "photo" && media.animatePhoto && (
+                  <input
+                    type="text"
+                    value={media.animationInstructions ?? ""}
+                    onChange={(e) => {
+                      dispatch({
+                        type: "UPDATE_MEDIA_ANIMATION",
+                        fileId: media.id,
+                        animatePhoto: true,
+                        animationInstructions: e.target.value.slice(0, 500),
+                      });
+                    }}
+                    placeholder="e.g. slow zoom in..."
+                    className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)] transition-colors"
+                  />
                 )}
               </div>
             ))}
@@ -263,16 +282,44 @@ export default function UploadStep() {
               <button
                 onClick={() => inputRef.current?.click()}
                 className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                aria-label="Add more files"
               >
                 <Plus className="h-8 w-8" />
               </button>
             )}
           </div>
 
-          {/* Creative direction (optional) */}
-          <div className="mt-4">
-            <label className="mb-1.5 block text-xs font-medium text-[var(--text-tertiary)]">
-              Special instructions
+          {/* Secondary drop zone — always visible when files exist */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+            }}
+            className={`mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed py-3 transition-all ${
+              isDragging
+                ? "border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]"
+                : "border-white/10 text-[var(--text-tertiary)] hover:border-white/20 hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            <Upload className="h-4 w-4" />
+            <span className="text-xs">
+              {isDragging ? "Drop files here" : "Drag & drop or click to add more files"}
+            </span>
+          </div>
+
+          {/* Creative direction */}
+          <div className="mt-5">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
+              <Sparkles className="h-3 w-3 text-[var(--accent)]" />
+              Creative direction
             </label>
             <input
               type="text"
@@ -281,16 +328,16 @@ export default function UploadStep() {
                 const value = e.target.value.slice(0, 300);
                 dispatch({ type: "SET_CREATIVE_DIRECTION", direction: value });
               }}
-              placeholder="e.g., violet neon theme, cinematic slow-mo..."
+              placeholder="e.g. violet neon theme, cinematic slow-mo, hype energy..."
               className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-[var(--text-tertiary)] outline-none transition-colors focus:border-[var(--accent)]"
             />
             <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
-              Optional — tell the AI how you want your video styled
+              Optional — guide the AI&apos;s editing style and mood
             </p>
           </div>
 
-          {/* AI Music toggle — Pro only */}
-          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-3">
+          {/* AI Music toggle */}
+          <div className="mt-4 flex flex-col gap-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/10 p-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Music className="h-4 w-4 text-purple-400" />
@@ -302,7 +349,9 @@ export default function UploadStep() {
                   dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled });
                   haptic(5);
                 }}
-                disabled={false}
+                role="switch"
+                aria-checked={state.aiMusicEnabled}
+                aria-label="Toggle AI generated music"
                 className={`relative h-6 w-11 rounded-full transition-colors ${
                   state.aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
                 } cursor-pointer`}
@@ -316,7 +365,7 @@ export default function UploadStep() {
             </div>
             {state.aiMusicEnabled && (
               <p className="text-[11px] text-[var(--text-tertiary)]">
-                AI will compose a custom instrumental soundtrack after your tape is created. You can customize the style in the editor.
+                AI will compose a custom instrumental soundtrack after your tape is created.
               </p>
             )}
           </div>
@@ -324,7 +373,7 @@ export default function UploadStep() {
           {/* Continue button */}
           <button
             onClick={handleContinue}
-            className="btn-primary mt-4 flex w-full items-center justify-center gap-2"
+            className="btn-primary mt-5 flex w-full items-center justify-center gap-2"
           >
             <span>Create Highlight Tape</span>
             <ArrowRight className="h-5 w-5" />
@@ -332,7 +381,7 @@ export default function UploadStep() {
         </div>
       )}
 
-      {/* Drop zone (shown when no files yet, or as secondary action) */}
+      {/* Drop zone — shown when no files yet */}
       {!hasFiles && (
         <div
           onDragOver={(e) => {
@@ -373,8 +422,8 @@ export default function UploadStep() {
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
               or click to browse — MP4, MOV, WebM, JPG, PNG up to {MAX_UPLOAD_SIZE_MB} MB each
             </p>
-            <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-              Up to {MAX_FILES} files — AI will create one highlight tape from all of them
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+              Up to {MAX_FILES} files — AI creates one highlight tape from all of them
             </p>
           </div>
         </div>
@@ -396,27 +445,21 @@ export default function UploadStep() {
         }}
       />
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          {error}
+      {/* Feature bullets — only shown in empty state as social proof */}
+      {!hasFiles && (
+        <div className="grid grid-cols-1 gap-3 text-sm text-[var(--text-secondary)] md:grid-cols-3">
+          {[
+            "AI-powered highlight tape",
+            "TikTok & Reels ready",
+            "Multi-clip smart editing",
+          ].map((label) => (
+            <div key={label} className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2">
+              <div className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+              {label}
+            </div>
+          ))}
         </div>
       )}
-
-      {/* Feature bullets */}
-      <div className="grid grid-cols-1 gap-3 text-sm text-[var(--text-secondary)] md:grid-cols-3">
-        {[
-          ["Sparkles", "AI-powered highlight tape"],
-          ["Smartphone", "TikTok & Reels ready"],
-          ["Shield", "Multi-clip smart editing"],
-        ].map(([, label]) => (
-          <div key={label} className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2">
-            <div className="h-2 w-2 rounded-full bg-[var(--accent)]" />
-            {label}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
