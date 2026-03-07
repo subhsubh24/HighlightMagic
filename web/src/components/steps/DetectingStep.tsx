@@ -122,15 +122,12 @@ async function callPlannerSSE(
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal
 ): Promise<DetectionResult> {
-  const bodyStr = JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations });
-  console.log(`[callPlannerSSE] Sending fetch to /api/plan — body size: ${(bodyStr.length / 1024).toFixed(0)}KB, frames: ${frames.length}, scores: ${scores.length}`);
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: bodyStr,
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
     signal,
   });
-  console.log(`[callPlannerSSE] Got response — status: ${response.status}`);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -274,7 +271,7 @@ export default function DetectingStep() {
 
     if (hasStarted.current) return cleanupFn;
     hasStarted.current = true;
-    const abort = abortRef.current;
+    let abort = abortRef.current;
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -316,6 +313,12 @@ export default function DetectingStep() {
           });
         }, 500);
 
+        // Fix Strict Mode abort — same logic as runDetection
+        if (abort.signal.aborted) {
+          const fresh = new AbortController();
+          abortRef.current = fresh;
+          abort = fresh;
+        }
         const result = await callPlannerSSE(
           cached.frames,
           cached.scores,
@@ -485,6 +488,17 @@ export default function DetectingStep() {
         }, 500);
 
         console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
+        // React Strict Mode aborts the signal during its simulated cleanup,
+        // but this async function keeps running. Create a fresh controller
+        // if the original was killed by Strict Mode (not a real unmount).
+        if (abort.signal.aborted) {
+          console.warn("[Detection] Abort signal was already aborted (React Strict Mode) — creating fresh controller");
+          const fresh = new AbortController();
+          abortRef.current = fresh;
+          // Reassign so the rest of this function (and cleanup) uses the new one
+          // eslint-disable-next-line no-param-reassign
+          abort = fresh;
+        }
         const plannerClientStart = Date.now();
         const result = await callPlannerSSE(
           frames,

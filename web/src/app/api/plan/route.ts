@@ -2,14 +2,6 @@ import { planFromScores } from "@/actions/detect";
 
 export const runtime = "nodejs";
 
-// GET handler for testing that this route compiles and is routable
-export async function GET() {
-  console.log("[/api/plan] GET handler hit");
-  return new Response(JSON.stringify({ ok: true, timestamp: Date.now() }), {
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
 /**
  * SSE route handler for the planner.
  *
@@ -24,13 +16,10 @@ export async function GET() {
  * The final result (or error) is sent as an SSE event once the planner finishes.
  */
 export async function POST(req: Request) {
-  console.log(`[/api/plan] POST handler entered — content-length: ${req.headers.get("content-length")}`);
   let body: Record<string, unknown>;
   try {
     body = await req.json();
-    console.log(`[/api/plan] Body parsed successfully`);
-  } catch (parseErr) {
-    console.error(`[/api/plan] Body parse FAILED:`, parseErr instanceof Error ? parseErr.message : parseErr);
+  } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -57,11 +46,8 @@ export async function POST(req: Request) {
   let keepalive: ReturnType<typeof setInterval> | undefined;
   let closed = false;
 
-  console.log(`[/api/plan] Request received — frames=${(frames as unknown[]).length}, scores=${(scores as unknown[]).length}`);
-
   const stream = new ReadableStream({
     async start(controller) {
-      console.log(`[/api/plan] Stream started, calling planFromScores...`);
       keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode("event: keepalive\ndata: {}\n\n"));
@@ -70,7 +56,6 @@ export async function POST(req: Request) {
         }
       }, 15_000);
 
-      const planStartMs = Date.now();
       try {
         const result = await planFromScores(
           frames,
@@ -79,7 +64,6 @@ export async function POST(req: Request) {
           userFeedback ?? undefined,
           creativeDirection ?? undefined,
           (phase) => {
-            console.log(`[/api/plan] Phase: ${phase} (+${((Date.now() - planStartMs) / 1000).toFixed(1)}s)`);
             try {
               controller.enqueue(
                 encoder.encode(`event: phase\ndata: ${JSON.stringify({ phase })}\n\n`)
@@ -90,13 +74,11 @@ export async function POST(req: Request) {
           },
           photoAnimations ?? undefined
         );
-        console.log(`[/api/plan] planFromScores complete — ${result.clips.length} clips in ${((Date.now() - planStartMs) / 1000).toFixed(1)}s`);
         clearInterval(keepalive);
         controller.enqueue(
           encoder.encode(`event: result\ndata: ${JSON.stringify(result)}\n\n`)
         );
       } catch (err) {
-        console.error(`[/api/plan] planFromScores FAILED after ${((Date.now() - planStartMs) / 1000).toFixed(1)}s:`, err instanceof Error ? err.message : err);
         clearInterval(keepalive);
         const message = err instanceof Error ? err.message : String(err);
         try {
