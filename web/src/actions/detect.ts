@@ -105,6 +105,9 @@ async function runWithConcurrency<T>(
  */
 type SSEStreamPhase = "thinking" | "generating";
 
+/** Max time (ms) to wait for the next SSE chunk before treating the stream as stalled. */
+const STREAM_READ_TIMEOUT_MS = 90_000; // 90s — generous for Opus thinking pauses
+
 async function consumeSSEStream(
   response: Response,
   onPhase?: (phase: SSEStreamPhase) => void
@@ -116,7 +119,19 @@ async function consumeSSEStream(
   let buffer = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    // Race the read against a timeout so we don't hang forever if the
+    // Anthropic stream stalls mid-response.
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Planner stream stalled — no data received for 90 seconds")), STREAM_READ_TIMEOUT_MS);
+    });
+    let result: ReadableStreamReadResult<Uint8Array>;
+    try {
+      result = await Promise.race([reader.read(), timeout]);
+    } finally {
+      clearTimeout(timer!);
+    }
+    const { done, value } = result;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });

@@ -105,6 +105,9 @@ const SLOW_THRESHOLD_S = 45;
 /** Threshold in seconds before showing a more detailed warning. */
 const VERY_SLOW_THRESHOLD_S = 120;
 
+/** Max time (ms) to wait for the next SSE chunk from the server before aborting. */
+const SSE_READ_TIMEOUT_MS = 90_000;
+
 /**
  * Call the planner via SSE route handler (/api/plan).
  * The route sends keepalive pings every 15s so the connection doesn't drop
@@ -169,7 +172,19 @@ async function callPlannerSSE(
   }
 
   while (true) {
-    const { done, value } = await reader.read();
+    // Race against a timeout so we don't hang forever if the server
+    // stops sending data (including keepalive pings).
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Lost connection to server — no data received for 90 seconds. Please try again.")), SSE_READ_TIMEOUT_MS);
+    });
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await Promise.race([reader.read(), timeout]);
+    } finally {
+      clearTimeout(timer!);
+    }
+    const { done, value } = chunk;
     if (done) {
       // Flush any remaining bytes from the decoder
       buffer += decoder.decode();
