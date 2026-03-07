@@ -88,8 +88,9 @@ const BATCH_DETECTION_PASSES = [
   "Applying editing style for best flow...",
 ];
 
-/** Minimum batch count before Batch API mode kicks in (saves 50% on scoring cost). */
-const BATCH_MODE_THRESHOLD = 3;
+/** Minimum total frame count before Batch API mode kicks in (saves 50% on scoring cost).
+ *  Photo-only uploads produce 1 frame each — batch API overhead is wasteful for small counts. */
+const BATCH_MODE_FRAME_THRESHOLD = 50;
 /** Polling interval for Batch API status checks. */
 const BATCH_POLL_INTERVAL_MS = 5_000;
 
@@ -410,14 +411,17 @@ export default function DetectingStep() {
       try {
         // Phase 1: Extract frames from all media files (0-30%)
         setPassIndex(0);
+        console.log(`[Detection] Starting frame extraction for ${state.mediaFiles.length} files (${state.mediaFiles.map(f => f.type).join(", ")})`);
         const frames = await extractFramesFromMultiple(
           state.mediaFiles,
           (pct) => setProgress(pct * 0.3)
         );
+        console.log(`[Detection] Extracted ${frames.length} frames`);
 
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
-        const useBatchMode = batches.length >= BATCH_MODE_THRESHOLD;
+        const useBatchMode = frames.length >= BATCH_MODE_FRAME_THRESHOLD;
+        console.log(`[Detection] ${frames.length} frames, ${batches.length} batches, batchMode=${useBatchMode} (threshold=${BATCH_MODE_FRAME_THRESHOLD} frames)`);
         if (useBatchMode) {
           batchModeRef.current = true;
           setBatchMode(true);
@@ -427,11 +431,14 @@ export default function DetectingStep() {
 
         if (useBatchMode) {
           // ── Batch API scoring (50% cost savings) ──
+          console.log(`[Detection] Starting batch API scoring...`);
           scores = await runBatchScoring(batches, sourceFileList);
         } else {
           // ── Real-time scoring (low latency) ──
+          console.log(`[Detection] Starting real-time scoring...`);
           scores = await runRealtimeScoring(batches, sourceFileList);
         }
+        console.log(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
         cacheDetectionData(frames, scores);
@@ -454,6 +461,8 @@ export default function DetectingStep() {
           });
         }, 500);
 
+        console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
+        const plannerClientStart = Date.now();
         const result = await callPlannerSSE(
           frames,
           scores,
@@ -461,6 +470,7 @@ export default function DetectingStep() {
           undefined,
           state.creativeDirection || undefined,
           (phase) => {
+            console.log(`[Detection] Planner phase: ${phase} (+${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s)`);
             phaseReceived = true;
             clearInterval(plannerTimer);
             if (phase === "thinking") {
@@ -474,6 +484,7 @@ export default function DetectingStep() {
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal
         );
+        console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
         await processResult(result);

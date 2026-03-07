@@ -112,11 +112,14 @@ async function consumeSSEStream(
   response: Response,
   onPhase?: (phase: SSEStreamPhase) => void
 ): Promise<{ text: string; stopReason: string | null }> {
+  const streamStartMs = Date.now();
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let text = "";
   let stopReason: string | null = null;
   let buffer = "";
+  let chunkCount = 0;
+  let lastLogMs = Date.now();
 
   while (true) {
     // Race the read against a timeout so we don't hang forever if the
@@ -149,17 +152,26 @@ async function consumeSSEStream(
         const event = JSON.parse(dataStr);
         if (event.type === "content_block_start") {
           if (event.content_block?.type === "thinking") {
+            console.log(`[Planner SSE] Thinking phase started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("thinking");
           } else if (event.content_block?.type === "text") {
+            console.log(`[Planner SSE] Text generation started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("generating");
           }
         } else if (event.type === "content_block_delta") {
           if (event.delta?.type === "text_delta") {
             text += event.delta.text;
           }
-          // thinking_delta events are silently skipped
+          chunkCount++;
+          // Log every 15s so we know the stream is alive
+          if (Date.now() - lastLogMs > 15_000) {
+            console.log(`[Planner SSE] Still streaming... chunks=${chunkCount}, textLen=${text.length}, +${((Date.now() - streamStartMs) / 1000).toFixed(0)}s`);
+            lastLogMs = Date.now();
+          }
         } else if (event.type === "message_delta") {
           stopReason = event.delta?.stop_reason ?? null;
+        } else if (event.type === "error") {
+          console.error(`[Planner SSE] Stream error event:`, JSON.stringify(event));
         }
       } catch {
         // Ignore unparseable SSE events (e.g. event: prefixes)
@@ -167,6 +179,7 @@ async function consumeSSEStream(
     }
   }
 
+  console.log(`[Planner SSE] Stream complete — ${chunkCount} chunks, ${text.length} chars, stop_reason=${stopReason}, ${((Date.now() - streamStartMs) / 1000).toFixed(1)}s total`);
   return { text, stopReason };
 }
 
@@ -1478,6 +1491,9 @@ Respond with ONLY a JSON object:
     }\n\nNow create the highlight tape.`,
   });
 
+  console.log(`[Planner] Sending request — ${userContent.length} content blocks, model=claude-opus-4-6, effort=medium`);
+  const plannerStartMs = Date.now();
+
   const response = await fetchWithRetry(
     "https://api.anthropic.com/v1/messages",
     {
@@ -1509,6 +1525,8 @@ Respond with ONLY a JSON object:
     },
     "Planner"
   );
+
+  console.log(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
