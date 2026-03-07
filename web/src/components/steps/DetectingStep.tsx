@@ -671,6 +671,12 @@ export default function DetectingStep() {
         return m && m.type === "photo";
       }).length;
 
+      if (totalAnimations === 0) {
+        console.warn("[Detection] triggerPhotoAnimations: no photo clips to animate, skipping");
+        return Promise.resolve();
+      }
+      console.log(`[Detection] Animating ${totalAnimations} photos...`);
+
       const promises: Promise<void>[] = [];
 
       for (const clip of uniqueClips) {
@@ -711,13 +717,15 @@ export default function DetectingStep() {
             completedAnimations++;
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
             // Progress 92% → 99% as animations complete
-            setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
+            const pct = totalAnimations > 0 ? Math.round(92 + (completedAnimations / totalAnimations) * 7) : 99;
+            setProgress(pct);
           })
           .catch((err) => {
             if (animSignal.aborted) return;
             completedAnimations++;
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
-            setProgress(Math.round(92 + (completedAnimations / totalAnimations) * 7));
+            const pct = totalAnimations > 0 ? Math.round(92 + (completedAnimations / totalAnimations) * 7) : 99;
+            setProgress(pct);
             console.error(`Photo animation failed for "${media.name}":`, err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
