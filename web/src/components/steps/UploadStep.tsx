@@ -87,7 +87,6 @@ export default function UploadStep() {
             name: file.name,
           });
         } else {
-          // Photos are always animated by AI — no manual toggle needed
           newMedia.push({
             id: uuid(),
             file,
@@ -95,7 +94,6 @@ export default function UploadStep() {
             type: "photo",
             duration: PHOTO_DISPLAY_DURATION,
             name: file.name,
-            animatePhoto: true,
           });
         }
       }
@@ -243,7 +241,7 @@ export default function UploadStep() {
 
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {state.mediaFiles.map((media, index) => (
-              <div key={media.id}>
+              <div key={media.id} className="flex flex-col gap-1.5">
                 <div
                   draggable
                   onDragStart={() => handleDragStart(index)}
@@ -276,21 +274,13 @@ export default function UploadStep() {
                     {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
                   </div>
 
-                  {/* Photo animation badge */}
-                  {media.type === "photo" && (
-                    <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-md bg-[var(--accent)]/30 px-1 py-0.5 text-[9px] text-[var(--accent)] backdrop-blur-sm">
-                      <Sparkles className="h-2 w-2" />
-                      Animate
-                    </div>
-                  )}
-
                   {/* Order number */}
                   <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
                     {index + 1}
                   </div>
 
                   {/* Drag handle */}
-                  <div className="absolute right-1 bottom-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <GripVertical className="h-3.5 w-3.5 text-white/70" />
                   </div>
 
@@ -306,6 +296,43 @@ export default function UploadStep() {
                     <X className="h-3 w-3" />
                   </button>
                 </div>
+
+                {/* Photo animation controls */}
+                {media.type === "photo" && (
+                  <label className="flex items-center gap-1.5 cursor-pointer py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={media.animatePhoto ?? false}
+                      onChange={(e) => {
+                        dispatch({
+                          type: "UPDATE_MEDIA_ANIMATION",
+                          fileId: media.id,
+                          animatePhoto: e.target.checked,
+                          animationInstructions: media.animationInstructions ?? "",
+                        });
+                      }}
+                      className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
+                    />
+                    <Sparkles className="h-3 w-3 text-[var(--accent)]" />
+                    <span className="text-[11px] text-[var(--text-secondary)]">Animate</span>
+                  </label>
+                )}
+                {media.type === "photo" && media.animatePhoto && (
+                  <input
+                    type="text"
+                    value={media.animationInstructions ?? ""}
+                    onChange={(e) => {
+                      dispatch({
+                        type: "UPDATE_MEDIA_ANIMATION",
+                        fileId: media.id,
+                        animatePhoto: true,
+                        animationInstructions: e.target.value.slice(0, 500),
+                      });
+                    }}
+                    placeholder="e.g. slow zoom in..."
+                    className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)] transition-colors"
+                  />
+                )}
               </div>
             ))}
 
