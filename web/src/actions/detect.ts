@@ -1457,23 +1457,34 @@ Beyond clip selection and visual style, you direct the FULL AUDIO-VISUAL PRODUCT
 Your plan drives automated generation of intro/outro cards, sound effects, voiceover, music, and thumbnails.
 Every decision cascades from the content's theme AND the user's creative direction (if any).
 
+Use TASTE and RESTRAINT. Not every tape needs every element. A clean travel montage may only
+need music + a subtle intro. A hype sports reel may benefit from SFX + voiceover + intro/outro.
+A quiet wedding highlight might need nothing but music and gentle transitions.
+Only add elements that genuinely elevate the content. Less is often more.
+
 INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
 The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
+Skip if the content speaks for itself or an intro would feel forced.
 
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
+Skip if unneccesary. Not every tape needs a bookend.
 
 SOUND EFFECTS — Transition whooshes, impact hits, crowd accents.
 Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
-Match SFX style to content mood. 3-8 cues total.
+Use an empty array [] if SFX would clutter the content (e.g. calm/cinematic content).
+When used, match SFX style to content mood. 2-6 cues max — quality over quantity.
 
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic"}.
-2-5 segments max. Don't over-narrate.
+Set enabled: false if narration would feel intrusive (most content doesn't need voiceover).
+When enabled, 2-4 segments max. Less is more — narrate only pivotal moments.
+Choose voice character that matches the content's energy and audience.
 
 MUSIC — AI instrumental soundtrack.
 Set "musicPrompt" (genre, energy, instruments, mood, tempo). Set "musicDurationMs" to total tape length in ms.
+Be specific about instrumentation and energy arc, not generic. The music should feel custom-scored.
 
 THUMBNAIL — Best frame for social sharing.
 Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
