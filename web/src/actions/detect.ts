@@ -1558,9 +1558,13 @@ Only add elements that genuinely elevate the content. Less is often more.
 INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
 The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
-IMPORTANT: The video is rendered in 9:16 PORTRAIT format. If the stylePrompt mentions text or titles,
-explicitly specify "small centered text" or "compact title text" — never large/fullscreen text that overflows the narrow portrait frame.
-Keep title text to 3-4 words max so it fits the vertical frame.
+CRITICAL TEXT RULES for stylePrompt (MUST follow these or text will overflow and be unreadable):
+- The video is rendered in 9:16 PORTRAIT (vertical) format — very narrow!
+- ALWAYS include in the stylePrompt: "small centered text occupying at most 60% of frame width"
+- Title text MUST be 2-3 words MAX (e.g. "GAME DAY", "NIGHTMARE", "OUR WEDDING") — never 4+ words
+- NEVER use "large text", "big title", "fullscreen text", or "wide text" in the stylePrompt
+- The text in the stylePrompt must match the "text" field exactly so the AI renders the right title
+- If you can't fit the title in 2-3 words, use abstract visuals with NO text in the stylePrompt instead
 DEFAULT TO null (no intro) in most cases. Intros are only justified for:
   - Long tapes (8+ clips) that benefit from a title card to set the mood
   - Event/occasion content (weddings, graduations, game days) where a title adds context

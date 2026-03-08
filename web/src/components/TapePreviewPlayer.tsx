@@ -286,11 +286,16 @@ export default function TapePreviewPlayer() {
     async function buildMixer() {
       const layers: AudioLayer[] = [];
 
+      // Compute the offset for intro/outro cards in the timeline
+      // clipIndex references indices in state.clips (user clips only), not the full timeline
+      const introOffset = timeline.length > 0 && timeline[0].clip.id === "__intro__" ? 1 : 0;
+
       // Load SFX tracks — positioned relative to their clip's timeline position
       for (const sfx of sfxTracks) {
+        const adjustedIndex = sfx.clipIndex + introOffset;
         const clipEntry = timeline.find(
-          (e, i) => i === sfx.clipIndex || e.clip.id === `clip-${sfx.clipIndex}`
-        ) ?? timeline[sfx.clipIndex];
+          (e) => e.clip.id === `clip-${sfx.clipIndex}`
+        ) ?? timeline[adjustedIndex];
         if (!clipEntry || !sfx.audioUrl) continue;
         const buffer = await fetchBuffer(sfx.audioUrl);
         if (!buffer || cancelled) continue;
@@ -304,9 +309,10 @@ export default function TapePreviewPlayer() {
 
       // Load voiceover segments — timed to their clip
       for (const vo of voSegments) {
+        const adjustedIndex = vo.clipIndex + introOffset;
         const clipEntry = timeline.find(
-          (e, i) => i === vo.clipIndex || e.clip.id === `clip-${vo.clipIndex}`
-        ) ?? timeline[vo.clipIndex];
+          (e) => e.clip.id === `clip-${vo.clipIndex}`
+        ) ?? timeline[adjustedIndex];
         if (!clipEntry || !vo.audioUrl) continue;
         const buffer = await fetchBuffer(vo.audioUrl);
         if (!buffer || cancelled) continue;
