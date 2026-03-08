@@ -115,12 +115,22 @@ export function getTransitionTransform(
 
 // ── Overlay effects drawn ON TOP of the composited clips ──
 
-const NEON_COLORS = [
+const DEFAULT_NEON_COLORS = [
   [147, 51, 234],  // purple
   [6, 182, 212],   // teal
   [236, 72, 153],  // magenta
   [245, 158, 11],  // amber
 ];
+
+/** Parse hex color string to [r, g, b] array */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.startsWith("#") ? hex.slice(1) : hex;
+  return [
+    parseInt(h.slice(0, 2), 16) || 0,
+    parseInt(h.slice(2, 4), 16) || 0,
+    parseInt(h.slice(4, 6), 16) || 0,
+  ];
+}
 
 export function drawTransitionOverlay(
   ctx: CanvasRenderingContext2D,
@@ -129,7 +139,9 @@ export function drawTransitionOverlay(
   type: TransitionType,
   progress: number,
   /** Used for color variation in color_flash */
-  seed: number = 0
+  seed: number = 0,
+  /** AI-decided neon colors for color_flash transitions (hex strings) */
+  neonColorHexes?: string[]
 ) {
   ctx.save();
 
@@ -234,7 +246,10 @@ export function drawTransitionOverlay(
     // ── Stylized ──
 
     case "color_flash": {
-      const [r, g, b] = NEON_COLORS[seed % NEON_COLORS.length];
+      const neonColors = neonColorHexes && neonColorHexes.length >= 3
+        ? neonColorHexes.map(hexToRgb)
+        : DEFAULT_NEON_COLORS;
+      const [r, g, b] = neonColors[seed % neonColors.length];
       const a = Math.sin(progress * Math.PI) * 0.65;
       ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
       ctx.fillRect(0, 0, w, h);

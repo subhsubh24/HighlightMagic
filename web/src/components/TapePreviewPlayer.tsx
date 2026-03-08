@@ -360,14 +360,17 @@ export default function TapePreviewPlayer() {
 
       // Auto-duck music when voiceover is playing
       if (musicGain) {
+        const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
+        const duckRatio = state.aiProductionPlan?.musicDuckRatio ?? 0.3;
+        const duckedVol = musicVol * duckRatio;
         const voLayers = layers.filter((l) => l.type === "voiceover");
         for (const vo of voLayers) {
           const voEnd = vo.startTime + vo.buffer.duration;
           // Duck music 0.2s before voiceover, restore 0.3s after
-          musicGain.gain.linearRampToValueAtTime(0.5, Math.max(0, vo.startTime - 0.2));
-          musicGain.gain.linearRampToValueAtTime(0.15, vo.startTime);
-          musicGain.gain.linearRampToValueAtTime(0.15, voEnd);
-          musicGain.gain.linearRampToValueAtTime(0.5, voEnd + 0.3);
+          musicGain.gain.linearRampToValueAtTime(musicVol, Math.max(0, vo.startTime - 0.2));
+          musicGain.gain.linearRampToValueAtTime(duckedVol, vo.startTime);
+          musicGain.gain.linearRampToValueAtTime(duckedVol, voEnd);
+          musicGain.gain.linearRampToValueAtTime(musicVol, voEnd + 0.3);
         }
       }
 
@@ -538,7 +541,9 @@ export default function TapePreviewPlayer() {
           localTime,
           entry.clipDuration,
           h,
-          captionCustom
+          captionCustom,
+          state.aiProductionPlan?.captionEntranceDuration ?? 0.5,
+          state.aiProductionPlan?.captionExitDuration ?? 0.3
         );
         drawKineticCaption(
           ctx,
@@ -569,7 +574,7 @@ export default function TapePreviewPlayer() {
       ctx.fillRect(0, 0, c.width, c.height);
 
       // Beat intensity for visual pulse
-      const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid) : 0;
+      const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid, state.aiProductionPlan?.beatSyncToleranceMs ?? 50) : 0;
 
       const nowActive = new Set<string>();
       let activeTransInfo: { type: TransitionType; progress: number; seed: number } | null = null;
@@ -622,7 +627,7 @@ export default function TapePreviewPlayer() {
 
       // Transition overlay
       if (activeTransInfo) {
-        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed);
+        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed, state.aiProductionPlan?.neonColors);
       }
 
       // Beat flash overlay (subtle brightness pulse on strong beats — AI chose the theme, beat sync is user toggle)

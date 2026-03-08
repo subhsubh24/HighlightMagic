@@ -119,6 +119,26 @@ export interface AiProductionPlan {
   /** AI-decided default transition duration for clips that don't specify one */
   defaultTransitionDuration: number;
 
+  // Timing & pacing
+  /** AI-decided photo display duration in seconds (2-8s) */
+  photoDisplayDuration: number;
+  /** AI-decided loop crossfade duration in seconds (0.2-1.5s) */
+  loopCrossfadeDuration: number;
+  /** AI-decided caption entrance animation duration in seconds (0.2-1.0s) */
+  captionEntranceDuration: number;
+  /** AI-decided caption exit animation duration in seconds (0.1-0.5s) */
+  captionExitDuration: number;
+  /** AI-decided music ducking ratio during voiceover (0.1-0.6) */
+  musicDuckRatio: number;
+  /** AI-decided beat-sync tolerance in ms (20-200ms) */
+  beatSyncToleranceMs: number;
+  /** AI-decided export bitrate in bps */
+  exportBitrate: number;
+  /** AI-decided watermark opacity (0.1-0.6) */
+  watermarkOpacity: number;
+  /** AI-decided neon transition colors as hex array */
+  neonColors: string[];
+
   // Thumbnail
   thumbnail: {
     sourceClipIndex: number;

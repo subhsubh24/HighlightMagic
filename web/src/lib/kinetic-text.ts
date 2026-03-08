@@ -39,7 +39,8 @@ export interface KineticTransform {
   glowAlpha: number;
 }
 
-const ANIMATION_DURATION = 0.5; // seconds
+const DEFAULT_ENTRANCE_DURATION = 0.5; // seconds
+const DEFAULT_EXIT_DURATION = 0.3; // seconds
 
 /**
  * Get the kinetic transform for a caption at a given time within the clip.
@@ -48,13 +49,18 @@ const ANIMATION_DURATION = 0.5; // seconds
  * @param localTime - Seconds since the clip started
  * @param clipDuration - Total clip duration in seconds
  * @param canvasHeight - Canvas height for scaling offsets
+ * @param custom - Custom caption parameters from AI
+ * @param entranceDuration - AI-decided entrance animation duration (defaults to 0.5s)
+ * @param exitDuration - AI-decided exit animation duration (defaults to 0.3s)
  */
 export function getKineticTransform(
   style: CaptionStyle,
   localTime: number,
   clipDuration: number,
   canvasHeight: number,
-  custom?: CustomCaptionParams
+  custom?: CustomCaptionParams,
+  entranceDuration: number = DEFAULT_ENTRANCE_DURATION,
+  exitDuration: number = DEFAULT_EXIT_DURATION
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -69,14 +75,13 @@ export function getKineticTransform(
   // Resolve animation type: custom overrides named style
   const animation = custom?.animation ?? styleToAnimation(style);
 
-  // Entrance animation (first 0.5s)
-  if (localTime < ANIMATION_DURATION) {
-    const t = localTime / ANIMATION_DURATION;
+  // Entrance animation
+  if (localTime < entranceDuration) {
+    const t = localTime / entranceDuration;
     return getEntranceAnimationByType(animation, t, canvasHeight, custom);
   }
 
-  // Exit animation (last 0.3s) — gentle fade
-  const exitDuration = 0.3;
+  // Exit animation — gentle fade
   const timeToEnd = clipDuration - localTime;
   if (timeToEnd < exitDuration && timeToEnd >= 0) {
     const t = timeToEnd / exitDuration;

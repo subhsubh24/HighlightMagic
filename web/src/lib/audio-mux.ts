@@ -55,14 +55,15 @@ export interface ScheduledAudioLayer {
   volume: number;      // 0-1
 }
 
-/** Ducking ratio — when voiceover plays, music drops to this fraction of its normal volume. */
-const MUSIC_DUCK_RATIO = 0.3;
+/** Default ducking ratio — when voiceover plays, music drops to this fraction of its normal volume. */
+const DEFAULT_MUSIC_DUCK_RATIO = 0.3;
 
 /**
  * Create a persistent audio pipeline for the render session.
  * Clip audio is routed through at full volume; music is lowered to avoid
  * drowning out the original audio from the clips.
  * @param musicVolume AI-decided music volume (0-1), defaults to 0.5
+ * @param musicDuckRatio AI-decided ducking ratio during voiceover (0.1-0.6), defaults to 0.3
  */
 export async function createAudioPipeline(
   canvasStream: MediaStream,
@@ -70,6 +71,7 @@ export async function createAudioPipeline(
   aiMusicUrl?: string | null,
   scheduledLayers?: ScheduledAudioLayer[],
   musicVolume: number = 0.5,
+  musicDuckRatio: number = DEFAULT_MUSIC_DUCK_RATIO,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -144,7 +146,7 @@ export async function createAudioPipeline(
   if (musicGainNode && voiceovers.length > 0) {
     for (const vo of voiceovers) {
       const voEnd = vo.startTime + vo.duration;
-      const duckedVolume = musicVolume * MUSIC_DUCK_RATIO;
+      const duckedVolume = musicVolume * musicDuckRatio;
       musicGainNode.gain.linearRampToValueAtTime(musicVolume, Math.max(0, vo.startTime - 0.2));
       musicGainNode.gain.linearRampToValueAtTime(duckedVolume, vo.startTime);
       musicGainNode.gain.linearRampToValueAtTime(duckedVolume, voEnd);

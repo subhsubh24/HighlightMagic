@@ -430,6 +430,15 @@ export interface ProductionPlan {
   sfxVolume: number;
   voiceoverVolume: number;
   defaultTransitionDuration: number;
+  photoDisplayDuration: number;
+  loopCrossfadeDuration: number;
+  captionEntranceDuration: number;
+  captionExitDuration: number;
+  musicDuckRatio: number;
+  beatSyncToleranceMs: number;
+  exportBitrate: number;
+  watermarkOpacity: number;
+  neonColors: string[];
   thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
   styleTransfer: { prompt: string; strength: number } | null;
   talkingHeadSpeech: string | null;
@@ -1613,6 +1622,33 @@ DEFAULT TRANSITION DURATION — Fallback for clips that don't specify their own.
 Set "defaultTransitionDuration" (0.1-1.0 seconds). 0.15 for fast/punchy edits, 0.3 for standard, 0.5-0.8 for cinematic/dreamy.
 Match to the overall pacing and energy of the content.
 
+PHOTO DISPLAY DURATION — How long static photos show in the final edit.
+Set "photoDisplayDuration" (2-8 seconds). 2-3s for fast/montage, 4-5s for standard, 6-8s for cinematic/contemplative.
+Each photo gets this baseline duration. Consider pacing: fast-cut reels need shorter photo holds.
+
+LOOP CROSSFADE DURATION — Cross-fade length for the seamless loop (last→first frame blend).
+Set "loopCrossfadeDuration" (0.2-1.5 seconds). 0.2-0.3s for punchy/beat-driven, 0.5 standard, 0.8-1.5s for dreamy/cinematic loops.
+
+CAPTION TIMING — Animation durations for caption text:
+Set "captionEntranceDuration" (0.2-1.0 seconds): how long the entrance animation plays. 0.3 for snappy, 0.5 standard, 0.8-1.0 for slow/cinematic.
+Set "captionExitDuration" (0.1-0.5 seconds): how long the exit fade plays. 0.15 for quick, 0.3 standard.
+
+MUSIC DUCKING — How much to lower music volume during voiceover.
+Set "musicDuckRatio" (0.1-0.6): ratio of normal volume. 0.15 for heavy ducking (clear VO), 0.3 standard, 0.5 for subtle ducking (music stays prominent).
+
+BEAT-SYNC TOLERANCE — How close a cut must be to a beat to snap.
+Set "beatSyncToleranceMs" (20-200 ms): 20-30 for tight/precise sync, 50 standard, 100-200 for loose/relaxed feel.
+
+EXPORT QUALITY — Video encoding bitrate.
+Set "exportBitrate" (8000000-20000000 bps): 8M for lightweight/fast, 12M standard, 16-20M for high-quality/cinematic.
+
+WATERMARK OPACITY — How visible the watermark text is.
+Set "watermarkOpacity" (0.1-0.6): 0.15 for subtle, 0.4 standard, 0.5-0.6 for prominent.
+
+NEON TRANSITION COLORS — Custom palette for color_flash transitions (hex colors).
+Set "neonColors" to an array of 3-6 hex colors. Match the content mood and color story.
+Examples: ["#9333ea","#06b6d4","#ec4899","#f59e0b"] (vibrant), ["#3b82f6","#8b5cf6","#06b6d4"] (cool).
+
 THUMBNAIL — Best frame for social sharing.
 Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
 
@@ -1626,7 +1662,7 @@ Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or nu
 null if no voice sample was provided or a talking head intro doesn't fit the content.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1768,15 +1804,28 @@ Respond with ONLY a JSON object:
           animationPrompt?: string;
         }>;
         // AI Production plan fields
-        intro?: { text: string; stylePrompt: string } | null;
-        outro?: { text: string; stylePrompt: string } | null;
+        intro?: { text: string; stylePrompt: string; duration?: number } | null;
+        outro?: { text: string; stylePrompt: string; duration?: number } | null;
         sfx?: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
-        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string; delaySec?: number };
         musicPrompt?: string;
         musicDurationMs?: number;
+        musicVolume?: number;
+        sfxVolume?: number;
+        voiceoverVolume?: number;
+        defaultTransitionDuration?: number;
         thumbnail?: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
         styleTransfer?: { prompt: string; strength: number } | null;
         talkingHeadSpeech?: string | null;
+        photoDisplayDuration?: number;
+        loopCrossfadeDuration?: number;
+        captionEntranceDuration?: number;
+        captionExitDuration?: number;
+        musicDuckRatio?: number;
+        beatSyncToleranceMs?: number;
+        exportBitrate?: number;
+        watermarkOpacity?: number;
+        neonColors?: string[];
       };
 
       if (!parsed.contentSummary) {
@@ -2045,6 +2094,19 @@ Respond with ONLY a JSON object:
         sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.8,
         voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 1.0,
         defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.1, Math.min(1.0, parsed.defaultTransitionDuration)) : 0.3,
+        photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(2, Math.min(8, parsed.photoDisplayDuration)) : 3,
+        loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.2, Math.min(1.5, parsed.loopCrossfadeDuration)) : 0.5,
+        captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.2, Math.min(1.0, parsed.captionEntranceDuration)) : 0.5,
+        captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.1, Math.min(0.5, parsed.captionExitDuration)) : 0.3,
+        musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0.1, Math.min(0.6, parsed.musicDuckRatio)) : 0.3,
+        beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(20, Math.min(200, Math.round(parsed.beatSyncToleranceMs))) : 50,
+        exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(8_000_000, Math.min(20_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
+        watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.1, Math.min(0.6, parsed.watermarkOpacity)) : 0.4,
+        neonColors: Array.isArray(parsed.neonColors) && parsed.neonColors.length >= 3
+          ? parsed.neonColors
+              .filter((c: unknown): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c))
+              .slice(0, 6)
+          : ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"],
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
           ? {
               sourceClipIndex: parsed.thumbnail.sourceClipIndex,
