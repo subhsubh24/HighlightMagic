@@ -72,7 +72,17 @@ export async function POST(req: Request) {
               // Controller closed — ignore
             }
           },
-          photoAnimations ?? undefined
+          photoAnimations ?? undefined,
+          (field, value) => {
+            // Forward early production plan fields to client
+            try {
+              controller.enqueue(
+                encoder.encode(`event: partial\ndata: ${JSON.stringify({ field, value })}\n\n`)
+              );
+            } catch {
+              // Controller closed — ignore
+            }
+          }
         );
         clearInterval(keepalive);
         controller.enqueue(

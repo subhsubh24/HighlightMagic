@@ -108,9 +108,66 @@ type SSEStreamPhase = "thinking" | "generating";
 /** Max time (ms) to wait for the next SSE chunk before treating the stream as stalled. */
 const STREAM_READ_TIMEOUT_MS = 90_000; // 90s — generous for Opus thinking pauses
 
+/** Callback for early production plan fields extracted during streaming. */
+type OnPartialField = (field: string, value: unknown) => void;
+
+/**
+ * Try to extract complete JSON string/number/object/array fields from partial
+ * streaming text. Used to start generators early (e.g., start music generation
+ * as soon as musicPrompt is fully streamed, before the full plan finishes).
+ */
+function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnPartialField): void {
+  // musicPrompt — a simple string field
+  if (!emitted.has("musicPrompt")) {
+    const m = text.match(/"musicPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (m) {
+      emitted.add("musicPrompt");
+      onPartial("musicPrompt", m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+      console.log(`[Planner SSE] Early extract: musicPrompt`);
+    }
+  }
+
+  // musicDurationMs — a number field
+  if (!emitted.has("musicDurationMs")) {
+    const m = text.match(/"musicDurationMs"\s*:\s*(\d+)/);
+    if (m) {
+      emitted.add("musicDurationMs");
+      onPartial("musicDurationMs", parseInt(m[1], 10));
+      console.log(`[Planner SSE] Early extract: musicDurationMs`);
+    }
+  }
+
+  // sfx — array of objects. Wait until the array closes.
+  if (!emitted.has("sfx")) {
+    const sfxStart = text.indexOf('"sfx"');
+    if (sfxStart !== -1) {
+      const bracketStart = text.indexOf('[', sfxStart);
+      if (bracketStart !== -1) {
+        // Find matching close bracket
+        let depth = 0;
+        for (let i = bracketStart; i < text.length; i++) {
+          if (text[i] === '[') depth++;
+          else if (text[i] === ']') depth--;
+          if (depth === 0) {
+            // Complete array
+            try {
+              const arr = JSON.parse(text.slice(bracketStart, i + 1));
+              emitted.add("sfx");
+              onPartial("sfx", arr);
+              console.log(`[Planner SSE] Early extract: sfx (${arr.length} items)`);
+            } catch { /* incomplete JSON — wait */ }
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
 async function consumeSSEStream(
   response: Response,
-  onPhase?: (phase: SSEStreamPhase) => void
+  onPhase?: (phase: SSEStreamPhase) => void,
+  onPartial?: OnPartialField
 ): Promise<{ text: string; stopReason: string | null }> {
   const streamStartMs = Date.now();
   const reader = response.body!.getReader();
@@ -120,6 +177,7 @@ async function consumeSSEStream(
   let buffer = "";
   let chunkCount = 0;
   let lastLogMs = Date.now();
+  const emittedFields = new Set<string>();
 
   while (true) {
     // Race the read against a timeout so we don't hang forever if the
@@ -161,6 +219,10 @@ async function consumeSSEStream(
         } else if (event.type === "content_block_delta") {
           if (event.delta?.type === "text_delta") {
             text += event.delta.text;
+            // Try to extract partial fields for early generator start
+            if (onPartial) {
+              extractPartialFields(text, emittedFields, onPartial);
+            }
           }
           chunkCount++;
           // Log every 15s so we know the stream is alive
@@ -450,7 +512,8 @@ export async function planFromScores(
   userFeedback?: string,
   creativeDirection?: string,
   onPhase?: (phase: "thinking" | "generating") => void,
-  photoAnimations?: PhotoAnimationInfo[]
+  photoAnimations?: PhotoAnimationInfo[],
+  onPartial?: OnPartialField
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -464,7 +527,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -1042,7 +1105,8 @@ async function planHighlightTape(
   userFeedback?: string,
   creativeDirection?: string,
   onPhase?: (phase: SSEStreamPhase) => void,
-  photoAnimations?: PhotoAnimationInfo[]
+  photoAnimations?: PhotoAnimationInfo[],
+  onPartial?: OnPartialField
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -1602,7 +1666,8 @@ Respond with ONLY a JSON object:
   }
 
   // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
-  const { text, stopReason } = await consumeSSEStream(response, onPhase);
+  // Pass onPartial to extract production plan fields early for pre-emptive generator start
+  const { text, stopReason } = await consumeSSEStream(response, onPhase, onPartial);
 
   if (stopReason === "max_tokens") {
     console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");

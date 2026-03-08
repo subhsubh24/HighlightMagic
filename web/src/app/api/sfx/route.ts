@@ -1,11 +1,12 @@
 import { generateSoundEffect } from "@/lib/elevenlabs-sfx";
+import { lookupSfxLibrary, cacheSfxResult } from "@/lib/sfx-library";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 /**
  * Generate a sound effect from a text prompt (ElevenLabs SFX v2).
- * Used for transition whooshes, impact hits, crowd roars, etc.
+ * Checks the pre-generated SFX library first to avoid redundant API calls.
  */
 export async function POST(req: Request) {
   try {
@@ -21,6 +22,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Check pre-generated SFX library first (instant, free)
+    const libraryHit = lookupSfxLibrary(prompt);
+    if (libraryHit) {
+      console.log(`[sfx] Library hit for "${prompt.slice(0, 60)}"`);
+      return Response.json({
+        status: "completed",
+        audioUrl: libraryHit.url,
+        duration: libraryHit.duration,
+      });
+    }
+
     const result = await generateSoundEffect(
       prompt,
       typeof durationMs === "number" ? durationMs : 2_000
@@ -31,6 +43,11 @@ export async function POST(req: Request) {
         { error: result.error ?? "SFX generation failed" },
         { status: 502 }
       );
+    }
+
+    // Cache the generated result for future lookups
+    if (result.audioUrl) {
+      cacheSfxResult(prompt, result.audioUrl, result.duration ?? 1);
     }
 
     return Response.json({

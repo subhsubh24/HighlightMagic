@@ -12,12 +12,13 @@ import {
   type DetectionResult,
   type DetectedClip,
 } from "@/actions/detect";
-import type { AnimationPollResult } from "@/lib/kling";
 import { buildFrameBatches, buildSourceFileList } from "@/lib/frame-batching";
 import { templateToTheme } from "@/lib/editing-styles";
 import { ALL_VELOCITY_PRESETS, type VelocityPreset } from "@/lib/velocity";
 import { uuid } from "@/lib/utils";
 import { cacheDetectionData, getCachedDetectionData } from "@/lib/detection-cache";
+import { pollBatched, cancelAllPolls } from "@/lib/poll-manager";
+import { cacheKey, getCachedAsset, setCachedAsset } from "@/lib/asset-cache";
 
 /** Convert DetectedClips to app-level highlights. */
 function buildHighlights(detectedClips: DetectedClip[]) {
@@ -122,7 +123,8 @@ async function callPlannerSSE(
   creativeDirection?: string,
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onPartial?: (field: string, value: unknown) => void
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
@@ -170,6 +172,12 @@ async function callPlannerSSE(
         try {
           const { phase } = JSON.parse(data);
           onPhase?.(phase);
+        } catch { /* ignore */ }
+      }
+      if (eventType === "partial") {
+        try {
+          const { field, value } = JSON.parse(data);
+          onPartial?.(field, value);
         } catch { /* ignore */ }
       }
       // keepalive events — just ignore, they keep the connection alive
@@ -222,6 +230,10 @@ export default function DetectingStep() {
   const hasStarted = useRef(false);
   const abortRef = useRef<AbortController>(new AbortController());
   const animationAbortRef = useRef<AbortController | null>(null);
+  /** Early-started music promise from streaming partial fields (Arch #4). */
+  const earlyMusicPromiseRef = useRef<Promise<string | null> | null>(null);
+  /** Early-started SFX status flag — prevents double-starting in processResult. */
+  const earlySfxStartedRef = useRef(false);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Keep a ref to the latest mediaFiles so long-running async code
@@ -274,11 +286,113 @@ export default function DetectingStep() {
     const cleanupFn = () => {
       abortRef.current.abort("DetectingStep unmounted");
       animationAbortRef.current?.abort("DetectingStep unmounted");
+      cancelAllPolls();
     };
 
     if (hasStarted.current) return cleanupFn;
     hasStarted.current = true;
+    earlyMusicPromiseRef.current = null;
+    earlySfxStartedRef.current = false;
     let abort = abortRef.current;
+
+    // ── Early generator start from streaming partial fields (Arch #4) ──
+    // Start music/SFX as soon as the planner streams the relevant field,
+    // saving 10-20s vs waiting for the full plan.
+    function startMusicEarly(prompt: string, durationMs?: number) {
+      if (earlyMusicPromiseRef.current) return; // Already started
+      if (!state.aiMusicEnabled || state.aiMusicStatus === "completed") return;
+
+      const musicCK = cacheKey("music", { prompt, durationMs });
+      const cached = getCachedAsset(musicCK);
+      if (cached) {
+        console.log("[Music] Early start — cache hit");
+        dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: cached.data });
+        earlyMusicPromiseRef.current = Promise.resolve(cached.data);
+        return;
+      }
+
+      console.log("[Music] Early start from streaming partial field");
+      dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
+      earlyMusicPromiseRef.current = (async () => {
+        try {
+          const res = await fetch("/api/music/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, durationMs }),
+          });
+          const data = await res.json();
+          if (!res.ok || data.status !== "completed" || !data.audioUrl) {
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+            return null;
+          }
+          setCachedAsset(musicCK, data.audioUrl);
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+          return data.audioUrl as string;
+        } catch {
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+          return null;
+        }
+      })();
+    }
+
+    function startSfxEarly(sfxCues: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>) {
+      if (earlySfxStartedRef.current || sfxCues.length === 0) return;
+      earlySfxStartedRef.current = true;
+      console.log(`[SFX] Early start from streaming partial — ${sfxCues.length} cues`);
+
+      dispatch({ type: "SET_SFX_STATUS", status: "generating" });
+      dispatch({
+        type: "SET_SFX_TRACKS",
+        tracks: sfxCues.map((s) => ({
+          clipIndex: s.clipIndex,
+          timing: s.timing as "before" | "on" | "after",
+          prompt: s.prompt,
+          durationMs: s.durationMs,
+          status: "generating" as const,
+        })),
+      });
+      // Fire off all SFX in parallel (same logic as processResult)
+      Promise.all(
+        sfxCues.map(async (sfxCue) => {
+          try {
+            const sfxCK = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
+            const cachedSfx = getCachedAsset(sfxCK);
+            if (cachedSfx) {
+              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: cachedSfx.data, status: "completed" });
+              return;
+            }
+            const res = await fetch("/api/sfx", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+            });
+            const data = await res.json();
+            if (res.ok && data.status === "completed" && data.audioUrl) {
+              setCachedAsset(sfxCK, data.audioUrl);
+              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: data.audioUrl, status: "completed" });
+            } else {
+              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+            }
+          } catch {
+            dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+          }
+        })
+      ).then(() => dispatch({ type: "SET_SFX_STATUS", status: "completed" }))
+        .catch(() => dispatch({ type: "SET_SFX_STATUS", status: "failed" }));
+    }
+
+    let earlyMusicDurationMs: number | undefined;
+    function handlePartialField(field: string, value: unknown) {
+      if (field === "musicPrompt" && typeof value === "string") {
+        startMusicEarly(value, earlyMusicDurationMs);
+      } else if (field === "musicDurationMs" && typeof value === "number") {
+        earlyMusicDurationMs = value;
+        // If musicPrompt already arrived, we can't update — but this is fine,
+        // musicDurationMs usually streams before musicPrompt in practice.
+      } else if (field === "sfx" && Array.isArray(value)) {
+        startSfxEarly(value as Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>);
+      }
+    }
 
     // Build photo animation info from upload step selections
     const photoAnimations = state.mediaFiles
@@ -343,7 +457,8 @@ export default function DetectingStep() {
             }
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
-          abort.signal
+          abort.signal,
+          handlePartialField
         );
 
         clearInterval(plannerTimer);
@@ -529,7 +644,8 @@ export default function DetectingStep() {
             }
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
-          abort.signal
+          abort.signal,
+          handlePartialField
         );
         console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
@@ -610,14 +726,26 @@ export default function DetectingStep() {
         });
       }
 
-      // 1. Music — use Claude's prompt if available, fallback to legacy
+      // 1. Music — use early-started promise if available (Arch #4), otherwise start now
       // Returns the audio URL so downstream promises (stems) can use it without stale state
-      const musicPromise: Promise<string | null> | null = (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
+      const musicPromise: Promise<string | null> | null = earlyMusicPromiseRef.current
+        ? earlyMusicPromiseRef.current
+        : (state.aiMusicEnabled && state.aiMusicStatus !== "completed")
         ? (async (): Promise<string | null> => {
             const prompt = productionPlan?.musicPrompt
               || state.aiMusicPrompt?.trim()
               || `Instrumental background music for a ${theme} highlight reel. ${result.contentSummary ?? ""}`.trim();
             if (!prompt) return null;
+
+            // Check asset cache first
+            const musicCacheKey = cacheKey("music", { prompt, durationMs: productionPlan?.musicDurationMs });
+            const cached = getCachedAsset(musicCacheKey);
+            if (cached) {
+              console.log("[Music] Cache hit — skipping ElevenLabs API call");
+              dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: cached.data });
+              return cached.data;
+            }
+
             dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
             try {
               const res = await fetch("/api/music/submit", {
@@ -633,6 +761,7 @@ export default function DetectingStep() {
                 dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
                 return null;
               }
+              setCachedAsset(musicCacheKey, data.audioUrl);
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
               return data.audioUrl as string;
             } catch {
@@ -642,8 +771,10 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 2. SFX generation — batch all sound effects in parallel
-      const sfxPromise = (productionPlan && productionPlan.sfx.length > 0)
+      // 2. SFX generation — skip if already started early (Arch #4)
+      const sfxPromise = earlySfxStartedRef.current
+        ? null // Already started from streaming partial field
+        : (productionPlan && productionPlan.sfx.length > 0)
         ? (async () => {
             dispatch({ type: "SET_SFX_STATUS", status: "generating" });
             dispatch({
@@ -660,6 +791,19 @@ export default function DetectingStep() {
               await Promise.all(
                 productionPlan.sfx.map(async (sfxCue) => {
                   try {
+                    // Check SFX cache first
+                    const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
+                    const cachedSfx = getCachedAsset(sfxCacheKey);
+                    if (cachedSfx) {
+                      dispatch({
+                        type: "UPDATE_SFX_TRACK",
+                        clipIndex: sfxCue.clipIndex,
+                        audioUrl: cachedSfx.data,
+                        status: "completed",
+                      });
+                      return;
+                    }
+
                     const res = await fetch("/api/sfx", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -670,6 +814,7 @@ export default function DetectingStep() {
                     });
                     const data = await res.json();
                     if (res.ok && data.status === "completed" && data.audioUrl) {
+                      setCachedAsset(sfxCacheKey, data.audioUrl);
                       dispatch({
                         type: "UPDATE_SFX_TRACK",
                         clipIndex: sfxCue.clipIndex,
@@ -717,6 +862,20 @@ export default function DetectingStep() {
             try {
               for (const segment of vo.segments) {
                 try {
+                  // Check voiceover cache first
+                  const voCacheKey = cacheKey("vo", { text: segment.text, voice: vo.voiceCharacter });
+                  const cachedVo = getCachedAsset(voCacheKey);
+                  if (cachedVo) {
+                    dispatch({
+                      type: "UPDATE_VOICEOVER_SEGMENT",
+                      clipIndex: segment.clipIndex,
+                      audioUrl: cachedVo.data,
+                      duration: (cachedVo.meta?.duration as number) ?? 2,
+                      status: "completed",
+                    });
+                    continue;
+                  }
+
                   const res = await fetch("/api/voiceover", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -727,6 +886,7 @@ export default function DetectingStep() {
                   });
                   const data = await res.json();
                   if (res.ok && data.status === "completed" && data.audioUrl) {
+                    setCachedAsset(voCacheKey, data.audioUrl, { duration: data.duration });
                     dispatch({
                       type: "UPDATE_VOICEOVER_SEGMENT",
                       clipIndex: segment.clipIndex,
@@ -1055,26 +1215,13 @@ export default function DetectingStep() {
       }, 400);
     }
 
-    /** Poll an Atlas Cloud task via /api/animate/check until done. Returns output URL or empty string on failure. */
+    /** Poll an Atlas Cloud task via batched poll manager. Returns output URL or empty string on failure. */
     async function pollAtlasTask(predictionId: string): Promise<string> {
-      const deadline = Date.now() + 300_000; // 5 min timeout
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 5_000));
-        try {
-          const res = await fetch("/api/animate/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ predictionId }),
-          });
-          const data = await res.json();
-          if (data.status === "completed" && data.videoUrl) return data.videoUrl;
-          if (data.status === "failed") return "";
-          // Still processing — continue polling
-        } catch {
-          // Transient error — continue polling
-        }
+      try {
+        return await pollBatched(predictionId, { timeoutMs: 300_000 });
+      } catch {
+        return ""; // Failed or timed out
       }
-      return ""; // Timeout
     }
 
     /** Convert a File to a base64 data URI for server-side API calls. */
@@ -1087,77 +1234,20 @@ export default function DetectingStep() {
       });
     }
 
-    /** Poll interval for animation status checks (ms) */
-    const ANIMATION_POLL_MS = 5_000;
-    /** Max animation wait time (ms) */
-    const ANIMATION_TIMEOUT_MS = 300_000;
-    /** Max consecutive transient errors before giving up */
-    const ANIMATION_MAX_TRANSIENT_ERRORS = 3;
-
-    /** Poll for animation completion on the client side (avoids server action timeout). */
+    /** Poll for animation completion via batched poll manager. */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
-      const deadline = Date.now() + ANIMATION_TIMEOUT_MS;
-      let consecutiveErrors = 0;
-      const signal = animationAbortRef.current?.signal;
-
-      while (Date.now() < deadline) {
+      try {
+        const videoUrl = await pollBatched(predictionId, { timeoutMs: 300_000, maxErrors: 3 });
+        dispatch({
+          type: "SET_ANIMATION_RESULT",
+          fileId: mediaId,
+          animatedVideoUrl: videoUrl,
+          animationStatus: "completed",
+        });
+      } catch (err) {
+        const signal = animationAbortRef.current?.signal;
         if (signal?.aborted) return;
-        await new Promise((r) => setTimeout(r, ANIMATION_POLL_MS));
-        if (signal?.aborted) return;
-
-        try {
-          const res = await fetch("/api/animate/check", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ predictionId }),
-            signal: signal,
-          });
-          if (!res.ok) throw new Error("Check request failed");
-          const result: AnimationPollResult = await res.json();
-          consecutiveErrors = 0; // reset on success
-
-          if (result.status === "completed" && result.videoUrl) {
-            dispatch({
-              type: "SET_ANIMATION_RESULT",
-              fileId: mediaId,
-              animatedVideoUrl: result.videoUrl,
-              animationStatus: "completed",
-            });
-            return;
-          }
-
-          if (result.status === "failed") {
-            console.error(`Photo animation failed for "${mediaName}": ${result.error}`);
-            dispatch({
-              type: "SET_ANIMATION_RESULT",
-              fileId: mediaId,
-              animatedVideoUrl: null,
-              animationStatus: "failed",
-            });
-            return;
-          }
-          // status === "processing" — keep polling
-        } catch (err) {
-          if (signal?.aborted) return;
-          consecutiveErrors++;
-          console.warn(`Photo animation poll error for "${mediaName}" (${consecutiveErrors}/${ANIMATION_MAX_TRANSIENT_ERRORS}):`, err);
-          if (consecutiveErrors >= ANIMATION_MAX_TRANSIENT_ERRORS) {
-            console.error(`Photo animation gave up after ${ANIMATION_MAX_TRANSIENT_ERRORS} consecutive errors for "${mediaName}"`);
-            dispatch({
-              type: "SET_ANIMATION_RESULT",
-              fileId: mediaId,
-              animatedVideoUrl: null,
-              animationStatus: "failed",
-            });
-            return;
-          }
-          // Transient error — keep polling
-        }
-      }
-
-      // Timed out
-      if (!signal?.aborted) {
-        console.error(`Photo animation timed out for "${mediaName}"`);
+        console.error(`Photo animation failed for "${mediaName}":`, err);
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,

@@ -27,10 +27,83 @@ import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } fro
 import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
-import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
+import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions, AppState } from "@/lib/types";
+import { EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_FRAME_RATE } from "@/lib/constants";
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
 type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
+
+/**
+ * Attempt server-side FFmpeg rendering (Arch #1).
+ * Returns a Blob on success, or null if server rendering is unavailable.
+ */
+async function tryServerRender(
+  clips: EditedClip[],
+  state: AppState,
+  isFree: boolean
+): Promise<Blob | null> {
+  try {
+    const renderClips = clips.map((clip) => {
+      const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
+      const hasAnimatedVideo = media?.type === "photo" &&
+        media.animationStatus === "completed" &&
+        media.animatedVideoUrl;
+      return {
+        sourceUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+        startTime: clip.trimStart,
+        endTime: clip.trimEnd,
+        filter: clip.customFilterCSS || undefined,
+        transitionType: clip.transitionType,
+        transitionDuration: clip.transitionDuration,
+        captionText: clip.captionText || undefined,
+        captionStyle: clip.captionStyle || undefined,
+      };
+    });
+
+    const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
+    if (state.aiMusicUrl) {
+      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: 0.7 });
+    }
+
+    const res = await fetch("/api/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clips: renderClips,
+        audioLayers,
+        width: EXPORT_WIDTH,
+        height: EXPORT_HEIGHT,
+        fps: EXPORT_FRAME_RATE,
+        bitrate: EXPORT_BITRATE,
+        seamlessLoop: state.viralOptions.seamlessLoop,
+        watermark: isFree ? WATERMARK_TEXT : undefined,
+      }),
+    });
+
+    if (res.status === 501) {
+      // Server rendering not enabled — fall back to client-side
+      return null;
+    }
+
+    if (!res.ok) {
+      console.warn("[render] Server render failed, falling back to client-side");
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.jobId) {
+      // TODO: Poll for job completion and download result
+      // For now, fall back to client-side rendering
+      console.log(`[render] Server render job queued: ${data.jobId}`);
+      return null;
+    }
+
+    return null;
+  } catch {
+    // Server rendering unavailable — silent fallback to client-side
+    return null;
+  }
+}
 
 /** Try codecs in preference order. */
 function pickMimeType(): { mimeType: string; ext: string } {
@@ -64,11 +137,13 @@ export default function ExportStep() {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const thumbnailAbortRef = useRef<AbortController | null>(null);
 
-  // Cleanup blob URL on unmount or when a new one is created
+  // Cleanup blob URL and abort thumbnail polling on unmount
   useEffect(() => {
     return () => {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
+      thumbnailAbortRef.current?.abort();
     };
   }, [blobUrl]);
 
@@ -109,6 +184,11 @@ export default function ExportStep() {
     const plan = state.aiProductionPlan;
     if (!plan?.thumbnail) return;
 
+    // Abort any previous thumbnail generation
+    thumbnailAbortRef.current?.abort();
+    const abort = new AbortController();
+    thumbnailAbortRef.current = abort;
+
     setThumbnailPhase("generating");
     try {
       // Find the source clip for the thumbnail
@@ -125,6 +205,7 @@ export default function ExportStep() {
         video.src = media.url;
         video.currentTime = plan.thumbnail.frameTime;
         await new Promise<void>((resolve) => { video.onseeked = () => resolve(); video.load(); });
+        if (abort.signal.aborted) return;
         const c = document.createElement("canvas");
         c.width = 1080; c.height = 1920;
         const ctx = c.getContext("2d")!;
@@ -136,17 +217,21 @@ export default function ExportStep() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageData: frameDataUri }),
+          signal: abort.signal,
         });
         const data = await res.json();
         if (res.ok && data.predictionId) {
           // Poll for result
           const deadline = Date.now() + 120_000;
           while (Date.now() < deadline) {
+            if (abort.signal.aborted) return;
             await new Promise((r) => setTimeout(r, 5000));
+            if (abort.signal.aborted) return;
             const checkRes = await fetch("/api/animate/check", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ predictionId: data.predictionId }),
+              signal: abort.signal,
             });
             const checkData = await checkRes.json();
             if (checkData.status === "completed" && checkData.videoUrl) {
@@ -158,9 +243,9 @@ export default function ExportStep() {
           }
         }
       }
-      setThumbnailPhase("failed");
+      if (!abort.signal.aborted) setThumbnailPhase("failed");
     } catch {
-      setThumbnailPhase("failed");
+      if (!abort.signal.aborted) setThumbnailPhase("failed");
     }
   }, [state, sortedClips]);
 
@@ -175,6 +260,22 @@ export default function ExportStep() {
     haptic();
 
     try {
+      // Attempt server-side FFmpeg rendering first (Arch #1)
+      // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
+      const serverResult = await tryServerRender(sortedClips, state, isFree);
+      if (serverResult) {
+        const url = URL.createObjectURL(serverResult);
+        setBlobUrl(url);
+        setExportExt("mp4");
+        dispatch({ type: "INCREMENT_EXPORTS" });
+        setPhase("done");
+        haptic([10, 50, 10]);
+        if (state.thumbnail && state.thumbnail.status !== "completed") {
+          generateThumbnail();
+        }
+        return;
+      }
+      // Server rendering not available — fall back to client-side
       const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
         const media = getMediaFile(state, clip.sourceFileId);
         // Use animated video if available (photo → video via Kling 3.0)
