@@ -201,7 +201,7 @@ export default function UploadStep() {
           <>
             <h1 className="mb-3 text-4xl font-bold leading-tight md:text-5xl">
               Drop your footage.{" "}
-              <span className="bg-accent-gradient bg-clip-text text-transparent">AI does the rest.</span>
+              <span className="gradient-text">AI does the rest.</span>
             </h1>
             <p className="mx-auto max-w-md text-[var(--text-secondary)]">
               Upload videos & photos — AI finds the best moments, adds music, SFX, voiceover, and creates a viral-ready highlight tape.
