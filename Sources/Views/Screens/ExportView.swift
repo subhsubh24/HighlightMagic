@@ -122,6 +122,26 @@ struct ExportView: View {
                         InfoRow(label: "Grade", value: clip.cinematicGrade.rawValue)
                     }
 
+                    // AI production features
+                    if clip.aiMusicData != nil {
+                        InfoRow(label: "AI Music", value: "Generated")
+                    }
+                    if clip.voiceoverData != nil {
+                        InfoRow(label: "Voiceover", value: "Generated")
+                    }
+                    if clip.sfxData != nil {
+                        InfoRow(label: "SFX", value: "Generated")
+                    }
+                    if clip.introVideoURL != nil {
+                        InfoRow(label: "Intro Card", value: "AI Generated")
+                    }
+                    if clip.outroVideoURL != nil {
+                        InfoRow(label: "Outro Card", value: "AI Generated")
+                    }
+                    if clip.styleTransferURL != nil {
+                        InfoRow(label: "Style Transfer", value: "Applied")
+                    }
+
                     // Watermark toggle
                     if appState.isProUser {
                         HStack {
@@ -270,7 +290,10 @@ struct ExportView: View {
             aiEffectConfig: clip.aiEffectConfig,
             aiMusicData: clip.aiMusicData,
             voiceoverData: clip.voiceoverData,
-            sfxData: clip.sfxData
+            sfxData: clip.sfxData,
+            introVideoURL: clip.introVideoURL,
+            outroVideoURL: clip.outroVideoURL,
+            styleTransferURL: clip.styleTransferURL
         )
 
         Analytics.exportStarted(

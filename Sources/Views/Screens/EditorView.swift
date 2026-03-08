@@ -88,6 +88,7 @@ struct EditorView: View {
                         captionSection(clipBinding)
                         musicSection(clip)
                         aiAudioSection
+                        aiProductionSection
                         viralEditSection(clipBinding)
                         filterSection(clipBinding)
                         premiumEffectsButton
@@ -335,6 +336,163 @@ struct EditorView: View {
                         .labelsHidden()
                         .tint(Theme.accent)
                 }
+            }
+        }
+    }
+
+    /// AI Production controls — intro/outro cards, voice cloning, stem separation, style transfer.
+    /// Matches web platform's AI production pipeline features.
+    @ViewBuilder
+    private var aiProductionSection: some View {
+        EditorSection(title: "AI Production", icon: "film.stack") {
+            VStack(spacing: 14) {
+                // Intro Card toggle
+                aiToggleRow(
+                    icon: "play.rectangle.fill",
+                    title: "AI Intro Card",
+                    subtitle: "Generate a text-to-video intro",
+                    isOn: Binding(
+                        get: { appState.introCardEnabled },
+                        set: { appState.introCardEnabled = $0 }
+                    )
+                )
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Outro Card toggle
+                aiToggleRow(
+                    icon: "stop.circle.fill",
+                    title: "AI Outro Card",
+                    subtitle: "Generate a text-to-video outro",
+                    isOn: Binding(
+                        get: { appState.outroCardEnabled },
+                        set: { appState.outroCardEnabled = $0 }
+                    )
+                )
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Voice Clone toggle
+                aiToggleRow(
+                    icon: "person.wave.2.fill",
+                    title: "Voice Clone",
+                    subtitle: "Clone your voice for narration",
+                    isOn: Binding(
+                        get: { appState.voiceCloneEnabled },
+                        set: { appState.voiceCloneEnabled = $0 }
+                    )
+                )
+
+                if appState.voiceCloneEnabled {
+                    HStack(spacing: 8) {
+                        statusBadge(for: appState.voiceCloneStatus)
+                    }
+                    .padding(.leading, 30)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Stem Separation toggle
+                aiToggleRow(
+                    icon: "waveform.path",
+                    title: "Stem Separation",
+                    subtitle: "Isolate instrumental from vocals",
+                    isOn: Binding(
+                        get: { appState.stemSeparationEnabled },
+                        set: { appState.stemSeparationEnabled = $0 }
+                    )
+                )
+
+                if appState.stemSeparationEnabled {
+                    HStack(spacing: 8) {
+                        statusBadge(for: appState.stemSeparationStatus)
+                    }
+                    .padding(.leading, 30)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // Style Transfer prompt
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "paintpalette.fill")
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Style Transfer")
+                                .font(Theme.body)
+                                .foregroundStyle(.white)
+                            Text("Apply a visual style to the whole clip")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+                    }
+                    TextField("e.g. anime, watercolor, film noir...", text: Binding(
+                        get: { appState.styleTransferPrompt },
+                        set: { appState.styleTransferPrompt = $0 }
+                    ))
+                        .font(Theme.body)
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        .background(Theme.surfaceLight)
+                        .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.smallCornerRadius))
+                }
+            }
+        }
+    }
+
+    private func aiToggleRow(icon: String, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Theme.body)
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(Theme.accent)
+        }
+    }
+
+    @ViewBuilder
+    private func statusBadge(for status: GenerationStatus) -> some View {
+        switch status {
+        case .idle:
+            Text("Ready")
+                .font(.caption2)
+                .foregroundStyle(Theme.textTertiary)
+        case .generating:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.6)
+                Text("Generating...")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.accent)
+            }
+        case .done:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+                Text("Done")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+        case .failed:
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                Text("Failed")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
             }
         }
     }

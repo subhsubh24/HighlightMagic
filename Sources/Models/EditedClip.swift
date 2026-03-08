@@ -29,6 +29,8 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var introVideoURL: URL?
     /// URL to AI-generated outro card video (from AtlasCloud)
     var outroVideoURL: URL?
+    /// URL to style-transferred video (from AtlasCloud Wan v2v)
+    var styleTransferURL: URL?
 
     init(
         id: UUID = UUID(),

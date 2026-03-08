@@ -283,6 +283,11 @@ actor ExportService {
         let voiceoverData: Data?
         let sfxData: Data?
 
+        // AI production assets (feature parity with web AtlasCloud pipeline)
+        let introVideoURL: URL?
+        let outroVideoURL: URL?
+        let styleTransferURL: URL?
+
         init(
             sourceURL: URL,
             trimStart: CMTime,
@@ -299,7 +304,10 @@ actor ExportService {
             aiEffectConfig: CustomEffectConfig? = nil,
             aiMusicData: Data? = nil,
             voiceoverData: Data? = nil,
-            sfxData: Data? = nil
+            sfxData: Data? = nil,
+            introVideoURL: URL? = nil,
+            outroVideoURL: URL? = nil,
+            styleTransferURL: URL? = nil
         ) {
             self.sourceURL = sourceURL
             self.trimStart = trimStart
@@ -317,6 +325,9 @@ actor ExportService {
             self.aiMusicData = aiMusicData
             self.voiceoverData = voiceoverData
             self.sfxData = sfxData
+            self.introVideoURL = introVideoURL
+            self.outroVideoURL = outroVideoURL
+            self.styleTransferURL = styleTransferURL
         }
 
         static var defaultSize: CGSize {
@@ -573,7 +584,79 @@ actor ExportService {
             )
         }
 
+        // 10. Concatenate intro/outro cards if present
+        var finalURL = outputURL
+        if config.introVideoURL != nil || config.outroVideoURL != nil {
+            finalURL = try await concatenateIntroOutro(
+                mainVideoURL: outputURL,
+                introURL: config.introVideoURL,
+                outroURL: config.outroVideoURL
+            )
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
         progressHandler(1.0)
+        return finalURL
+    }
+
+    /// Concatenate intro, main video, and outro into a single video.
+    private func concatenateIntroOutro(
+        mainVideoURL: URL,
+        introURL: URL?,
+        outroURL: URL?
+    ) async throws -> URL {
+        let composition = AVMutableComposition()
+        guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw ExportError.noVideoTrack
+        }
+
+        var currentTime = CMTime.zero
+
+        // Helper to append a video file
+        func appendVideo(url: URL) async throws {
+            let asset = AVURLAsset(url: url)
+            let duration = try await asset.load(.duration)
+            let range = CMTimeRange(start: .zero, duration: duration)
+            if let vTrack = try await asset.loadTracks(withMediaType: .video).first {
+                try videoTrack.insertTimeRange(range, of: vTrack, at: currentTime)
+            }
+            if let aTrack = try await asset.loadTracks(withMediaType: .audio).first {
+                try audioTrack.insertTimeRange(range, of: aTrack, at: currentTime)
+            }
+            currentTime = CMTimeAdd(currentTime, duration)
+        }
+
+        if let introURL {
+            try await appendVideo(url: introURL)
+        }
+        try await appendVideo(url: mainVideoURL)
+        if let outroURL {
+            try await appendVideo(url: outroURL)
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("highlight_concat_\(UUID().uuidString).mp4")
+
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw ExportError.exportSessionCreationFailed
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        await exportSession.export()
+
+        guard exportSession.status == .completed else {
+            throw ExportError.exportFailed(
+                exportSession.error?.localizedDescription ?? "Unknown error"
+            )
+        }
+
         return outputURL
     }
 

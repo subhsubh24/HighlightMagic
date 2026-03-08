@@ -31,6 +31,21 @@ final class AppState {
     var voiceoverEnabled: Bool = false
     var sfxEnabled: Bool = false
 
+    // AI production features (AtlasCloud + ElevenLabs)
+    var introCardEnabled: Bool = false
+    var outroCardEnabled: Bool = false
+    var voiceCloneEnabled: Bool = false
+    var stemSeparationEnabled: Bool = false
+    var styleTransferPrompt: String = ""
+
+    // Voice cloning state
+    var clonedVoiceId: String?
+    var voiceCloneStatus: GenerationStatus = .idle
+
+    // Stem separation state
+    var instrumentalMusicData: Data?
+    var stemSeparationStatus: GenerationStatus = .idle
+
     var canExportFree: Bool {
         exportsUsedThisMonth < Constants.freeExportLimit
     }
@@ -62,7 +77,27 @@ final class AppState {
         isProcessing = false
         processingProgress = 0
         errorMessage = nil
+        // Reset AI feature state
+        aiMusicEnabled = false
+        voiceoverEnabled = false
+        sfxEnabled = false
+        introCardEnabled = false
+        outroCardEnabled = false
+        voiceCloneEnabled = false
+        stemSeparationEnabled = false
+        styleTransferPrompt = ""
+        clonedVoiceId = nil
+        voiceCloneStatus = .idle
+        instrumentalMusicData = nil
+        stemSeparationStatus = .idle
     }
+}
+
+enum GenerationStatus: String, Sendable {
+    case idle
+    case generating
+    case done
+    case failed
 }
 
 enum AppScreen: Hashable {
