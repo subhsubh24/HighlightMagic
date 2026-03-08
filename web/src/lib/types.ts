@@ -70,6 +70,8 @@ export interface GeneratedCard {
   text: string;
   stylePrompt: string;
   videoUrl?: string;
+  /** AI-decided duration in seconds (3-5s range) */
+  duration: number;
   status: GenerationStatus;
 }
 
@@ -85,8 +87,8 @@ export interface GeneratedThumbnail {
 /** Claude's expanded plan output — drives the entire AI autopilot pipeline */
 export interface AiProductionPlan {
   // Intro/outro cards
-  intro: { text: string; stylePrompt: string } | null;
-  outro: { text: string; stylePrompt: string } | null;
+  intro: { text: string; stylePrompt: string; duration: number } | null;
+  outro: { text: string; stylePrompt: string; duration: number } | null;
 
   // Sound effects
   sfx: Array<{
@@ -101,11 +103,21 @@ export interface AiProductionPlan {
     enabled: boolean;
     segments: Array<{ clipIndex: number; text: string }>;
     voiceCharacter: string;
+    /** AI-decided delay in seconds before voiceover starts after clip begins (0-1s) */
+    delaySec: number;
   };
 
   // Music
   musicPrompt: string;
   musicDurationMs: number;
+
+  // Audio mix — AI-decided volume levels (0-1)
+  musicVolume: number;
+  sfxVolume: number;
+  voiceoverVolume: number;
+
+  /** AI-decided default transition duration for clips that don't specify one */
+  defaultTransitionDuration: number;
 
   // Thumbnail
   thumbnail: {

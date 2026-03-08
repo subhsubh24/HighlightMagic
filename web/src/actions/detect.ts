@@ -420,12 +420,16 @@ export interface DetectedClip {
 }
 
 export interface ProductionPlan {
-  intro: { text: string; stylePrompt: string } | null;
-  outro: { text: string; stylePrompt: string } | null;
+  intro: { text: string; stylePrompt: string; duration: number } | null;
+  outro: { text: string; stylePrompt: string; duration: number } | null;
   sfx: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
-  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string; delaySec: number };
   musicPrompt: string;
   musicDurationMs: number;
+  musicVolume: number;
+  sfxVolume: number;
+  voiceoverVolume: number;
+  defaultTransitionDuration: number;
   thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
   styleTransfer: { prompt: string; strength: number } | null;
   talkingHeadSpeech: string | null;
@@ -1555,8 +1559,9 @@ need music + a subtle intro. A hype sports reel may benefit from SFX + voiceover
 A quiet wedding highlight might need nothing but music and gentle transitions.
 Only add elements that genuinely elevate the content. Less is often more.
 
-INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
-Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
+INTRO CARD — An AI-generated video title card prepended to the tape.
+Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
+"duration" is in seconds (3-5). Pick based on content pacing: 3s for fast/hype, 5s for cinematic/slow.
 The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
 IMPORTANT: The video is rendered in 9:16 PORTRAIT format (1080x1920, very tall and narrow).
 Text MUST fit within the narrow frame. In the stylePrompt:
@@ -1576,8 +1581,9 @@ SKIP intro (set null) for:
   - When no clear title/theme exists beyond "look at these"
 
 OUTRO CARD — A matching closing card appended after the last clip.
-Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
+Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
 Same 9:16 portrait text rules as intro — 2-4 words max, "small centered text" in stylePrompt, fits narrow vertical frame.
+"duration" 3-5 seconds, match the intro's pacing.
 DEFAULT TO null. Only add an outro if the tape is long (8+ clips) AND has a clear closing message.
 Most tapes should NOT have an outro.
 
@@ -1587,7 +1593,8 @@ Use an empty array [] if SFX would clutter the content (e.g. calm/cinematic cont
 When used, match SFX style to content mood. 2-6 cues max — quality over quantity.
 
 VOICEOVER — AI-generated narration on key moments.
-Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic"}.
+Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
+"delaySec" (0-1s): delay before voiceover starts after clip begins. Use 0 for immediate, 0.3 for natural pause, 0.5-1 for dramatic reveals.
 Set enabled: false if narration would feel intrusive (most content doesn't need voiceover).
 When enabled, 2-4 segments max. Less is more — narrate only pivotal moments.
 Choose voice character that matches the content's energy and audience.
@@ -1595,6 +1602,16 @@ Choose voice character that matches the content's energy and audience.
 MUSIC — AI instrumental soundtrack.
 Set "musicPrompt" (genre, energy, instruments, mood, tempo). Set "musicDurationMs" to total tape length in ms.
 Be specific about instrumentation and energy arc, not generic. The music should feel custom-scored.
+
+AUDIO MIX — Fine-tune the volume balance for the entire tape.
+Set "musicVolume" (0-1): background music level. 0.3 for VO-heavy, 0.5 normal, 0.7 for music-driven.
+Set "sfxVolume" (0-1): sound effects level. 0.6 for subtle, 0.8 normal, 1.0 for punchy/hype.
+Set "voiceoverVolume" (0-1): narration level. 0.8 for subtle, 1.0 normal.
+These let you create the perfect mix for the content — e.g. a music video needs loud music + quiet VO, while a narrated recap needs loud VO + quiet music.
+
+DEFAULT TRANSITION DURATION — Fallback for clips that don't specify their own.
+Set "defaultTransitionDuration" (0.1-1.0 seconds). 0.15 for fast/punchy edits, 0.3 for standard, 0.5-0.8 for cinematic/dreamy.
+Match to the overall pacing and energy of the content.
 
 THUMBNAIL — Best frame for social sharing.
 Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
@@ -1609,7 +1626,7 @@ Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or nu
 null if no voice sample was provided or a talking head intro doesn't fit the content.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description"}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description"}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype"}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1964,10 +1981,18 @@ Respond with ONLY a JSON object:
 
       const productionPlan: ProductionPlan = {
         intro: (parsed.intro && typeof parsed.intro.text === "string" && typeof parsed.intro.stylePrompt === "string")
-          ? { text: parsed.intro.text.slice(0, 200), stylePrompt: parsed.intro.stylePrompt.slice(0, 500) }
+          ? {
+              text: parsed.intro.text.slice(0, 200),
+              stylePrompt: parsed.intro.stylePrompt.slice(0, 500),
+              duration: typeof parsed.intro.duration === "number" ? Math.max(3, Math.min(5, parsed.intro.duration)) : 4,
+            }
           : null,
         outro: (parsed.outro && typeof parsed.outro.text === "string" && typeof parsed.outro.stylePrompt === "string")
-          ? { text: parsed.outro.text.slice(0, 200), stylePrompt: parsed.outro.stylePrompt.slice(0, 500) }
+          ? {
+              text: parsed.outro.text.slice(0, 200),
+              stylePrompt: parsed.outro.stylePrompt.slice(0, 500),
+              duration: typeof parsed.outro.duration === "number" ? Math.max(3, Math.min(5, parsed.outro.duration)) : 4,
+            }
           : null,
         sfx: Array.isArray(parsed.sfx)
           ? parsed.sfx
@@ -1998,8 +2023,11 @@ Respond with ONLY a JSON object:
               voiceCharacter: VALID_VOICE_CHARS.includes(parsed.voiceover.voiceCharacter)
                 ? parsed.voiceover.voiceCharacter
                 : "male-broadcaster-hype",
+              delaySec: typeof parsed.voiceover.delaySec === "number"
+                ? Math.max(0, Math.min(1, parsed.voiceover.delaySec))
+                : 0.3,
             }
-          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype" },
+          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype", delaySec: 0.3 },
         musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
         musicDurationMs: (() => {
           // Compute total tape duration from clips so music always covers the full video
@@ -2013,6 +2041,10 @@ Respond with ONLY a JSON object:
           }
           return Math.min(300000, Math.max(floor, 60000));
         })(),
+        musicVolume: typeof parsed.musicVolume === "number" ? Math.max(0, Math.min(1, parsed.musicVolume)) : 0.5,
+        sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.8,
+        voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 1.0,
+        defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.1, Math.min(1.0, parsed.defaultTransitionDuration)) : 0.3,
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
           ? {
               sourceClipIndex: parsed.thumbnail.sourceClipIndex,

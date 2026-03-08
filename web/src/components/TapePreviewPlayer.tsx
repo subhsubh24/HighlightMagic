@@ -107,14 +107,15 @@ export default function TapePreviewPlayer() {
     const entries: TimelineEntry[] = [];
     let t = 0;
 
-    // Prepend intro card if available
+    // Prepend intro card if available — use AI-decided duration
     if (state.introCard?.status === "completed" && state.introCard.videoUrl) {
+      const introDur = state.introCard.duration;
       const introClip: EditedClip = {
         id: "__intro__",
         sourceFileId: "__intro__",
-        segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Intro", detectionSources: [] },
+        segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: introDur, confidenceScore: 1, label: "Intro", detectionSources: [] },
         trimStart: 0,
-        trimEnd: 5,
+        trimEnd: introDur,
         order: -1,
         selectedMusicTrack: null,
         captionText: "",
@@ -129,10 +130,10 @@ export default function TapePreviewPlayer() {
         filterCSS: "",
         captionText: "",
         globalStart: 0,
-        globalEnd: 5,
-        clipDuration: 5,
+        globalEnd: introDur,
+        clipDuration: introDur,
       });
-      t = 5;
+      t = introDur;
     }
 
     for (let i = 0; i < sortedClips.length; i++) {
@@ -159,20 +160,22 @@ export default function TapePreviewPlayer() {
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
-        // Use next clip's per-clip transition duration (neutral 0.3s default)
+        // Use next clip's per-clip transition duration, fallback to AI-decided default
+        const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
         const nextClip = sortedClips[i + 1];
-        t -= nextClip?.transitionDuration ?? 0.3;
+        t -= nextClip?.transitionDuration ?? defaultTransDur;
       }
     }
 
-    // Append outro card if available
+    // Append outro card if available — use AI-decided duration
     if (state.outroCard?.status === "completed" && state.outroCard.videoUrl) {
+      const outroDur = state.outroCard.duration;
       const outroClip: EditedClip = {
         id: "__outro__",
         sourceFileId: "__outro__",
-        segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Outro", detectionSources: [] },
+        segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: outroDur, confidenceScore: 1, label: "Outro", detectionSources: [] },
         trimStart: 0,
-        trimEnd: 5,
+        trimEnd: outroDur,
         order: 9999,
         selectedMusicTrack: null,
         captionText: "",
@@ -187,8 +190,8 @@ export default function TapePreviewPlayer() {
         filterCSS: "",
         captionText: "",
         globalStart: t,
-        globalEnd: t + 5,
-        clipDuration: 5,
+        globalEnd: t + outroDur,
+        clipDuration: outroDur,
       });
     }
 
@@ -297,11 +300,13 @@ export default function TapePreviewPlayer() {
         const buffer = await fetchBuffer(sfx.audioUrl);
         if (!buffer || cancelled) continue;
 
+        const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
         let startTime = clipEntry.globalStart;
         if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - 0.5);
-        else if (sfx.timing === "after") startTime = clipEntry.globalEnd - 0.3;
+        else if (sfx.timing === "after") startTime = clipEntry.globalEnd - defaultTransDur;
 
-        layers.push({ buffer, startTime, gain: 0.8, type: "sfx" });
+        const sfxVol = state.aiProductionPlan?.sfxVolume ?? 0.8;
+        layers.push({ buffer, startTime, gain: sfxVol, type: "sfx" });
       }
 
       // Load voiceover segments — timed to their clip
@@ -312,10 +317,12 @@ export default function TapePreviewPlayer() {
         const buffer = await fetchBuffer(vo.audioUrl);
         if (!buffer || cancelled) continue;
 
+        const voDelay = state.aiProductionPlan?.voiceover.delaySec ?? 0.3;
+        const voVol = state.aiProductionPlan?.voiceoverVolume ?? 1.0;
         layers.push({
           buffer,
-          startTime: clipEntry.globalStart + 0.3,
-          gain: 1.0,
+          startTime: clipEntry.globalStart + voDelay,
+          gain: voVol,
           type: "voiceover",
         });
       }
@@ -324,7 +331,8 @@ export default function TapePreviewPlayer() {
       if (hasMusicUrl && state.aiMusicUrl) {
         const buffer = await fetchBuffer(state.aiMusicUrl);
         if (buffer && !cancelled) {
-          layers.push({ buffer, startTime: 0, gain: 0.5, type: "music" });
+          const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
+          layers.push({ buffer, startTime: 0, gain: musicVol, type: "music" });
         }
       }
 

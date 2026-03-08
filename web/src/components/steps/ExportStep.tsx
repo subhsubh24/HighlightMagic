@@ -57,18 +57,24 @@ async function tryServerRender(
       captionText?: string; captionStyle?: string;
     }> = [];
 
-    // Prepend intro card if available
-    const INTRO_DUR = 5;
-    const OUTRO_DUR = 5;
+    // Use AI-driven durations and volumes from production plan
+    const plan = state.aiProductionPlan;
     const hasIntro = state.introCard?.status === "completed" && state.introCard.videoUrl;
     const hasOutro = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
-    const introOffset = hasIntro ? INTRO_DUR : 0;
+    const introDur = state.introCard?.duration ?? 4;
+    const outroDur = state.outroCard?.duration ?? 4;
+    const introOffset = hasIntro ? introDur : 0;
+    const defaultTransDur = plan?.defaultTransitionDuration ?? 0.3;
+    const voDelay = plan?.voiceover.delaySec ?? 0.3;
+    const musicVol = plan?.musicVolume ?? 0.5;
+    const sfxVol = plan?.sfxVolume ?? 0.8;
+    const voVol = plan?.voiceoverVolume ?? 1.0;
 
     if (hasIntro) {
       renderClips.push({
         sourceUrl: state.introCard!.videoUrl!,
         startTime: 0,
-        endTime: INTRO_DUR,
+        endTime: introDur,
       });
     }
 
@@ -93,13 +99,13 @@ async function tryServerRender(
       renderClips.push({
         sourceUrl: state.outroCard!.videoUrl!,
         startTime: 0,
-        endTime: OUTRO_DUR,
+        endTime: outroDur,
       });
     }
 
     const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
     if (state.aiMusicUrl) {
-      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: 0.7 });
+      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: musicVol });
     }
 
     // Compute per-clip timeline offsets for voiceover / SFX placement
@@ -111,7 +117,7 @@ async function tryServerRender(
       const dur = clips[i].trimEnd - clips[i].trimStart;
       clipStarts.push(t);
       clipEnds.push(t + dur);
-      t += dur - (clips[i + 1]?.transitionDuration ?? 0.3);
+      t += dur - (clips[i + 1]?.transitionDuration ?? defaultTransDur);
     }
 
     // Voiceover segments
@@ -119,7 +125,7 @@ async function tryServerRender(
       if (!vo.audioUrl || vo.status !== "completed") continue;
       const start = clipStarts[vo.clipIndex];
       if (start == null) continue;
-      audioLayers.push({ url: vo.audioUrl, startTime: start + 0.3, volume: 1.0 });
+      audioLayers.push({ url: vo.audioUrl, startTime: start + voDelay, volume: voVol });
     }
 
     // SFX tracks
@@ -130,8 +136,8 @@ async function tryServerRender(
       if (clipStart == null) continue;
       let sfxStart = clipStart;
       if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - 0.5);
-      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - 0.3;
-      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: 0.8 });
+      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - defaultTransDur;
+      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: sfxVol });
     }
 
     const res = await fetch("/api/render", {
@@ -360,20 +366,25 @@ export default function ExportStep() {
       // Server rendering not available — fall back to client-side
       const renderClips: RenderClipInstruction[] = [];
 
-      // Prepend intro card if available
-      const INTRO_DURATION = 5;
-      const OUTRO_DURATION = 5;
-      const hasIntro = state.introCard?.status === "completed" && state.introCard.videoUrl;
-      const hasOutro = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
-      const introOffset = hasIntro ? INTRO_DURATION : 0;
+      // AI-driven durations and volumes from production plan
+      const cPlan = state.aiProductionPlan;
+      const hasIntroC = state.introCard?.status === "completed" && state.introCard.videoUrl;
+      const hasOutroC = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
+      const introDurC = state.introCard?.duration ?? 4;
+      const outroDurC = state.outroCard?.duration ?? 4;
+      const introOffsetC = hasIntroC ? introDurC : 0;
+      const defaultTransDurC = cPlan?.defaultTransitionDuration ?? 0.3;
+      const voDelayC = cPlan?.voiceover.delaySec ?? 0.3;
+      const sfxVolC = cPlan?.sfxVolume ?? 0.8;
+      const voVolC = cPlan?.voiceoverVolume ?? 1.0;
 
-      if (hasIntro) {
+      if (hasIntroC) {
         const introClip: EditedClip = {
           id: "__intro__",
           sourceFileId: "__intro__",
-          segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: INTRO_DURATION, confidenceScore: 1, label: "Intro", detectionSources: [] },
+          segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: introDurC, confidenceScore: 1, label: "Intro", detectionSources: [] },
           trimStart: 0,
-          trimEnd: INTRO_DURATION,
+          trimEnd: introDurC,
           order: -1,
           selectedMusicTrack: null,
           captionText: "",
@@ -408,13 +419,13 @@ export default function ExportStep() {
       }
 
       // Append outro card if available
-      if (hasOutro) {
+      if (hasOutroC) {
         const outroClip: EditedClip = {
           id: "__outro__",
           sourceFileId: "__outro__",
-          segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: OUTRO_DURATION, confidenceScore: 1, label: "Outro", detectionSources: [] },
+          segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: outroDurC, confidenceScore: 1, label: "Outro", detectionSources: [] },
           trimStart: 0,
-          trimEnd: OUTRO_DURATION,
+          trimEnd: outroDurC,
           order: 9999,
           selectedMusicTrack: null,
           captionText: "",
@@ -436,23 +447,23 @@ export default function ExportStep() {
       setExportExt(ext);
 
       // Build scheduled audio layers for voiceover + SFX
-      // Audio timing must account for intro card offset since clipIndex refers to user clips
+      // Audio timing uses AI-driven values; intro card offset since clipIndex refers to user clips
       const scheduled: ScheduledAudioLayer[] = [];
       {
         const cStarts: number[] = [];
         const cEnds: number[] = [];
-        let st = introOffset; // Start after intro card duration
+        let st = introOffsetC; // Start after intro card duration
         for (let i = 0; i < sortedClips.length; i++) {
           const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
           cStarts.push(st);
           cEnds.push(st + dur);
-          st += dur - (sortedClips[i + 1]?.transitionDuration ?? 0.3);
+          st += dur - (sortedClips[i + 1]?.transitionDuration ?? defaultTransDurC);
         }
         for (const vo of state.voiceoverSegments ?? []) {
           if (!vo.audioUrl || vo.status !== "completed") continue;
           const s = cStarts[vo.clipIndex];
           if (s == null) continue;
-          scheduled.push({ url: vo.audioUrl, startTime: s + 0.3, volume: 1.0 });
+          scheduled.push({ url: vo.audioUrl, startTime: s + voDelayC, volume: voVolC });
         }
         for (const sfx of state.sfxTracks ?? []) {
           if (!sfx.audioUrl || sfx.status !== "completed") continue;
@@ -461,8 +472,8 @@ export default function ExportStep() {
           if (cs == null) continue;
           let sfxS = cs;
           if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
-          else if (sfx.timing === "after") sfxS = (ce ?? cs) - 0.3;
-          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: 0.8 });
+          else if (sfx.timing === "after") sfxS = (ce ?? cs) - defaultTransDurC;
+          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC });
         }
       }
 
@@ -475,6 +486,8 @@ export default function ExportStep() {
         (pct) => setProgress(pct),
         state.aiMusicUrl,
         scheduled,
+        defaultTransDurC,
+        cPlan?.musicVolume ?? 0.5,
       );
 
       const url = URL.createObjectURL(blob);
@@ -814,6 +827,8 @@ async function renderHighlightTape(
   onProgress: (pct: number) => void,
   aiMusicUrl?: string | null,
   scheduledLayers?: ScheduledAudioLayer[],
+  defaultTransitionDuration: number = 0.3,
+  musicVolume: number = 0.5,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -838,7 +853,7 @@ async function renderHighlightTape(
       trimEnd: c.clip.trimEnd,
       transitionDuration: c.clip.transitionDuration,
     })),
-    0.3,
+    defaultTransitionDuration,
     beatGrid
   );
   if (renderValidation.issues.length > 0) {
@@ -852,7 +867,7 @@ async function renderHighlightTape(
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume);
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
@@ -863,7 +878,7 @@ async function renderHighlightTape(
     }
     totalDuration += clipDur;
     if (i < clips.length - 1) {
-      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? 0.3;
+      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
     }
   }
 
@@ -903,7 +918,7 @@ async function renderHighlightTape(
     // Per-clip style values (AI-specified, neutral defaults as last resort)
     const clipStyle = {
       ...style,
-      transitionDuration: instruction.clip.transitionDuration ?? 0.3,
+      transitionDuration: instruction.clip.transitionDuration ?? defaultTransitionDuration,
       entryPunchScale: instruction.clip.entryPunchScale ?? 1.0,
       entryPunchDuration: instruction.clip.entryPunchDuration ?? 0.15,
       kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? 0,

@@ -755,9 +755,16 @@ export default function DetectingStep() {
               prompt: s.prompt,
               durationMs: s.durationMs,
             })),
-            voiceover: productionPlan.voiceover,
+            voiceover: {
+              ...productionPlan.voiceover,
+              delaySec: productionPlan.voiceover.delaySec ?? 0.3,
+            },
             musicPrompt: productionPlan.musicPrompt,
             musicDurationMs: productionPlan.musicDurationMs,
+            musicVolume: productionPlan.musicVolume ?? 0.5,
+            sfxVolume: productionPlan.sfxVolume ?? 0.8,
+            voiceoverVolume: productionPlan.voiceoverVolume ?? 1.0,
+            defaultTransitionDuration: productionPlan.defaultTransitionDuration ?? 0.3,
             thumbnail: productionPlan.thumbnail,
             photoAnimationPrompts: {},
             styleTransfer: productionPlan.styleTransfer ?? null,
@@ -963,21 +970,22 @@ export default function DetectingStep() {
       // 4. Intro card generation (Atlas Cloud T2V)
       const introPromise = productionPlan?.intro
         ? (async () => {
+            const introDur = productionPlan.intro!.duration;
             dispatch({
               type: "SET_INTRO_CARD",
-              card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "generating" },
+              card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "generating" },
             });
             try {
               const submitRes = await fetch("/api/intro", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: 5 }),
+                body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: introDur }),
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
                 dispatch({
                   type: "SET_INTRO_CARD",
-                  card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+                  card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
                 });
                 return;
               }
@@ -988,6 +996,7 @@ export default function DetectingStep() {
                 card: {
                   text: productionPlan.intro!.text,
                   stylePrompt: productionPlan.intro!.stylePrompt,
+                  duration: introDur,
                   videoUrl,
                   status: videoUrl ? "completed" : "failed",
                 },
@@ -995,7 +1004,7 @@ export default function DetectingStep() {
             } catch {
               dispatch({
                 type: "SET_INTRO_CARD",
-                card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+                card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
               });
             }
           })()
@@ -1004,21 +1013,22 @@ export default function DetectingStep() {
       // 5. Outro card generation (Atlas Cloud T2V)
       const outroPromise = productionPlan?.outro
         ? (async () => {
+            const outroDur = productionPlan.outro!.duration;
             dispatch({
               type: "SET_OUTRO_CARD",
-              card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "generating" },
+              card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "generating" },
             });
             try {
               const submitRes = await fetch("/api/outro", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: 5 }),
+                body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: outroDur }),
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
                 dispatch({
                   type: "SET_OUTRO_CARD",
-                  card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+                  card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
                 });
                 return;
               }
@@ -1028,6 +1038,7 @@ export default function DetectingStep() {
                 card: {
                   text: productionPlan.outro!.text,
                   stylePrompt: productionPlan.outro!.stylePrompt,
+                  duration: outroDur,
                   videoUrl,
                   status: videoUrl ? "completed" : "failed",
                 },
@@ -1035,7 +1046,7 @@ export default function DetectingStep() {
             } catch {
               dispatch({
                 type: "SET_OUTRO_CARD",
-                card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+                card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
               });
             }
           })()

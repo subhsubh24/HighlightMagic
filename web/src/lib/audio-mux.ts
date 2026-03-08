@@ -55,21 +55,21 @@ export interface ScheduledAudioLayer {
   volume: number;      // 0-1
 }
 
-/** Volume for background music — matches TapePreviewPlayer (0.5). */
-const MUSIC_VOLUME = 0.5;
-/** Ducked music volume when voiceover is playing. */
-const MUSIC_DUCKED_VOLUME = 0.15;
+/** Ducking ratio — when voiceover plays, music drops to this fraction of its normal volume. */
+const MUSIC_DUCK_RATIO = 0.3;
 
 /**
  * Create a persistent audio pipeline for the render session.
  * Clip audio is routed through at full volume; music is lowered to avoid
  * drowning out the original audio from the clips.
+ * @param musicVolume AI-decided music volume (0-1), defaults to 0.5
  */
 export async function createAudioPipeline(
   canvasStream: MediaStream,
   track: MusicTrack | null,
   aiMusicUrl?: string | null,
   scheduledLayers?: ScheduledAudioLayer[],
+  musicVolume: number = 0.5,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -99,7 +99,7 @@ export async function createAudioPipeline(
         musicSource.buffer = buffer;
         musicSource.loop = true;
         musicGainNode = audioCtx.createGain();
-        musicGainNode.gain.value = MUSIC_VOLUME;
+        musicGainNode.gain.value = musicVolume;
         musicSource.connect(musicGainNode);
         musicGainNode.connect(dest);
         musicSource.start(0);
@@ -144,10 +144,11 @@ export async function createAudioPipeline(
   if (musicGainNode && voiceovers.length > 0) {
     for (const vo of voiceovers) {
       const voEnd = vo.startTime + vo.duration;
-      musicGainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, Math.max(0, vo.startTime - 0.2));
-      musicGainNode.gain.linearRampToValueAtTime(MUSIC_DUCKED_VOLUME, vo.startTime);
-      musicGainNode.gain.linearRampToValueAtTime(MUSIC_DUCKED_VOLUME, voEnd);
-      musicGainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, voEnd + 0.3);
+      const duckedVolume = musicVolume * MUSIC_DUCK_RATIO;
+      musicGainNode.gain.linearRampToValueAtTime(musicVolume, Math.max(0, vo.startTime - 0.2));
+      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, vo.startTime);
+      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, voEnd);
+      musicGainNode.gain.linearRampToValueAtTime(musicVolume, voEnd + 0.3);
     }
   }
 
