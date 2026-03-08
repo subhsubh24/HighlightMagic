@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   Download,
   Play,
   RefreshCw,
@@ -28,21 +29,21 @@ import { haptic } from "@/lib/utils";
 import TapePreviewPlayer from "@/components/TapePreviewPlayer";
 import type { GenerationStatus } from "@/lib/types";
 
-/** Status badge used for each AI production track */
+/** Compact status dot + label for AI production tracks */
 function StatusBadge({ status, label }: { status: GenerationStatus; label: string }) {
   if (status === "idle") return null;
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
-      {status === "generating" && <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--accent)]" />}
-      {status === "completed" && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
-      {status === "failed" && <XCircle className="h-3.5 w-3.5 text-red-400" />}
-      <span className="text-xs text-[var(--text-secondary)]">{label}</span>
-      <span className={`ml-auto text-[10px] font-medium ${
+    <div className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 transition-colors hover:bg-white/5">
+      {status === "generating" && <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />}
+      {status === "completed" && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+      {status === "failed" && <XCircle className="h-3 w-3 text-red-400" />}
+      <span className="flex-1 text-xs text-[var(--text-secondary)]">{label}</span>
+      <span className={`text-[10px] font-medium tabular-nums ${
         status === "completed" ? "text-emerald-400" :
         status === "failed" ? "text-red-400" :
         "text-[var(--accent)]"
       }`}>
-        {status === "generating" ? "Generating..." : status === "completed" ? "Ready" : "Failed"}
+        {status === "generating" ? "In progress" : status === "completed" ? "Done" : "Failed"}
       </span>
     </div>
   );
@@ -129,15 +130,28 @@ export default function EditorStep() {
 
       {/* AI Production Status Panel */}
       {hasAnyProduction && (
-        <div className="flex flex-col gap-1.5">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] px-1">
-            AI Production
-          </p>
-          <StatusBadge status={musicStatus} label="Background Music" />
-          <StatusBadge status={sfxStatus} label="Sound Effects" />
-          <StatusBadge status={voiceoverStatus} label="Voiceover" />
-          <StatusBadge status={introStatus} label="Intro Card" />
-          <StatusBadge status={outroStatus} label="Outro Card" />
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+              <span className="text-xs font-medium text-white">AI Production</span>
+            </div>
+            {!allReady ? (
+              <div className="flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />
+                <span className="text-[10px] text-[var(--accent)]">Working...</span>
+              </div>
+            ) : (
+              <span className="text-[10px] text-emerald-400 font-medium">All ready</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5 p-1.5">
+            <StatusBadge status={musicStatus} label="Background Music" />
+            <StatusBadge status={sfxStatus} label="Sound Effects" />
+            <StatusBadge status={voiceoverStatus} label="Voiceover" />
+            <StatusBadge status={introStatus} label="Intro Card" />
+            <StatusBadge status={outroStatus} label="Outro Card" />
+          </div>
         </div>
       )}
 
@@ -193,22 +207,25 @@ export default function EditorStep() {
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2 mt-auto">
-        <button
-          onClick={handleRegenerate}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-white/10"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Regenerate
-        </button>
-        <button
-          onClick={handleExport}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] py-3 text-sm font-medium text-white transition-colors hover:opacity-90"
-        >
-          <Download className="h-4 w-4" />
-          Export Tape
-        </button>
+      {/* Sticky action bar */}
+      <div className="sticky bottom-0 -mx-4 mt-auto bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)] to-transparent px-4 pt-6 pb-2">
+        <div className="flex gap-2">
+          <button
+            onClick={handleRegenerate}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-white/10 active:scale-[0.98]"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Regenerate
+          </button>
+          <button
+            onClick={handleExport}
+            className="btn-primary group flex flex-[2] items-center justify-center gap-2 !py-3"
+          >
+            <Download className="h-4 w-4" />
+            Export Tape
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

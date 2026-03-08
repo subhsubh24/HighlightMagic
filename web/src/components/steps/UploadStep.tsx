@@ -514,12 +514,15 @@ export default function UploadStep() {
           {/* CTA */}
           <button
             onClick={handleContinue}
-            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2"
+            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2 animate-pulse-glow-subtle"
           >
             <Wand2 className="h-4 w-4 transition-transform group-hover:rotate-12" />
             <span>Create Highlight Tape</span>
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
+          <p className="text-center text-[10px] text-[var(--text-tertiary)] mt-1">
+            AI will analyze your footage and create a complete edit in ~2 minutes
+          </p>
         </div>
       )}
 
@@ -539,21 +542,23 @@ export default function UploadStep() {
             if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
           }}
           aria-label="Upload video and photo files"
-          className={`glass-card flex w-full max-w-md cursor-pointer flex-col items-center gap-4 p-10 transition-all ${
+          className={`glass-card group flex w-full max-w-md cursor-pointer flex-col items-center gap-5 p-10 transition-all duration-300 ${
             isDragging
               ? "scale-[1.02] border-[var(--accent)] shadow-[0_0_30px_rgba(124,58,237,0.3)]"
-              : "hover:border-white/20"
+              : "hover:border-white/20 hover:shadow-[0_0_20px_rgba(124,58,237,0.1)]"
           }`}
         >
           <div
-            className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-colors ${
-              isDragging ? "bg-[var(--accent)]" : "bg-white/10"
+            className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-all duration-300 ${
+              isDragging
+                ? "bg-[var(--accent)] scale-110 rotate-3"
+                : "bg-white/10 group-hover:bg-white/15 group-hover:scale-105"
             }`}
           >
             {isDragging ? (
-              <Film className="h-8 w-8 text-white" />
+              <Film className="h-8 w-8 text-white animate-pulse" />
             ) : (
-              <Upload className="h-8 w-8 text-[var(--text-secondary)]" />
+              <Upload className="h-8 w-8 text-[var(--text-secondary)] transition-transform group-hover:-translate-y-0.5" />
             )}
           </div>
 
@@ -562,10 +567,11 @@ export default function UploadStep() {
               {isDragging ? "Drop your files here" : "Drag & drop videos + photos"}
             </p>
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-              or click to browse — MP4, MOV, WebM, JPG, PNG up to {MAX_UPLOAD_SIZE_MB} MB each
+              or <span className="text-[var(--accent)] underline underline-offset-2">click to browse</span> — MP4, MOV, WebM, JPG, PNG
             </p>
-            <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-              Up to {MAX_FILES} files — AI creates one highlight tape from all of them
+            <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-[var(--text-tertiary)]">
+              <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-white/10 px-1.5 text-[10px] font-medium">{MAX_FILES}</span>
+              files max · {MAX_UPLOAD_SIZE_MB} MB each
             </p>
           </div>
         </div>

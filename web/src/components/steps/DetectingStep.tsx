@@ -1415,61 +1415,121 @@ export default function DetectingStep() {
     );
   }
 
+  // Circular progress ring params
+  const ringSize = 120;
+  const strokeWidth = 6;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeOffset = circumference - (progress / 100) * circumference;
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-8 animate-fade-in">
-      {/* Animated icon */}
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
+      {/* Circular progress with icon */}
       <div className="relative">
-        <div className="animate-pulse-glow flex h-24 w-24 items-center justify-center rounded-3xl bg-accent-gradient">
-          <Sparkles className="h-10 w-10 text-white" />
+        <svg width={ringSize} height={ringSize} className="rotate-[-90deg]">
+          <circle
+            cx={ringSize / 2} cy={ringSize / 2} r={radius}
+            fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={ringSize / 2} cy={ringSize / 2} r={radius}
+            fill="none" stroke="url(#progress-gradient)" strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeOffset}
+            className="transition-all duration-500 ease-out"
+          />
+          <defs>
+            <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--accent)" />
+              <stop offset="100%" stopColor="var(--accent-pink)" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="animate-pulse-glow flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-gradient">
+            <Sparkles className="h-7 w-7 text-white" />
+          </div>
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="w-full max-w-sm">
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+      {/* Percentage */}
+      <p className="text-2xl font-bold text-white tabular-nums">
+        {Math.round(progress)}%
+      </p>
+
+      {/* Linear progress bar (secondary) */}
+      <div className="w-full max-w-xs">
+        <div className="h-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-accent-gradient transition-all duration-300"
+            className="h-full rounded-full bg-accent-gradient transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="mt-3 text-center text-lg font-semibold text-white">
-          {Math.round(progress)}%
+      </div>
+
+      {/* Phase label */}
+      <div className="text-center space-y-1.5">
+        <p className="text-sm font-medium text-white">
+          {animatingPhotos
+                ? animationProgress.total > 1
+                  ? `Animating photos (${animationProgress.completed}/${animationProgress.total})`
+                  : "Animating your photo"
+                : plannerElapsed > 0
+                  ? `Planning your highlight tape`
+                  : (passes[passIndex] ?? passes[passes.length - 1]).replace("...", "")}
+        </p>
+        <p className="text-xs text-[var(--text-tertiary)]">
+          {animatingPhotos
+                ? animationProgress.failed > 0
+                  ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
+                  : "Generating motion with Kling — usually 1-2 min per photo"
+                : isPlannerPass
+                  ? `Analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} · ${plannerElapsed}s elapsed`
+                  : isReplan
+                    ? "Re-generating with your creative direction"
+                    : `${fileCount} file${fileCount !== 1 ? "s" : ""} queued for analysis`}
         </p>
       </div>
 
-      {/* Pass label */}
-      <p className="text-center text-[var(--text-secondary)]">
-        {animatingPhotos
-              ? animationProgress.total > 1
-                ? `Animating photos (${animationProgress.completed}/${animationProgress.total})...`
-                : "Animating your photo..."
-              : plannerElapsed > 0
-                ? `Planning your highlight tape (${plannerElapsed}s)...`
-                : (passes[passIndex] ?? passes[passes.length - 1])}
-      </p>
-
-      <p className="text-center text-xs text-[var(--text-tertiary)]">
-        {animatingPhotos
-              ? animationProgress.failed > 0
-                ? `${animationProgress.failed} failed — check your ATLASCLOUD_API_KEY configuration`
-                : "Generating motion with Kling — this usually takes 1-2 minutes per photo"
-              : isPlannerPass
-                ? `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} — waiting for response (${plannerElapsed}s)`
-                : isReplan
-                  ? "Re-generating with your creative direction..."
-                  : `AI is analyzing ${fileCount} file${fileCount !== 1 ? "s" : ""} to create your highlight tape`}
-      </p>
+      {/* Pipeline phases checklist — shows completed phases */}
+      <div className="flex flex-col gap-1 w-full max-w-xs">
+        {passes.map((label, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-all duration-300 ${
+              i < passIndex
+                ? "text-emerald-400/80"
+                : i === passIndex
+                  ? "text-white bg-white/5"
+                  : "text-[var(--text-tertiary)]"
+            }`}
+          >
+            <div className={`h-1.5 w-1.5 rounded-full transition-colors ${
+              i < passIndex
+                ? "bg-emerald-400"
+                : i === passIndex
+                  ? "bg-[var(--accent)] animate-pulse"
+                  : "bg-white/20"
+            }`} />
+            {label.replace("...", "")}
+          </div>
+        ))}
+      </div>
 
       {isSlow && (
-        <p className="text-center text-xs text-amber-400/80 animate-fade-in">
-          {isPlannerPass
-            ? isVerySlow
-              ? "The AI planner is still working — complex footage takes longer to analyze. You can wait or go back and try again."
-              : "The AI planner needs extra time for your footage — still processing..."
-            : isVerySlow
-              ? "This is taking unusually long — the AI model may be overloaded. You can wait or go back and try again."
-              : "Taking longer than expected — still working, hang tight..."}
-        </p>
+        <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 max-w-sm animate-fade-in">
+          <div className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+          <p className="text-xs text-amber-400/80">
+            {isPlannerPass
+              ? isVerySlow
+                ? "Complex footage takes longer. You can wait or go back."
+                : "AI needs extra time for your footage..."
+              : isVerySlow
+                ? "Model may be overloaded. You can wait or go back."
+                : "Taking longer than expected — still working..."}
+          </p>
+        </div>
       )}
     </div>
   );

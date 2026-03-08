@@ -551,26 +551,47 @@ export default function ExportStep() {
       )}
 
       {/* Rendering phase */}
-      {phase === "rendering" && (
-        <div className="flex w-full flex-col items-center gap-4 py-12">
-          <div className="w-full max-w-xs">
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-accent-gradient transition-all"
-                style={{ width: `${progress}%` }}
-              />
+      {phase === "rendering" && (() => {
+        const rSize = 100;
+        const rStroke = 5;
+        const rRadius = (rSize - rStroke) / 2;
+        const rCirc = 2 * Math.PI * rRadius;
+        const rOffset = rCirc - (progress / 100) * rCirc;
+        return (
+          <div className="flex w-full flex-col items-center gap-5 py-12 animate-fade-in">
+            {/* Circular progress */}
+            <div className="relative">
+              <svg width={rSize} height={rSize} className="rotate-[-90deg]">
+                <circle cx={rSize / 2} cy={rSize / 2} r={rRadius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={rStroke} />
+                <circle cx={rSize / 2} cy={rSize / 2} r={rRadius} fill="none" stroke="url(#export-gradient)" strokeWidth={rStroke} strokeLinecap="round" strokeDasharray={rCirc} strokeDashoffset={rOffset} className="transition-all duration-300" />
+                <defs>
+                  <linearGradient id="export-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="var(--accent)" />
+                    <stop offset="100%" stopColor="var(--accent-pink)" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-lg font-bold text-white tabular-nums">{Math.round(progress)}%</span>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <p className="text-sm font-medium text-white">
+                Rendering your highlight tape
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                {style.label} style · {sortedClips.length} clips
+              </p>
+            </div>
+
+            <div className="flex gap-2 text-[10px]">
+              {state.viralOptions.beatSync && hasMusic && <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-400 font-medium">Beat Sync</span>}
+              {state.viralOptions.seamlessLoop && <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-blue-400 font-medium">Loop</span>}
             </div>
           </div>
-          <p className="text-lg font-semibold text-white">{Math.round(progress)}%</p>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Rendering with {style.label.toLowerCase()} editing style...
-          </p>
-          <div className="flex gap-2 text-[10px] text-[var(--text-tertiary)]">
-            {state.viralOptions.beatSync && hasMusic && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400">Beat Sync</span>}
-            {state.viralOptions.seamlessLoop && <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-blue-400">Loop</span>}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Done phase — video player */}
       {phase === "done" && (
@@ -590,29 +611,29 @@ export default function ExportStep() {
           )}
 
           <div className="text-center">
-            <h3 className="text-xl font-bold text-white">Highlight Tape Ready!</h3>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {sortedClips.length} clips · {style.label} style — ready to share
+            <h3 className="text-2xl font-bold text-white">Your tape is ready!</h3>
+            <p className="mt-1.5 text-sm text-[var(--text-secondary)]">
+              {sortedClips.length} clips · {style.label} style
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-3">
-            <button onClick={handleDownload} className="btn-primary flex items-center justify-center gap-2">
+          <div className="flex w-full gap-3">
+            <button onClick={handleDownload} className="btn-primary flex flex-1 items-center justify-center gap-2">
               <Download className="h-5 w-5" />
               Download
             </button>
-            <button onClick={handleShare} className="btn-secondary flex items-center justify-center gap-2">
+            <button onClick={handleShare} className="btn-secondary flex flex-1 items-center justify-center gap-2">
               <Share2 className="h-5 w-5" />
               Share
             </button>
-            <button
-              onClick={() => dispatch({ type: "RESET" })}
-              className="flex items-center justify-center gap-2 py-3 text-sm text-[var(--text-tertiary)] hover:text-white"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Start Over
-            </button>
           </div>
+          <button
+            onClick={() => dispatch({ type: "RESET" })}
+            className="flex items-center justify-center gap-2 py-2 text-sm text-[var(--text-tertiary)] hover:text-white transition-colors"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Create another tape
+          </button>
 
           {/* Auto-generated thumbnail */}
           {thumbnailPhase === "generating" && (

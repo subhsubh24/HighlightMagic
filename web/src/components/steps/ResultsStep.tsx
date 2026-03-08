@@ -193,18 +193,22 @@ export default function ResultsStep() {
 
       {/* Empty state */}
       {sortedClips.length === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">
-          <VideoOff className="h-16 w-16 text-[var(--text-tertiary)]" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16 animate-fade-in">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white/5">
+            <VideoOff className="h-10 w-10 text-[var(--text-tertiary)]" />
+          </div>
           <h3 className="text-xl font-bold text-white">No Highlights Found</h3>
-          <p className="max-w-sm text-center text-[var(--text-secondary)]">
+          <p className="max-w-sm text-center text-sm text-[var(--text-secondary)]">
             Try different videos or photos — clips with more action, faces, or variety tend to work best.
           </p>
-          <button
-            onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
-            className="btn-primary"
-          >
-            Try Again
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
+              className="btn-primary"
+            >
+              Try Different Files
+            </button>
+          </div>
         </div>
       )}
 
@@ -377,29 +381,26 @@ export default function ResultsStep() {
         })}
       </div>
 
-      {/* Edit & Export CTA */}
-      <button
-        onClick={handleEditAll}
-        className="btn-primary flex items-center justify-center gap-2"
-      >
-        <Scissors className="h-5 w-5" />
-        Edit & Export Highlight Tape
-        <ArrowRight className="h-5 w-5" />
-      </button>
-
-      {/* Template badge */}
-      {state.selectedTemplate && (
-        <div className="flex items-center justify-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-[var(--text-tertiary)]">
-          Using{" "}
-          <span
-            className="font-semibold"
-            style={{ color: state.selectedTemplate.colorAccent }}
-          >
-            {state.selectedTemplate.name}
-          </span>{" "}
-          template — filter & music auto-applied during edit
-        </div>
-      )}
+      {/* Sticky CTA bar */}
+      <div className="sticky bottom-0 -mx-4 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)] to-transparent px-4 pt-6 pb-2">
+        <button
+          onClick={handleEditAll}
+          className="btn-primary group flex w-full items-center justify-center gap-2"
+        >
+          <Scissors className="h-5 w-5 transition-transform group-hover:rotate-12" />
+          Edit & Export Highlight Tape
+          <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+        </button>
+        {state.selectedTemplate && (
+          <p className="mt-2 text-center text-[10px] text-[var(--text-tertiary)]">
+            Using{" "}
+            <span className="font-semibold" style={{ color: state.selectedTemplate.colorAccent }}>
+              {state.selectedTemplate.name}
+            </span>{" "}
+            template
+          </p>
+        )}
+      </div>
       </>)}
     </div>
   );
