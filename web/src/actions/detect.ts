@@ -1761,6 +1761,7 @@ Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
 
 STYLE TRANSFER — Optional visual post-processing look applied to the entire tape.
 Set "styleTransfer": {"prompt": "cinematic film grain, warm tones, subtle vignette", "strength": 0.4} or null.
+"strength" (0.1-1.0): how much the style transfer affects the final output. 0.2 = subtle hint, 0.5 = balanced, 0.8-1.0 = heavy stylization. Always specify strength explicitly.
 This stacks on top of per-clip filterCSS, so consider how they interact. Use it when a unified
 post-processing look would tie the tape together, skip it when per-clip grades already do the job.
 
@@ -2050,7 +2051,7 @@ Respond with ONLY a JSON object:
         sourceFileId: p.sourceFileId,
         startTime: Math.max(0, p.startTime),
         endTime: Math.max(0, p.endTime),
-        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
+        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) ?? 0.5)),
         label: p.label || "Highlight",
         velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
           ? p.velocityPreset
@@ -2288,11 +2289,18 @@ Respond with ONLY a JSON object:
         beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 50,
         exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(4_000_000, Math.min(30_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
         watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,
-        neonColors: Array.isArray(parsed.neonColors) && parsed.neonColors.length >= 2
-          ? parsed.neonColors
+        neonColors: (() => {
+          if (Array.isArray(parsed.neonColors)) {
+            const valid = parsed.neonColors
               .filter((c: unknown): c is string => typeof c === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c))
-              .slice(0, 8)
-          : ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"],
+              .slice(0, 8);
+            if (valid.length >= 2) return valid;
+            // AI provided colors but too few survived validation — keep what we have and pad
+            if (valid.length === 1) return [valid[0], valid[0]];
+          }
+          // Only use default palette when AI provided nothing at all
+          return ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"];
+        })(),
 
         // ── New AI rendering controls ──
         beatPulseIntensity: typeof parsed.beatPulseIntensity === "number" ? Math.max(0, Math.min(0.1, parsed.beatPulseIntensity)) : undefined,
