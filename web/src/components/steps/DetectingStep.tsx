@@ -510,14 +510,18 @@ export default function DetectingStep() {
             if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
             launchedBatches++;
             // Show launch progress (30-40%) then completion progress (40-58%)
-            setProgress(Math.round(30 + (launchedBatches / batches.length) * 10));
+            if (batches.length > 0) {
+              setProgress(Math.round(30 + (launchedBatches / batches.length) * 10));
+            }
             const scores = await scoreSingleBatch(
               batch,
               sourceFileList,
               state.selectedTemplate?.name
             );
             completedBatches++;
-            setProgress(Math.round(40 + (completedBatches / batches.length) * 18));
+            if (batches.length > 0) {
+              setProgress(Math.round(40 + (completedBatches / batches.length) * 18));
+            }
             return scores;
           })
         );
@@ -1024,7 +1028,8 @@ export default function DetectingStep() {
             dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
             try {
               // Upload voice sample to clone API
-              const [, b64] = state.voiceSampleUrl!.split(",");
+              const parts = state.voiceSampleUrl!.split(",");
+              const b64 = parts.length > 1 ? parts.slice(1).join(",") : parts[0];
               const binary = atob(b64);
               const bytes = new Uint8Array(binary.length);
               for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1230,6 +1235,7 @@ export default function DetectingStep() {
 
       // Brief pause for the 100% satisfaction, then navigate
       setTimeout(() => {
+        if (abort.signal.aborted) return;
         dispatch({ type: "SET_HIGHLIGHTS", highlights: finalHighlights });
         dispatch({ type: "SET_CLIPS", clips: finalClips });
         dispatch({ type: "SET_STEP", step: "results" });

@@ -41,7 +41,8 @@ export async function generateSoundEffect(
   durationMs: number = 2_000
 ): Promise<SfxGenerateResult> {
   const apiKey = getApiKey();
-  const clampedDuration = Math.max(500, Math.min(durationMs, MAX_SFX_DURATION_MS));
+  const safeDuration = Number.isFinite(durationMs) ? durationMs : 2_000;
+  const clampedDuration = Math.max(500, Math.min(safeDuration, MAX_SFX_DURATION_MS));
 
   console.log(
     `[elevenlabs-sfx] Generating: "${prompt.slice(0, 80)}..." (${clampedDuration}ms)`

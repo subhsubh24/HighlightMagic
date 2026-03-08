@@ -1835,7 +1835,7 @@ Respond with ONLY a JSON object:
         id: crypto.randomUUID(),
         sourceFileId: p.sourceFileId,
         startTime: Math.max(0, p.startTime),
-        endTime: p.endTime,
+        endTime: Math.max(0, p.endTime),
         confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
         label: p.label || "Highlight",
         velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
@@ -1956,9 +1956,10 @@ Respond with ONLY a JSON object:
           ? parsed.sfx
               .filter((s) =>
                 typeof s.clipIndex === "number" &&
+                s.clipIndex >= 0 && s.clipIndex < spacedClips.length &&
                 VALID_SFX_TIMINGS.includes(s.timing) &&
-                typeof s.prompt === "string" &&
-                typeof s.durationMs === "number"
+                typeof s.prompt === "string" && s.prompt.trim().length > 0 &&
+                typeof s.durationMs === "number" && Number.isFinite(s.durationMs)
               )
               .slice(0, 12)
               .map((s) => ({
@@ -1973,7 +1974,7 @@ Respond with ONLY a JSON object:
               enabled: parsed.voiceover.enabled,
               segments: Array.isArray(parsed.voiceover.segments)
                 ? parsed.voiceover.segments
-                    .filter((seg) => typeof seg.clipIndex === "number" && typeof seg.text === "string")
+                    .filter((seg) => typeof seg.clipIndex === "number" && seg.clipIndex >= 0 && seg.clipIndex < spacedClips.length && typeof seg.text === "string" && seg.text.trim().length > 0)
                     .slice(0, 8)
                     .map((seg) => ({ clipIndex: seg.clipIndex, text: seg.text.slice(0, 200) }))
                 : [],
@@ -1995,10 +1996,10 @@ Respond with ONLY a JSON object:
           }
           return Math.min(300000, Math.max(floor, 60000));
         })(),
-        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number")
+        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
           ? {
               sourceClipIndex: parsed.thumbnail.sourceClipIndex,
-              frameTime: typeof parsed.thumbnail.frameTime === "number" ? parsed.thumbnail.frameTime : 0,
+              frameTime: typeof parsed.thumbnail.frameTime === "number" ? Math.max(0, parsed.thumbnail.frameTime) : 0,
               stylePrompt: typeof parsed.thumbnail.stylePrompt === "string" ? parsed.thumbnail.stylePrompt.slice(0, 300) : "",
             }
           : null,

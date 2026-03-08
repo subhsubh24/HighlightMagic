@@ -92,6 +92,7 @@ export async function deleteVoiceClone(voiceId: string): Promise<void> {
     await fetch(`${ELEVENLABS_API_BASE}/voices/${voiceId}`, {
       method: "DELETE",
       headers: { "xi-api-key": apiKey },
+      signal: AbortSignal.timeout(30_000),
     });
     console.log(`[elevenlabs-voice-clone] Deleted clone: ${voiceId}`);
   } catch (e) {
