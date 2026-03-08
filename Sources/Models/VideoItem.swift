@@ -2,10 +2,13 @@ import Foundation
 import Photos
 import AVFoundation
 
-struct VideoItem: Identifiable, Hashable, @unchecked Sendable {
+struct VideoItem: Identifiable, Hashable, Sendable {
     let id: UUID
     let sourceURL: URL
-    let phAsset: PHAsset?
+    /// PHAsset is not Sendable but is only accessed from the main actor for
+    /// photo library operations. Using nonisolated(unsafe) documents this
+    /// contract explicitly rather than blanket @unchecked Sendable on the struct.
+    nonisolated(unsafe) let phAsset: PHAsset?
     let duration: TimeInterval
     let creationDate: Date?
     let thumbnailTime: CMTime

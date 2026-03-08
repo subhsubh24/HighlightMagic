@@ -12,6 +12,7 @@ export default function Header() {
     <header className="flex items-center justify-between border-b border-white/5 px-4 py-3">
       <button
         onClick={() => dispatch({ type: "RESET" })}
+        aria-label="Reset to home"
         className="flex items-center gap-2 text-white transition-opacity hover:opacity-80"
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gradient">

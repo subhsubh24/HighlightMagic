@@ -2,9 +2,12 @@ import Foundation
 import AVFoundation
 import CoreImage
 import UIKit
+import os.log
 
 actor ClipGenerationService {
     static let shared = ClipGenerationService()
+
+    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
 
     private init() {}
 
@@ -275,6 +278,16 @@ actor ExportService {
         let premiumEffects: [PremiumEffect]
         let aiEffectConfig: CustomEffectConfig?
 
+        // AI-generated audio (feature parity with web ElevenLabs pipeline)
+        let aiMusicData: Data?
+        let voiceoverData: Data?
+        let sfxData: Data?
+
+        // AI production assets (feature parity with web AtlasCloud pipeline)
+        let introVideoURL: URL?
+        let outroVideoURL: URL?
+        let styleTransferURL: URL?
+
         init(
             sourceURL: URL,
             trimStart: CMTime,
@@ -288,7 +301,13 @@ actor ExportService {
             viralConfig: ViralEditConfig = .off,
             cinematicGrade: CinematicGrade = .none,
             premiumEffects: [PremiumEffect] = [],
-            aiEffectConfig: CustomEffectConfig? = nil
+            aiEffectConfig: CustomEffectConfig? = nil,
+            aiMusicData: Data? = nil,
+            voiceoverData: Data? = nil,
+            sfxData: Data? = nil,
+            introVideoURL: URL? = nil,
+            outroVideoURL: URL? = nil,
+            styleTransferURL: URL? = nil
         ) {
             self.sourceURL = sourceURL
             self.trimStart = trimStart
@@ -303,6 +322,12 @@ actor ExportService {
             self.cinematicGrade = cinematicGrade
             self.premiumEffects = premiumEffects
             self.aiEffectConfig = aiEffectConfig
+            self.aiMusicData = aiMusicData
+            self.voiceoverData = voiceoverData
+            self.sfxData = sfxData
+            self.introVideoURL = introVideoURL
+            self.outroVideoURL = outroVideoURL
+            self.styleTransferURL = styleTransferURL
         }
 
         static var defaultSize: CGSize {
@@ -402,11 +427,15 @@ actor ExportService {
                preferredTrackID: kCMPersistentTrackID_Invalid
            ) {
             if velocityMap != nil {
-                try? compositionAudioTrack.insertTimeRange(
-                    timeRange,
-                    of: sourceAudioTrack,
-                    at: .zero
-                )
+                do {
+                    try compositionAudioTrack.insertTimeRange(
+                        timeRange,
+                        of: sourceAudioTrack,
+                        at: .zero
+                    )
+                } catch {
+                    logger.warning("Audio track insertion failed (velocity path): \(error.localizedDescription)")
+                }
                 if let velMap = velocityMap {
                     let outputDuration = CMTime(seconds: velMap.outputDuration, preferredTimescale: 600)
                     let inputDuration = CMTimeSubtract(config.trimEnd, config.trimStart)
@@ -433,7 +462,10 @@ actor ExportService {
             effectiveClipDuration = CMTimeSubtract(config.trimEnd, config.trimStart)
         }
 
-        if let musicTrack = config.musicTrack, let musicURL = musicTrack.bundleURL {
+        // 5a. Try AI-generated music first, then fall back to bundled track
+        if let aiMusic = config.aiMusicData {
+            try await insertAudioData(aiMusic, into: composition, duration: effectiveClipDuration, label: "AI music")
+        } else if let musicTrack = config.musicTrack, let musicURL = musicTrack.bundleURL {
             let musicAsset = AVURLAsset(url: musicURL)
             if let musicAudioTrack = try? await musicAsset.loadTracks(withMediaType: .audio).first,
                let musicCompositionTrack = composition.addMutableTrack(
@@ -446,12 +478,26 @@ actor ExportService {
                     duration: min(effectiveClipDuration, musicDuration)
                 )
 
-                try? musicCompositionTrack.insertTimeRange(
-                    musicRange,
-                    of: musicAudioTrack,
-                    at: .zero
-                )
+                do {
+                    try musicCompositionTrack.insertTimeRange(
+                        musicRange,
+                        of: musicAudioTrack,
+                        at: .zero
+                    )
+                } catch {
+                    logger.warning("Music track insertion failed: \(error.localizedDescription)")
+                }
             }
+        }
+
+        // 5b. Add AI voiceover track
+        if let voiceover = config.voiceoverData {
+            try await insertAudioData(voiceover, into: composition, duration: effectiveClipDuration, label: "voiceover")
+        }
+
+        // 5c. Add AI sound effects track
+        if let sfx = config.sfxData {
+            try await insertAudioData(sfx, into: composition, duration: effectiveClipDuration, label: "SFX")
         }
         progressHandler(0.35)
 
@@ -538,8 +584,115 @@ actor ExportService {
             )
         }
 
+        // 10. Concatenate intro/outro cards if present
+        var finalURL = outputURL
+        if config.introVideoURL != nil || config.outroVideoURL != nil {
+            finalURL = try await concatenateIntroOutro(
+                mainVideoURL: outputURL,
+                introURL: config.introVideoURL,
+                outroURL: config.outroVideoURL
+            )
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
         progressHandler(1.0)
+        return finalURL
+    }
+
+    /// Concatenate intro, main video, and outro into a single video.
+    private func concatenateIntroOutro(
+        mainVideoURL: URL,
+        introURL: URL?,
+        outroURL: URL?
+    ) async throws -> URL {
+        let composition = AVMutableComposition()
+        guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw ExportError.noVideoTrack
+        }
+
+        var currentTime = CMTime.zero
+
+        // Helper to append a video file
+        func appendVideo(url: URL) async throws {
+            let asset = AVURLAsset(url: url)
+            let duration = try await asset.load(.duration)
+            let range = CMTimeRange(start: .zero, duration: duration)
+            if let vTrack = try await asset.loadTracks(withMediaType: .video).first {
+                try videoTrack.insertTimeRange(range, of: vTrack, at: currentTime)
+            }
+            if let aTrack = try await asset.loadTracks(withMediaType: .audio).first {
+                try audioTrack.insertTimeRange(range, of: aTrack, at: currentTime)
+            }
+            currentTime = CMTimeAdd(currentTime, duration)
+        }
+
+        if let introURL {
+            try await appendVideo(url: introURL)
+        }
+        try await appendVideo(url: mainVideoURL)
+        if let outroURL {
+            try await appendVideo(url: outroURL)
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("highlight_concat_\(UUID().uuidString).mp4")
+
+        guard let exportSession = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw ExportError.exportSessionCreationFailed
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        await exportSession.export()
+
+        guard exportSession.status == .completed else {
+            throw ExportError.exportFailed(
+                exportSession.error?.localizedDescription ?? "Unknown error"
+            )
+        }
+
         return outputURL
+    }
+
+    // MARK: - AI Audio Insertion
+
+    /// Write AI-generated audio data (MP3) to a temp file, then insert into composition.
+    private func insertAudioData(
+        _ data: Data,
+        into composition: AVMutableComposition,
+        duration: CMTime,
+        label: String
+    ) async throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ai_\(label)_\(UUID().uuidString).mp3")
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let audioAsset = AVURLAsset(url: tempURL)
+        guard let audioTrack = try? await audioAsset.loadTracks(withMediaType: .audio).first,
+              let compositionTrack = composition.addMutableTrack(
+                  withMediaType: .audio,
+                  preferredTrackID: kCMPersistentTrackID_Invalid
+              ) else {
+            logger.warning("\(label) audio track not found in generated data")
+            return
+        }
+
+        let audioDuration = try await audioAsset.load(.duration)
+        let insertRange = CMTimeRange(start: .zero, duration: min(duration, audioDuration))
+
+        do {
+            try compositionTrack.insertTimeRange(insertRange, of: audioTrack, at: .zero)
+            logger.info("Inserted \(label) audio (\(data.count) bytes)")
+        } catch {
+            logger.warning("\(label) audio insertion failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Pass 1: CIFilter Rendering

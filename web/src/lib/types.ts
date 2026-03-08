@@ -37,6 +37,96 @@ export interface HighlightTemplate {
 
 export type MediaType = "video" | "photo";
 
+export type AnimationStatus = "idle" | "generating" | "completed" | "failed";
+
+export type AiMusicStatus = "idle" | "generating" | "completed" | "failed";
+
+/** Generic async generation status — used for SFX, voiceover, intro, outro, thumbnail */
+export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
+
+// ── AI Production types (auto-pilot pipeline) ──
+
+/** Sound effect mapped to a specific clip transition or accent moment */
+export interface SfxTrack {
+  clipIndex: number;
+  timing: "before" | "on" | "after";
+  prompt: string;
+  durationMs: number;
+  audioUrl?: string;
+  status: GenerationStatus;
+}
+
+/** Voiceover segment timed to a specific clip */
+export interface VoiceoverSegment {
+  clipIndex: number;
+  text: string;
+  audioUrl?: string;
+  duration?: number;
+  status: GenerationStatus;
+}
+
+/** AI-generated intro or outro video card */
+export interface GeneratedCard {
+  text: string;
+  stylePrompt: string;
+  videoUrl?: string;
+  status: GenerationStatus;
+}
+
+/** Thumbnail generation result */
+export interface GeneratedThumbnail {
+  sourceClipIndex: number;
+  frameTime: number;
+  stylePrompt: string;
+  imageUrl?: string;
+  status: GenerationStatus;
+}
+
+/** Claude's expanded plan output — drives the entire AI autopilot pipeline */
+export interface AiProductionPlan {
+  // Intro/outro cards
+  intro: { text: string; stylePrompt: string } | null;
+  outro: { text: string; stylePrompt: string } | null;
+
+  // Sound effects
+  sfx: Array<{
+    clipIndex: number;
+    timing: "before" | "on" | "after";
+    prompt: string;
+    durationMs: number;
+  }>;
+
+  // Voiceover
+  voiceover: {
+    enabled: boolean;
+    segments: Array<{ clipIndex: number; text: string }>;
+    voiceCharacter: string;
+  };
+
+  // Music
+  musicPrompt: string;
+  musicDurationMs: number;
+
+  // Thumbnail
+  thumbnail: {
+    sourceClipIndex: number;
+    frameTime: number;
+    stylePrompt: string;
+  } | null;
+
+  // Enhanced photo animation prompts (Claude improves user's vague instructions)
+  photoAnimationPrompts: Record<string, string>;
+
+  // Style transfer — AI-chosen visual post-processing look
+  styleTransfer: {
+    prompt: string;
+    strength: number; // 0.1-1.0
+  } | null;
+
+  // Talking head intro — Claude writes the intro speech
+  talkingHeadSpeech: string | null;
+}
+
 export interface MediaFile {
   id: string;
   file: File;
@@ -45,6 +135,11 @@ export interface MediaFile {
   duration: number; // 0 for photos
   name: string;
   thumbnailUrl?: string;
+  // Photo animation (Kling 3.0 via Atlas Cloud)
+  animatePhoto?: boolean;
+  animationInstructions?: string;
+  animatedVideoUrl?: string | null;
+  animationStatus?: AnimationStatus;
 }
 
 export interface HighlightSegment {
@@ -154,4 +249,58 @@ export interface AppState {
   regenerateFeedback: string | null;
   // Creative direction — optional user-provided style instructions passed to Opus planner
   creativeDirection: string;
+  // AI-generated music (ElevenLabs Eleven Music) — opt-in, Pro only
+  aiMusicEnabled: boolean;
+  aiMusicStatus: AiMusicStatus;
+  aiMusicUrl: string | null;
+  aiMusicPrompt: string;
+
+  // ── AI Production pipeline state (auto-pilot) ──
+
+  /** Claude's expanded creative plan — drives all downstream generation */
+  aiProductionPlan: AiProductionPlan | null;
+
+  // Intro/outro video cards (Atlas Cloud T2V)
+  introCard: GeneratedCard | null;
+  outroCard: GeneratedCard | null;
+
+  // Sound effects (ElevenLabs SFX v2)
+  sfxTracks: SfxTrack[];
+  sfxStatus: GenerationStatus;
+
+  // Voiceover segments (ElevenLabs TTS v3)
+  voiceoverSegments: VoiceoverSegment[];
+  voiceoverStatus: GenerationStatus;
+
+  // Auto-generated thumbnail (Atlas Cloud BG remove + image gen)
+  thumbnail: GeneratedThumbnail | null;
+
+  // Audio transcript from Scribe (enhances detection)
+  audioTranscript: string | null;
+
+  // ── Voice cloning (Pro) ──
+  /** Base64 data URI of the voice sample uploaded by user */
+  voiceSampleUrl: string | null;
+  /** ElevenLabs voice ID after cloning */
+  clonedVoiceId: string | null;
+  voiceCloneStatus: GenerationStatus;
+
+  // ── Stem separation (Pro) — instrumental-only track for ducking under voiceover ──
+  instrumentalMusicUrl: string | null;
+  stemSeparationStatus: GenerationStatus;
+
+  // ── Style transfer (Pro) — visual post-processing ──
+  /** AI-chosen style prompt for the final tape look */
+  styleTransferPrompt: string | null;
+
+  // ── Talking head intro (Pro) — lip-sync video from photo + voice ──
+  talkingHead: {
+    /** Source photo (data URI) */
+    photoUrl: string | null;
+    /** Intro speech text (AI-generated or user-provided) */
+    speechText: string | null;
+    /** Generated video URL */
+    videoUrl: string | null;
+    status: GenerationStatus;
+  } | null;
 }

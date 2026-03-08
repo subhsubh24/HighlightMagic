@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os.log
 
 @Observable @MainActor
 final class UserAccountService {
@@ -24,7 +25,9 @@ final class UserAccountService {
         }
 
         // Setup projects directory
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            fatalError("Documents directory unavailable")
+        }
         projectsDirectory = docs.appendingPathComponent("Projects", isDirectory: true)
         try? FileManager.default.createDirectory(
             at: projectsDirectory,
@@ -71,8 +74,12 @@ final class UserAccountService {
 
     private func persistProjects() {
         let url = projectsDirectory.appendingPathComponent("projects.json")
-        if let data = try? JSONEncoder().encode(savedProjects) {
-            try? data.write(to: url)
+        do {
+            let data = try JSONEncoder().encode(savedProjects)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            let logger = Logger(subsystem: "com.highlightmagic.app", category: "UserAccount")
+            logger.error("Failed to save projects: \(error.localizedDescription)")
         }
     }
 

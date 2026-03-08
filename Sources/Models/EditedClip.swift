@@ -18,6 +18,20 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var aiEffectConfig: CustomEffectConfig?
     var exportURL: URL?
 
+    // AI-generated audio (feature parity with web)
+    /// AI-generated music data (MP3) from ElevenLabs, used instead of bundled music
+    nonisolated(unsafe) var aiMusicData: Data?
+    /// AI voiceover narration data (MP3) from ElevenLabs
+    nonisolated(unsafe) var voiceoverData: Data?
+    /// AI sound effect data (MP3) from ElevenLabs
+    nonisolated(unsafe) var sfxData: Data?
+    /// URL to AI-generated intro card video (from AtlasCloud)
+    var introVideoURL: URL?
+    /// URL to AI-generated outro card video (from AtlasCloud)
+    var outroVideoURL: URL?
+    /// URL to style-transferred video (from AtlasCloud Wan v2v)
+    var styleTransferURL: URL?
+
     init(
         id: UUID = UUID(),
         sourceVideoID: UUID,

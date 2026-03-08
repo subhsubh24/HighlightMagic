@@ -3,6 +3,14 @@
 import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 import type { SourceFileInfo } from "@/lib/frame-batching";
 
+// ── Debug logging ──
+
+const DEBUG = process.env.NODE_ENV === "development" || process.env.DEBUG_DETECT === "1";
+/** Debug-only logger — gated behind NODE_ENV or DEBUG_DETECT flag to avoid production noise. */
+function debugLog(...args: unknown[]) {
+  if (DEBUG) console.log(...args);
+}
+
 // ── API helpers ──
 
 /** Max concurrent API calls — retry logic handles any 429s from the API */
@@ -39,8 +47,9 @@ async function fetchWithRetry(
       if (response.status === 429 || response.status === 529) {
         // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
         const retryAfter = response.headers.get("retry-after");
-        const rawWaitMs = retryAfter
-          ? parseFloat(retryAfter) * 1000
+        const retryAfterSec = retryAfter ? parseFloat(retryAfter) : NaN;
+        const rawWaitMs = !isNaN(retryAfterSec) && retryAfterSec > 0
+          ? retryAfterSec * 1000
           : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
         console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
@@ -104,18 +113,107 @@ async function runWithConcurrency<T>(
  */
 type SSEStreamPhase = "thinking" | "generating";
 
+/** Max time (ms) to wait for the next SSE chunk before treating the stream as stalled. */
+const STREAM_READ_TIMEOUT_MS = 90_000; // 90s — generous for Opus thinking pauses
+
+/** Callback for early production plan fields extracted during streaming. */
+type OnPartialField = (field: string, value: unknown) => void;
+
+/**
+ * Try to extract complete JSON string/number/object/array fields from partial
+ * streaming text. Used to start generators early (e.g., start music generation
+ * as soon as musicPrompt is fully streamed, before the full plan finishes).
+ */
+const PARTIAL_FIELD_COUNT = 3; // musicPrompt, musicDurationMs, sfx
+
+function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnPartialField): void {
+  // All trackable fields already emitted — nothing left to do
+  if (emitted.size >= PARTIAL_FIELD_COUNT) return;
+
+  // musicPrompt — a simple string field
+  if (!emitted.has("musicPrompt")) {
+    const m = text.match(/"musicPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if (m) {
+      emitted.add("musicPrompt");
+      onPartial("musicPrompt", m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+      debugLog(`[Planner SSE] Early extract: musicPrompt`);
+    }
+  }
+
+  // musicDurationMs — a number field
+  if (!emitted.has("musicDurationMs")) {
+    const m = text.match(/"musicDurationMs"\s*:\s*(\d+)/);
+    if (m) {
+      emitted.add("musicDurationMs");
+      onPartial("musicDurationMs", parseInt(m[1], 10));
+      debugLog(`[Planner SSE] Early extract: musicDurationMs`);
+    }
+  }
+
+  // sfx — array of objects. Wait until the array closes.
+  if (!emitted.has("sfx")) {
+    const sfxStart = text.indexOf('"sfx"');
+    if (sfxStart !== -1) {
+      const bracketStart = text.indexOf('[', sfxStart);
+      if (bracketStart !== -1) {
+        // Find matching close bracket — skip characters inside JSON strings
+        // to avoid being fooled by brackets in prompt text
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let i = bracketStart; i < text.length; i++) {
+          const ch = text[i];
+          if (escaped) { escaped = false; continue; }
+          if (ch === '\\') { escaped = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+          if (depth === 0) {
+            // Complete array
+            try {
+              const arr = JSON.parse(text.slice(bracketStart, i + 1));
+              emitted.add("sfx");
+              onPartial("sfx", arr);
+              debugLog(`[Planner SSE] Early extract: sfx (${arr.length} items)`);
+            } catch { /* incomplete JSON — wait */ }
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
 async function consumeSSEStream(
   response: Response,
-  onPhase?: (phase: SSEStreamPhase) => void
+  onPhase?: (phase: SSEStreamPhase) => void,
+  onPartial?: OnPartialField
 ): Promise<{ text: string; stopReason: string | null }> {
+  const streamStartMs = Date.now();
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let text = "";
   let stopReason: string | null = null;
   let buffer = "";
+  let chunkCount = 0;
+  let lastLogMs = Date.now();
+  const emittedFields = new Set<string>();
 
   while (true) {
-    const { done, value } = await reader.read();
+    // Race the read against a timeout so we don't hang forever if the
+    // Anthropic stream stalls mid-response.
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Planner stream stalled — no data received for 90 seconds")), STREAM_READ_TIMEOUT_MS);
+    });
+    let result: ReadableStreamReadResult<Uint8Array>;
+    try {
+      result = await Promise.race([reader.read(), timeout]);
+    } finally {
+      clearTimeout(timer!);
+    }
+    const { done, value } = result;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
@@ -133,17 +231,30 @@ async function consumeSSEStream(
         const event = JSON.parse(dataStr);
         if (event.type === "content_block_start") {
           if (event.content_block?.type === "thinking") {
+            debugLog(`[Planner SSE] Thinking phase started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("thinking");
           } else if (event.content_block?.type === "text") {
+            debugLog(`[Planner SSE] Text generation started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("generating");
           }
         } else if (event.type === "content_block_delta") {
           if (event.delta?.type === "text_delta") {
             text += event.delta.text;
+            // Try to extract partial fields for early generator start
+            if (onPartial) {
+              extractPartialFields(text, emittedFields, onPartial);
+            }
           }
-          // thinking_delta events are silently skipped
+          chunkCount++;
+          // Log every 15s so we know the stream is alive
+          if (Date.now() - lastLogMs > 15_000) {
+            debugLog(`[Planner SSE] Still streaming... chunks=${chunkCount}, textLen=${text.length}, +${((Date.now() - streamStartMs) / 1000).toFixed(0)}s`);
+            lastLogMs = Date.now();
+          }
         } else if (event.type === "message_delta") {
           stopReason = event.delta?.stop_reason ?? null;
+        } else if (event.type === "error") {
+          console.error(`[Planner SSE] Stream error event:`, JSON.stringify(event));
         }
       } catch {
         // Ignore unparseable SSE events (e.g. event: prefixes)
@@ -151,6 +262,7 @@ async function consumeSSEStream(
     }
   }
 
+  debugLog(`[Planner SSE] Stream complete — ${chunkCount} chunks, ${text.length} chars, stop_reason=${stopReason}, ${((Date.now() - streamStartMs) / 1000).toFixed(1)}s total`);
   return { text, stopReason };
 }
 
@@ -240,11 +352,6 @@ function safeParseJSONArray(raw: string): unknown {
 
 // ── Types ──
 
-interface FrameInput {
-  timestamp: number;
-  base64: string;
-}
-
 interface MultiFrameInput {
   sourceFileId: string;
   sourceFileName: string;
@@ -308,27 +415,28 @@ export interface DetectedClip {
   customCaptionAnimation?: string;
   customCaptionGlowColor?: string;
   customCaptionGlowRadius?: number;
+  // Photo animation — AI-generated motion prompt for Kling
+  animationPrompt?: string;
+}
+
+export interface ProductionPlan {
+  intro: { text: string; stylePrompt: string } | null;
+  outro: { text: string; stylePrompt: string } | null;
+  sfx: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
+  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+  musicPrompt: string;
+  musicDurationMs: number;
+  thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
+  styleTransfer: { prompt: string; strength: number } | null;
+  talkingHeadSpeech: string | null;
 }
 
 export interface DetectionResult {
   clips: DetectedClip[];
   detectedTheme: DetectedTheme;
   contentSummary: string;
-}
-
-// ── Legacy single-video detection (backward compat) ──
-
-export async function detectHighlights(
-  frames: FrameInput[],
-  templateName?: string
-): Promise<DetectionResult> {
-  const multiFrames: MultiFrameInput[] = frames.map((f) => ({
-    ...f,
-    sourceFileId: "single",
-    sourceFileName: "video",
-    sourceType: "video" as const,
-  }));
-  return detectMultiClipHighlights(multiFrames, templateName);
+  /** AI production plan — drives SFX, voiceover, intro/outro, music, and thumbnail generation */
+  productionPlan?: ProductionPlan;
 }
 
 // ── Helpers ──
@@ -363,42 +471,6 @@ export async function scoreSingleBatch(
   return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
 }
 
-/** @deprecated Use buildFrameBatches + scoreSingleBatch from the client instead. */
-export async function scoreAllFrames(
-  frames: MultiFrameInput[],
-  templateName?: string
-): Promise<ScoredFrame[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
-  }
-
-  const sourceFiles = buildSourceFilesMap(frames);
-
-  // Batch frames BY SOURCE FILE so the AI sees temporal flow within each video.
-  const framesBySource = new Map<string, MultiFrameInput[]>();
-  for (const f of frames) {
-    if (!framesBySource.has(f.sourceFileId)) framesBySource.set(f.sourceFileId, []);
-    framesBySource.get(f.sourceFileId)!.push(f);
-  }
-
-  const batches: MultiFrameInput[][] = [];
-  for (const [, sourceFrames] of framesBySource) {
-    for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
-      batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
-    }
-  }
-
-  const batchResults = await runWithConcurrency(
-    batches.map((batch, i) => async () => {
-      // Stagger batch starts so we don't slam the API at t=0 and trigger 429s
-      if (i > 0) await new Promise((r) => setTimeout(r, i * BATCH_STAGGER_MS));
-      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
-    }),
-    MAX_CONCURRENCY
-  );
-  return batchResults.flat();
-}
 
 // ── Score normalization across batches ──
 
@@ -441,11 +513,18 @@ function normalizeScoresAcrossBatches(scores: ScoredFrame[]): ScoredFrame[] {
 
   return scores.map((s) => ({
     ...s,
-    score: range > 0.001 ? (zScores.get(s)! - minZ) / range : s.score,
+    score: Math.max(0, Math.min(1, range > 0.001 ? (zScores.get(s)! - minZ) / range : 0.5)),
   }));
 }
 
 // ── Phase 2: Plan highlights from scores ──
+
+/** Info about which photos should be animated (passed from upload step). */
+export interface PhotoAnimationInfo {
+  sourceFileId: string;
+  animatePhoto: boolean;
+  animationInstructions: string;
+}
 
 export async function planFromScores(
   frames: MultiFrameInput[],
@@ -453,7 +532,9 @@ export async function planFromScores(
   templateName?: string,
   userFeedback?: string,
   creativeDirection?: string,
-  onPhase?: (phase: "thinking" | "generating") => void
+  onPhase?: (phase: "thinking" | "generating") => void,
+  photoAnimations?: PhotoAnimationInfo[],
+  onPartial?: OnPartialField
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -467,7 +548,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -478,14 +559,125 @@ export async function planFromScores(
   return result;
 }
 
-// ── Multi-clip detection (convenience wrapper) ──
+// ── Phase 3: Validate assembled tape (Haiku QA) ──
 
-export async function detectMultiClipHighlights(
-  frames: MultiFrameInput[],
-  templateName?: string
-): Promise<DetectionResult> {
-  const scores = await scoreAllFrames(frames, templateName);
-  return planFromScores(frames, scores, templateName);
+export interface TapeValidationResult {
+  passed: boolean;
+  issues: string[];
+  suggestions: string[];
+}
+
+/**
+ * Haiku reviews the assembled tape and checks for quality issues.
+ * Fast and cheap — acts as a QA gate before showing results to user.
+ *
+ * Checks: narrative coherence, animation fit, pacing, transition logic,
+ * source coverage, hook quality, and cross-source connections.
+ */
+export async function validateTape(
+  clips: DetectedClip[],
+  sourceFiles: Array<{ id: string; name: string; type: "video" | "photo" }>,
+  contentSummary: string,
+  animatedFileIds: string[],
+): Promise<TapeValidationResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+
+  const clipSummaries = clips.map((c, i) => {
+    const src = sourceFiles.find((s) => s.id === c.sourceFileId);
+    const isAnimated = animatedFileIds.includes(c.sourceFileId);
+    return `  ${i + 1}. [${src?.type ?? "?"}${isAnimated ? " ANIMATED" : ""}] "${c.label}" from "${src?.name}" (${c.startTime.toFixed(1)}-${c.endTime.toFixed(1)}s, confidence: ${c.confidenceScore}) transition: ${c.transitionType ?? "none"}, velocity: ${c.velocityPreset}${c.captionText ? `, caption: "${c.captionText}"` : ""}${c.animationPrompt ? `, animationPrompt: "${c.animationPrompt.slice(0, 80)}..."` : ""}`;
+  }).join("\n");
+
+  const allSourceIds = new Set(sourceFiles.map((s) => s.id));
+  const coveredSourceIds = new Set(clips.map((c) => c.sourceFileId));
+  const missingSources = sourceFiles.filter((s) => !coveredSourceIds.has(s.id));
+
+  const prompt = `You are a quality assurance reviewer for Instagram Reels highlight tapes.
+You've been given the final assembled tape — clips in order with all editing decisions made.
+Some photos have been animated into 5-second videos via Kling (marked [ANIMATED]).
+
+Your job: review the tape for issues that would hurt engagement or feel jarring.
+
+CONTENT SUMMARY:
+${contentSummary}
+
+SOURCE FILES (${sourceFiles.length} total):
+${sourceFiles.map((s) => `  - "${s.name}" (${s.type}${animatedFileIds.includes(s.id) ? ", will be animated" : ""})`).join("\n")}
+
+ASSEMBLED TAPE (${clips.length} clips):
+${clipSummaries}
+
+${missingSources.length > 0 ? `\nWARNING: These sources have NO clips: ${missingSources.map((s) => `"${s.name}"`).join(", ")}` : ""}
+
+CHECK THESE (answer each yes/no, flag issues):
+1. HOOK QUALITY: Is clip 1 truly the strongest opening? Would it stop a scroll?
+2. PACING: Does energy oscillate properly? Any dead stretches or monotonous runs?
+3. TRANSITIONS: Do transition types match the energy change between clips? (e.g., no "zoom_punch" between two slow dreamy clips)
+4. SOURCE COVERAGE: Does every source file appear at least once?
+5. ANIMATION FIT: For animated photos — do their animation prompts match the narrative arc? Would the motion feel natural in context?
+6. NARRATIVE ARC: Does the tape tell a coherent story? Is there build-up, climax, and resolution?
+7. CAPTION QUALITY: Are captions punchy, varied, and well-placed? No cliché or redundant captions?
+
+Respond with ONLY a JSON object:
+{
+  "passed": true/false,
+  "issues": ["specific issue 1", "specific issue 2"],
+  "suggestions": ["specific actionable fix 1", "specific actionable fix 2"]
+}
+
+Rules:
+- PASS if the tape is good enough to post. Minor imperfections are fine.
+- FAIL only for real problems: missing sources, jarring transitions, weak hook, broken pacing, animation prompts that contradict the mood.
+- Be specific in issues/suggestions — reference clip numbers and names.
+- Max 5 issues, max 5 suggestions. Empty arrays if none.`;
+
+  const response = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    },
+    "Tape validation",
+    30_000 // 30s timeout — Haiku is fast
+  );
+
+  if (!response.ok) {
+    console.warn("Tape validation failed (non-blocking):", response.status);
+    // Non-blocking — if validation fails, just pass
+    return { passed: true, issues: [], suggestions: [] };
+  }
+
+  const body = await response.json();
+  const text = body.content?.[0]?.text ?? "";
+
+  // Extract JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.warn("Tape validation: no JSON in response");
+    return { passed: true, issues: [], suggestions: [] };
+  }
+
+  try {
+    const result = JSON.parse(jsonMatch[0]);
+    return {
+      passed: !!result.passed,
+      issues: Array.isArray(result.issues) ? result.issues.slice(0, 5) : [],
+      suggestions: Array.isArray(result.suggestions) ? result.suggestions.slice(0, 5) : [],
+    };
+  } catch {
+    console.warn("Tape validation: JSON parse error");
+    return { passed: true, issues: [], suggestions: [] };
+  }
 }
 
 /** Max batch-level retries (on top of HTTP-level retry in fetchWithRetry) */
@@ -628,7 +820,7 @@ function buildScoringContent(
       ? `, audioOnset: ${frame.audioOnset.toFixed(2)}`
       : "";
     const specTag = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1)
-      ? `, spectrum: B${frame.audioBass!.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}`
+      ? `, spectrum: B${(frame.audioBass ?? 0).toFixed(2)}/M${(frame.audioMid ?? 0).toFixed(2)}/T${(frame.audioTreble ?? 0).toFixed(2)}`
       : "";
     content.push({
       type: "text",
@@ -788,6 +980,12 @@ const VALID_THEMES: DetectedTheme[] = [
  * - 5 MB per individual image
  * We leave headroom for the system prompt + score text + JSON overhead.
  */
+/** Build a lookup key from source file ID + timestamp with enough precision to avoid collisions.
+ * Using 3 decimal places (ms precision) prevents the collisions that .toFixed(1) caused. */
+function frameKey(sourceFileId: string, timestamp: number): string {
+  return `${sourceFileId}::${timestamp.toFixed(3)}`;
+}
+
 const API_MAX_IMAGES = 60; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
 const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
@@ -799,7 +997,7 @@ function selectPlannerFrames(
   // Build a lookup from (sourceFileId, timestamp) → frame
   const frameLookup = new Map<string, MultiFrameInput>();
   for (const f of frames) {
-    frameLookup.set(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`, f);
+    frameLookup.set(frameKey(f.sourceFileId, f.timestamp), f);
   }
 
   // Group scores by source, sorted best-first
@@ -822,7 +1020,7 @@ function selectPlannerFrames(
 
   function addFrame(score: ScoredFrame, enforceGap: boolean): boolean {
     if (selected.length >= API_MAX_IMAGES) return false;
-    const key = `${score.sourceFileId}::${score.timestamp.toFixed(1)}`;
+    const key = frameKey(score.sourceFileId, score.timestamp);
     const frame = frameLookup.get(key);
     if (!frame || usedKeys.has(key)) return false;
 
@@ -861,7 +1059,7 @@ function selectPlannerFrames(
   }
 
   // Phase 3: if still under budget, fill remaining WITHOUT gap enforcement
-  // Ensures we always get close to 80 frames even with dense scoring
+  // Ensures we always get close to 60 frames even with dense scoring
   if (selected.length < API_MAX_IMAGES && totalBytes < API_IMAGE_PAYLOAD_BUDGET) {
     for (const s of allSorted) {
       if (selected.length >= API_MAX_IMAGES || totalBytes >= API_IMAGE_PAYLOAD_BUDGET) break;
@@ -885,13 +1083,13 @@ function selectPlannerFrames(
     // Build per-source score lookup for shedding lowest-scored frames
     const scoreLookup = new Map<string, number>();
     for (const s of scores) {
-      scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s.score);
+      scoreLookup.set(frameKey(s.sourceFileId, s.timestamp), s.score);
     }
     // Sort selected frames from that source by score ascending (shed worst first)
     const toShed: number[] = [];
     for (const src of overRepresented) {
       const indices = selected
-        .map((f, i) => ({ i, score: scoreLookup.get(`${f.sourceFileId}::${f.timestamp.toFixed(1)}`) ?? 0 }))
+        .map((f, i) => ({ i, score: scoreLookup.get(frameKey(f.sourceFileId, f.timestamp)) ?? 0 }))
         .filter((_, idx) => selected[idx].sourceFileId === src)
         .sort((a, b) => a.score - b.score);
       const excess = (countBySource.get(src) ?? 0) - maxPerSource;
@@ -905,7 +1103,7 @@ function selectPlannerFrames(
       const kept = selected.filter((_, i) => !shedSet.has(i));
       selected.length = 0;
       selected.push(...kept);
-      console.log(`Planner: shed ${before - selected.length} frames to enforce ${(SOURCE_CAP_RATIO * 100).toFixed(0)}% per-source cap`);
+      debugLog(`Planner: shed ${before - selected.length} frames to enforce ${(SOURCE_CAP_RATIO * 100).toFixed(0)}% per-source cap`);
     }
   }
 
@@ -915,7 +1113,7 @@ function selectPlannerFrames(
     return a.timestamp - b.timestamp;
   });
 
-  console.log(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
+  debugLog(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
   return selected;
 }
 
@@ -927,8 +1125,10 @@ async function planHighlightTape(
   templateName?: string,
   userFeedback?: string,
   creativeDirection?: string,
-  onPhase?: (phase: SSEStreamPhase) => void
-): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string }> {
+  onPhase?: (phase: SSEStreamPhase) => void,
+  photoAnimations?: PhotoAnimationInfo[],
+  onPartial?: OnPartialField
+): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
   for (const f of allFrames) {
@@ -936,11 +1136,27 @@ async function planHighlightTape(
     if (f.timestamp > current) sourceDurations.set(f.sourceFileId, f.timestamp);
   }
 
+  // Build animation lookup for photos
+  const animationLookup = new Map<string, PhotoAnimationInfo>();
+  if (photoAnimations) {
+    for (const pa of photoAnimations) {
+      animationLookup.set(pa.sourceFileId, pa);
+    }
+  }
+
   const sourceList = Array.from(sourceFiles.entries())
     .map(([id, info]) => {
       const approxDuration = (sourceDurations.get(id) ?? 0) + 2; // +2s for last sample interval
       const durationStr = info.type === "photo" ? "photo (still)" : `~${approxDuration.toFixed(0)}s duration`;
-      return `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled, ${durationStr})`;
+      let line = `- "${info.name}" (${info.type}, ID: ${id}, ${info.frameCount} frames sampled, ${durationStr})`;
+      // Include animation info for photos
+      const animInfo = animationLookup.get(id);
+      if (animInfo?.animatePhoto) {
+        line += animInfo.animationInstructions
+          ? ` [ANIMATE — user wants: "${animInfo.animationInstructions}"]`
+          : ` [ANIMATE — generate a motion prompt for this photo]`;
+      }
+      return line;
     })
     .join("\n");
 
@@ -956,10 +1172,10 @@ async function planHighlightTape(
   const onsetLookup = new Map<string, number>();
   const specLookup = new Map<string, { bass: number; mid: number; treble: number }>();
   for (const f of allFrames) {
-    const key = `${f.sourceFileId}::${f.timestamp.toFixed(1)}`;
+    const key = frameKey(f.sourceFileId, f.timestamp);
     if (f.audioEnergy != null) audioLookup.set(key, f.audioEnergy);
     if (f.audioOnset != null) onsetLookup.set(key, f.audioOnset);
-    if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid!, treble: f.audioTreble! });
+    if (f.audioBass != null) specLookup.set(key, { bass: f.audioBass, mid: f.audioMid ?? 0, treble: f.audioTreble ?? 0 });
   }
 
   const allScoresSummary = Array.from(scoresBySource.entries())
@@ -970,7 +1186,7 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
-          const key = `${s.sourceFileId}::${s.timestamp.toFixed(1)}`;
+          const key = frameKey(s.sourceFileId, s.timestamp);
           const audioVal = audioLookup.get(key);
           const onsetVal = onsetLookup.get(key);
           const audioTag = audioVal != null ? `  audio:${audioVal.toFixed(2)}` : "";
@@ -983,8 +1199,8 @@ async function planHighlightTape(
 
       // Build ASCII audio visualizations for this source
       const bars = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
-      const audioVals = sorted.map((s) => audioLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
-      const onsetVals = sorted.map((s) => onsetLookup.get(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`)).filter((v): v is number => v != null);
+      const audioVals = sorted.map((s) => audioLookup.get(frameKey(s.sourceFileId, s.timestamp))).filter((v): v is number => v != null);
+      const onsetVals = sorted.map((s) => onsetLookup.get(frameKey(s.sourceFileId, s.timestamp))).filter((v): v is number => v != null);
       const audioViz = audioVals.length > 0
         ? `  Audio energy:  ${audioVals.map((v) => bars[Math.min(7, Math.floor(v * 8))]).join("")}`
         : "";
@@ -1296,6 +1512,24 @@ DESIGN UNIQUE CAPTION STYLES FOR EACH CLIP. Match the look to the moment's energ
 KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
 0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
 
+PHOTO ANIMATION — some photos are marked [ANIMATE] in the source list above.
+For these photos, you MUST include an "animationPrompt" field in the clip JSON.
+This prompt will be sent to Kling (image-to-video AI) to BRING THE PHOTO TO LIFE.
+The goal is realistic subject motion — people move, animals react, nature flows — not just camera tricks.
+Think about what would ACTUALLY HAPPEN next if the photo unfroze. Make it feel alive.
+Analyze the photo holistically: the subjects, their poses, the environment, the mood, and the edit context.
+- If the user provided instructions (shown after "user wants:"), incorporate them into your prompt.
+- If no instructions, imagine what natural motion would occur and describe it vividly.
+- PRIORITIZE SUBJECT MOTION over camera motion. Describe what the people/animals/objects DO:
+  "Person on couch starts to stand up, stretches arms, turns head toward camera with a smile"
+  "Dog leaps up excitedly, tail wagging fast, ears perking up, tongue out"
+  "Athlete mid-stride pushes off and sprints forward, jersey rippling, crowd blurs behind"
+  "Waves crash onto shore, foam spreads across sand, seagrass sways in wind"
+  "Child blows out birthday candles, smoke wisps rise, nearby kids cheer and clap"
+- You CAN add subtle camera motion too (slow push-in, gentle drift) but subject motion comes first.
+- Keep prompts under 300 characters. Be specific about what moves, how, and in what order.
+- For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
+
 YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
 sourceFileId, startTime, endTime (MUST be 2+ seconds apart), label, confidenceScore,
 velocityKeyframes (REQUIRED — custom speed curve for this clip),
@@ -1305,11 +1539,73 @@ filterCSS (REQUIRED — custom CSS color grade for this clip),
 entryPunchScale (REQUIRED — 1.0 = none, up to 1.1),
 entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
 kenBurnsIntensity (photos only, 0-0.08),
+animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling),
 captionText (optional — only 30-50% of clips),
 captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
 
+═══════════════════════════════════════════════
+STEP 5: AI PRODUCTION PLAN — You are the CREATIVE DIRECTOR
+═══════════════════════════════════════════════
+Beyond clip selection and visual style, you direct the FULL AUDIO-VISUAL PRODUCTION.
+Your plan drives automated generation of intro/outro cards, sound effects, voiceover, music, and thumbnails.
+Every decision cascades from the content's theme AND the user's creative direction (if any).
+
+Use TASTE and RESTRAINT. Not every tape needs every element. A clean travel montage may only
+need music + a subtle intro. A hype sports reel may benefit from SFX + voiceover + intro/outro.
+A quiet wedding highlight might need nothing but music and gentle transitions.
+Only add elements that genuinely elevate the content. Less is often more.
+
+INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
+Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
+The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
+IMPORTANT: The video is rendered in 9:16 PORTRAIT format. If the stylePrompt mentions text or titles,
+explicitly specify "small centered text" or "compact title text" — never large/fullscreen text that overflows the narrow portrait frame.
+Keep title text to 3-4 words max so it fits the vertical frame.
+DEFAULT TO null (no intro) in most cases. Intros are only justified for:
+  - Long tapes (8+ clips) that benefit from a title card to set the mood
+  - Event/occasion content (weddings, graduations, game days) where a title adds context
+  - User explicitly requested an intro in their creative direction
+SKIP intro (set null) for:
+  - Small collections (≤6 clips/photos) — the content speaks for itself
+  - Art, product, or aesthetic collections — jump straight into the visuals
+  - Any tape under 30 seconds total — an intro eats too much runtime
+  - When no clear title/theme exists beyond "look at these"
+
+OUTRO CARD — A matching closing card appended after the last clip.
+Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
+Same 9:16 portrait text rules as intro — keep text small and compact.
+DEFAULT TO null. Only add an outro if the tape is long (8+ clips) AND has a clear closing message.
+Most tapes should NOT have an outro.
+
+SOUND EFFECTS — Transition whooshes, impact hits, crowd accents.
+Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
+Use an empty array [] if SFX would clutter the content (e.g. calm/cinematic content).
+When used, match SFX style to content mood. 2-6 cues max — quality over quantity.
+
+VOICEOVER — AI-generated narration on key moments.
+Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic"}.
+Set enabled: false if narration would feel intrusive (most content doesn't need voiceover).
+When enabled, 2-4 segments max. Less is more — narrate only pivotal moments.
+Choose voice character that matches the content's energy and audience.
+
+MUSIC — AI instrumental soundtrack.
+Set "musicPrompt" (genre, energy, instruments, mood, tempo). Set "musicDurationMs" to total tape length in ms.
+Be specific about instrumentation and energy arc, not generic. The music should feel custom-scored.
+
+THUMBNAIL — Best frame for social sharing.
+Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
+
+STYLE TRANSFER — Optional visual post-processing look applied to the entire tape.
+Set "styleTransfer": {"prompt": "cinematic film grain, warm tones, subtle vignette", "strength": 0.4} or null.
+Only use when a specific look would elevate the content (cinematic, neon, vintage, etc.).
+null means no post-processing — the per-clip filters are enough. Most content should be null.
+
+TALKING HEAD INTRO — If a voice clone sample is provided, write a short intro speech (5-10 words).
+Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or null.
+null if no voice sample was provided or a talking head intro doesn't fit the content.
+
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description"}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description"}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype"}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -1317,7 +1613,7 @@ Respond with ONLY a JSON object:
   // Build a score lookup so we can annotate each frame with its score + label
   const scoreLookup = new Map<string, ScoredFrame>();
   for (const s of scores) {
-    scoreLookup.set(`${s.sourceFileId}::${s.timestamp.toFixed(1)}`, s);
+    scoreLookup.set(frameKey(s.sourceFileId, s.timestamp), s);
   }
 
   userContent.push({
@@ -1331,7 +1627,7 @@ Respond with ONLY a JSON object:
       source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
     });
 
-    const scoreData = scoreLookup.get(`${frame.sourceFileId}::${frame.timestamp.toFixed(1)}`);
+    const scoreData = scoreLookup.get(frameKey(frame.sourceFileId, frame.timestamp));
     const approxDuration = (sourceDurations.get(frame.sourceFileId) ?? 0) + 2;
     const position = approxDuration > 0
       ? `${((frame.timestamp / approxDuration) * 100).toFixed(0)}% through`
@@ -1339,7 +1635,7 @@ Respond with ONLY a JSON object:
 
     const audioVal = frame.audioEnergy != null ? ` | AUDIO: ${frame.audioEnergy.toFixed(2)}` : "";
     const onsetVal = frame.audioOnset != null && frame.audioOnset > 0.1 ? ` | ONSET: ${frame.audioOnset.toFixed(2)}` : "";
-    const specVal = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1) ? ` | SPECTRUM: B${frame.audioBass.toFixed(2)}/M${frame.audioMid!.toFixed(2)}/T${frame.audioTreble!.toFixed(2)}` : "";
+    const specVal = (frame.audioBass != null && frame.audioEnergy != null && frame.audioEnergy > 0.1) ? ` | SPECTRUM: B${frame.audioBass.toFixed(2)}/M${(frame.audioMid ?? 0).toFixed(2)}/T${(frame.audioTreble ?? 0).toFixed(2)}` : "";
     let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}${specVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
@@ -1361,289 +1657,384 @@ Respond with ONLY a JSON object:
     }\n\nNow create the highlight tape.`,
   });
 
-  try {
-    const response = await fetchWithRetry(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-opus-4-6",
-          max_tokens: 32000,
-          stream: true,
-          thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: "medium",
-          },
-          system: [
-            {
-              type: "text",
-              text: systemPrompt,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          messages: [{ role: "user", content: userContent }],
-        }),
+  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=claude-opus-4-6, effort=medium`);
+  const plannerStartMs = Date.now();
+
+  const response = await fetchWithRetry(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
-      "Planner"
-    );
+      body: JSON.stringify({
+        model: "claude-opus-4-6",
+        max_tokens: 32000,
+        stream: true,
+        thinking: {
+          type: "adaptive",
+        },
+        output_config: {
+          effort: "medium",
+        },
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userContent }],
+      }),
+    },
+    "Planner"
+  );
 
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => "");
-      throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
-    }
+  debugLog(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
 
-    // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
-    const { text, stopReason } = await consumeSSEStream(response, onPhase);
-
-    if (stopReason === "max_tokens") {
-      console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
-    }
-
-    if (!text) {
-      console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
-      throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
-    }
-
-    // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
-    const objMatch = text.match(/\{[\s\S]*\}/);
-    if (objMatch) {
-      const parsed = JSON.parse(objMatch[0]) as {
-          contentSummary?: string;
-          theme?: string;
-          clips?: Array<{
-            sourceFileId: string;
-            startTime: number;
-            endTime: number;
-            label: string;
-            confidenceScore: number;
-            velocityPreset?: string;
-            transitionType?: string;
-            transitionDuration?: number;
-            filter?: string;
-            captionText?: string;
-            captionStyle?: string;
-            entryPunchScale?: number;
-            entryPunchDuration?: number;
-            kenBurnsIntensity?: number;
-            // Dynamic AI-authored styles
-            velocityKeyframes?: Array<{ position: number; speed: number }>;
-            filterCSS?: string;
-            // Dynamic AI-authored caption styling
-            captionFontWeight?: number;
-            captionFontStyle?: string;
-            captionFontFamily?: string;
-            captionColor?: string;
-            captionAnimation?: string;
-            captionGlowColor?: string;
-            captionGlowRadius?: number;
-          }>;
-        };
-
-        if (!parsed.contentSummary) {
-          console.warn("Planner: AI returned no contentSummary");
-        }
-        const contentSummary = parsed.contentSummary ?? "";
-
-        const theme: DetectedTheme =
-          parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
-            ? (parsed.theme as DetectedTheme)
-            : "cinematic";
-        if (parsed.theme && !VALID_THEMES.includes(parsed.theme as DetectedTheme)) {
-          console.warn(`Planner: unrecognized theme "${parsed.theme}", falling back to "cinematic"`);
-        }
-
-        const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
-        const VALID_TRANSITIONS = [
-          "flash", "zoom_punch", "whip", "hard_flash", "glitch",
-          "crossfade", "light_leak", "soft_zoom",
-          "color_flash", "strobe", "hard_cut", "dip_to_black",
-        ];
-        const VALID_FILTERS = [
-          "None", "Vibrant", "Warm", "Cool", "Noir", "Fade",
-          "GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm",
-        ];
-        const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
-
-        if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
-          console.warn("Planner: AI returned no clips array or empty clips");
-          return { clips: [], detectedTheme: theme, contentSummary };
-        }
-
-        const clips = parsed.clips.filter((p, i) => {
-          // Validate required fields
-          if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
-            console.warn(`Planner: clip ${i} missing required fields, skipping`);
-            return false;
-          }
-          // Validate time range
-          if (p.startTime >= p.endTime) {
-            console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
-            return false;
-          }
-          // Minimum clip duration guard — clips under 2s feel like errors
-          const MIN_CLIP_DURATION_S = 2.0;
-          if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
-            console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
-            return false;
-          }
-          return true;
-        }).map((p, i) => {
-          if (p.velocityPreset && !VALID_VELOCITIES.includes(p.velocityPreset)) {
-            console.warn(`Planner: clip ${i} unrecognized velocity "${p.velocityPreset}", defaulting to "normal"`);
-          }
-          if (p.filter && !VALID_FILTERS.includes(p.filter)) {
-            console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
-          }
-
-          // Validate custom velocity keyframes from AI
-          let customVelocityKeyframes: Array<{ position: number; speed: number }> | undefined;
-          if (Array.isArray(p.velocityKeyframes) && p.velocityKeyframes.length >= 2) {
-            const valid = p.velocityKeyframes.every((kf: { position?: number; speed?: number }) =>
-              typeof kf.position === "number" && typeof kf.speed === "number" &&
-              kf.position >= 0 && kf.position <= 1 && kf.speed >= 0.1 && kf.speed <= 5.0
-            );
-            if (valid) {
-              customVelocityKeyframes = p.velocityKeyframes
-                .map((kf: { position: number; speed: number }) => ({
-                  position: kf.position,
-                  speed: Math.max(0.1, Math.min(5.0, kf.speed)),
-                }))
-                .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
-            } else {
-              console.warn(`Planner: clip ${i} invalid velocityKeyframes, ignoring`);
-            }
-          }
-
-          // Validate custom CSS filter string — allow only safe CSS filter functions
-          let customFilterCSS: string | undefined;
-          if (typeof p.filterCSS === "string" && p.filterCSS.trim()) {
-            const safeFilterPattern = /^(\s*(saturate|contrast|brightness|sepia|hue-rotate|grayscale|blur|invert|opacity)\([^)]+\)\s*)+$/i;
-            if (safeFilterPattern.test(p.filterCSS.trim())) {
-              customFilterCSS = p.filterCSS.trim();
-            } else {
-              console.warn(`Planner: clip ${i} unsafe filterCSS "${p.filterCSS.slice(0, 60)}", ignoring`);
-            }
-          }
-
-          return {
-          id: crypto.randomUUID(),
-          sourceFileId: p.sourceFileId,
-          startTime: Math.max(0, p.startTime),
-          endTime: p.endTime,
-          confidenceScore: Math.max(0, Math.min(1, p.confidenceScore)),
-          label: p.label || "Highlight",
-          velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
-            ? p.velocityPreset
-            : "normal",
-          order: i,
-          // Per-clip visual style from AI
-          transitionType: (p.transitionType && VALID_TRANSITIONS.includes(p.transitionType))
-            ? p.transitionType : undefined,
-          transitionDuration: (typeof p.transitionDuration === "number" && p.transitionDuration >= 0.1 && p.transitionDuration <= 2.0)
-            ? p.transitionDuration : undefined,
-          filter: (p.filter && VALID_FILTERS.includes(p.filter))
-            ? p.filter : undefined,
-          captionText: p.captionText || undefined,
-          captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
-            ? p.captionStyle : undefined,
-          entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
-            ? p.entryPunchScale : undefined,
-          entryPunchDuration: (typeof p.entryPunchDuration === "number" && p.entryPunchDuration >= 0 && p.entryPunchDuration <= 0.5)
-            ? p.entryPunchDuration : undefined,
-          kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
-            ? p.kenBurnsIntensity : undefined,
-          // Dynamic AI-authored styles
-          customVelocityKeyframes,
-          customFilterCSS,
-          // Dynamic AI-authored caption styling
-          customCaptionFontWeight: (typeof p.captionFontWeight === "number" && p.captionFontWeight >= 100 && p.captionFontWeight <= 900)
-            ? p.captionFontWeight : undefined,
-          customCaptionFontStyle: (p.captionFontStyle === "italic" || p.captionFontStyle === "normal")
-            ? p.captionFontStyle : undefined,
-          customCaptionFontFamily: (p.captionFontFamily === "sans-serif" || p.captionFontFamily === "serif" || p.captionFontFamily === "mono")
-            ? p.captionFontFamily : undefined,
-          customCaptionColor: (typeof p.captionColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionColor))
-            ? p.captionColor : undefined,
-          customCaptionAnimation: (typeof p.captionAnimation === "string" && ["pop", "slide", "flicker", "typewriter", "fade", "none"].includes(p.captionAnimation))
-            ? p.captionAnimation : undefined,
-          customCaptionGlowColor: (typeof p.captionGlowColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionGlowColor))
-            ? p.captionGlowColor : undefined,
-          customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
-            ? p.captionGlowRadius : undefined,
-        }; });
-
-        // Deduplicate: drop clips with identical or overlapping time ranges from the same source
-        const uniqueClips: typeof clips = [];
-        for (const clip of clips) {
-          // Check for overlap with already-accepted clips from the same source
-          const dominated = uniqueClips.some((existing) => {
-            if (existing.sourceFileId !== clip.sourceFileId) return false;
-            // Compute overlap between existing and candidate
-            const overlapStart = Math.max(existing.startTime, clip.startTime);
-            const overlapEnd = Math.min(existing.endTime, clip.endTime);
-            const overlap = Math.max(0, overlapEnd - overlapStart);
-            const candidateDuration = clip.endTime - clip.startTime;
-            // Drop if >50% of the candidate's duration overlaps an existing clip
-            return candidateDuration > 0 && overlap / candidateDuration > 0.5;
-          });
-          if (dominated) {
-            console.warn(
-              `Planner: dropping overlapping clip ${clip.sourceFileId} [${clip.startTime}-${clip.endTime}]`
-            );
-            continue;
-          }
-          uniqueClips.push(clip);
-        }
-
-        // Enforce minimum temporal gap between clips from the same source.
-        // Clips that are too close (within 5s) to an already-accepted clip get dropped.
-        const MIN_CLIP_GAP_S = 5;
-        const MAX_CLIPS_PER_SOURCE = 6;
-        const spacedClips: typeof uniqueClips = [];
-        const sourceClipCount = new Map<string, number>();
-        for (const clip of uniqueClips) {
-          // Cap clips per source to prevent visual repetition
-          const srcCount = sourceClipCount.get(clip.sourceFileId) ?? 0;
-          if (srcCount >= MAX_CLIPS_PER_SOURCE) {
-            console.warn(
-              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — max ${MAX_CLIPS_PER_SOURCE} clips per source reached`
-            );
-            continue;
-          }
-          const tooClose = spacedClips.some((existing) => {
-            if (existing.sourceFileId !== clip.sourceFileId) return false;
-            // Check gap between the clips (gap = space between one's end and other's start)
-            const gap = Math.min(
-              Math.abs(clip.startTime - existing.endTime),
-              Math.abs(existing.startTime - clip.endTime)
-            );
-            return gap < MIN_CLIP_GAP_S;
-          });
-          if (tooClose) {
-            console.warn(
-              `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — too close to existing clip from same source (min gap: ${MIN_CLIP_GAP_S}s)`
-            );
-            continue;
-          }
-          spacedClips.push(clip);
-          sourceClipCount.set(clip.sourceFileId, srcCount + 1);
-        }
-
-        return { clips: spacedClips, detectedTheme: theme, contentSummary };
-    }
-
-    throw new Error("Planner response could not be parsed as JSON");
-  } catch (err) {
-    // Re-throw so the retry loop in detectMultiClipHighlights can handle it
-    throw err instanceof Error ? err : new Error(String(err));
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
   }
+
+  // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
+  // Pass onPartial to extract production plan fields early for pre-emptive generator start
+  const { text, stopReason } = await consumeSSEStream(response, onPhase, onPartial);
+
+  if (stopReason === "max_tokens") {
+    console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
+  }
+
+  if (!text) {
+    console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
+    throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
+  }
+
+  // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
+  const objMatch = text.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    const parsed = JSON.parse(objMatch[0]) as {
+        contentSummary?: string;
+        theme?: string;
+        clips?: Array<{
+          sourceFileId: string;
+          startTime: number;
+          endTime: number;
+          label: string;
+          confidenceScore: number;
+          velocityPreset?: string;
+          transitionType?: string;
+          transitionDuration?: number;
+          filter?: string;
+          captionText?: string;
+          captionStyle?: string;
+          entryPunchScale?: number;
+          entryPunchDuration?: number;
+          kenBurnsIntensity?: number;
+          // Dynamic AI-authored styles
+          velocityKeyframes?: Array<{ position: number; speed: number }>;
+          filterCSS?: string;
+          // Dynamic AI-authored caption styling
+          captionFontWeight?: number;
+          captionFontStyle?: string;
+          captionFontFamily?: string;
+          captionColor?: string;
+          captionAnimation?: string;
+          captionGlowColor?: string;
+          captionGlowRadius?: number;
+          animationPrompt?: string;
+        }>;
+        // AI Production plan fields
+        intro?: { text: string; stylePrompt: string } | null;
+        outro?: { text: string; stylePrompt: string } | null;
+        sfx?: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
+        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string };
+        musicPrompt?: string;
+        musicDurationMs?: number;
+        thumbnail?: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
+        styleTransfer?: { prompt: string; strength: number } | null;
+        talkingHeadSpeech?: string | null;
+      };
+
+      if (!parsed.contentSummary) {
+        console.warn("Planner: AI returned no contentSummary");
+      }
+      const contentSummary = parsed.contentSummary ?? "";
+
+      const theme: DetectedTheme =
+        parsed.theme && VALID_THEMES.includes(parsed.theme as DetectedTheme)
+          ? (parsed.theme as DetectedTheme)
+          : "cinematic";
+      if (parsed.theme && !VALID_THEMES.includes(parsed.theme as DetectedTheme)) {
+        console.warn(`Planner: unrecognized theme "${parsed.theme}", falling back to "cinematic"`);
+      }
+
+      const VALID_VELOCITIES = ["normal", "hero", "bullet", "ramp_in", "ramp_out", "montage"];
+      const VALID_TRANSITIONS = [
+        "flash", "zoom_punch", "whip", "hard_flash", "glitch",
+        "crossfade", "light_leak", "soft_zoom",
+        "color_flash", "strobe", "hard_cut", "dip_to_black",
+      ];
+      const VALID_FILTERS = [
+        "None", "Vibrant", "Warm", "Cool", "Noir", "Fade",
+        "GoldenHour", "TealOrange", "MoodyCinematic", "CleanAiry", "VintageFilm",
+      ];
+      const VALID_CAPTION_STYLES = ["Bold", "Minimal", "Neon", "Classic"];
+
+      if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
+        console.warn("Planner: AI returned no clips array or empty clips");
+        return { clips: [], detectedTheme: theme, contentSummary };
+      }
+
+      const clips = parsed.clips.filter((p, i) => {
+        // Validate required fields
+        if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
+          console.warn(`Planner: clip ${i} missing required fields, skipping`);
+          return false;
+        }
+        // Validate time range
+        if (p.startTime >= p.endTime) {
+          console.warn(`Planner: clip ${i} has startTime (${p.startTime}) >= endTime (${p.endTime}), skipping`);
+          return false;
+        }
+        // Minimum clip duration guard — clips under 2s feel like errors
+        const MIN_CLIP_DURATION_S = 2.0;
+        if (p.endTime - p.startTime < MIN_CLIP_DURATION_S) {
+          console.warn(`Planner: clip ${i} too short (${(p.endTime - p.startTime).toFixed(2)}s < ${MIN_CLIP_DURATION_S}s), skipping`);
+          return false;
+        }
+        return true;
+      }).map((p, i) => {
+        if (p.velocityPreset && !VALID_VELOCITIES.includes(p.velocityPreset)) {
+          console.warn(`Planner: clip ${i} unrecognized velocity "${p.velocityPreset}", defaulting to "normal"`);
+        }
+        if (p.filter && !VALID_FILTERS.includes(p.filter)) {
+          console.warn(`Planner: clip ${i} unrecognized filter "${p.filter}", dropping`);
+        }
+
+        // Validate custom velocity keyframes from AI
+        let customVelocityKeyframes: Array<{ position: number; speed: number }> | undefined;
+        if (Array.isArray(p.velocityKeyframes) && p.velocityKeyframes.length >= 2) {
+          const valid = p.velocityKeyframes.every((kf: { position?: number; speed?: number }) =>
+            typeof kf.position === "number" && typeof kf.speed === "number" &&
+            kf.position >= 0 && kf.position <= 1 && kf.speed >= 0.1 && kf.speed <= 5.0
+          );
+          if (valid) {
+            customVelocityKeyframes = p.velocityKeyframes
+              .map((kf: { position: number; speed: number }) => ({
+                position: kf.position,
+                speed: Math.max(0.1, Math.min(5.0, kf.speed)),
+              }))
+              .sort((a: { position: number }, b: { position: number }) => a.position - b.position);
+          } else {
+            console.warn(`Planner: clip ${i} invalid velocityKeyframes, ignoring`);
+          }
+        }
+
+        // Validate custom CSS filter string — allow only safe CSS filter functions
+        let customFilterCSS: string | undefined;
+        if (typeof p.filterCSS === "string" && p.filterCSS.trim()) {
+          const safeFilterPattern = /^(\s*(saturate|contrast|brightness|sepia|hue-rotate|grayscale|blur|invert|opacity)\([^)]+\)\s*)+$/i;
+          if (safeFilterPattern.test(p.filterCSS.trim())) {
+            customFilterCSS = p.filterCSS.trim();
+          } else {
+            console.warn(`Planner: clip ${i} unsafe filterCSS "${p.filterCSS.slice(0, 60)}", ignoring`);
+          }
+        }
+
+        return {
+        id: crypto.randomUUID(),
+        sourceFileId: p.sourceFileId,
+        startTime: Math.max(0, p.startTime),
+        endTime: Math.max(0, p.endTime),
+        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
+        label: p.label || "Highlight",
+        velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
+          ? p.velocityPreset
+          : "normal",
+        order: i,
+        // Per-clip visual style from AI
+        transitionType: (p.transitionType && VALID_TRANSITIONS.includes(p.transitionType))
+          ? p.transitionType : undefined,
+        transitionDuration: (typeof p.transitionDuration === "number" && p.transitionDuration >= 0.1 && p.transitionDuration <= 2.0)
+          ? p.transitionDuration : undefined,
+        filter: (p.filter && VALID_FILTERS.includes(p.filter))
+          ? p.filter : undefined,
+        captionText: p.captionText || undefined,
+        captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
+          ? p.captionStyle : undefined,
+        entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
+          ? p.entryPunchScale : undefined,
+        entryPunchDuration: (typeof p.entryPunchDuration === "number" && p.entryPunchDuration >= 0 && p.entryPunchDuration <= 0.5)
+          ? p.entryPunchDuration : undefined,
+        kenBurnsIntensity: (typeof p.kenBurnsIntensity === "number" && p.kenBurnsIntensity >= 0 && p.kenBurnsIntensity <= 0.15)
+          ? p.kenBurnsIntensity : undefined,
+        // Dynamic AI-authored styles
+        customVelocityKeyframes,
+        customFilterCSS,
+        // Dynamic AI-authored caption styling
+        customCaptionFontWeight: (typeof p.captionFontWeight === "number" && p.captionFontWeight >= 100 && p.captionFontWeight <= 900)
+          ? p.captionFontWeight : undefined,
+        customCaptionFontStyle: (p.captionFontStyle === "italic" || p.captionFontStyle === "normal")
+          ? p.captionFontStyle : undefined,
+        customCaptionFontFamily: (p.captionFontFamily === "sans-serif" || p.captionFontFamily === "serif" || p.captionFontFamily === "mono")
+          ? p.captionFontFamily : undefined,
+        customCaptionColor: (typeof p.captionColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionColor))
+          ? p.captionColor : undefined,
+        customCaptionAnimation: (typeof p.captionAnimation === "string" && ["pop", "slide", "flicker", "typewriter", "fade", "none"].includes(p.captionAnimation))
+          ? p.captionAnimation : undefined,
+        customCaptionGlowColor: (typeof p.captionGlowColor === "string" && /^#[0-9a-fA-F]{6}$/.test(p.captionGlowColor))
+          ? p.captionGlowColor : undefined,
+        customCaptionGlowRadius: (typeof p.captionGlowRadius === "number" && p.captionGlowRadius >= 0 && p.captionGlowRadius <= 30)
+          ? p.captionGlowRadius : undefined,
+        // Photo animation prompt from AI
+        animationPrompt: (typeof p.animationPrompt === "string" && p.animationPrompt.trim())
+          ? p.animationPrompt.trim().slice(0, 500) : undefined,
+      }; });
+
+      // Deduplicate: drop clips with identical or overlapping time ranges from the same source
+      const uniqueClips: typeof clips = [];
+      for (const clip of clips) {
+        // Check for overlap with already-accepted clips from the same source
+        const dominated = uniqueClips.some((existing) => {
+          if (existing.sourceFileId !== clip.sourceFileId) return false;
+          // Compute overlap between existing and candidate
+          const overlapStart = Math.max(existing.startTime, clip.startTime);
+          const overlapEnd = Math.min(existing.endTime, clip.endTime);
+          const overlap = Math.max(0, overlapEnd - overlapStart);
+          const candidateDuration = clip.endTime - clip.startTime;
+          // Drop if >50% of the candidate's duration overlaps an existing clip
+          return candidateDuration > 0 && overlap / candidateDuration > 0.5;
+        });
+        if (dominated) {
+          console.warn(
+            `Planner: dropping overlapping clip ${clip.sourceFileId} [${clip.startTime}-${clip.endTime}]`
+          );
+          continue;
+        }
+        uniqueClips.push(clip);
+      }
+
+      // Enforce minimum temporal gap between clips from the same source.
+      // Clips that are too close (within 5s) to an already-accepted clip get dropped.
+      const MIN_CLIP_GAP_S = 5;
+      const MAX_CLIPS_PER_SOURCE = 6;
+      const spacedClips: typeof uniqueClips = [];
+      const sourceClipCount = new Map<string, number>();
+      for (const clip of uniqueClips) {
+        // Cap clips per source to prevent visual repetition
+        const srcCount = sourceClipCount.get(clip.sourceFileId) ?? 0;
+        if (srcCount >= MAX_CLIPS_PER_SOURCE) {
+          console.warn(
+            `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — max ${MAX_CLIPS_PER_SOURCE} clips per source reached`
+          );
+          continue;
+        }
+        const tooClose = spacedClips.some((existing) => {
+          if (existing.sourceFileId !== clip.sourceFileId) return false;
+          // Check gap between the clips (gap = space between one's end and other's start)
+          const gap = Math.min(
+            Math.abs(clip.startTime - existing.endTime),
+            Math.abs(existing.startTime - clip.endTime)
+          );
+          return gap < MIN_CLIP_GAP_S;
+        });
+        if (tooClose) {
+          console.warn(
+            `Planner: dropping clip ${clip.sourceFileId} [${clip.startTime.toFixed(1)}-${clip.endTime.toFixed(1)}] — too close to existing clip from same source (min gap: ${MIN_CLIP_GAP_S}s)`
+          );
+          continue;
+        }
+        spacedClips.push(clip);
+        sourceClipCount.set(clip.sourceFileId, srcCount + 1);
+      }
+
+      // Extract AI production plan from Claude's output
+      const VALID_SFX_TIMINGS = ["before", "on", "after"];
+      const VALID_VOICE_CHARS = [
+        "male-broadcaster-hype", "male-narrator-warm", "male-young-energetic",
+        "female-narrator-warm", "female-broadcaster-hype", "female-young-energetic",
+      ];
+
+      const productionPlan: ProductionPlan = {
+        intro: (parsed.intro && typeof parsed.intro.text === "string" && typeof parsed.intro.stylePrompt === "string")
+          ? { text: parsed.intro.text.slice(0, 200), stylePrompt: parsed.intro.stylePrompt.slice(0, 500) }
+          : null,
+        outro: (parsed.outro && typeof parsed.outro.text === "string" && typeof parsed.outro.stylePrompt === "string")
+          ? { text: parsed.outro.text.slice(0, 200), stylePrompt: parsed.outro.stylePrompt.slice(0, 500) }
+          : null,
+        sfx: Array.isArray(parsed.sfx)
+          ? parsed.sfx
+              .filter((s) =>
+                typeof s.clipIndex === "number" &&
+                s.clipIndex >= 0 && s.clipIndex < spacedClips.length &&
+                VALID_SFX_TIMINGS.includes(s.timing) &&
+                typeof s.prompt === "string" && s.prompt.trim().length > 0 &&
+                typeof s.durationMs === "number" && Number.isFinite(s.durationMs)
+              )
+              .slice(0, 12)
+              .map((s) => ({
+                clipIndex: s.clipIndex,
+                timing: s.timing,
+                prompt: s.prompt.slice(0, 300),
+                durationMs: Math.max(500, Math.min(5000, s.durationMs)),
+              }))
+          : [],
+        voiceover: (parsed.voiceover && typeof parsed.voiceover.enabled === "boolean")
+          ? {
+              enabled: parsed.voiceover.enabled,
+              segments: Array.isArray(parsed.voiceover.segments)
+                ? parsed.voiceover.segments
+                    .filter((seg) => typeof seg.clipIndex === "number" && seg.clipIndex >= 0 && seg.clipIndex < spacedClips.length && typeof seg.text === "string" && seg.text.trim().length > 0)
+                    .slice(0, 8)
+                    .map((seg) => ({ clipIndex: seg.clipIndex, text: seg.text.slice(0, 200) }))
+                : [],
+              voiceCharacter: VALID_VOICE_CHARS.includes(parsed.voiceover.voiceCharacter)
+                ? parsed.voiceover.voiceCharacter
+                : "male-broadcaster-hype",
+            }
+          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype" },
+        musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
+        musicDurationMs: (() => {
+          // Compute total tape duration from clips so music always covers the full video
+          const tapeDurationMs = spacedClips.reduce(
+            (sum, c) => sum + (c.endTime - c.startTime) * 1000, 0
+          );
+          const floor = Math.max(3000, tapeDurationMs);
+          if (typeof parsed.musicDurationMs === "number") {
+            // Use the AI value but never shorter than the tape itself
+            return Math.max(floor, Math.min(300000, parsed.musicDurationMs));
+          }
+          return Math.min(300000, Math.max(floor, 60000));
+        })(),
+        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
+          ? {
+              sourceClipIndex: parsed.thumbnail.sourceClipIndex,
+              frameTime: typeof parsed.thumbnail.frameTime === "number" ? Math.max(0, parsed.thumbnail.frameTime) : 0,
+              stylePrompt: typeof parsed.thumbnail.stylePrompt === "string" ? parsed.thumbnail.stylePrompt.slice(0, 300) : "",
+            }
+          : null,
+        styleTransfer: (parsed.styleTransfer && typeof parsed.styleTransfer.prompt === "string")
+          ? {
+              prompt: parsed.styleTransfer.prompt.slice(0, 500),
+              strength: typeof parsed.styleTransfer.strength === "number"
+                ? Math.max(0.1, Math.min(1.0, parsed.styleTransfer.strength))
+                : 0.5,
+            }
+          : null,
+        talkingHeadSpeech: typeof parsed.talkingHeadSpeech === "string"
+          ? parsed.talkingHeadSpeech.slice(0, 200)
+          : null,
+      };
+
+      debugLog(`[Planner] Production plan: intro=${!!productionPlan.intro}, outro=${!!productionPlan.outro}, sfx=${productionPlan.sfx.length}, voiceover=${productionPlan.voiceover.enabled ? productionPlan.voiceover.segments.length + " segments" : "disabled"}, music=${productionPlan.musicPrompt.length > 0 ? "yes" : "no"}, thumbnail=${!!productionPlan.thumbnail}`);
+
+      return { clips: spacedClips, detectedTheme: theme, contentSummary, productionPlan };
+  }
+
+  throw new Error("Planner response could not be parsed as JSON");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

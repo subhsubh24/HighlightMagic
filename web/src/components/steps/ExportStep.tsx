@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music, CheckCircle, AlertTriangle } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -21,15 +21,148 @@ import {
   getClipEntryScale,
   type TransitionType,
 } from "@/lib/transitions";
-import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid, type TimelineValidation } from "@/lib/beat-sync";
+import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
-import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
+import { createAudioPipeline, type AudioPipeline, type ScheduledAudioLayer } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
-import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions } from "@/lib/types";
+import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions, AppState } from "@/lib/types";
+import { EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_FRAME_RATE } from "@/lib/constants";
+
+const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
+function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
 
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
+type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
+
+/**
+ * Attempt server-side FFmpeg rendering (Arch #1).
+ * Returns a Blob on success, or null if server rendering is unavailable.
+ */
+/** Cache the 501 result so we only probe once per page load. */
+let serverRenderAvailable: boolean | null = null;
+
+async function tryServerRender(
+  clips: EditedClip[],
+  state: AppState,
+  isFree: boolean
+): Promise<Blob | null> {
+  // Skip entirely if we already know server rendering is unavailable
+  if (serverRenderAvailable === false) return null;
+  try {
+    const renderClips = clips.map((clip) => {
+      const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
+      const hasAnimatedVideo = media?.type === "photo" &&
+        media.animationStatus === "completed" &&
+        media.animatedVideoUrl;
+      return {
+        sourceUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+        startTime: clip.trimStart,
+        endTime: clip.trimEnd,
+        filter: clip.customFilterCSS || undefined,
+        transitionType: clip.transitionType,
+        transitionDuration: clip.transitionDuration,
+        captionText: clip.captionText || undefined,
+        captionStyle: clip.captionStyle || undefined,
+      };
+    });
+
+    const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
+    if (state.aiMusicUrl) {
+      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: 0.7 });
+    }
+
+    // Compute per-clip timeline offsets for voiceover / SFX placement
+    const clipStarts: number[] = [];
+    const clipEnds: number[] = [];
+    let t = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const dur = clips[i].trimEnd - clips[i].trimStart;
+      clipStarts.push(t);
+      clipEnds.push(t + dur);
+      t += dur - (clips[i + 1]?.transitionDuration ?? 0.3);
+    }
+
+    // Voiceover segments
+    for (const vo of state.voiceoverSegments ?? []) {
+      if (!vo.audioUrl || vo.status !== "completed") continue;
+      const start = clipStarts[vo.clipIndex];
+      if (start == null) continue;
+      audioLayers.push({ url: vo.audioUrl, startTime: start + 0.3, volume: 1.0 });
+    }
+
+    // SFX tracks
+    for (const sfx of state.sfxTracks ?? []) {
+      if (!sfx.audioUrl || sfx.status !== "completed") continue;
+      const clipStart = clipStarts[sfx.clipIndex];
+      const clipEnd = clipEnds[sfx.clipIndex];
+      if (clipStart == null) continue;
+      let sfxStart = clipStart;
+      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - 0.5);
+      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - 0.3;
+      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: 0.8 });
+    }
+
+    const res = await fetch("/api/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clips: renderClips,
+        audioLayers,
+        width: EXPORT_WIDTH,
+        height: EXPORT_HEIGHT,
+        fps: EXPORT_FRAME_RATE,
+        bitrate: EXPORT_BITRATE,
+        seamlessLoop: state.viralOptions.seamlessLoop,
+        watermark: isFree ? WATERMARK_TEXT : undefined,
+      }),
+    });
+
+    if (res.status === 501) {
+      // Server rendering not enabled — cache this and never probe again
+      serverRenderAvailable = false;
+      return null;
+    }
+    serverRenderAvailable = true;
+
+    if (!res.ok) {
+      console.warn("[render] Server render failed, falling back to client-side");
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.jobId) {
+      debugLog(`[render] Server render job queued: ${data.jobId}`);
+      // Poll for server-side render completion using the shared poll endpoint
+      const POLL_INTERVAL = 5_000;
+      const MAX_POLLS = 60; // 5 min max
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+        const check = await fetch("/api/animate/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ predictionId: data.jobId }),
+        });
+        if (!check.ok) continue;
+        const status = await check.json();
+        if (status.status === "completed" && status.videoUrl) {
+          // Download rendered video as Blob
+          const videoRes = await fetch(status.videoUrl);
+          if (videoRes.ok) return await videoRes.blob();
+        }
+        if (status.status === "failed") break;
+      }
+      // Timed out or failed — fall back to client-side rendering
+      return null;
+    }
+
+    return null;
+  } catch {
+    // Server rendering unavailable — silent fallback to client-side
+    return null;
+  }
+}
 
 /** Try codecs in preference order. */
 function pickMimeType(): { mimeType: string; ext: string } {
@@ -60,7 +193,18 @@ export default function ExportStep() {
   const [progress, setProgress] = useState(0);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [exportExt, setExportExt] = useState("webm");
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const thumbnailAbortRef = useRef<AbortController | null>(null);
+
+  // Cleanup blob URL and abort thumbnail polling on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      thumbnailAbortRef.current?.abort();
+    };
+  }, [blobUrl]);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
@@ -70,30 +214,92 @@ export default function ExportStep() {
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
 
-  // Pre-export validation: beat-sync alignment + timeline integrity
-  const validation = useMemo<TimelineValidation | null>(() => {
-    if (sortedClips.length === 0) return null;
-    const beatGrid = state.viralOptions.beatSync
-      ? (() => {
-          const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
-          return track ? buildBeatGrid(track.bpm, 300) : null;
-        })()
-      : null;
-    return validateTimeline(
-      sortedClips.map((clip) => {
-        const media = getMediaFile(state, clip.sourceFileId);
-        return {
-          sourceFileId: clip.sourceFileId,
-          trimStart: clip.trimStart,
-          trimEnd: clip.trimEnd,
-          sourceDuration: media?.duration ?? 0,
-          transitionDuration: clip.transitionDuration,
-        };
-      }),
-      0.3,
-      beatGrid
-    );
-  }, [sortedClips, state]);
+
+
+  const generateThumbnail = useCallback(async () => {
+    const plan = state.aiProductionPlan;
+    if (!plan?.thumbnail) return;
+
+    // Abort any previous thumbnail generation
+    thumbnailAbortRef.current?.abort();
+    const abort = new AbortController();
+    thumbnailAbortRef.current = abort;
+
+    setThumbnailPhase("generating");
+    try {
+      // Find the source clip for the thumbnail
+      const clip = sortedClips[plan.thumbnail.sourceClipIndex];
+      if (!clip) { setThumbnailPhase("failed"); return; }
+
+      const media = getMediaFile(state, clip.sourceFileId);
+      if (!media) { setThumbnailPhase("failed"); return; }
+
+      // Extract frame at the specified time using canvas
+      if (media.type === "video") {
+        const video = document.createElement("video");
+        video.crossOrigin = "anonymous";
+        video.preload = "auto";
+        video.src = media.url;
+        // Correct lifecycle: load → wait for loadeddata → seek → wait for seeked
+        await new Promise<void>((resolve, reject) => {
+          video.onloadeddata = () => {
+            video.currentTime = plan.thumbnail!.frameTime;
+            video.onseeked = () => resolve();
+          };
+          video.onerror = () => reject(new Error("Failed to load video for thumbnail"));
+          video.load();
+        });
+        if (abort.signal.aborted) {
+          video.src = "";
+          video.removeAttribute("src");
+          return;
+        }
+        const c = document.createElement("canvas");
+        c.width = 1080; c.height = 1920;
+        const ctx = c.getContext("2d")!;
+        ctx.drawImage(video, 0, 0, c.width, c.height);
+        // Clean up the video element to release memory
+        video.src = "";
+        video.removeAttribute("src");
+        video.load();
+        const frameDataUri = c.toDataURL("image/jpeg", 0.9);
+
+        // Submit to BG removal
+        const res = await fetch("/api/thumbnail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageData: frameDataUri }),
+          signal: abort.signal,
+        });
+        const data = await res.json();
+        if (res.ok && data.predictionId) {
+          // Poll for result
+          const deadline = Date.now() + 120_000;
+          while (Date.now() < deadline) {
+            if (abort.signal.aborted) return;
+            await new Promise((r) => setTimeout(r, 5000));
+            if (abort.signal.aborted) return;
+            const checkRes = await fetch("/api/animate/check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ predictionId: data.predictionId }),
+              signal: abort.signal,
+            });
+            const checkData = await checkRes.json();
+            if (checkData.status === "completed" && checkData.videoUrl) {
+              setThumbnailUrl(checkData.videoUrl);
+              setThumbnailPhase("done");
+              return;
+            }
+            if (checkData.status === "failed") break;
+          }
+        }
+      }
+      if (!abort.signal.aborted) setThumbnailPhase("failed");
+    } catch {
+      if (!abort.signal.aborted) setThumbnailPhase("failed");
+    }
+  }, [state, sortedClips]);
 
   const handleExport = useCallback(async () => {
     if (!canExport) {
@@ -106,12 +312,32 @@ export default function ExportStep() {
     haptic();
 
     try {
+      // Attempt server-side FFmpeg rendering first (Arch #1)
+      // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
+      const serverResult = await tryServerRender(sortedClips, state, isFree);
+      if (serverResult) {
+        const url = URL.createObjectURL(serverResult);
+        setBlobUrl(url);
+        setExportExt("mp4");
+        dispatch({ type: "INCREMENT_EXPORTS" });
+        setPhase("done");
+        haptic([10, 50, 10]);
+        if (state.thumbnail && state.thumbnail.status !== "completed") {
+          generateThumbnail();
+        }
+        return;
+      }
+      // Server rendering not available — fall back to client-side
       const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
         const media = getMediaFile(state, clip.sourceFileId);
+        // Use animated video if available (photo → video via Kling 3.0)
+        const hasAnimatedVideo = media?.type === "photo" &&
+          media.animationStatus === "completed" &&
+          media.animatedVideoUrl;
         return {
           clip,
-          mediaUrl: media?.url ?? "",
-          mediaType: media?.type ?? "video",
+          mediaUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+          mediaType: hasAnimatedVideo ? "video" as const : (media?.type ?? "video"),
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
@@ -121,13 +347,45 @@ export default function ExportStep() {
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
+      // Build scheduled audio layers for voiceover + SFX
+      const scheduled: ScheduledAudioLayer[] = [];
+      {
+        const cStarts: number[] = [];
+        const cEnds: number[] = [];
+        let st = 0;
+        for (let i = 0; i < sortedClips.length; i++) {
+          const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          cStarts.push(st);
+          cEnds.push(st + dur);
+          st += dur - (sortedClips[i + 1]?.transitionDuration ?? 0.3);
+        }
+        for (const vo of state.voiceoverSegments ?? []) {
+          if (!vo.audioUrl || vo.status !== "completed") continue;
+          const s = cStarts[vo.clipIndex];
+          if (s == null) continue;
+          scheduled.push({ url: vo.audioUrl, startTime: s + 0.3, volume: 1.0 });
+        }
+        for (const sfx of state.sfxTracks ?? []) {
+          if (!sfx.audioUrl || sfx.status !== "completed") continue;
+          const cs = cStarts[sfx.clipIndex];
+          const ce = cEnds[sfx.clipIndex];
+          if (cs == null) continue;
+          let sfxS = cs;
+          if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
+          else if (sfx.timing === "after") sfxS = (ce ?? cs) - 0.3;
+          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: 0.8 });
+        }
+      }
+
       const blob = await renderHighlightTape(
         renderClips,
         isFree ? WATERMARK_TEXT : null,
         state.detectedTheme,
         state.viralOptions,
         mimeType,
-        (pct) => setProgress(pct)
+        (pct) => setProgress(pct),
+        state.aiMusicUrl,
+        scheduled,
       );
 
       const url = URL.createObjectURL(blob);
@@ -135,6 +393,11 @@ export default function ExportStep() {
       dispatch({ type: "INCREMENT_EXPORTS" });
       setPhase("done");
       haptic([10, 50, 10]);
+
+      // Auto-generate thumbnail from AI's chosen frame (non-blocking)
+      if (state.thumbnail && state.thumbnail.status !== "completed") {
+        generateThumbnail();
+      }
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
@@ -172,9 +435,6 @@ export default function ExportStep() {
     dispatch({ type: "SET_VIRAL_OPTIONS", options: { [key]: !state.viralOptions[key] } });
   };
 
-  const { mimeType: detectedMime } = typeof MediaRecorder !== "undefined" ? pickMimeType() : { mimeType: "video/webm" };
-  const formatLabel = detectedMime.includes("mp4") ? "MP4 · H.264" : "WebM · VP9";
-
   return (
     <div className="flex flex-1 flex-col items-center gap-6 animate-fade-in">
       {phase === "done" && <Confetti />}
@@ -198,39 +458,21 @@ export default function ExportStep() {
           <div className="glass-card w-full p-4">
             <div className="flex flex-col gap-2 text-sm">
               <Row label="Clips" value={`${sortedClips.length} clips combined`} />
-              <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
-              <Row label="Editing Style" value={`${style.label} — ${style.description.split("—")[0].trim()}`} />
-              <Row label="Format" value={`${formatLabel} · 1080×1920`} />
-              {isFree && <Row label="Watermark" value="Included (Free tier)" />}
+              <Row label="Duration" value={`~${Math.round(totalDuration)}s`} />
+              <Row label="Style" value={style.label} />
               {isFree && (
                 <Row
-                  label="Exports remaining"
+                  label="Free exports left"
                   value={`${FREE_EXPORT_LIMIT - state.exportsUsed}/${FREE_EXPORT_LIMIT}`}
                 />
               )}
             </div>
-
-            <div className="mt-4 flex gap-1 overflow-x-auto">
-              {sortedClips.map((clip, i) => {
-                const m = getMediaFile(state, clip.sourceFileId);
-                return (
-                  <div
-                    key={clip.id}
-                    className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-[10px] text-[var(--text-secondary)]"
-                  >
-                    <Film className="h-3 w-3" />
-                    {i + 1}. {Math.round(clip.trimEnd - clip.trimStart)}s
-                    {m && <span className="max-w-[60px] truncate text-[var(--text-tertiary)]">{m.name}</span>}
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
-          {/* Viral options */}
+          {/* Extra options */}
           <div className="glass-card w-full p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-              Viral Optimization
+              Extras
             </p>
             <div className="flex flex-col gap-2.5">
               <label className="flex cursor-pointer items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
@@ -239,7 +481,7 @@ export default function ExportStep() {
                   <div>
                     <p className="text-sm font-medium text-white">Beat Sync</p>
                     <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Snap cuts to the music&apos;s beat grid
+                      Cuts land on the beat of the music
                     </p>
                   </div>
                 </div>
@@ -254,9 +496,9 @@ export default function ExportStep() {
                 <div className="flex items-center gap-2.5">
                   <Repeat className="h-4 w-4 text-blue-400" />
                   <div>
-                    <p className="text-sm font-medium text-white">Seamless Loop</p>
+                    <p className="text-sm font-medium text-white">Loop</p>
                     <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Cross-fade end into start for TikTok replay
+                      Blends the end into the start for infinite replay
                     </p>
                   </div>
                 </div>
@@ -270,76 +512,6 @@ export default function ExportStep() {
             </div>
           </div>
 
-          {/* Pre-export validation report */}
-          {validation && (
-            <div className="glass-card w-full p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                Rendering Validation
-              </p>
-              <div className="flex flex-col gap-2">
-                {/* Timeline validity */}
-                <div className="flex items-center gap-2">
-                  {validation.valid ? (
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-amber-400" />
-                  )}
-                  <span className="text-sm text-white">
-                    {validation.valid ? "Timeline OK" : `${validation.issues.length} issue${validation.issues.length !== 1 ? "s" : ""} found`}
-                  </span>
-                  <span className="ml-auto text-xs text-[var(--text-tertiary)]">
-                    ~{Math.round(validation.totalDuration)}s rendered
-                  </span>
-                </div>
-                {/* Timeline issues */}
-                {validation.issues.length > 0 && (
-                  <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                    {validation.issues.map((issue, i) => (
-                      <p key={i}>{issue.message}</p>
-                    ))}
-                  </div>
-                )}
-                {/* Beat-sync quality */}
-                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Music className="h-4 w-4 text-emerald-400" />
-                    <span className="text-sm text-white">Beat Sync</span>
-                    <div className="ml-auto flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={`h-full rounded-full ${
-                            validation.beatSync.quality >= 0.85
-                              ? "bg-emerald-400"
-                              : validation.beatSync.quality >= 0.65
-                                ? "bg-yellow-400"
-                                : "bg-red-400"
-                          }`}
-                          style={{ width: `${validation.beatSync.quality * 100}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-medium ${
-                        validation.beatSync.quality >= 0.85
-                          ? "text-emerald-400"
-                          : validation.beatSync.quality >= 0.65
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                      }`}>
-                        {validation.beatSync.label}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
-                  <p className="text-[11px] text-[var(--text-tertiary)]">
-                    {validation.beatSync.tightCount}/{validation.beatSync.totalTransitions} cuts within 1 frame
-                    {" · "}avg offset {validation.beatSync.avgOffsetMs.toFixed(0)}ms
-                    {" · "}max {validation.beatSync.maxOffsetMs.toFixed(0)}ms
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
           <button onClick={handleExport} className="btn-primary flex w-full items-center justify-center gap-2">
             <Download className="h-5 w-5" />
             Export Highlight Tape
@@ -348,26 +520,47 @@ export default function ExportStep() {
       )}
 
       {/* Rendering phase */}
-      {phase === "rendering" && (
-        <div className="flex w-full flex-col items-center gap-4 py-12">
-          <div className="w-full max-w-xs">
-            <div className="h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-accent-gradient transition-all"
-                style={{ width: `${progress}%` }}
-              />
+      {phase === "rendering" && (() => {
+        const rSize = 100;
+        const rStroke = 5;
+        const rRadius = (rSize - rStroke) / 2;
+        const rCirc = 2 * Math.PI * rRadius;
+        const rOffset = rCirc - (progress / 100) * rCirc;
+        return (
+          <div className="flex w-full flex-col items-center gap-5 py-12 animate-fade-in">
+            {/* Circular progress */}
+            <div className="relative">
+              <svg width={rSize} height={rSize} className="rotate-[-90deg]">
+                <circle cx={rSize / 2} cy={rSize / 2} r={rRadius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={rStroke} />
+                <circle cx={rSize / 2} cy={rSize / 2} r={rRadius} fill="none" stroke="url(#export-gradient)" strokeWidth={rStroke} strokeLinecap="round" strokeDasharray={rCirc} strokeDashoffset={rOffset} className="transition-all duration-300" />
+                <defs>
+                  <linearGradient id="export-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="var(--accent)" />
+                    <stop offset="100%" stopColor="var(--accent-pink)" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-lg font-bold text-white tabular-nums">{Math.round(progress)}%</span>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <p className="text-sm font-medium text-white">
+                Rendering your highlight tape
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                {style.label} style · {sortedClips.length} clips
+              </p>
+            </div>
+
+            <div className="flex gap-2 text-[10px]">
+              {state.viralOptions.beatSync && hasMusic && <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-emerald-400 font-medium">Beat Sync</span>}
+              {state.viralOptions.seamlessLoop && <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-blue-400 font-medium">Loop</span>}
             </div>
           </div>
-          <p className="text-lg font-semibold text-white">{Math.round(progress)}%</p>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Rendering with {style.label.toLowerCase()} editing style...
-          </p>
-          <div className="flex gap-2 text-[10px] text-[var(--text-tertiary)]">
-            {state.viralOptions.beatSync && hasMusic && <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-emerald-400">Beat Sync</span>}
-            {state.viralOptions.seamlessLoop && <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-blue-400">Loop</span>}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Done phase — video player */}
       {phase === "done" && (
@@ -379,37 +572,53 @@ export default function ExportStep() {
                 className="h-full w-full object-contain"
                 controls
                 playsInline
-                autoPlay
                 loop
-                muted
               />
             </div>
           )}
 
           <div className="text-center">
-            <h3 className="text-xl font-bold text-white">Highlight Tape Ready!</h3>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              {sortedClips.length} clips · {style.label} style — ready to share
+            <h3 className="text-2xl font-bold text-white">Your tape is ready!</h3>
+            <p className="mt-1.5 text-sm text-[var(--text-secondary)]">
+              {sortedClips.length} clips · {style.label} style
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-3">
-            <button onClick={handleDownload} className="btn-primary flex items-center justify-center gap-2">
+          <div className="flex w-full gap-3">
+            <button onClick={handleDownload} className="btn-primary flex flex-1 items-center justify-center gap-2">
               <Download className="h-5 w-5" />
               Download
             </button>
-            <button onClick={handleShare} className="btn-secondary flex items-center justify-center gap-2">
+            <button onClick={handleShare} className="btn-secondary flex flex-1 items-center justify-center gap-2">
               <Share2 className="h-5 w-5" />
               Share
             </button>
-            <button
-              onClick={() => dispatch({ type: "RESET" })}
-              className="flex items-center justify-center gap-2 py-3 text-sm text-[var(--text-tertiary)] hover:text-white"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Start Over
-            </button>
           </div>
+          <button
+            onClick={() => dispatch({ type: "RESET" })}
+            className="flex items-center justify-center gap-2 py-2 text-sm text-[var(--text-tertiary)] hover:text-white transition-colors"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Create another tape
+          </button>
+
+          {/* Auto-generated thumbnail */}
+          {thumbnailPhase === "generating" && (
+            <div className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-xs text-[var(--text-tertiary)]">
+              <RotateCcw className="h-3.5 w-3.5 animate-spin" />
+              Generating social thumbnail...
+            </div>
+          )}
+          {thumbnailPhase === "done" && thumbnailUrl && (
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-xs text-[var(--text-tertiary)]">Social Thumbnail</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={thumbnailUrl} alt="Generated thumbnail" className="w-32 rounded-lg border border-white/10" />
+              <a href={thumbnailUrl} download="thumbnail.png" className="text-xs text-[var(--accent)] hover:underline">
+                Download Thumbnail
+              </a>
+            </div>
+          )}
 
           <p className="text-xs text-[var(--text-tertiary)]">Made with Highlight Magic</p>
 
@@ -513,7 +722,9 @@ async function renderHighlightTape(
   theme: EditingTheme,
   viralOptions: ViralExportOptions,
   mimeType: string,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  aiMusicUrl?: string | null,
+  scheduledLayers?: ScheduledAudioLayer[],
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -546,13 +757,13 @@ async function renderHighlightTape(
   }
   if (renderValidation.beatSync) {
     const bs = renderValidation.beatSync;
-    console.log(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
+    debugLog(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
   }
 
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers);
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
@@ -754,6 +965,8 @@ function renderVideoClip(
           if (canvasElapsedMs >= canvasDurationMs || video.paused) {
             video.pause();
             disconnectAudio();
+            video.src = "";
+            video.removeAttribute("src");
             resolve();
             return;
           }
@@ -767,6 +980,8 @@ function renderVideoClip(
             }
             video.pause();
             disconnectAudio();
+            video.src = "";
+            video.removeAttribute("src");
             resolve();
             return;
           }
@@ -836,6 +1051,8 @@ function renderVideoClip(
 
     video.onerror = () => {
       disconnectAudio();
+      video.src = "";
+      video.removeAttribute("src");
       reject(new Error("Failed to load video for rendering"));
     };
   });

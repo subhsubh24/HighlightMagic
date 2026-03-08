@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct ProcessingView: View {
     @Environment(AppState.self) private var appState
@@ -134,6 +135,21 @@ struct ProcessingView: View {
             )
             appState.generatedClips = clips
 
+            // AI audio generation (feature parity with web platform)
+            if await ElevenLabsService.shared.isAvailable {
+                await generateAIAudio(for: clips)
+            }
+
+            // AI production features (AtlasCloud: intro/outro, style transfer)
+            if await AtlasCloudService.shared.isAvailable {
+                await generateAIProduction(for: clips)
+            }
+
+            // Voice cloning & stem separation (ElevenLabs)
+            if await ElevenLabsService.shared.isAvailable {
+                await generateAdvancedAudio(for: clips)
+            }
+
             let durationMs = Int(Date.now.timeIntervalSince(startTime) * 1000)
             let avgConf = result.segments.isEmpty ? 0 :
                 result.segments.map(\.confidenceScore).reduce(0, +) / Double(result.segments.count)
@@ -148,6 +164,182 @@ struct ProcessingView: View {
         } catch {
             errorMessage = error.localizedDescription
             hasError = true
+        }
+    }
+
+    /// Generate AI music, voiceover, and SFX for clips when enabled.
+    /// Runs after detection completes, before navigating to results.
+    private func generateAIAudio(for clips: [EditedClip]) async {
+        // AI Music — generate one track for the whole tape
+        if appState.aiMusicEnabled {
+            let totalDuration = clips.reduce(0.0) { $0 + $1.duration }
+            let musicPrompt = appState.userPrompt.isEmpty
+                ? "upbeat energetic highlight reel background music"
+                : "background music for: \(appState.userPrompt)"
+            let result = await ElevenLabsService.shared.generateMusic(
+                prompt: musicPrompt,
+                durationMs: Int(totalDuration * 1000)
+            )
+            if case .completed = result.status, let data = result.audioData {
+                await MainActor.run {
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].aiMusicData = data
+                    }
+                }
+            }
+        }
+
+        // AI Voiceover — generate per-clip narration
+        if appState.voiceoverEnabled {
+            let segments = clips.enumerated().map { (i, clip) in
+                (text: clip.captionText.isEmpty ? clip.segment.label : clip.captionText, clipIndex: i)
+            }
+            let results = await ElevenLabsService.shared.generateVoiceovers(segments: segments)
+            await MainActor.run {
+                for (clipIndex, result) in results {
+                    if case .completed = result.status, let data = result.audioData,
+                       clipIndex < appState.generatedClips.count {
+                        appState.generatedClips[clipIndex].voiceoverData = data
+                    }
+                }
+            }
+        }
+
+        // AI SFX — generate transition sound for each clip
+        if appState.sfxEnabled {
+            let requests = clips.map { _ in (prompt: "cinematic whoosh transition", durationMs: 1500) }
+            let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
+            await MainActor.run {
+                for (i, result) in results.enumerated() where i < appState.generatedClips.count {
+                    if case .completed = result.status, let data = result.audioData {
+                        appState.generatedClips[i].sfxData = data
+                    }
+                }
+            }
+        }
+    }
+
+    /// Generate AI production assets: intro/outro cards and style transfer.
+    /// Uses AtlasCloudService (Kling i2v, Wan 2.6 T2V, Wan v2v).
+    private func generateAIProduction(for clips: [EditedClip]) async {
+        // Intro card — generate a text-to-video intro
+        if appState.introCardEnabled {
+            let prompt = appState.userPrompt.isEmpty
+                ? "cinematic highlight reel intro with glowing text"
+                : "intro card for: \(appState.userPrompt)"
+            do {
+                let introURL = try await AtlasCloudService.shared.generateTextToVideo(
+                    prompt: prompt,
+                    duration: 3
+                )
+                await MainActor.run {
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].introVideoURL = introURL
+                    }
+                }
+            } catch {
+                // Non-fatal — continue without intro
+            }
+        }
+
+        // Outro card — generate a text-to-video outro
+        if appState.outroCardEnabled {
+            let prompt = appState.userPrompt.isEmpty
+                ? "cinematic outro card with subscribe and follow call to action"
+                : "outro card for: \(appState.userPrompt)"
+            do {
+                let outroURL = try await AtlasCloudService.shared.generateTextToVideo(
+                    prompt: prompt,
+                    duration: 3
+                )
+                await MainActor.run {
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].outroVideoURL = outroURL
+                    }
+                }
+            } catch {
+                // Non-fatal — continue without outro
+            }
+        }
+
+        // Style transfer — apply visual style to each clip
+        if !appState.styleTransferPrompt.isEmpty, let video = appState.selectedVideo {
+            do {
+                let styledURL = try await AtlasCloudService.shared.applyStyleTransfer(
+                    videoURL: video.sourceURL,
+                    stylePrompt: appState.styleTransferPrompt
+                )
+                await MainActor.run {
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].styleTransferURL = styledURL
+                    }
+                }
+            } catch {
+                // Non-fatal — continue without style transfer
+            }
+        }
+    }
+
+    /// Generate advanced audio features: voice cloning and stem separation.
+    private func generateAdvancedAudio(for clips: [EditedClip]) async {
+        // Voice cloning — create a clone from the video's audio, then use it for voiceover
+        if appState.voiceCloneEnabled, let video = appState.selectedVideo {
+            await MainActor.run { appState.voiceCloneStatus = .generating }
+            do {
+                // Extract audio data from the video for voice cloning
+                let audioData = try Data(contentsOf: video.sourceURL)
+                let cloneResult = await ElevenLabsService.shared.createVoiceClone(
+                    audioData: audioData,
+                    name: "User Voice",
+                    fileName: video.sourceURL.lastPathComponent
+                )
+                guard case .completed = cloneResult.status, let voiceId = cloneResult.voiceId else {
+                    await MainActor.run { appState.voiceCloneStatus = .failed }
+                    return
+                }
+                await MainActor.run {
+                    appState.clonedVoiceId = voiceId
+                    appState.voiceCloneStatus = .done
+                }
+
+                // If voiceover is also enabled, regenerate using the cloned voice
+                if appState.voiceoverEnabled {
+                    for (i, clip) in clips.enumerated() {
+                        let text = clip.captionText.isEmpty ? clip.segment.label : clip.captionText
+                        let result = await ElevenLabsService.shared.generateWithClonedVoice(
+                            text: text,
+                            voiceId: voiceId
+                        )
+                        if case .completed = result.status, let data = result.audioData {
+                            await MainActor.run {
+                                if i < appState.generatedClips.count {
+                                    appState.generatedClips[i].voiceoverData = data
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                await MainActor.run { appState.voiceCloneStatus = .failed }
+            }
+        }
+
+        // Stem separation — isolate instrumental track from AI-generated music
+        if appState.stemSeparationEnabled, let musicData = clips.first?.aiMusicData {
+            await MainActor.run { appState.stemSeparationStatus = .generating }
+            let stemResult = await ElevenLabsService.shared.separateStems(audioData: musicData)
+            if case .completed = stemResult.status, let instrumental = stemResult.instrumentalData {
+                await MainActor.run {
+                    appState.instrumentalMusicData = instrumental
+                    appState.stemSeparationStatus = .done
+                    // Replace AI music with instrumental-only version
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].aiMusicData = instrumental
+                    }
+                }
+            } else {
+                await MainActor.run { appState.stemSeparationStatus = .failed }
+            }
         }
     }
 }
