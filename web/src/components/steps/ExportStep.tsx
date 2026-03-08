@@ -298,7 +298,8 @@ export default function ExportStep() {
         }
         const c = document.createElement("canvas");
         c.width = 1080; c.height = 1920;
-        const ctx = c.getContext("2d")!;
+        const ctx = c.getContext("2d");
+        if (!ctx) { console.error("[Thumbnail] Failed to create canvas context"); setThumbnailPhase("failed"); return; }
         ctx.drawImage(video, 0, 0, c.width, c.height);
         // Clean up the video element to release memory
         video.src = "";
@@ -886,7 +887,8 @@ async function renderHighlightTape(
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to create canvas 2D context — browser may have exhausted GPU resources");
 
   const style = getEditingStyle(theme);
   const fallbackTransition: TransitionType = "hard_cut";

@@ -181,6 +181,12 @@ export function getEffectiveDuration(
   }
   const avgSpeed = totalSpeed / steps;
 
+  // Guard against zero/near-zero average speed (e.g. all keyframes at speed 0)
+  if (avgSpeed < 0.01) {
+    console.warn("[Velocity] Average speed near zero — returning source duration to avoid Infinity");
+    return sourceDuration;
+  }
+
   return sourceDuration / avgSpeed;
 }
 

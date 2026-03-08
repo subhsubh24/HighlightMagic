@@ -141,6 +141,10 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "REORDER_MEDIA": {
       const arr = [...state.mediaFiles];
+      if (action.fromIndex < 0 || action.fromIndex >= arr.length || action.toIndex < 0 || action.toIndex >= arr.length) {
+        console.warn(`[Store] REORDER_MEDIA out of bounds: from=${action.fromIndex} to=${action.toIndex} length=${arr.length}`);
+        return state;
+      }
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
       return { ...state, mediaFiles: arr, ...deriveLegacyVideo(arr) };
@@ -176,6 +180,10 @@ export function reducer(state: AppState, action: Action): AppState {
     case "REORDER_CLIPS": {
       // Sort by order first so indices match the visual (sorted) order
       const arr = [...state.clips].sort((a, b) => a.order - b.order);
+      if (action.fromIndex < 0 || action.fromIndex >= arr.length || action.toIndex < 0 || action.toIndex >= arr.length) {
+        console.warn(`[Store] REORDER_CLIPS out of bounds: from=${action.fromIndex} to=${action.toIndex} length=${arr.length}`);
+        return state;
+      }
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
       // Update order field
