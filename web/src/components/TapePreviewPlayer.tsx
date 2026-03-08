@@ -858,6 +858,7 @@ export default function TapePreviewPlayer() {
         {playerState === "playing" ? (
           <button
             onClick={pause}
+            aria-label="Pause tape preview"
             className="flex items-center gap-1.5 rounded-lg bg-white/5 px-4 py-2 text-xs text-white hover:bg-white/10"
           >
             <Pause className="h-3.5 w-3.5" />
@@ -866,6 +867,7 @@ export default function TapePreviewPlayer() {
         ) : (
           <button
             onClick={play}
+            aria-label="Play tape preview"
             className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-medium text-white hover:opacity-90"
           >
             <Play className="ml-0.5 h-3.5 w-3.5" />
@@ -875,6 +877,7 @@ export default function TapePreviewPlayer() {
         {progress > 0 && playerState !== "playing" && (
           <button
             onClick={restart}
+            aria-label="Restart tape preview"
             className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-xs text-[var(--text-tertiary)] hover:bg-white/10 hover:text-white"
           >
             <RotateCcw className="h-3.5 w-3.5" />

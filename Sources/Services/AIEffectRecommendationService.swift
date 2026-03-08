@@ -357,7 +357,12 @@ actor AIEffectRecommendationService {
             let roleTag = s.narrativeRole.map { " [\($0)]" } ?? ""
             let audio = audioLookup[Int(s.timestamp)]
             let audioTag = audio.map { "  audio:\(String(format: "%.2f", $0.audioEnergy))" } ?? ""
-            let onsetTag = (audio?.audioOnset ?? 0) > 0.1 ? "  onset:\(String(format: "%.2f", audio!.audioOnset))" : ""
+            let onsetTag: String
+            if let a = audio, a.audioOnset > 0.1 {
+                onsetTag = "  onset:\(String(format: "%.2f", a.audioOnset))"
+            } else {
+                onsetTag = ""
+            }
             let specTag: String
             if let a = audio, a.audioEnergy > 0.1 {
                 specTag = "  spectrum:B\(String(format: "%.2f", a.audioBass))/M\(String(format: "%.2f", a.audioMid))/T\(String(format: "%.2f", a.audioTreble))"
@@ -407,7 +412,12 @@ actor AIEffectRecommendationService {
 
             let audio = audioLookup[Int(frame.timestamp)]
             let audioVal = audio.map { " | AUDIO: \(String(format: "%.2f", $0.audioEnergy))" } ?? ""
-            let onsetVal = (audio?.audioOnset ?? 0) > 0.1 ? " | ONSET: \(String(format: "%.2f", audio!.audioOnset))" : ""
+            let onsetVal: String
+            if let a = audio, a.audioOnset > 0.1 {
+                onsetVal = " | ONSET: \(String(format: "%.2f", a.audioOnset))"
+            } else {
+                onsetVal = ""
+            }
             let specVal: String
             if let a = audio, a.audioEnergy > 0.1 {
                 specVal = " | SPECTRUM: B\(String(format: "%.2f", a.audioBass))/M\(String(format: "%.2f", a.audioMid))/T\(String(format: "%.2f", a.audioTreble))"

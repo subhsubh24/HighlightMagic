@@ -19,6 +19,9 @@ actor HighlightDetectionService {
         /// Per-clip AI creative configs from the Opus planner (1:1 with segments).
         /// When present, downstream clip generation skips re-planning.
         var perClipConfigs: [CustomEffectConfig]?
+        /// Audio transcript from ElevenLabs Scribe (when available).
+        /// Provides word-level timing for caption generation and content understanding.
+        var transcript: ElevenLabsService.ScribeResult?
     }
 
     // MARK: - Main Detection Pipeline
@@ -75,11 +78,21 @@ actor HighlightDetectionService {
     ) async throws -> DetectionResult {
         logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
 
-        // Phase 1: Extract audio features (0-5%)
+        // Phase 1: Extract audio features + transcription in parallel (0-5%)
         progressHandler(0.01)
         let audioFeatures: [AudioFeatureService.AudioFeatures]
+        var transcript: ElevenLabsService.ScribeResult?
         do {
-            audioFeatures = try await AudioFeatureService.shared.extractFeatures(from: asset)
+            // Run audio feature extraction and transcription concurrently
+            async let featuresTask = AudioFeatureService.shared.extractFeatures(from: asset)
+            async let transcriptTask: ElevenLabsService.ScribeResult? = {
+                if await ElevenLabsService.shared.isAvailable {
+                    return await ElevenLabsService.shared.transcribeVideoAudio(asset: asset)
+                }
+                return nil
+            }()
+            audioFeatures = try await featuresTask
+            transcript = await transcriptTask
         } catch {
             logger.warning("Audio feature extraction failed: \(error.localizedDescription), continuing without audio")
             audioFeatures = []
@@ -141,7 +154,8 @@ actor HighlightDetectionService {
         return DetectionResult(
             segments: finalSegments,
             overallConfidence: avgConfidence,
-            perClipConfigs: finalConfigs
+            perClipConfigs: finalConfigs,
+            transcript: transcript
         )
     }
 

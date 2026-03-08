@@ -158,6 +158,8 @@ export default function EditorStep() {
       {/* Clip list — collapsible */}
       <button
         onClick={() => { setShowClips(!showClips); haptic(5); }}
+        aria-expanded={showClips}
+        aria-label={`${showClips ? "Hide" : "Show"} clip list`}
         className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-2.5 transition-colors hover:bg-white/10"
       >
         <span className="text-sm text-[var(--text-secondary)]">
@@ -212,6 +214,7 @@ export default function EditorStep() {
         <div className="flex gap-2">
           <button
             onClick={handleRegenerate}
+            aria-label="Regenerate highlight tape"
             className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-white/10 active:scale-[0.98]"
           >
             <RefreshCw className="h-4 w-4" />
@@ -219,6 +222,7 @@ export default function EditorStep() {
           </button>
           <button
             onClick={handleExport}
+            aria-label="Export highlight tape"
             className="btn-primary group flex flex-[2] items-center justify-center gap-2 !py-3"
           >
             <Download className="h-4 w-4" />

@@ -2,9 +2,12 @@ import Foundation
 import AVFoundation
 import CoreImage
 import UIKit
+import os.log
 
 actor ClipGenerationService {
     static let shared = ClipGenerationService()
+
+    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
 
     private init() {}
 
@@ -402,11 +405,15 @@ actor ExportService {
                preferredTrackID: kCMPersistentTrackID_Invalid
            ) {
             if velocityMap != nil {
-                try? compositionAudioTrack.insertTimeRange(
-                    timeRange,
-                    of: sourceAudioTrack,
-                    at: .zero
-                )
+                do {
+                    try compositionAudioTrack.insertTimeRange(
+                        timeRange,
+                        of: sourceAudioTrack,
+                        at: .zero
+                    )
+                } catch {
+                    logger.warning("Audio track insertion failed (velocity path): \(error.localizedDescription)")
+                }
                 if let velMap = velocityMap {
                     let outputDuration = CMTime(seconds: velMap.outputDuration, preferredTimescale: 600)
                     let inputDuration = CMTimeSubtract(config.trimEnd, config.trimStart)
@@ -446,11 +453,15 @@ actor ExportService {
                     duration: min(effectiveClipDuration, musicDuration)
                 )
 
-                try? musicCompositionTrack.insertTimeRange(
-                    musicRange,
-                    of: musicAudioTrack,
-                    at: .zero
-                )
+                do {
+                    try musicCompositionTrack.insertTimeRange(
+                        musicRange,
+                        of: musicAudioTrack,
+                        at: .zero
+                    )
+                } catch {
+                    logger.warning("Music track insertion failed: \(error.localizedDescription)")
+                }
             }
         }
         progressHandler(0.35)
