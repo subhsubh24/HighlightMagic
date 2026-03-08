@@ -134,6 +134,11 @@ struct ProcessingView: View {
             )
             appState.generatedClips = clips
 
+            // AI audio generation (feature parity with web platform)
+            if await ElevenLabsService.shared.isAvailable {
+                await generateAIAudio(for: clips)
+            }
+
             let durationMs = Int(Date.now.timeIntervalSince(startTime) * 1000)
             let avgConf = result.segments.isEmpty ? 0 :
                 result.segments.map(\.confidenceScore).reduce(0, +) / Double(result.segments.count)
@@ -148,6 +153,58 @@ struct ProcessingView: View {
         } catch {
             errorMessage = error.localizedDescription
             hasError = true
+        }
+    }
+
+    /// Generate AI music, voiceover, and SFX for clips when enabled.
+    /// Runs after detection completes, before navigating to results.
+    private func generateAIAudio(for clips: [EditedClip]) async {
+        // AI Music — generate one track for the whole tape
+        if appState.aiMusicEnabled {
+            let totalDuration = clips.reduce(0.0) { $0 + $1.duration }
+            let musicPrompt = appState.userPrompt.isEmpty
+                ? "upbeat energetic highlight reel background music"
+                : "background music for: \(appState.userPrompt)"
+            let result = await ElevenLabsService.shared.generateMusic(
+                prompt: musicPrompt,
+                durationMs: Int(totalDuration * 1000)
+            )
+            if case .completed = result.status, let data = result.audioData {
+                await MainActor.run {
+                    for i in appState.generatedClips.indices {
+                        appState.generatedClips[i].aiMusicData = data
+                    }
+                }
+            }
+        }
+
+        // AI Voiceover — generate per-clip narration
+        if appState.voiceoverEnabled {
+            let segments = clips.enumerated().map { (i, clip) in
+                (text: clip.captionText.isEmpty ? clip.segment.label : clip.captionText, clipIndex: i)
+            }
+            let results = await ElevenLabsService.shared.generateVoiceovers(segments: segments)
+            await MainActor.run {
+                for (clipIndex, result) in results {
+                    if case .completed = result.status, let data = result.audioData,
+                       clipIndex < appState.generatedClips.count {
+                        appState.generatedClips[clipIndex].voiceoverData = data
+                    }
+                }
+            }
+        }
+
+        // AI SFX — generate transition sound for each clip
+        if appState.sfxEnabled {
+            let requests = clips.map { _ in (prompt: "cinematic whoosh transition", durationMs: 1500) }
+            let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
+            await MainActor.run {
+                for (i, result) in results.enumerated() where i < appState.generatedClips.count {
+                    if case .completed = result.status, let data = result.audioData {
+                        appState.generatedClips[i].sfxData = data
+                    }
+                }
+            }
         }
     }
 }

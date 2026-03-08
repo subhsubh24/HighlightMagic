@@ -26,6 +26,11 @@ final class AppState {
 
     var isProUser: Bool = false
 
+    // AI feature toggles (feature parity with web platform)
+    var aiMusicEnabled: Bool = false
+    var voiceoverEnabled: Bool = false
+    var sfxEnabled: Bool = false
+
     var canExportFree: Bool {
         exportsUsedThisMonth < Constants.freeExportLimit
     }

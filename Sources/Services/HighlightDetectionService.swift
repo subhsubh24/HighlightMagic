@@ -126,7 +126,8 @@ actor HighlightDetectionService {
             scoredFrames: scoredFrames,
             audioFeatures: audioFeatures,
             userPrompt: prompt,
-            creativeDirection: creativeDirection
+            creativeDirection: creativeDirection,
+            transcript: transcript?.text
         ) { phase in
             progressHandler(phase)
         }

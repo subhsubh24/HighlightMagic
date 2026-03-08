@@ -278,6 +278,11 @@ actor ExportService {
         let premiumEffects: [PremiumEffect]
         let aiEffectConfig: CustomEffectConfig?
 
+        // AI-generated audio (feature parity with web ElevenLabs pipeline)
+        let aiMusicData: Data?
+        let voiceoverData: Data?
+        let sfxData: Data?
+
         init(
             sourceURL: URL,
             trimStart: CMTime,
@@ -291,7 +296,10 @@ actor ExportService {
             viralConfig: ViralEditConfig = .off,
             cinematicGrade: CinematicGrade = .none,
             premiumEffects: [PremiumEffect] = [],
-            aiEffectConfig: CustomEffectConfig? = nil
+            aiEffectConfig: CustomEffectConfig? = nil,
+            aiMusicData: Data? = nil,
+            voiceoverData: Data? = nil,
+            sfxData: Data? = nil
         ) {
             self.sourceURL = sourceURL
             self.trimStart = trimStart
@@ -306,6 +314,9 @@ actor ExportService {
             self.cinematicGrade = cinematicGrade
             self.premiumEffects = premiumEffects
             self.aiEffectConfig = aiEffectConfig
+            self.aiMusicData = aiMusicData
+            self.voiceoverData = voiceoverData
+            self.sfxData = sfxData
         }
 
         static var defaultSize: CGSize {
@@ -440,7 +451,10 @@ actor ExportService {
             effectiveClipDuration = CMTimeSubtract(config.trimEnd, config.trimStart)
         }
 
-        if let musicTrack = config.musicTrack, let musicURL = musicTrack.bundleURL {
+        // 5a. Try AI-generated music first, then fall back to bundled track
+        if let aiMusic = config.aiMusicData {
+            try await insertAudioData(aiMusic, into: composition, duration: effectiveClipDuration, label: "AI music")
+        } else if let musicTrack = config.musicTrack, let musicURL = musicTrack.bundleURL {
             let musicAsset = AVURLAsset(url: musicURL)
             if let musicAudioTrack = try? await musicAsset.loadTracks(withMediaType: .audio).first,
                let musicCompositionTrack = composition.addMutableTrack(
@@ -463,6 +477,16 @@ actor ExportService {
                     logger.warning("Music track insertion failed: \(error.localizedDescription)")
                 }
             }
+        }
+
+        // 5b. Add AI voiceover track
+        if let voiceover = config.voiceoverData {
+            try await insertAudioData(voiceover, into: composition, duration: effectiveClipDuration, label: "voiceover")
+        }
+
+        // 5c. Add AI sound effects track
+        if let sfx = config.sfxData {
+            try await insertAudioData(sfx, into: composition, duration: effectiveClipDuration, label: "SFX")
         }
         progressHandler(0.35)
 
@@ -551,6 +575,41 @@ actor ExportService {
 
         progressHandler(1.0)
         return outputURL
+    }
+
+    // MARK: - AI Audio Insertion
+
+    /// Write AI-generated audio data (MP3) to a temp file, then insert into composition.
+    private func insertAudioData(
+        _ data: Data,
+        into composition: AVMutableComposition,
+        duration: CMTime,
+        label: String
+    ) async throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ai_\(label)_\(UUID().uuidString).mp3")
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let audioAsset = AVURLAsset(url: tempURL)
+        guard let audioTrack = try? await audioAsset.loadTracks(withMediaType: .audio).first,
+              let compositionTrack = composition.addMutableTrack(
+                  withMediaType: .audio,
+                  preferredTrackID: kCMPersistentTrackID_Invalid
+              ) else {
+            logger.warning("\(label) audio track not found in generated data")
+            return
+        }
+
+        let audioDuration = try await audioAsset.load(.duration)
+        let insertRange = CMTimeRange(start: .zero, duration: min(duration, audioDuration))
+
+        do {
+            try compositionTrack.insertTimeRange(insertRange, of: audioTrack, at: .zero)
+            logger.info("Inserted \(label) audio (\(data.count) bytes)")
+        } catch {
+            logger.warning("\(label) audio insertion failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Pass 1: CIFilter Rendering

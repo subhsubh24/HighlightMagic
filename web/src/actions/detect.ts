@@ -3,6 +3,14 @@
 import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 import type { SourceFileInfo } from "@/lib/frame-batching";
 
+// ── Debug logging ──
+
+const DEBUG = process.env.NODE_ENV === "development" || process.env.DEBUG_DETECT === "1";
+/** Debug-only logger — gated behind NODE_ENV or DEBUG_DETECT flag to avoid production noise. */
+function debugLog(...args: unknown[]) {
+  if (DEBUG) debugLog(...args);
+}
+
 // ── API helpers ──
 
 /** Max concurrent API calls — retry logic handles any 429s from the API */
@@ -128,7 +136,7 @@ function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnP
     if (m) {
       emitted.add("musicPrompt");
       onPartial("musicPrompt", m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
-      console.log(`[Planner SSE] Early extract: musicPrompt`);
+      debugLog(`[Planner SSE] Early extract: musicPrompt`);
     }
   }
 
@@ -138,7 +146,7 @@ function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnP
     if (m) {
       emitted.add("musicDurationMs");
       onPartial("musicDurationMs", parseInt(m[1], 10));
-      console.log(`[Planner SSE] Early extract: musicDurationMs`);
+      debugLog(`[Planner SSE] Early extract: musicDurationMs`);
     }
   }
 
@@ -167,7 +175,7 @@ function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnP
               const arr = JSON.parse(text.slice(bracketStart, i + 1));
               emitted.add("sfx");
               onPartial("sfx", arr);
-              console.log(`[Planner SSE] Early extract: sfx (${arr.length} items)`);
+              debugLog(`[Planner SSE] Early extract: sfx (${arr.length} items)`);
             } catch { /* incomplete JSON — wait */ }
             break;
           }
@@ -223,10 +231,10 @@ async function consumeSSEStream(
         const event = JSON.parse(dataStr);
         if (event.type === "content_block_start") {
           if (event.content_block?.type === "thinking") {
-            console.log(`[Planner SSE] Thinking phase started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
+            debugLog(`[Planner SSE] Thinking phase started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("thinking");
           } else if (event.content_block?.type === "text") {
-            console.log(`[Planner SSE] Text generation started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
+            debugLog(`[Planner SSE] Text generation started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("generating");
           }
         } else if (event.type === "content_block_delta") {
@@ -240,7 +248,7 @@ async function consumeSSEStream(
           chunkCount++;
           // Log every 15s so we know the stream is alive
           if (Date.now() - lastLogMs > 15_000) {
-            console.log(`[Planner SSE] Still streaming... chunks=${chunkCount}, textLen=${text.length}, +${((Date.now() - streamStartMs) / 1000).toFixed(0)}s`);
+            debugLog(`[Planner SSE] Still streaming... chunks=${chunkCount}, textLen=${text.length}, +${((Date.now() - streamStartMs) / 1000).toFixed(0)}s`);
             lastLogMs = Date.now();
           }
         } else if (event.type === "message_delta") {
@@ -254,7 +262,7 @@ async function consumeSSEStream(
     }
   }
 
-  console.log(`[Planner SSE] Stream complete — ${chunkCount} chunks, ${text.length} chars, stop_reason=${stopReason}, ${((Date.now() - streamStartMs) / 1000).toFixed(1)}s total`);
+  debugLog(`[Planner SSE] Stream complete — ${chunkCount} chunks, ${text.length} chars, stop_reason=${stopReason}, ${((Date.now() - streamStartMs) / 1000).toFixed(1)}s total`);
   return { text, stopReason };
 }
 
@@ -1095,7 +1103,7 @@ function selectPlannerFrames(
       const kept = selected.filter((_, i) => !shedSet.has(i));
       selected.length = 0;
       selected.push(...kept);
-      console.log(`Planner: shed ${before - selected.length} frames to enforce ${(SOURCE_CAP_RATIO * 100).toFixed(0)}% per-source cap`);
+      debugLog(`Planner: shed ${before - selected.length} frames to enforce ${(SOURCE_CAP_RATIO * 100).toFixed(0)}% per-source cap`);
     }
   }
 
@@ -1105,7 +1113,7 @@ function selectPlannerFrames(
     return a.timestamp - b.timestamp;
   });
 
-  console.log(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
+  debugLog(`Planner: sending ${selected.length}/${frames.length} frames (~${(totalBytes / 1024 / 1024).toFixed(1)} MB)`);
   return selected;
 }
 
@@ -1636,7 +1644,7 @@ Respond with ONLY a JSON object:
     }\n\nNow create the highlight tape.`,
   });
 
-  console.log(`[Planner] Sending request — ${userContent.length} content blocks, model=claude-opus-4-6, effort=medium`);
+  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=claude-opus-4-6, effort=medium`);
   const plannerStartMs = Date.now();
 
   const response = await fetchWithRetry(
@@ -1671,7 +1679,7 @@ Respond with ONLY a JSON object:
     "Planner"
   );
 
-  console.log(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
+  debugLog(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
@@ -1998,7 +2006,7 @@ Respond with ONLY a JSON object:
           : null,
       };
 
-      console.log(`[Planner] Production plan: intro=${!!productionPlan.intro}, outro=${!!productionPlan.outro}, sfx=${productionPlan.sfx.length}, voiceover=${productionPlan.voiceover.enabled ? productionPlan.voiceover.segments.length + " segments" : "disabled"}, music=${productionPlan.musicPrompt.length > 0 ? "yes" : "no"}, thumbnail=${!!productionPlan.thumbnail}`);
+      debugLog(`[Planner] Production plan: intro=${!!productionPlan.intro}, outro=${!!productionPlan.outro}, sfx=${productionPlan.sfx.length}, voiceover=${productionPlan.voiceover.enabled ? productionPlan.voiceover.segments.length + " segments" : "disabled"}, music=${productionPlan.musicPrompt.length > 0 ? "yes" : "no"}, thumbnail=${!!productionPlan.thumbnail}`);
 
       return { clips: spacedClips, detectedTheme: theme, contentSummary, productionPlan };
   }

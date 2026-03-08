@@ -87,6 +87,7 @@ struct EditorView: View {
                         trimSection(clipBinding)
                         captionSection(clipBinding)
                         musicSection(clip)
+                        aiAudioSection
                         viralEditSection(clipBinding)
                         filterSection(clipBinding)
                         premiumEffectsButton
@@ -256,6 +257,85 @@ struct EditorView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Constants.Layout.smallCornerRadius))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// AI Audio controls — toggles for AI music, voiceover, and SFX generation.
+    /// Matches web platform's AI audio features.
+    @ViewBuilder
+    private var aiAudioSection: some View {
+        EditorSection(title: "AI Audio", icon: "waveform.and.mic") {
+            VStack(spacing: 14) {
+                // AI Music toggle
+                HStack {
+                    Image(systemName: "music.note.list")
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("AI Music")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                        Text("Generate custom background music")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { appState.aiMusicEnabled },
+                        set: { appState.aiMusicEnabled = $0 }
+                    ))
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // AI Voiceover toggle
+                HStack {
+                    Image(systemName: "mic.fill")
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("AI Voiceover")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                        Text("Auto-narrate each clip")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { appState.voiceoverEnabled },
+                        set: { appState.voiceoverEnabled = $0 }
+                    ))
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
+
+                Divider().overlay(Theme.surfaceLight)
+
+                // AI SFX toggle
+                HStack {
+                    Image(systemName: "speaker.wave.3.fill")
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sound Effects")
+                            .font(Theme.body)
+                            .foregroundStyle(.white)
+                        Text("Add transition whooshes & impacts")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { appState.sfxEnabled },
+                        set: { appState.sfxEnabled = $0 }
+                    ))
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
+            }
         }
     }
 

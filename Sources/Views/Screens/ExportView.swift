@@ -267,7 +267,10 @@ struct ExportView: View {
             viralConfig: clip.viralConfig,
             cinematicGrade: clip.cinematicGrade,
             premiumEffects: clip.selectedPremiumEffects,
-            aiEffectConfig: clip.aiEffectConfig
+            aiEffectConfig: clip.aiEffectConfig,
+            aiMusicData: clip.aiMusicData,
+            voiceoverData: clip.voiceoverData,
+            sfxData: clip.sfxData
         )
 
         Analytics.exportStarted(
