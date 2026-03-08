@@ -51,12 +51,33 @@ async function tryServerRender(
   // Skip entirely if we already know server rendering is unavailable
   if (serverRenderAvailable === false) return null;
   try {
-    const renderClips = clips.map((clip) => {
+    const renderClips: Array<{
+      sourceUrl: string; startTime: number; endTime: number;
+      filter?: string; transitionType?: string; transitionDuration?: number;
+      captionText?: string; captionStyle?: string;
+    }> = [];
+
+    // Prepend intro card if available
+    const INTRO_DUR = 5;
+    const OUTRO_DUR = 5;
+    const hasIntro = state.introCard?.status === "completed" && state.introCard.videoUrl;
+    const hasOutro = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
+    const introOffset = hasIntro ? INTRO_DUR : 0;
+
+    if (hasIntro) {
+      renderClips.push({
+        sourceUrl: state.introCard!.videoUrl!,
+        startTime: 0,
+        endTime: INTRO_DUR,
+      });
+    }
+
+    for (const clip of clips) {
       const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
       const hasAnimatedVideo = media?.type === "photo" &&
         media.animationStatus === "completed" &&
         media.animatedVideoUrl;
-      return {
+      renderClips.push({
         sourceUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
         startTime: clip.trimStart,
         endTime: clip.trimEnd,
@@ -65,8 +86,16 @@ async function tryServerRender(
         transitionDuration: clip.transitionDuration,
         captionText: clip.captionText || undefined,
         captionStyle: clip.captionStyle || undefined,
-      };
-    });
+      });
+    }
+
+    if (hasOutro) {
+      renderClips.push({
+        sourceUrl: state.outroCard!.videoUrl!,
+        startTime: 0,
+        endTime: OUTRO_DUR,
+      });
+    }
 
     const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
     if (state.aiMusicUrl) {
@@ -74,9 +103,10 @@ async function tryServerRender(
     }
 
     // Compute per-clip timeline offsets for voiceover / SFX placement
+    // Offset by intro card duration since clipIndex refers to user clips only
     const clipStarts: number[] = [];
     const clipEnds: number[] = [];
-    let t = 0;
+    let t = introOffset;
     for (let i = 0; i < clips.length; i++) {
       const dur = clips[i].trimEnd - clips[i].trimStart;
       clipStarts.push(t);
@@ -328,31 +358,90 @@ export default function ExportStep() {
         return;
       }
       // Server rendering not available — fall back to client-side
-      const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
+      const renderClips: RenderClipInstruction[] = [];
+
+      // Prepend intro card if available
+      const INTRO_DURATION = 5;
+      const OUTRO_DURATION = 5;
+      const hasIntro = state.introCard?.status === "completed" && state.introCard.videoUrl;
+      const hasOutro = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
+      const introOffset = hasIntro ? INTRO_DURATION : 0;
+
+      if (hasIntro) {
+        const introClip: EditedClip = {
+          id: "__intro__",
+          sourceFileId: "__intro__",
+          segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: INTRO_DURATION, confidenceScore: 1, label: "Intro", detectionSources: [] },
+          trimStart: 0,
+          trimEnd: INTRO_DURATION,
+          order: -1,
+          selectedMusicTrack: null,
+          captionText: "",
+          captionStyle: "Bold",
+          selectedFilter: "None",
+          velocityPreset: "normal",
+        };
+        renderClips.push({
+          clip: introClip,
+          mediaUrl: state.introCard!.videoUrl!,
+          mediaType: "video",
+          filterCSS: "",
+          captionText: "",
+          captionStyle: "Bold",
+        });
+      }
+
+      for (const clip of sortedClips) {
         const media = getMediaFile(state, clip.sourceFileId);
         // Use animated video if available (photo → video via Kling 3.0)
         const hasAnimatedVideo = media?.type === "photo" &&
           media.animationStatus === "completed" &&
           media.animatedVideoUrl;
-        return {
+        renderClips.push({
           clip,
           mediaUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
           mediaType: hasAnimatedVideo ? "video" as const : (media?.type ?? "video"),
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
+        });
+      }
+
+      // Append outro card if available
+      if (hasOutro) {
+        const outroClip: EditedClip = {
+          id: "__outro__",
+          sourceFileId: "__outro__",
+          segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: OUTRO_DURATION, confidenceScore: 1, label: "Outro", detectionSources: [] },
+          trimStart: 0,
+          trimEnd: OUTRO_DURATION,
+          order: 9999,
+          selectedMusicTrack: null,
+          captionText: "",
+          captionStyle: "Bold",
+          selectedFilter: "None",
+          velocityPreset: "normal",
         };
-      });
+        renderClips.push({
+          clip: outroClip,
+          mediaUrl: state.outroCard!.videoUrl!,
+          mediaType: "video",
+          filterCSS: "",
+          captionText: "",
+          captionStyle: "Bold",
+        });
+      }
 
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
       // Build scheduled audio layers for voiceover + SFX
+      // Audio timing must account for intro card offset since clipIndex refers to user clips
       const scheduled: ScheduledAudioLayer[] = [];
       {
         const cStarts: number[] = [];
         const cEnds: number[] = [];
-        let st = 0;
+        let st = introOffset; // Start after intro card duration
         for (let i = 0; i < sortedClips.length; i++) {
           const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
           cStarts.push(st);

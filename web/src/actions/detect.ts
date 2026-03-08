@@ -1558,9 +1558,13 @@ Only add elements that genuinely elevate the content. Less is often more.
 INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
 The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
-IMPORTANT: The video is rendered in 9:16 PORTRAIT format. If the stylePrompt mentions text or titles,
-explicitly specify "small centered text" or "compact title text" — never large/fullscreen text that overflows the narrow portrait frame.
-Keep title text to 3-4 words max so it fits the vertical frame.
+IMPORTANT: The video is rendered in 9:16 PORTRAIT format (1080x1920, very tall and narrow).
+Text MUST fit within the narrow frame. In the stylePrompt:
+- ALWAYS include "small centered text, compact, fits within narrow portrait frame"
+- NEVER use "large text", "bold title", "big letters", or "fullscreen text"
+- Keep the "text" field to 2-4 words MAX (e.g. "Game Day", "Our Wedding", "Summer 2025")
+- If the title is longer, abbreviate it — the text must be SHORT to fit the vertical frame
+- Prefer abstract motion backgrounds (particles, gradients, light leaks) with minimal text overlay
 DEFAULT TO null (no intro) in most cases. Intros are only justified for:
   - Long tapes (8+ clips) that benefit from a title card to set the mood
   - Event/occasion content (weddings, graduations, game days) where a title adds context
@@ -1573,7 +1577,7 @@ SKIP intro (set null) for:
 
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
-Same 9:16 portrait text rules as intro — keep text small and compact.
+Same 9:16 portrait text rules as intro — 2-4 words max, "small centered text" in stylePrompt, fits narrow vertical frame.
 DEFAULT TO null. Only add an outro if the tape is long (8+ clips) AND has a clear closing message.
 Most tapes should NOT have an outro.
 
