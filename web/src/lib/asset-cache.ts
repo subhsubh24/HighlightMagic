@@ -77,27 +77,38 @@ export function setCachedAsset(key: string, data: string, meta?: Record<string, 
 
 function evictIfNeeded(): void {
   try {
-    const keys: { key: string; ts: number }[] = [];
+    // Collect all cache keys first — removing during iteration shifts indices
+    const allKeys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (!k?.startsWith(CACHE_PREFIX)) continue;
+      if (k?.startsWith(CACHE_PREFIX)) allKeys.push(k);
+    }
+
+    const valid: { key: string; ts: number }[] = [];
+    const expired: string[] = [];
+
+    for (const k of allKeys) {
       try {
         const entry: CacheEntry = JSON.parse(localStorage.getItem(k)!);
         if (Date.now() - entry.ts > TTL_MS) {
-          localStorage.removeItem(k);
-          continue;
+          expired.push(k);
+        } else {
+          valid.push({ key: k, ts: entry.ts });
         }
-        keys.push({ key: k, ts: entry.ts });
       } catch {
-        localStorage.removeItem(k!);
+        expired.push(k);
       }
     }
+
+    // Remove expired entries (safe — not iterating localStorage)
+    for (const k of expired) localStorage.removeItem(k);
+
     // If still over limit, remove oldest
-    if (keys.length >= MAX_ENTRIES) {
-      keys.sort((a, b) => a.ts - b.ts);
-      const toRemove = keys.length - MAX_ENTRIES + 1;
+    if (valid.length >= MAX_ENTRIES) {
+      valid.sort((a, b) => a.ts - b.ts);
+      const toRemove = valid.length - MAX_ENTRIES + 1;
       for (let i = 0; i < toRemove; i++) {
-        localStorage.removeItem(keys[i].key);
+        localStorage.removeItem(valid[i].key);
       }
     }
   } catch {

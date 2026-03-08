@@ -116,7 +116,12 @@ type OnPartialField = (field: string, value: unknown) => void;
  * streaming text. Used to start generators early (e.g., start music generation
  * as soon as musicPrompt is fully streamed, before the full plan finishes).
  */
+const PARTIAL_FIELD_COUNT = 3; // musicPrompt, musicDurationMs, sfx
+
 function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnPartialField): void {
+  // All trackable fields already emitted — nothing left to do
+  if (emitted.size >= PARTIAL_FIELD_COUNT) return;
+
   // musicPrompt — a simple string field
   if (!emitted.has("musicPrompt")) {
     const m = text.match(/"musicPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"/);
@@ -143,11 +148,19 @@ function extractPartialFields(text: string, emitted: Set<string>, onPartial: OnP
     if (sfxStart !== -1) {
       const bracketStart = text.indexOf('[', sfxStart);
       if (bracketStart !== -1) {
-        // Find matching close bracket
+        // Find matching close bracket — skip characters inside JSON strings
+        // to avoid being fooled by brackets in prompt text
         let depth = 0;
+        let inString = false;
+        let escaped = false;
         for (let i = bracketStart; i < text.length; i++) {
-          if (text[i] === '[') depth++;
-          else if (text[i] === ']') depth--;
+          const ch = text[i];
+          if (escaped) { escaped = false; continue; }
+          if (ch === '\\') { escaped = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (ch === '[') depth++;
+          else if (ch === ']') depth--;
           if (depth === 0) {
             // Complete array
             try {

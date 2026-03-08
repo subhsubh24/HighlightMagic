@@ -37,11 +37,16 @@ type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
  * Attempt server-side FFmpeg rendering (Arch #1).
  * Returns a Blob on success, or null if server rendering is unavailable.
  */
+/** Cache the 501 result so we only probe once per page load. */
+let serverRenderAvailable: boolean | null = null;
+
 async function tryServerRender(
   clips: EditedClip[],
   state: AppState,
   isFree: boolean
 ): Promise<Blob | null> {
+  // Skip entirely if we already know server rendering is unavailable
+  if (serverRenderAvailable === false) return null;
   try {
     const renderClips = clips.map((clip) => {
       const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
@@ -81,9 +86,11 @@ async function tryServerRender(
     });
 
     if (res.status === 501) {
-      // Server rendering not enabled — fall back to client-side
+      // Server rendering not enabled — cache this and never probe again
+      serverRenderAvailable = false;
       return null;
     }
+    serverRenderAvailable = true;
 
     if (!res.ok) {
       console.warn("[render] Server render failed, falling back to client-side");
