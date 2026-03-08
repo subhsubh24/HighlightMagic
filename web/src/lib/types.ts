@@ -139,6 +139,37 @@ export interface AiProductionPlan {
   /** AI-decided neon transition colors as hex array */
   neonColors: string[];
 
+  // ── Rendering fine-tuning (AI full creative control) ──
+
+  /** Beat pulse scale multiplier (0 = no pulse, 0.015 = subtle, 0.04 = pronounced) */
+  beatPulseIntensity?: number;
+  /** Beat flash overlay max opacity (0 = none, 0.12 = subtle, 0.3 = punchy) */
+  beatFlashOpacity?: number;
+
+  /** Caption font size as fraction of canvas height (0.02 = small, 0.025 = default, 0.04 = large) */
+  captionFontSize?: number;
+  /** Caption vertical position as fraction of canvas height (0.5 = center, 0.89 = bottom, 0.15 = top) */
+  captionVerticalPosition?: number;
+  /** Caption drop shadow color (CSS color string) */
+  captionShadowColor?: string;
+  /** Caption drop shadow blur in pixels */
+  captionShadowBlur?: number;
+
+  /** Flash transition overlay opacity (0-1). Default 0.85. */
+  flashOverlayAlpha?: number;
+  /** Zoom punch flash overlay opacity (0-1). Default 0.35. */
+  zoomPunchFlashAlpha?: number;
+  /** Color flash overlay opacity (0-1). Default 0.65. */
+  colorFlashAlpha?: number;
+  /** Strobe flash count per transition (2-8). Default 4. */
+  strobeFlashCount?: number;
+  /** Strobe flash opacity (0-1). Default 0.9. */
+  strobeFlashAlpha?: number;
+  /** Light leak tint color as hex (default warm gold "#ffc864"). */
+  lightLeakColor?: string;
+  /** Glitch channel colors as [primary hex, secondary hex] (default red/cyan). */
+  glitchColors?: [string, string];
+
   // Thumbnail
   thumbnail: {
     sourceClipIndex: number;

@@ -439,6 +439,20 @@ export interface ProductionPlan {
   exportBitrate: number;
   watermarkOpacity: number;
   neonColors: string[];
+  // Rendering fine-tuning (all optional — AI creative control)
+  beatPulseIntensity?: number;
+  beatFlashOpacity?: number;
+  captionFontSize?: number;
+  captionVerticalPosition?: number;
+  captionShadowColor?: string;
+  captionShadowBlur?: number;
+  flashOverlayAlpha?: number;
+  zoomPunchFlashAlpha?: number;
+  colorFlashAlpha?: number;
+  strobeFlashCount?: number;
+  strobeFlashAlpha?: number;
+  lightLeakColor?: string;
+  glitchColors?: [string, string];
   thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
   styleTransfer: { prompt: string; strength: number } | null;
   talkingHeadSpeech: string | null;
@@ -1643,35 +1657,59 @@ Set "voiceoverVolume" (0-1): narration level. 0.8 for subtle, 1.0 normal.
 These let you create the perfect mix for the content — e.g. a music video needs loud music + quiet VO, while a narrated recap needs loud VO + quiet music.
 
 DEFAULT TRANSITION DURATION — Fallback for clips that don't specify their own.
-Set "defaultTransitionDuration" (0.1-1.0 seconds). 0.15 for fast/punchy edits, 0.3 for standard, 0.5-0.8 for cinematic/dreamy.
+Set "defaultTransitionDuration" (0.05-2.0 seconds). 0.05-0.15 for snappy cuts, 0.3 standard, 0.5-2.0 for cinematic/dreamy.
 Match to the overall pacing and energy of the content.
 
 PHOTO DISPLAY DURATION — How long static photos show in the final edit.
-Set "photoDisplayDuration" (2-8 seconds). 2-3s for fast/montage, 4-5s for standard, 6-8s for cinematic/contemplative.
+Set "photoDisplayDuration" (1-15 seconds). 1-2s for rapid montage, 3-5s for standard, 6-15s for cinematic/contemplative.
 Each photo gets this baseline duration. Consider pacing: fast-cut reels need shorter photo holds.
 
 LOOP CROSSFADE DURATION — Cross-fade length for the seamless loop (last→first frame blend).
-Set "loopCrossfadeDuration" (0.2-1.5 seconds). 0.2-0.3s for punchy/beat-driven, 0.5 standard, 0.8-1.5s for dreamy/cinematic loops.
+Set "loopCrossfadeDuration" (0.1-3.0 seconds). 0.2-0.3s for punchy/beat-driven, 0.5 standard, 1.0-3.0s for dreamy/cinematic loops.
 
 CAPTION TIMING — Animation durations for caption text:
-Set "captionEntranceDuration" (0.2-1.0 seconds): how long the entrance animation plays. 0.3 for snappy, 0.5 standard, 0.8-1.0 for slow/cinematic.
-Set "captionExitDuration" (0.1-0.5 seconds): how long the exit fade plays. 0.15 for quick, 0.3 standard.
+Set "captionEntranceDuration" (0.05-2.0 seconds): how long the entrance animation plays. 0.3 for snappy, 0.5 standard, 1.0-2.0 for slow/cinematic.
+Set "captionExitDuration" (0.05-1.0 seconds): how long the exit fade plays. 0.15 for quick, 0.3 standard, 0.5-1.0 for drawn-out.
 
 MUSIC DUCKING — How much to lower music volume during voiceover.
-Set "musicDuckRatio" (0.1-0.6): ratio of normal volume. 0.15 for heavy ducking (clear VO), 0.3 standard, 0.5 for subtle ducking (music stays prominent).
+Set "musicDuckRatio" (0-1.0): ratio of normal volume. 0 = complete mute, 0.15 for heavy ducking, 0.3 standard, 0.5 for subtle, 1.0 = no ducking.
 
 BEAT-SYNC TOLERANCE — How close a cut must be to a beat to snap.
-Set "beatSyncToleranceMs" (20-200 ms): 20-30 for tight/precise sync, 50 standard, 100-200 for loose/relaxed feel.
+Set "beatSyncToleranceMs" (5-500 ms): 5-20 for extremely tight sync, 50 standard, 100-500 for loose/relaxed feel.
 
 EXPORT QUALITY — Video encoding bitrate.
-Set "exportBitrate" (8000000-20000000 bps): 8M for lightweight/fast, 12M standard, 16-20M for high-quality/cinematic.
+Set "exportBitrate" (4000000-30000000 bps): 4M for lightweight, 12M standard, 20-30M for maximum quality.
 
 WATERMARK OPACITY — How visible the watermark text is.
-Set "watermarkOpacity" (0.1-0.6): 0.15 for subtle, 0.4 standard, 0.5-0.6 for prominent.
+Set "watermarkOpacity" (0.05-0.8): 0.1 for barely visible, 0.4 standard, 0.6-0.8 for prominent.
 
 NEON TRANSITION COLORS — Custom palette for color_flash transitions (hex colors).
-Set "neonColors" to an array of 3-6 hex colors. Match the content mood and color story.
+Set "neonColors" to an array of 2-8 hex colors. Match the content mood and color story.
 Examples: ["#9333ea","#06b6d4","#ec4899","#f59e0b"] (vibrant), ["#3b82f6","#8b5cf6","#06b6d4"] (cool).
+
+═══════════════════════════════════════════════
+RENDERING FINE-TUNING — Full control over effect intensities
+═══════════════════════════════════════════════
+All optional. When omitted, sensible defaults are used. Set these to fine-tune the visual feel:
+
+BEAT PULSE — Visual scale bump on music beats:
+"beatPulseIntensity" (0-0.1): 0 = no pulse, 0.015 = subtle, 0.03 = noticeable, 0.06 = punchy.
+"beatFlashOpacity" (0-0.5): brightness overlay on strong beats. 0 = none, 0.12 = subtle, 0.3 = intense.
+
+CAPTION RENDERING:
+"captionFontSize" (0.01-0.08): fraction of canvas height. 0.02 = small, 0.025 = standard, 0.04 = large.
+"captionVerticalPosition" (0.1-0.95): vertical placement. 0.15 = top, 0.5 = center, 0.89 = bottom.
+"captionShadowColor": CSS color for drop shadow (e.g. "rgba(0,0,0,0.7)" or "rgba(75,0,130,0.5)").
+"captionShadowBlur" (0-30): shadow blur in pixels. 0 = sharp, 8 = standard, 20 = dramatic halo.
+
+TRANSITION INTENSITY — Fine-tune how each transition type looks:
+"flashOverlayAlpha" (0-1): flash transition brightness. 0.5 = subtle, 0.85 = standard, 1.0 = blinding.
+"zoomPunchFlashAlpha" (0-1): zoom punch white flash. 0.15 = minimal, 0.35 = standard, 0.6 = intense.
+"colorFlashAlpha" (0-1): color flash overlay intensity. 0.4 = tinted, 0.65 = standard, 0.9 = saturated.
+"strobeFlashCount" (1-12): number of flashes in strobe transition. 2 = slow, 4 = standard, 8 = rapid.
+"strobeFlashAlpha" (0-1): strobe brightness. 0.5 = subtle, 0.9 = standard.
+"lightLeakColor": hex color for light leak tint (default warm gold "#ffc864"). Try "#87ceeb" (cool blue), "#ff6b9d" (pink), "#c8a2c8" (lavender).
+"glitchColors": [primary hex, secondary hex] for glitch RGB channels (default red/cyan ["#ff0050","#00c8ff"]). Try ["#39ff14","#ff00ff"] (neon green/magenta).
 
 THUMBNAIL — Best frame for social sharing.
 Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
@@ -1850,6 +1888,20 @@ Respond with ONLY a JSON object:
         exportBitrate?: number;
         watermarkOpacity?: number;
         neonColors?: string[];
+        // Rendering fine-tuning
+        beatPulseIntensity?: number;
+        beatFlashOpacity?: number;
+        captionFontSize?: number;
+        captionVerticalPosition?: number;
+        captionShadowColor?: string;
+        captionShadowBlur?: number;
+        flashOverlayAlpha?: number;
+        zoomPunchFlashAlpha?: number;
+        colorFlashAlpha?: number;
+        strobeFlashCount?: number;
+        strobeFlashAlpha?: number;
+        lightLeakColor?: string;
+        glitchColors?: [string, string];
       };
 
       if (!parsed.contentSummary) {
@@ -2147,20 +2199,36 @@ Respond with ONLY a JSON object:
         musicVolume: typeof parsed.musicVolume === "number" ? Math.max(0, Math.min(1, parsed.musicVolume)) : 0.5,
         sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.8,
         voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 1.0,
-        defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.1, Math.min(1.0, parsed.defaultTransitionDuration)) : 0.3,
-        photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(2, Math.min(8, parsed.photoDisplayDuration)) : 3,
-        loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.2, Math.min(1.5, parsed.loopCrossfadeDuration)) : 0.5,
-        captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.2, Math.min(1.0, parsed.captionEntranceDuration)) : 0.5,
-        captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.1, Math.min(0.5, parsed.captionExitDuration)) : 0.3,
-        musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0.1, Math.min(0.6, parsed.musicDuckRatio)) : 0.3,
-        beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(20, Math.min(200, Math.round(parsed.beatSyncToleranceMs))) : 50,
-        exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(8_000_000, Math.min(20_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
-        watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.1, Math.min(0.6, parsed.watermarkOpacity)) : 0.4,
-        neonColors: Array.isArray(parsed.neonColors) && parsed.neonColors.length >= 3
+        defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.defaultTransitionDuration)) : 0.3,
+        photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(1, Math.min(15, parsed.photoDisplayDuration)) : 3,
+        loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.1, Math.min(3.0, parsed.loopCrossfadeDuration)) : 0.5,
+        captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.captionEntranceDuration)) : 0.5,
+        captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.05, Math.min(1.0, parsed.captionExitDuration)) : 0.3,
+        musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0, Math.min(1.0, parsed.musicDuckRatio)) : 0.3,
+        beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 50,
+        exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(4_000_000, Math.min(30_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
+        watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,
+        neonColors: Array.isArray(parsed.neonColors) && parsed.neonColors.length >= 2
           ? parsed.neonColors
               .filter((c: unknown): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c))
-              .slice(0, 6)
+              .slice(0, 8)
           : ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"],
+
+        // ── New AI rendering controls ──
+        beatPulseIntensity: typeof parsed.beatPulseIntensity === "number" ? Math.max(0, Math.min(0.1, parsed.beatPulseIntensity)) : undefined,
+        beatFlashOpacity: typeof parsed.beatFlashOpacity === "number" ? Math.max(0, Math.min(0.5, parsed.beatFlashOpacity)) : undefined,
+        captionFontSize: typeof parsed.captionFontSize === "number" ? Math.max(0.01, Math.min(0.08, parsed.captionFontSize)) : undefined,
+        captionVerticalPosition: typeof parsed.captionVerticalPosition === "number" ? Math.max(0.1, Math.min(0.95, parsed.captionVerticalPosition)) : undefined,
+        captionShadowColor: typeof parsed.captionShadowColor === "string" ? parsed.captionShadowColor.slice(0, 50) : undefined,
+        captionShadowBlur: typeof parsed.captionShadowBlur === "number" ? Math.max(0, Math.min(30, parsed.captionShadowBlur)) : undefined,
+        flashOverlayAlpha: typeof parsed.flashOverlayAlpha === "number" ? Math.max(0, Math.min(1, parsed.flashOverlayAlpha)) : undefined,
+        zoomPunchFlashAlpha: typeof parsed.zoomPunchFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.zoomPunchFlashAlpha)) : undefined,
+        colorFlashAlpha: typeof parsed.colorFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.colorFlashAlpha)) : undefined,
+        strobeFlashCount: typeof parsed.strobeFlashCount === "number" ? Math.max(1, Math.min(12, Math.round(parsed.strobeFlashCount))) : undefined,
+        strobeFlashAlpha: typeof parsed.strobeFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.strobeFlashAlpha)) : undefined,
+        lightLeakColor: (typeof parsed.lightLeakColor === "string" && /^#[0-9a-fA-F]{6}$/.test(parsed.lightLeakColor)) ? parsed.lightLeakColor : undefined,
+        glitchColors: (Array.isArray(parsed.glitchColors) && parsed.glitchColors.length === 2 && parsed.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? parsed.glitchColors as [string, string] : undefined,
+
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
           ? {
               sourceClipIndex: parsed.thumbnail.sourceClipIndex,

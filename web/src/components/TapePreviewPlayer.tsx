@@ -500,9 +500,10 @@ export default function TapePreviewPlayer() {
         dh *= scale;
       }
 
-      // Beat pulse: subtle scale bump on beats (adds satisfying rhythm feel)
+      // Beat pulse: scale bump on beats — AI controls intensity
       if (currentBeatIntensity > 0) {
-        const pulseScale = 1 + currentBeatIntensity * 0.015;
+        const beatPulseIntensity = state.aiProductionPlan?.beatPulseIntensity ?? 0.015;
+        const pulseScale = 1 + currentBeatIntensity * beatPulseIntensity;
         dw *= pulseScale;
         dh *= pulseScale;
       }
@@ -552,8 +553,11 @@ export default function TapePreviewPlayer() {
           kTransform,
           w,
           h,
-          Math.round(h * 0.025),
-          captionCustom
+          Math.round(h * (state.aiProductionPlan?.captionFontSize ?? 0.025)),
+          captionCustom,
+          state.aiProductionPlan?.captionVerticalPosition,
+          state.aiProductionPlan?.captionShadowColor,
+          state.aiProductionPlan?.captionShadowBlur
         );
       }
 
@@ -627,13 +631,22 @@ export default function TapePreviewPlayer() {
 
       // Transition overlay
       if (activeTransInfo) {
-        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed, state.aiProductionPlan?.neonColors);
+        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed, state.aiProductionPlan?.neonColors, {
+          flashOverlayAlpha: state.aiProductionPlan?.flashOverlayAlpha,
+          zoomPunchFlashAlpha: state.aiProductionPlan?.zoomPunchFlashAlpha,
+          colorFlashAlpha: state.aiProductionPlan?.colorFlashAlpha,
+          strobeFlashCount: state.aiProductionPlan?.strobeFlashCount,
+          strobeFlashAlpha: state.aiProductionPlan?.strobeFlashAlpha,
+          lightLeakColor: state.aiProductionPlan?.lightLeakColor,
+          glitchColors: state.aiProductionPlan?.glitchColors,
+        });
       }
 
-      // Beat flash overlay (subtle brightness pulse on strong beats — AI chose the theme, beat sync is user toggle)
-      if (currentBeatIntensity > 0.5) {
+      // Beat flash overlay — AI controls opacity
+      const beatFlashMax = state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
+      if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
         ctx.save();
-        ctx.globalAlpha = (currentBeatIntensity - 0.5) * 0.12;
+        ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.restore();
@@ -650,14 +663,14 @@ export default function TapePreviewPlayer() {
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
             const speed = getSpeedFromKeyframes(posInClip, customKf);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
             }
           } else if (preset !== "normal") {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
             const speed = getSpeedAtPosition(posInClip, preset);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
             }

@@ -494,6 +494,20 @@ export default function ExportStep() {
         cPlan?.neonColors,
         cPlan?.photoDisplayDuration ?? 3,
         cPlan?.beatSyncToleranceMs ?? 50,
+        cPlan ? {
+          beatPulseIntensity: cPlan.beatPulseIntensity,
+          captionFontSize: cPlan.captionFontSize,
+          captionVerticalPosition: cPlan.captionVerticalPosition,
+          captionShadowColor: cPlan.captionShadowColor,
+          captionShadowBlur: cPlan.captionShadowBlur,
+          flashOverlayAlpha: cPlan.flashOverlayAlpha,
+          zoomPunchFlashAlpha: cPlan.zoomPunchFlashAlpha,
+          colorFlashAlpha: cPlan.colorFlashAlpha,
+          strobeFlashCount: cPlan.strobeFlashCount,
+          strobeFlashAlpha: cPlan.strobeFlashAlpha,
+          lightLeakColor: cPlan.lightLeakColor,
+          glitchColors: cPlan.glitchColors,
+        } : undefined,
       );
 
       const url = URL.createObjectURL(blob);
@@ -844,6 +858,7 @@ async function renderHighlightTape(
   neonColors?: string[],
   photoDisplayDuration: number = 3,
   beatSyncToleranceMs: number = 50,
+  aiRenderOpts?: ExportAiRenderOptions,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -942,11 +957,11 @@ async function renderHighlightTape(
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs);
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs, aiRenderOpts);
     } else {
       await renderVideoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs);
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts);
     }
 
     // Save first frame for seamless loop
@@ -1038,6 +1053,22 @@ function renderLoopCrossfade(
   });
 }
 
+/** AI rendering options passed through to export render functions */
+interface ExportAiRenderOptions {
+  beatPulseIntensity?: number;
+  captionFontSize?: number;
+  captionVerticalPosition?: number;
+  captionShadowColor?: string;
+  captionShadowBlur?: number;
+  flashOverlayAlpha?: number;
+  zoomPunchFlashAlpha?: number;
+  colorFlashAlpha?: number;
+  strobeFlashCount?: number;
+  strobeFlashAlpha?: number;
+  lightLeakColor?: string;
+  glitchColors?: [string, string];
+}
+
 function renderVideoClip(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -1055,7 +1086,8 @@ function renderVideoClip(
   captionEntrance: number = 0.5,
   captionExit: number = 0.3,
   neonColorHexes?: string[],
-  beatTolerance: number = 50
+  beatTolerance: number = 50,
+  aiRenderOpts?: ExportAiRenderOptions
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -1117,14 +1149,14 @@ function renderVideoClip(
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
             const speed = getSpeedFromKeyframes(posInClip, customKf);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
               video.playbackRate = clampedSpeed;
             }
           } else if (velocityPreset !== "normal") {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
             const speed = getSpeedAtPosition(posInClip, velocityPreset);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
               video.playbackRate = clampedSpeed;
             }
@@ -1132,11 +1164,11 @@ function renderVideoClip(
 
           const entryScale = getClipEntryScale(canvasElapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-          // Beat pulse
+          // Beat pulse — AI controls intensity
           let beatPulse = 1;
           if (beatGrid) {
             const intensity = getBeatIntensity(canvasElapsedSec, beatGrid, beatTolerance);
-            beatPulse = 1 + intensity * 0.012;
+            beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.012);
           }
 
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
@@ -1151,7 +1183,7 @@ function renderVideoClip(
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, dx, dy, dw, dh);
               ctx.filter = "none";
-            }, neonColorHexes);
+            }, neonColorHexes, aiRenderOpts);
           } else {
             const totalScale = entryScale * beatPulse;
             const dw = baseW * totalScale;
@@ -1165,7 +1197,7 @@ function renderVideoClip(
             ctx.filter = "none";
           }
 
-          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit);
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
           requestAnimationFrame(drawFrame);
         };
 
@@ -1199,7 +1231,8 @@ function renderPhotoClip(
   captionExit: number = 0.3,
   neonColorHexes?: string[],
   photoDisplayDur: number = 3,
-  beatTolerance: number = 50
+  beatTolerance: number = 50,
+  aiRenderOpts?: ExportAiRenderOptions
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -1226,11 +1259,11 @@ function renderPhotoClip(
         const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
         const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-        // Beat pulse
+        // Beat pulse — AI controls intensity
         let beatPulse = 1;
         if (beatGrid) {
           const intensity = getBeatIntensity(elapsedSec, beatGrid, beatTolerance);
-          beatPulse = 1 + intensity * 0.012;
+          beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.012);
         }
 
         if (crossfadeFrom && transType && elapsedMs < transitionMs) {
@@ -1245,7 +1278,7 @@ function renderPhotoClip(
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(img, dx, dy, dw, dh);
             ctx.filter = "none";
-          }, neonColorHexes);
+          }, neonColorHexes, aiRenderOpts);
         } else {
           const totalScale = kenBurnsScale * entryScale * beatPulse;
           const dw = baseW * totalScale;
@@ -1259,7 +1292,7 @@ function renderPhotoClip(
           ctx.filter = "none";
         }
 
-        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit);
+        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
         requestAnimationFrame(drawFrame);
       };
 
@@ -1282,7 +1315,8 @@ function renderTransitionFrame(
   progress: number,
   seed: number,
   drawIncoming: () => void,
-  neonColorHexes?: string[]
+  neonColorHexes?: string[],
+  aiRenderOpts?: ExportAiRenderOptions
 ) {
   const outAlpha = getClipAlpha(transType, progress, true);
   const inAlpha = getClipAlpha(transType, progress, false);
@@ -1313,7 +1347,7 @@ function renderTransitionFrame(
 
   // Overlay effect
   ctx.globalAlpha = 1;
-  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed, neonColorHexes);
+  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed, neonColorHexes, aiRenderOpts);
 }
 
 function buildCaptionCustom(clip: EditedClip): CustomCaptionParams | undefined {
@@ -1342,7 +1376,8 @@ function drawOverlays(
   captionCustom?: CustomCaptionParams,
   wmOpacity: number = 0.4,
   captionEntrance: number = 0.5,
-  captionExit: number = 0.3
+  captionExit: number = 0.3,
+  aiRenderOpts?: ExportAiRenderOptions
 ) {
   if (watermarkText) {
     ctx.save();
@@ -1357,6 +1392,9 @@ function drawOverlays(
   // Kinetic text instead of static caption
   if (captionText) {
     const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height, captionCustom, captionEntrance, captionExit);
+    const fontSize = aiRenderOpts?.captionFontSize
+      ? Math.round(canvas.height * aiRenderOpts.captionFontSize)
+      : 48;
     drawKineticCaption(
       ctx,
       captionText,
@@ -1364,8 +1402,11 @@ function drawOverlays(
       kTransform,
       canvas.width,
       canvas.height,
-      48,
-      captionCustom
+      fontSize,
+      captionCustom,
+      aiRenderOpts?.captionVerticalPosition,
+      aiRenderOpts?.captionShadowColor,
+      aiRenderOpts?.captionShadowBlur
     );
   }
 }

@@ -234,16 +234,22 @@ export function drawKineticCaption(
   canvasWidth: number,
   canvasHeight: number,
   fontSize: number,
-  custom?: CustomCaptionParams
+  custom?: CustomCaptionParams,
+  /** AI-decided vertical position (0-1 fraction of canvas height, default 0.89) */
+  verticalPosition?: number,
+  /** AI-decided shadow color (CSS color, default "rgba(0,0,0,0.7)") */
+  shadowColor?: string,
+  /** AI-decided shadow blur (pixels, default 8) */
+  shadowBlur?: number
 ) {
   if (!text || transform.alpha <= 0) return;
 
   ctx.save();
   ctx.globalAlpha = Math.min(1, Math.max(0, transform.alpha));
 
-  // Position: bottom area, centered
+  // Position: AI-controlled vertical position, centered horizontally
   const x = canvasWidth / 2;
-  const y = canvasHeight * 0.89 + transform.offsetY;
+  const y = canvasHeight * (verticalPosition ?? 0.89) + transform.offsetY;
 
   ctx.translate(x, y);
   ctx.scale(transform.scale, transform.scale);
@@ -289,7 +295,7 @@ export function drawKineticCaption(
 
   // Letter spacing (applied by drawing characters individually if needed)
   if (transform.letterSpacing !== 1 && Math.abs(transform.letterSpacing - 1) > 0.05) {
-    drawSpacedText(ctx, text, 0, 0, transform.letterSpacing, transform, textColor, glowColor1);
+    drawSpacedText(ctx, text, 0, 0, transform.letterSpacing, transform, textColor, glowColor1, shadowColor ?? "rgba(0,0,0,0.7)", shadowBlur ?? 8);
   } else {
     // Glow effect
     if (transform.glowRadius > 0 && transform.glowAlpha > 0) {
@@ -306,9 +312,9 @@ export function drawKineticCaption(
       ctx.shadowBlur = 0;
     }
 
-    // Main text
-    ctx.shadowColor = "rgba(0,0,0,0.7)";
-    ctx.shadowBlur = 8;
+    // Main text — AI controls shadow
+    ctx.shadowColor = shadowColor ?? "rgba(0,0,0,0.7)";
+    ctx.shadowBlur = shadowBlur ?? 8;
     ctx.fillStyle = textColor;
     ctx.fillText(text, 0, 0);
   }
@@ -346,15 +352,17 @@ function drawSpacedText(
   spacing: number,
   transform: KineticTransform,
   textColor: string,
-  glowColor: string
+  glowColor: string,
+  sColor: string = "rgba(0,0,0,0.7)",
+  sBlur: number = 8
 ) {
   const chars = text.split("");
   const baseWidths = chars.map((c) => ctx.measureText(c).width);
   const totalWidth = baseWidths.reduce((sum, w) => sum + w * spacing, 0);
   let currentX = x - totalWidth / 2;
 
-  ctx.shadowColor = "rgba(0,0,0,0.7)";
-  ctx.shadowBlur = 8;
+  ctx.shadowColor = sColor;
+  ctx.shadowBlur = sBlur;
   ctx.fillStyle = textColor;
 
   if (transform.glowRadius > 0) {
