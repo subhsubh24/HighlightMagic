@@ -80,10 +80,17 @@ export async function createAudioPipeline(
   let musicSource: AudioBufferSourceNode | null = null;
 
   // Load and start background music if available
-  if (track) {
+  // Either from a curated track object or directly from AI music URL
+  const musicUrl = track
+    ? (track.id === "__ai_generated__" && aiMusicUrl ? aiMusicUrl : `/audio/${track.fileName}.mp3`)
+    : aiMusicUrl || null;
+
+  if (musicUrl) {
     try {
-      const buffer = await loadTrackAudio(track, audioCtx, aiMusicUrl);
-      if (buffer) {
+      const response = await fetch(musicUrl);
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = await audioCtx.decodeAudioData(arrayBuffer);
         musicSource = audioCtx.createBufferSource();
         musicSource.buffer = buffer;
         musicSource.loop = true;
