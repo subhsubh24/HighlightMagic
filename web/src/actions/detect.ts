@@ -1558,11 +1558,24 @@ Only add elements that genuinely elevate the content. Less is often more.
 INTRO CARD — A 3-5 second AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt"} or null to skip.
 The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
-Skip if the content speaks for itself or an intro would feel forced.
+IMPORTANT: The video is rendered in 9:16 PORTRAIT format. If the stylePrompt mentions text or titles,
+explicitly specify "small centered text" or "compact title text" — never large/fullscreen text that overflows the narrow portrait frame.
+Keep title text to 3-4 words max so it fits the vertical frame.
+DEFAULT TO null (no intro) in most cases. Intros are only justified for:
+  - Long tapes (8+ clips) that benefit from a title card to set the mood
+  - Event/occasion content (weddings, graduations, game days) where a title adds context
+  - User explicitly requested an intro in their creative direction
+SKIP intro (set null) for:
+  - Small collections (≤6 clips/photos) — the content speaks for itself
+  - Art, product, or aesthetic collections — jump straight into the visuals
+  - Any tape under 30 seconds total — an intro eats too much runtime
+  - When no clear title/theme exists beyond "look at these"
 
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt"} or null to skip.
-Skip if unneccesary. Not every tape needs a bookend.
+Same 9:16 portrait text rules as intro — keep text small and compact.
+DEFAULT TO null. Only add an outro if the tape is long (8+ clips) AND has a clear closing message.
+Most tapes should NOT have an outro.
 
 SOUND EFFECTS — Transition whooshes, impact hits, crowd accents.
 Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
