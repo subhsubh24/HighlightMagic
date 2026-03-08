@@ -172,11 +172,12 @@ export function getEffectiveDuration(
   if (!customKeyframes && preset === "normal") return sourceDuration;
   if (kf.every((k) => Math.abs(k.speed - 1.0) < 0.01)) return sourceDuration;
 
-  // Calculate average speed across the curve
+  // Calculate average speed across the curve using midpoint sampling
+  // to avoid systematic bias from missing the endpoint at position 1.0
   const steps = 100;
   let totalSpeed = 0;
   for (let i = 0; i < steps; i++) {
-    totalSpeed += getSpeedFromKeyframes(i / steps, kf);
+    totalSpeed += getSpeedFromKeyframes((i + 0.5) / steps, kf);
   }
   const avgSpeed = totalSpeed / steps;
 

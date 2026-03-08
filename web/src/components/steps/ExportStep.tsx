@@ -453,14 +453,25 @@ export default function ExportStep() {
       setExportExt(ext);
 
       // Build scheduled audio layers for voiceover + SFX
-      // Audio timing uses AI-driven values; intro card offset since clipIndex refers to user clips
+      // Audio timing must match the actual rendered durations (beat-snapped if beat-sync is active)
       const scheduled: ScheduledAudioLayer[] = [];
       {
+        // Build beat grid for audio scheduling — must match renderHighlightTape logic
+        let audioBeatGrid: ReturnType<typeof buildBeatGrid> | null = null;
+        if (state.viralOptions.beatSync) {
+          const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
+          if (track) audioBeatGrid = buildBeatGrid(track.bpm, 300);
+        }
         const cStarts: number[] = [];
         const cEnds: number[] = [];
         let st = introOffsetC; // Start after intro card duration
         for (let i = 0; i < sortedClips.length; i++) {
-          const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          let dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          // Apply beat-sync snapping to match actual render durations
+          if (audioBeatGrid && audioBeatGrid.beatInterval > 0) {
+            const beats = Math.max(2, Math.round(dur / audioBeatGrid.beatInterval));
+            dur = beats * audioBeatGrid.beatInterval;
+          }
           cStarts.push(st);
           cEnds.push(st + dur);
           st += dur - (sortedClips[i + 1]?.transitionDuration ?? defaultTransDurC);
@@ -469,7 +480,7 @@ export default function ExportStep() {
           if (!vo.audioUrl || vo.status !== "completed") continue;
           const s = cStarts[vo.clipIndex];
           if (s == null) continue;
-          scheduled.push({ url: vo.audioUrl, startTime: s + voDelayC, volume: voVolC });
+          scheduled.push({ url: vo.audioUrl, startTime: s + voDelayC, volume: voVolC, layerType: "voiceover" });
         }
         for (const sfx of state.sfxTracks ?? []) {
           if (!sfx.audioUrl || sfx.status !== "completed") continue;
@@ -479,7 +490,7 @@ export default function ExportStep() {
           let sfxS = cs;
           if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
           else if (sfx.timing === "after") sfxS = (ce ?? cs) - defaultTransDurC;
-          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC });
+          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC, layerType: "sfx" });
         }
       }
 
@@ -905,7 +916,7 @@ async function renderHighlightTape(
   }
 
   // Audio pipeline: captures original clip audio + optional background music
-  const canvasStream = canvas.captureStream(30);
+  const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
   const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio);
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
@@ -1290,7 +1301,12 @@ function renderPhotoClip(
       const ia = img.width / img.height;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
-      if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
+      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full image without cropping
+        if (ia > ca) { baseW = canvas.width; baseH = baseW / ia; }
+        else { baseH = canvas.height; baseW = baseH * ia; }
+      } else if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
       else { baseW = canvas.width; baseH = baseW / ia; }
 
       const durationMs = (canvasDuration > 0 ? canvasDuration : photoDisplayDur) * 1000;

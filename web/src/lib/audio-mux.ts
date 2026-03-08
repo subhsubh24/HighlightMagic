@@ -53,6 +53,8 @@ export interface ScheduledAudioLayer {
   url: string;
   startTime: number;   // seconds from render start
   volume: number;      // 0-1
+  /** Layer type — used for auto-ducking detection (voiceover triggers music duck) */
+  layerType?: "voiceover" | "sfx";
 }
 
 /** Default ducking ratio — when voiceover plays, music drops to this fraction of its normal volume. */
@@ -117,6 +119,10 @@ export async function createAudioPipeline(
   const voiceovers: { startTime: number; duration: number }[] = [];
 
   if (scheduledLayers && scheduledLayers.length > 0) {
+    // Capture the current AudioContext time as the render start reference.
+    // layer.startTime is relative to render start, so offset by audioCtx.currentTime
+    // to account for any delay spent loading/decoding the music buffer above.
+    const renderStartTime = audioCtx.currentTime;
     for (const layer of scheduledLayers) {
       try {
         const response = await fetch(layer.url);
@@ -129,11 +135,11 @@ export async function createAudioPipeline(
         gain.gain.value = layer.volume;
         source.connect(gain);
         gain.connect(dest);
-        source.start(Math.max(0, layer.startTime));
+        source.start(renderStartTime + Math.max(0, layer.startTime));
         scheduledSources.push(source);
 
-        // If this is a voiceover layer (volume 1.0), record timing for ducking
-        if (layer.volume === 1.0) {
+        // If this is a voiceover layer, record timing for auto-ducking music
+        if (layer.layerType === "voiceover") {
           voiceovers.push({ startTime: layer.startTime, duration: buffer.duration });
         }
       } catch {
@@ -143,14 +149,27 @@ export async function createAudioPipeline(
   }
 
   // Auto-duck music during voiceover — matches TapePreviewPlayer behavior
+  // Sort by start time and merge overlapping/adjacent segments to avoid conflicting ramps
   if (musicGainNode && voiceovers.length > 0) {
-    for (const vo of voiceovers) {
+    const sorted = [...voiceovers].sort((a, b) => a.startTime - b.startTime);
+    const merged: { startTime: number; endTime: number }[] = [];
+    for (const vo of sorted) {
       const voEnd = vo.startTime + vo.duration;
-      const duckedVolume = musicVolume * musicDuckRatio;
-      musicGainNode.gain.linearRampToValueAtTime(musicVolume, Math.max(0, vo.startTime - 0.2));
-      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, vo.startTime);
-      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, voEnd);
-      musicGainNode.gain.linearRampToValueAtTime(musicVolume, voEnd + 0.3);
+      const last = merged[merged.length - 1];
+      // Merge if overlapping or within 0.5s gap (avoids rapid duck/unduck)
+      if (last && vo.startTime <= last.endTime + 0.5) {
+        last.endTime = Math.max(last.endTime, voEnd);
+      } else {
+        merged.push({ startTime: vo.startTime, endTime: voEnd });
+      }
+    }
+    const duckedVolume = musicVolume * musicDuckRatio;
+    for (const seg of merged) {
+      const duckStart = Math.max(0, seg.startTime - 0.2);
+      musicGainNode.gain.setValueAtTime(musicVolume, duckStart);
+      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, seg.startTime);
+      musicGainNode.gain.setValueAtTime(duckedVolume, seg.endTime);
+      musicGainNode.gain.linearRampToValueAtTime(musicVolume, seg.endTime + 0.3);
     }
   }
 

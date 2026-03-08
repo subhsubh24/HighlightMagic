@@ -326,6 +326,7 @@ export default function DetectingStep() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
           });
           const data = await res.json();
           if (!res.ok || data.status !== "completed" || !data.audioUrl) {
@@ -377,6 +378,7 @@ export default function DetectingStep() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+            signal: abort.signal,
           });
           const data = await res.json();
           if (res.ok && data.status === "completed" && data.audioUrl) {
@@ -446,7 +448,9 @@ export default function DetectingStep() {
     async function runReplan() {
       let plannerTimer: ReturnType<typeof setInterval> | undefined;
       try {
-        const cached = getCachedDetectionData();
+        const cached = getCachedDetectionData(
+          mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
+        );
         if (!cached.frames || !cached.scores) {
           // Cache miss — fall back to full detection
           console.warn("Replan: no cached data, falling back to full detection");
@@ -632,7 +636,10 @@ export default function DetectingStep() {
         debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
-        cacheDetectionData(frames, scores);
+        cacheDetectionData(
+          frames, scores,
+          mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
+        );
 
         // Phase 3: Plan highlights via server action (60-92%)
         setPassIndex(useBatchMode ? 3 : 2);
@@ -725,6 +732,18 @@ export default function DetectingStep() {
         return true;
       });
 
+      // Build mapping from original (pre-filter) clip index to post-filter index
+      // so SFX/voiceover clipIndex values can be remapped correctly
+      const clipIndexMap = new Map<number, number>();
+      {
+        let postIdx = 0;
+        for (let origIdx = 0; origIdx < result.clips.length; origIdx++) {
+          if (detectedClips.includes(result.clips[origIdx])) {
+            clipIndexMap.set(origIdx, postIdx++);
+          }
+        }
+      }
+
       // Convert to app types
       const highlights = buildHighlights(detectedClips);
       const clips = buildClips(detectedClips, state.selectedTemplate);
@@ -749,14 +768,19 @@ export default function DetectingStep() {
           plan: {
             intro: productionPlan.intro,
             outro: productionPlan.outro,
-            sfx: productionPlan.sfx.map((s) => ({
-              clipIndex: s.clipIndex,
-              timing: s.timing as "before" | "on" | "after",
-              prompt: s.prompt,
-              durationMs: s.durationMs,
-            })),
+            sfx: productionPlan.sfx
+              .filter((s) => clipIndexMap.has(s.clipIndex))
+              .map((s) => ({
+                clipIndex: clipIndexMap.get(s.clipIndex)!,
+                timing: s.timing as "before" | "on" | "after",
+                prompt: s.prompt,
+                durationMs: s.durationMs,
+              })),
             voiceover: {
               ...productionPlan.voiceover,
+              segments: productionPlan.voiceover.segments
+                .filter((s) => clipIndexMap.has(s.clipIndex))
+                .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })),
               delaySec: productionPlan.voiceover.delaySec ?? 0.3,
             },
             musicPrompt: productionPlan.musicPrompt,
@@ -824,6 +848,7 @@ export default function DetectingStep() {
                   prompt,
                   durationMs: productionPlan?.musicDurationMs,
                 }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (!res.ok || data.status !== "completed" || !data.audioUrl) {
@@ -857,57 +882,38 @@ export default function DetectingStep() {
               })),
             });
             try {
-              await Promise.all(
-                productionPlan.sfx.map(async (sfxCue) => {
-                  try {
-                    // Check SFX cache first
-                    const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
-                    const cachedSfx = getCachedAsset(sfxCacheKey);
-                    if (cachedSfx) {
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: cachedSfx.data,
-                        status: "completed",
-                      });
-                      return;
-                    }
-
-                    const res = await fetch("/api/sfx", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        prompt: sfxCue.prompt,
-                        durationMs: sfxCue.durationMs,
-                      }),
-                    });
-                    const data = await res.json();
-                    if (res.ok && data.status === "completed" && data.audioUrl) {
-                      setCachedAsset(sfxCacheKey, data.audioUrl);
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: data.audioUrl,
-                        status: "completed",
-                      });
-                    } else {
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: "",
-                        status: "failed",
-                      });
-                    }
-                  } catch {
-                    dispatch({
-                      type: "UPDATE_SFX_TRACK",
-                      clipIndex: sfxCue.clipIndex,
-                      audioUrl: "",
-                      status: "failed",
-                    });
+              // Limit concurrency to 3 to avoid ElevenLabs rate limits
+              const SFX_CONCURRENCY = 3;
+              const sfxQueue = [...productionPlan.sfx];
+              const processSfxCue = async (sfxCue: typeof sfxQueue[0]) => {
+                try {
+                  const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
+                  const cachedSfx = getCachedAsset(sfxCacheKey);
+                  if (cachedSfx) {
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: cachedSfx.data, status: "completed" });
+                    return;
                   }
-                })
-              );
+                  const res = await fetch("/api/sfx", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+                    signal: abort.signal,
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.status === "completed" && data.audioUrl) {
+                    setCachedAsset(sfxCacheKey, data.audioUrl);
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: data.audioUrl, status: "completed" });
+                  } else {
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+                  }
+                } catch {
+                  dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+                }
+              };
+              // Process in batches of SFX_CONCURRENCY
+              for (let i = 0; i < sfxQueue.length; i += SFX_CONCURRENCY) {
+                await Promise.all(sfxQueue.slice(i, i + SFX_CONCURRENCY).map(processSfxCue));
+              }
               dispatch({ type: "SET_SFX_STATUS", status: "completed" });
             } catch {
               dispatch({ type: "SET_SFX_STATUS", status: "failed" });
@@ -915,10 +921,48 @@ export default function DetectingStep() {
           })()
         : null;
 
+      // Pre-declare voiceClonePromise so voiceover can await it (section 6 assigns it)
+      let voiceClonePromise: Promise<string | null> | null = null;
+      if (state.voiceSampleUrl && productionPlan?.voiceover?.enabled) {
+        // Start voice cloning early so voiceover can use the result
+        voiceClonePromise = (async (): Promise<string | null> => {
+          dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
+          try {
+            const parts = state.voiceSampleUrl!.split(",");
+            const b64 = parts.length > 1 ? parts.slice(1).join(",") : parts[0];
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/mpeg" });
+            const formData = new FormData();
+            formData.append("audio", blob, "voice-sample.mp3");
+            formData.append("name", "Highlight Tape Voice");
+            const res = await fetch("/api/voice-clone", {
+              method: "POST",
+              body: formData,
+              signal: abort.signal,
+            });
+            const data = await res.json();
+            if (res.ok && data.status === "completed" && data.voiceId) {
+              dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
+              return data.voiceId as string;
+            }
+            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+            return null;
+          } catch {
+            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+            return null;
+          }
+        })();
+      }
+
       // 3. Voiceover generation — sequential for voice consistency
+      // If user provided a voice sample, await clone completion and use cloned voice
       const voiceoverPromise = (productionPlan?.voiceover?.enabled && productionPlan.voiceover.segments.length > 0)
         ? (async () => {
             const vo = productionPlan.voiceover;
+            // Prefer cloned voice over AI-picked voiceCharacter
+            const resolvedVoiceId = voiceClonePromise ? await voiceClonePromise : null;
             dispatch({ type: "SET_VOICEOVER_STATUS", status: "generating" });
             dispatch({
               type: "SET_VOICEOVER_SEGMENTS",
@@ -952,7 +996,9 @@ export default function DetectingStep() {
                     body: JSON.stringify({
                       text: segment.text,
                       voiceCharacter: vo.voiceCharacter,
+                      ...(resolvedVoiceId ? { voiceId: resolvedVoiceId } : {}),
                     }),
+                    signal: abort.signal,
                   });
                   const data = await res.json();
                   if (res.ok && data.status === "completed" && data.audioUrl) {
@@ -1003,6 +1049,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: introDur }),
+                signal: abort.signal,
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
@@ -1046,6 +1093,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: outroDur }),
+                signal: abort.signal,
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
@@ -1075,41 +1123,7 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 6. Voice cloning — if user provided a voice sample, clone it and use for voiceover
-      const voiceClonePromise = (state.voiceSampleUrl && productionPlan?.voiceover?.enabled)
-        ? (async () => {
-            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
-            try {
-              // Upload voice sample to clone API
-              const parts = state.voiceSampleUrl!.split(",");
-              const b64 = parts.length > 1 ? parts.slice(1).join(",") : parts[0];
-              const binary = atob(b64);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              const blob = new Blob([bytes], { type: "audio/mpeg" });
-
-              const formData = new FormData();
-              formData.append("audio", blob, "voice-sample.mp3");
-              formData.append("name", "Highlight Tape Voice");
-
-              const res = await fetch("/api/voice-clone", {
-                method: "POST",
-                body: formData,
-              });
-              const data = await res.json();
-              if (res.ok && data.status === "completed" && data.voiceId) {
-                dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
-                return data.voiceId as string;
-              } else {
-                dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
-                return null;
-              }
-            } catch {
-              dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
-              return null;
-            }
-          })()
-        : null;
+      // 6. Voice cloning — already started above (before voiceover, so it can await the result)
 
       // 7. Stem separation — isolate instrumental from AI music for smarter ducking
       // Uses musicPromise's returned URL directly (not stale state)
@@ -1124,6 +1138,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ musicDataUri: musicUrl }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (res.ok && data.status === "completed" && data.instrumentalUrl) {
@@ -1174,6 +1189,7 @@ export default function DetectingStep() {
                   voiceCharacter: voiceId ? undefined : "male-broadcaster-hype",
                   voiceId,
                 }),
+                signal: abort.signal,
               });
               const ttsData = await ttsRes.json();
               if (!ttsRes.ok || ttsData.status !== "completed" || !ttsData.audioUrl) {
@@ -1191,6 +1207,7 @@ export default function DetectingStep() {
               const lipRes = await fetch("/api/talking-head", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: abort.signal,
                 body: JSON.stringify({
                   imageData: photoDataUri,
                   audioData: ttsData.audioUrl,
@@ -1240,6 +1257,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ imageData: dataUri }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (res.ok && data.predictionId) {

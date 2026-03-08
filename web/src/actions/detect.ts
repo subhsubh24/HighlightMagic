@@ -2210,7 +2210,7 @@ Respond with ONLY a JSON object:
         watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,
         neonColors: Array.isArray(parsed.neonColors) && parsed.neonColors.length >= 2
           ? parsed.neonColors
-              .filter((c: unknown): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c))
+              .filter((c: unknown): c is string => typeof c === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c))
               .slice(0, 8)
           : ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"],
 
@@ -2226,7 +2226,7 @@ Respond with ONLY a JSON object:
         colorFlashAlpha: typeof parsed.colorFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.colorFlashAlpha)) : undefined,
         strobeFlashCount: typeof parsed.strobeFlashCount === "number" ? Math.max(1, Math.min(12, Math.round(parsed.strobeFlashCount))) : undefined,
         strobeFlashAlpha: typeof parsed.strobeFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.strobeFlashAlpha)) : undefined,
-        lightLeakColor: (typeof parsed.lightLeakColor === "string" && /^#[0-9a-fA-F]{6}$/.test(parsed.lightLeakColor)) ? parsed.lightLeakColor : undefined,
+        lightLeakColor: (typeof parsed.lightLeakColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(parsed.lightLeakColor)) ? parsed.lightLeakColor : undefined,
         glitchColors: (Array.isArray(parsed.glitchColors) && parsed.glitchColors.length === 2 && parsed.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? parsed.glitchColors as [string, string] : undefined,
 
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)

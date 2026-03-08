@@ -117,12 +117,14 @@ function getEntranceAnimationByType(
 
   switch (animation) {
     case "pop": {
+      // Start from a small visible scale (0.3) and ease-out-back to full scale (1.0)
+      // easeOutBack overshoots past 1.0 then settles, creating a satisfying "pop" bounce
       const bounceT = easeOutBack(t);
-      const scale = bounceT * 1.0;
+      const scale = 0.3 + bounceT * 0.7; // 0.3 → overshoot → 1.0
       return {
-        scale: Math.max(0.01, scale),
+        scale,
         offsetY: 0,
-        alpha: Math.min(1, t * 3),
+        alpha: Math.min(1, t * 4),
         rotation: 0,
         letterSpacing: 1,
         glowRadius: glowR > 0 ? easeOutCubic(t) * glowR : 0,
