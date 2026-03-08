@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Wand2 } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2, Wand2, Volume2, Type, Palette, Video, Zap } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { haptic, uuid } from "@/lib/utils";
@@ -18,12 +18,24 @@ const STYLE_PRESETS = [
   { label: "Golden Hour", value: "golden hour warmth, soft lens flare, dreamy mood" },
 ] as const;
 
+/** Features AI auto-creates — shown as teasers */
+const AI_FEATURES = [
+  { icon: Music, label: "Custom soundtrack", color: "text-purple-400" },
+  { icon: Volume2, label: "Sound effects", color: "text-blue-400" },
+  { icon: Type, label: "AI voiceover", color: "text-emerald-400" },
+  { icon: Palette, label: "Style grading", color: "text-orange-400" },
+  { icon: Video, label: "Intro & outro", color: "text-pink-400" },
+  { icon: Zap, label: "Photo animation", color: "text-yellow-400" },
+] as const;
+
 export default function UploadStep() {
   const { state, dispatch } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
+  const voiceInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [voiceUploading, setVoiceUploading] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const dragItemIndex = useRef<number | null>(null);
 
@@ -82,8 +94,6 @@ export default function UploadStep() {
             type: "photo",
             duration: PHOTO_DISPLAY_DURATION,
             name: file.name,
-            animatePhoto: true,
-            animationInstructions: "",
           });
         }
       }
@@ -128,6 +138,30 @@ export default function UploadStep() {
       setActivePreset(preset.label);
       dispatch({ type: "SET_CREATIVE_DIRECTION", direction: preset.value });
     }
+  };
+
+  const handleVoiceSample = async (file: File) => {
+    if (!file.type.startsWith("audio/") && !file.type.startsWith("video/")) {
+      setError("Voice sample must be an audio file (MP3, WAV, M4A).");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Voice sample must be under 10 MB.");
+      return;
+    }
+    setVoiceUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Failed to read voice sample"));
+        reader.readAsDataURL(file);
+      });
+      dispatch({ type: "SET_VOICE_SAMPLE", url: dataUri });
+    } catch {
+      setError("Failed to process voice sample.");
+    }
+    setVoiceUploading(false);
   };
 
   // Drag-to-reorder handlers
@@ -263,12 +297,41 @@ export default function UploadStep() {
                   </button>
                 </div>
 
-                {/* Photo badge */}
+                {/* Photo animation controls */}
                 {media.type === "photo" && (
-                  <div className="flex items-center gap-1 py-0.5">
+                  <label className="flex items-center gap-1.5 cursor-pointer py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={media.animatePhoto ?? false}
+                      onChange={(e) => {
+                        dispatch({
+                          type: "UPDATE_MEDIA_ANIMATION",
+                          fileId: media.id,
+                          animatePhoto: e.target.checked,
+                          animationInstructions: media.animationInstructions ?? "",
+                        });
+                      }}
+                      className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
+                    />
                     <Sparkles className="h-3 w-3 text-[var(--accent)]" />
-                    <span className="text-[11px] text-[var(--text-tertiary)]">Auto-animated</span>
-                  </div>
+                    <span className="text-[11px] text-[var(--text-secondary)]">Animate</span>
+                  </label>
+                )}
+                {media.type === "photo" && media.animatePhoto && (
+                  <input
+                    type="text"
+                    value={media.animationInstructions ?? ""}
+                    onChange={(e) => {
+                      dispatch({
+                        type: "UPDATE_MEDIA_ANIMATION",
+                        fileId: media.id,
+                        animatePhoto: true,
+                        animationInstructions: e.target.value.slice(0, 500),
+                      });
+                    }}
+                    placeholder="e.g. slow zoom in..."
+                    className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)] transition-colors"
+                  />
                 )}
               </div>
             ))}
@@ -347,6 +410,105 @@ export default function UploadStep() {
               disabled={!!activePreset}
               className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-[var(--text-tertiary)] outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-50"
             />
+          </div>
+
+          {/* AI Music toggle */}
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <Music className="h-4 w-4 text-purple-400" />
+              <div>
+                <span className="text-sm font-medium text-white">AI Music</span>
+                <p className="text-[10px] text-[var(--text-tertiary)]">Custom instrumental soundtrack</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled });
+                haptic(5);
+              }}
+              role="switch"
+              aria-checked={state.aiMusicEnabled}
+              aria-label="Toggle AI generated music"
+              className={`relative h-6 w-11 rounded-full transition-colors ${
+                state.aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
+              } cursor-pointer`}
+            >
+              <div
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  state.aiMusicEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Voice clone */}
+          <div className="mt-2 rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Mic className="h-4 w-4 text-blue-400" />
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-white">Voice Clone</span>
+                    <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-medium text-blue-300">PRO</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--text-tertiary)]">
+                    AI narrates in your voice + creates a talking head intro
+                  </p>
+                </div>
+              </div>
+              {state.voiceSampleUrl && (
+                <button
+                  onClick={() => dispatch({ type: "SET_VOICE_SAMPLE", url: null })}
+                  className="text-xs text-red-400/60 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {state.voiceSampleUrl ? (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/10 p-2">
+                <Mic className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-xs text-emerald-300">Voice sample ready — AI will clone your voice and create a talking head intro</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => voiceInputRef.current?.click()}
+                disabled={voiceUploading}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-500/20 bg-white/[0.02] px-4 py-2 text-xs text-[var(--text-tertiary)] transition-colors hover:border-blue-400/40 hover:text-blue-300 disabled:opacity-50"
+              >
+                {voiceUploading ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing...</>
+                ) : (
+                  <><Upload className="h-3.5 w-3.5" /> Upload 10-30s voice sample (MP3, WAV, M4A)</>
+                )}
+              </button>
+            )}
+          </div>
+          <input
+            ref={voiceInputRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleVoiceSample(file);
+              e.target.value = "";
+            }}
+          />
+
+          {/* What AI will create — feature teasers */}
+          <div className="mt-5 rounded-xl bg-gradient-to-br from-[var(--accent)]/5 to-purple-500/5 border border-[var(--accent)]/10 p-3">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+              AI will auto-create
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {AI_FEATURES.map(({ icon: Icon, label, color }) => (
+                <div key={label} className="flex items-center gap-1.5 rounded-lg bg-white/[0.03] px-2 py-1.5">
+                  <Icon className={`h-3 w-3 ${color}`} />
+                  <span className="text-[10px] text-[var(--text-secondary)]">{label}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* CTA */}
@@ -435,7 +597,8 @@ export default function UploadStep() {
         <div className="grid grid-cols-1 gap-2 text-sm text-[var(--text-secondary)] md:grid-cols-3 w-full max-w-lg">
           {[
             { icon: Wand2, label: "AI picks the best moments" },
-            { icon: Sparkles, label: "Music, SFX & animation added" },
+            { icon: Music, label: "Auto music, SFX & voiceover" },
+            { icon: Sparkles, label: "Photos auto-animated" },
           ].map(({ icon: Icon, label }) => (
             <div key={label} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
               <Icon className="h-3.5 w-3.5 text-[var(--accent)]" />
