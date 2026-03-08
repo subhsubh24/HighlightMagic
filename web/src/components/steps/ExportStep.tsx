@@ -1101,8 +1101,16 @@ function renderVideoClip(
       const va = video.videoWidth / video.videoHeight;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
-      if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
-      else { baseW = canvas.width; baseH = baseW / va; }
+      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full video without cropping
+        if (va > ca) { baseW = canvas.width; baseH = baseW / va; }
+        else { baseH = canvas.height; baseW = baseH * va; }
+      } else {
+        // Cover-fit for regular clips: fill canvas, crop if needed
+        if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
+        else { baseW = canvas.width; baseH = baseW / va; }
+      }
 
       const { trimStart, trimEnd } = instruction.clip;
       const velocityPreset = instruction.clip.velocityPreset ?? "normal";

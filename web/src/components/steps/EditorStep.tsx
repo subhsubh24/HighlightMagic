@@ -124,7 +124,7 @@ export default function EditorStep() {
       </div>
 
       {/* Full tape preview — the star of the show */}
-      <div className="w-full max-w-xs self-center">
+      <div className="w-full max-w-[240px] sm:max-w-xs self-center">
         <TapePreviewPlayer />
       </div>
 

@@ -484,12 +484,25 @@ export default function TapePreviewPlayer() {
       const sa = sw / sh;
       const ca = w / h;
       let dw: number, dh: number;
-      if (sa > ca) {
-        dh = h;
-        dw = dh * sa;
+      const isCardClip = entry.clip.id === "__intro__" || entry.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full video without cropping
+        if (sa > ca) {
+          dw = w;
+          dh = dw / sa;
+        } else {
+          dh = h;
+          dw = dh * sa;
+        }
       } else {
-        dw = w;
-        dh = dw / sa;
+        // Cover-fit for regular clips: fill canvas, crop if needed
+        if (sa > ca) {
+          dh = h;
+          dw = dh * sa;
+        } else {
+          dw = w;
+          dh = dw / sa;
+        }
       }
 
       // Ken Burns zoom for static photos only (animated photos are now video, skip Ken Burns)

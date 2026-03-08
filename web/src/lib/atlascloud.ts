@@ -299,20 +299,23 @@ export async function generatePhotoAnimation(
  */
 export async function submitTextToVideo(
   prompt: string,
-  duration: number = 5
+  duration: number = 5,
+  aspectRatio: string = "9:16"
 ): Promise<string> {
   return submitTask(MODELS.WAN_T2V, {
     prompt,
     duration: Math.max(2, Math.min(10, duration)),
+    aspect_ratio: aspectRatio,
   });
 }
 
 /** One-shot T2V (submit + poll). Returns video URL. */
 export async function generateTextToVideo(
   prompt: string,
-  duration: number = 5
+  duration: number = 5,
+  aspectRatio: string = "9:16"
 ): Promise<string> {
-  const predictionId = await submitTextToVideo(prompt, duration);
+  const predictionId = await submitTextToVideo(prompt, duration, aspectRatio);
   return pollTaskResult(predictionId);
 }
 
