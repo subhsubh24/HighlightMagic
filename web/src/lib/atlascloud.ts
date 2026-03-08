@@ -136,7 +136,7 @@ export async function submitTask(
     }
 
     const data = (await response.json()) as { data?: { id?: string } };
-    console.log(`[atlascloud] submit response:`, JSON.stringify(data));
+    console.log(`[atlascloud] submit response: id=${data?.data?.id ?? "none"}`);
     if (!data?.data?.id) {
       throw new Error("Atlas Cloud API returned no prediction ID");
     }

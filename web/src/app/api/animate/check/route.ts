@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       videoUrl: result.outputUrl,
       error: result.error,
     };
-    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl}` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
+    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl.slice(0, 80)}...` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
     return Response.json(clientResult);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

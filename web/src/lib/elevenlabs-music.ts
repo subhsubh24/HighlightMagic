@@ -73,8 +73,8 @@ export async function generateMusic(
         // ElevenLabs often returns a sanitized prompt_suggestion — retry with it
         const suggestion = errorData.detail?.data?.prompt_suggestion;
         if (!_isRetry && suggestion && typeof suggestion === "string" && suggestion !== prompt) {
-          console.log(`[elevenlabs-music] Prompt rejected, retrying with suggestion: "${suggestion.slice(0, 80)}..."`);
-          return generateMusic(suggestion, durationMs, true);
+          console.warn(`[Music] Prompt rejected by ElevenLabs, retrying once with their suggestion: "${suggestion.slice(0, 80)}..."`);
+          return generateMusic(suggestion, durationMs, true /* prevent further recursion */);
         }
         return {
           status: "failed",
