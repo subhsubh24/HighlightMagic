@@ -19,7 +19,7 @@ import {
   type TransitionType,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import { createAudioPipeline, type AudioPipeline, type ScheduledAudioLayer } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
@@ -926,7 +926,8 @@ async function renderHighlightTape(
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
-    let clipDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+    const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+    let clipDur = getEffectiveDuration(sourceDur, clips[i].clip.velocityPreset, clips[i].clip.customVelocityKeyframes);
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDur / beatGrid.beatInterval));
       clipDur = beats * beatGrid.beatInterval;
@@ -1173,9 +1174,13 @@ function renderVideoClip(
 
           // Stop if video reached trim end
           if (video.currentTime >= trimEnd) {
-            // Hold last frame for remaining canvas time — still draw overlays
+            // Hold last frame for remaining canvas time — redraw video frame + overlays
             if (canvasElapsedMs < canvasDurationMs) {
               onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
+              // Redraw the held video frame to clear previous overlay compositing
+              ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              ctx.filter = "none";
               drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
               requestAnimationFrame(drawFrame);
               return;
@@ -1211,6 +1216,9 @@ function renderVideoClip(
 
           const entryScale = getClipEntryScale(canvasElapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
+          // Ken Burns — slow zoom over clip duration (AI controls intensity)
+          const kenBurnsScale = 1 + (canvasElapsedMs / canvasDurationMs) * (style.kenBurnsIntensity ?? 0);
+
           // Beat pulse — AI controls intensity (use global timeline time for beat sync)
           let beatPulse = 1;
           let currentBeatIntensity = 0;
@@ -1223,7 +1231,7 @@ function renderVideoClip(
             const progress = canvasElapsedSec / style.transitionDuration;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
               const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-              const totalScale = inTransform.scale * entryScale * beatPulse;
+              const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
               const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
@@ -1233,7 +1241,7 @@ function renderVideoClip(
               ctx.filter = "none";
             }, neonColorHexes, aiRenderOpts);
           } else {
-            const totalScale = entryScale * beatPulse;
+            const totalScale = entryScale * beatPulse * kenBurnsScale;
             const dw = baseW * totalScale;
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2;

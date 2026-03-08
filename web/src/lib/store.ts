@@ -192,10 +192,12 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "REMOVE_CLIP": {
       const filtered = state.clips.filter((c) => c.id !== action.clipId).map((c, i) => ({ ...c, order: i }));
+      // Keep activeClipId if it still exists, otherwise fall back to nearest clip
+      const activeStillExists = state.activeClipId && filtered.some((c) => c.id === state.activeClipId);
       return {
         ...state,
         clips: filtered,
-        activeClipId: filtered[0]?.id ?? null,
+        activeClipId: activeStillExists ? state.activeClipId : (filtered[0]?.id ?? null),
       };
     }
     case "INCREMENT_EXPORTS":

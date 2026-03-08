@@ -14,7 +14,7 @@ import {
   type TransitionTransform,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import type { EditedClip, SfxTrack, VoiceoverSegment } from "@/lib/types";
 
@@ -127,7 +127,7 @@ export default function TapePreviewPlayer() {
         clip: introClip,
         mediaUrl: state.introCard.videoUrl,
         mediaType: "video",
-        filterCSS: "",
+        filterCSS: "none",
         captionText: "",
         globalStart: 0,
         globalEnd: introDur,
@@ -140,7 +140,9 @@ export default function TapePreviewPlayer() {
       const clip = sortedClips[i];
       const media = getMediaFile(state, clip.sourceFileId);
       if (!media) continue;
-      let dur = clip.trimEnd - clip.trimStart;
+      const sourceDur = clip.trimEnd - clip.trimStart;
+      // Account for velocity/speed ramping — effective duration may differ from source
+      let dur = getEffectiveDuration(sourceDur, clip.velocityPreset, clip.customVelocityKeyframes);
 
       // Beat-sync: snap duration to nearest beat boundary
       if (beatGrid && beatGrid.beatInterval > 0) {
@@ -187,7 +189,7 @@ export default function TapePreviewPlayer() {
         clip: outroClip,
         mediaUrl: state.outroCard.videoUrl,
         mediaType: "video",
-        filterCSS: "",
+        filterCSS: "none",
         captionText: "",
         globalStart: t,
         globalEnd: t + outroDur,
@@ -196,7 +198,7 @@ export default function TapePreviewPlayer() {
     }
 
     return entries;
-  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard]);
+  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard, state.aiProductionPlan?.defaultTransitionDuration]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 

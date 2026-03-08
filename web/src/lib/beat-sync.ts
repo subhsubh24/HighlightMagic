@@ -128,8 +128,9 @@ export function buildBeatSyncedTimeline(
     // Next clip starts at (this clip end) minus transition overlap, expressed in beats
     cumulativeBeats += beats;
     if (i < clips.length - 1) {
-      // Subtract transition overlap in beat units (floor to avoid fractional beat starts)
-      const overlapBeats = Math.floor(clipTransDuration / grid.beatInterval);
+      // Subtract transition overlap in beat units (round to nearest beat, min 1 if overlap > 0)
+      const rawOverlapBeats = clipTransDuration / grid.beatInterval;
+      const overlapBeats = clipTransDuration > 0 ? Math.max(1, Math.round(rawOverlapBeats)) : 0;
       cumulativeBeats -= overlapBeats;
     }
   }

@@ -21,7 +21,12 @@ export default function ResultsStep() {
   const [customFeedback, setCustomFeedback] = useState("");
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
-  const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const totalDuration = sortedClips.reduce((sum, c, i) => {
+    const dur = c.trimEnd - c.trimStart;
+    const overlap = (i < sortedClips.length - 1) ? (sortedClips[i + 1]?.transitionDuration ?? defaultTransDur) : 0;
+    return sum + dur - overlap;
+  }, 0);
 
   // Check if regeneration is possible (cached data available)
   const canRegenerate = getCachedDetectionData().frames !== null;

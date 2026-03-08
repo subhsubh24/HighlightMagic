@@ -763,6 +763,20 @@ export default function DetectingStep() {
       // ══════════════════════════════════════════════════════════
       const productionPlan = result.productionPlan;
 
+      // Build remapped SFX/voiceover/thumbnail with post-filter clip indices
+      // so generation dispatches use correct indices throughout
+      const remappedSfx = productionPlan?.sfx
+        .filter((s) => clipIndexMap.has(s.clipIndex))
+        .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })) ?? [];
+      const remappedVoSegments = productionPlan?.voiceover?.segments
+        .filter((s) => clipIndexMap.has(s.clipIndex))
+        .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })) ?? [];
+      const remappedThumbnail = productionPlan?.thumbnail
+        ? (clipIndexMap.has(productionPlan.thumbnail.sourceClipIndex)
+            ? { ...productionPlan.thumbnail, sourceClipIndex: clipIndexMap.get(productionPlan.thumbnail.sourceClipIndex)! }
+            : null)
+        : null;
+
       // Store the production plan in state
       if (productionPlan) {
         dispatch({
@@ -770,19 +784,15 @@ export default function DetectingStep() {
           plan: {
             intro: productionPlan.intro,
             outro: productionPlan.outro,
-            sfx: productionPlan.sfx
-              .filter((s) => clipIndexMap.has(s.clipIndex))
-              .map((s) => ({
-                clipIndex: clipIndexMap.get(s.clipIndex)!,
+            sfx: remappedSfx.map((s) => ({
+                clipIndex: s.clipIndex,
                 timing: s.timing as "before" | "on" | "after",
                 prompt: s.prompt,
                 durationMs: s.durationMs,
               })),
             voiceover: {
               ...productionPlan.voiceover,
-              segments: productionPlan.voiceover.segments
-                .filter((s) => clipIndexMap.has(s.clipIndex))
-                .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })),
+              segments: remappedVoSegments,
               delaySec: productionPlan.voiceover.delaySec ?? 0.3,
             },
             musicPrompt: productionPlan.musicPrompt,
@@ -813,8 +823,10 @@ export default function DetectingStep() {
             strobeFlashAlpha: productionPlan.strobeFlashAlpha,
             lightLeakColor: productionPlan.lightLeakColor,
             glitchColors: productionPlan.glitchColors,
-            thumbnail: productionPlan.thumbnail,
-            photoAnimationPrompts: {},
+            thumbnail: remappedThumbnail,
+            photoAnimationPrompts: Object.fromEntries(
+              detectedClips.filter((c) => c.animationPrompt).map((c) => [c.sourceFileId, c.animationPrompt!])
+            ),
             styleTransfer: productionPlan.styleTransfer ?? null,
             talkingHeadSpeech: productionPlan.talkingHeadSpeech ?? null,
           },
@@ -871,12 +883,12 @@ export default function DetectingStep() {
       // 2. SFX generation — skip if already started early (Arch #4)
       const sfxPromise = earlySfxStartedRef.current
         ? null // Already started from streaming partial field
-        : (productionPlan && productionPlan.sfx.length > 0)
+        : (remappedSfx.length > 0)
         ? (async () => {
             dispatch({ type: "SET_SFX_STATUS", status: "generating" });
             dispatch({
               type: "SET_SFX_TRACKS",
-              tracks: productionPlan.sfx.map((s) => ({
+              tracks: remappedSfx.map((s) => ({
                 clipIndex: s.clipIndex,
                 timing: s.timing as "before" | "on" | "after",
                 prompt: s.prompt,
@@ -887,7 +899,7 @@ export default function DetectingStep() {
             try {
               // Limit concurrency to 3 to avoid ElevenLabs rate limits
               const SFX_CONCURRENCY = 3;
-              const sfxQueue = [...productionPlan.sfx];
+              const sfxQueue = [...remappedSfx];
               const processSfxCue = async (sfxCue: typeof sfxQueue[0]) => {
                 try {
                   const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
@@ -964,15 +976,15 @@ export default function DetectingStep() {
 
       // 3. Voiceover generation — sequential for voice consistency
       // If user provided a voice sample, await clone completion and use cloned voice
-      const voiceoverPromise = (productionPlan?.voiceover?.enabled && productionPlan.voiceover.segments.length > 0)
+      const voiceoverPromise = (productionPlan?.voiceover?.enabled && remappedVoSegments.length > 0)
         ? (async () => {
-            const vo = productionPlan.voiceover;
+            const vo = productionPlan!.voiceover;
             // Prefer cloned voice over AI-picked voiceCharacter
             const resolvedVoiceId = voiceClonePromise ? await voiceClonePromise : null;
             dispatch({ type: "SET_VOICEOVER_STATUS", status: "generating" });
             dispatch({
               type: "SET_VOICEOVER_SEGMENTS",
-              segments: vo.segments.map((s) => ({
+              segments: remappedVoSegments.map((s) => ({
                 clipIndex: s.clipIndex,
                 text: s.text,
                 duration: 0,
@@ -980,7 +992,7 @@ export default function DetectingStep() {
               })),
             });
             try {
-              for (const segment of vo.segments) {
+              for (const segment of remappedVoSegments) {
                 try {
                   // Check voiceover cache first
                   const voCacheKey = cacheKey("vo", { text: segment.text, voice: vo.voiceCharacter });
