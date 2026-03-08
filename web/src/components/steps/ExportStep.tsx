@@ -24,7 +24,7 @@ import {
 import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
-import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
+import { createAudioPipeline, type AudioPipeline, type ScheduledAudioLayer } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions, AppState } from "@/lib/types";
@@ -71,6 +71,37 @@ async function tryServerRender(
     const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
     if (state.aiMusicUrl) {
       audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: 0.7 });
+    }
+
+    // Compute per-clip timeline offsets for voiceover / SFX placement
+    const clipStarts: number[] = [];
+    const clipEnds: number[] = [];
+    let t = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const dur = clips[i].trimEnd - clips[i].trimStart;
+      clipStarts.push(t);
+      clipEnds.push(t + dur);
+      t += dur - (clips[i + 1]?.transitionDuration ?? 0.3);
+    }
+
+    // Voiceover segments
+    for (const vo of state.voiceoverSegments ?? []) {
+      if (!vo.audioUrl || vo.status !== "completed") continue;
+      const start = clipStarts[vo.clipIndex];
+      if (start == null) continue;
+      audioLayers.push({ url: vo.audioUrl, startTime: start + 0.3, volume: 1.0 });
+    }
+
+    // SFX tracks
+    for (const sfx of state.sfxTracks ?? []) {
+      if (!sfx.audioUrl || sfx.status !== "completed") continue;
+      const clipStart = clipStarts[sfx.clipIndex];
+      const clipEnd = clipEnds[sfx.clipIndex];
+      if (clipStart == null) continue;
+      let sfxStart = clipStart;
+      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - 0.5);
+      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - 0.3;
+      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: 0.8 });
     }
 
     const res = await fetch("/api/render", {
@@ -316,6 +347,36 @@ export default function ExportStep() {
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
+      // Build scheduled audio layers for voiceover + SFX
+      const scheduled: ScheduledAudioLayer[] = [];
+      {
+        const cStarts: number[] = [];
+        const cEnds: number[] = [];
+        let st = 0;
+        for (let i = 0; i < sortedClips.length; i++) {
+          const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          cStarts.push(st);
+          cEnds.push(st + dur);
+          st += dur - (sortedClips[i + 1]?.transitionDuration ?? 0.3);
+        }
+        for (const vo of state.voiceoverSegments ?? []) {
+          if (!vo.audioUrl || vo.status !== "completed") continue;
+          const s = cStarts[vo.clipIndex];
+          if (s == null) continue;
+          scheduled.push({ url: vo.audioUrl, startTime: s + 0.3, volume: 1.0 });
+        }
+        for (const sfx of state.sfxTracks ?? []) {
+          if (!sfx.audioUrl || sfx.status !== "completed") continue;
+          const cs = cStarts[sfx.clipIndex];
+          const ce = cEnds[sfx.clipIndex];
+          if (cs == null) continue;
+          let sfxS = cs;
+          if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
+          else if (sfx.timing === "after") sfxS = (ce ?? cs) - 0.3;
+          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: 0.8 });
+        }
+      }
+
       const blob = await renderHighlightTape(
         renderClips,
         isFree ? WATERMARK_TEXT : null,
@@ -324,6 +385,7 @@ export default function ExportStep() {
         mimeType,
         (pct) => setProgress(pct),
         state.aiMusicUrl,
+        scheduled,
       );
 
       const url = URL.createObjectURL(blob);
@@ -510,9 +572,7 @@ export default function ExportStep() {
                 className="h-full w-full object-contain"
                 controls
                 playsInline
-                autoPlay
                 loop
-                muted
               />
             </div>
           )}
@@ -664,6 +724,7 @@ async function renderHighlightTape(
   mimeType: string,
   onProgress: (pct: number) => void,
   aiMusicUrl?: string | null,
+  scheduledLayers?: ScheduledAudioLayer[],
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
@@ -702,7 +763,7 @@ async function renderHighlightTape(
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(30);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers);
   // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {

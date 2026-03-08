@@ -48,6 +48,13 @@ export interface AudioPipeline {
   cleanup(): void;
 }
 
+/** A scheduled audio layer (voiceover, SFX) to mix into the render. */
+export interface ScheduledAudioLayer {
+  url: string;
+  startTime: number;   // seconds from render start
+  volume: number;      // 0-1
+}
+
 /** Volume for background music when clip audio is also playing (0-1). */
 const MUSIC_VOLUME_WITH_CLIPS = 0.25;
 
@@ -60,6 +67,7 @@ export async function createAudioPipeline(
   canvasStream: MediaStream,
   track: MusicTrack | null,
   aiMusicUrl?: string | null,
+  scheduledLayers?: ScheduledAudioLayer[],
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -87,6 +95,29 @@ export async function createAudioPipeline(
       }
     } catch {
       // Music load failed — continue without it
+    }
+  }
+
+  // Schedule voiceover / SFX layers at their designated times
+  const scheduledSources: AudioBufferSourceNode[] = [];
+  if (scheduledLayers && scheduledLayers.length > 0) {
+    for (const layer of scheduledLayers) {
+      try {
+        const response = await fetch(layer.url);
+        if (!response.ok) continue;
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        const gain = audioCtx.createGain();
+        gain.gain.value = layer.volume;
+        source.connect(gain);
+        gain.connect(dest);
+        source.start(Math.max(0, layer.startTime));
+        scheduledSources.push(source);
+      } catch {
+        // Skip failed layer
+      }
     }
   }
 
@@ -133,6 +164,9 @@ export async function createAudioPipeline(
       try {
         if (musicSource) musicSource.stop();
       } catch { /* already stopped */ }
+      for (const s of scheduledSources) {
+        try { s.stop(); } catch { /* already stopped */ }
+      }
       audioCtx.close();
     },
   };
