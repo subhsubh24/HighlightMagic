@@ -382,13 +382,21 @@ export default function DetectingStep() {
     }
 
     let earlyMusicDurationMs: number | undefined;
+    let earlyMusicPrompt: string | undefined;
     function handlePartialField(field: string, value: unknown) {
       if (field === "musicPrompt" && typeof value === "string") {
-        startMusicEarly(value, earlyMusicDurationMs);
+        earlyMusicPrompt = value;
+        // If duration already arrived, start immediately; otherwise defer
+        // until musicDurationMs arrives (or processResult starts it with full plan)
+        if (earlyMusicDurationMs !== undefined) {
+          startMusicEarly(value, earlyMusicDurationMs);
+        }
       } else if (field === "musicDurationMs" && typeof value === "number") {
         earlyMusicDurationMs = value;
-        // If musicPrompt already arrived, we can't update — but this is fine,
-        // musicDurationMs usually streams before musicPrompt in practice.
+        // If musicPrompt already arrived, start now with the correct duration
+        if (earlyMusicPrompt) {
+          startMusicEarly(earlyMusicPrompt, value);
+        }
       } else if (field === "sfx" && Array.isArray(value)) {
         startSfxEarly(value as Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>);
       }
@@ -531,7 +539,9 @@ export default function DetectingStep() {
       let pollCount = 0;
       let status: Awaited<ReturnType<typeof pollScoringBatch>>;
       do {
+        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
         await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
+        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
         status = await pollScoringBatch(batchId);
         pollCount++;
         const total = status.counts.processing + status.counts.succeeded +
@@ -673,12 +683,14 @@ export default function DetectingStep() {
       }
 
       // Validate AI output — filter out clips with invalid time ranges
+      // Use mediaFilesRef.current to avoid stale closure on state.mediaFiles
+      const currentMediaFiles = mediaFilesRef.current;
       const detectedClips = result.clips.filter((c) => {
         if (c.startTime >= c.endTime) {
           console.warn(`Dropping clip: startTime (${c.startTime}) >= endTime (${c.endTime})`);
           return false;
         }
-        const media = state.mediaFiles.find((m) => m.id === c.sourceFileId);
+        const media = currentMediaFiles.find((m) => m.id === c.sourceFileId);
         if (media && media.duration > 0 && c.endTime > media.duration + 1) {
           console.warn(`Clip endTime (${c.endTime}s) exceeds source "${media.name}" duration (${media.duration}s)`);
         }
@@ -691,7 +703,7 @@ export default function DetectingStep() {
 
       // Animate any photos that the user marked or that Opus gave an animationPrompt
       const animatableSourceIds = new Set(
-        state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
+        currentMediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
       );
       const animatableClips = detectedClips.filter(
         (c) => c.animationPrompt || animatableSourceIds.has(c.sourceFileId)
@@ -1024,11 +1036,14 @@ export default function DetectingStep() {
               const data = await res.json();
               if (res.ok && data.status === "completed" && data.voiceId) {
                 dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
+                return data.voiceId as string;
               } else {
                 dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+                return null;
               }
             } catch {
               dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+              return null;
             }
           })()
         : null;
@@ -1072,11 +1087,12 @@ export default function DetectingStep() {
               },
             });
             try {
-              // Wait for voice clone to complete
-              if (voiceClonePromise) await voiceClonePromise;
+              // Wait for voice clone to complete and get the voiceId directly
+              // (state.clonedVoiceId would be stale — captured at useEffect fire time)
+              const clonedVoiceId = voiceClonePromise ? await voiceClonePromise : null;
 
               // Find a photo to use as the talking head source (first uploaded photo)
-              const photoMedia = state.mediaFiles.find((m) => m.type === "photo");
+              const photoMedia = mediaFilesRef.current.find((m) => m.type === "photo");
               if (!photoMedia) {
                 dispatch({
                   type: "SET_TALKING_HEAD",
@@ -1086,7 +1102,7 @@ export default function DetectingStep() {
               }
 
               // Generate TTS for the speech (using cloned voice if available)
-              const voiceId = state.clonedVoiceId;
+              const voiceId = clonedVoiceId;
               const ttsRes = await fetch("/api/voiceover", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1150,7 +1166,7 @@ export default function DetectingStep() {
       // 9. Auto-upscale low-res photos before animation
       // Map of mediaId → upscaled URL, shared with animation pipeline
       const upscaledUrls = new Map<string, string>();
-      const upscalePromises = state.mediaFiles
+      const upscalePromises = currentMediaFiles
         .filter((m) => m.type === "photo" && m.animatePhoto)
         .map(async (media) => {
           try {
@@ -1188,7 +1204,7 @@ export default function DetectingStep() {
       if (animatableClips.length > 0) {
         setProgress(92);
         const uniquePhotoCount = new Set(
-          animatableClips.filter((c) => state.mediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
+          animatableClips.filter((c) => currentMediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
         ).size;
         setAnimationProgress({ total: uniquePhotoCount, completed: 0, failed: 0 });
         setAnimatingPhotos(true);
@@ -1274,9 +1290,11 @@ export default function DetectingStep() {
       });
 
       // Track completions — progress goes from 92% to 99% as animations finish
+      // Use ref to avoid stale closure on state.mediaFiles
+      const latestMediaFiles = mediaFilesRef.current;
       let completedAnimations = 0;
       const totalAnimations = uniqueClips.filter((c) => {
-        const m = state.mediaFiles.find((f) => f.id === c.sourceFileId);
+        const m = latestMediaFiles.find((f) => f.id === c.sourceFileId);
         return m && m.type === "photo";
       }).length;
 
@@ -1289,7 +1307,7 @@ export default function DetectingStep() {
       const promises: Promise<void>[] = [];
 
       for (const clip of uniqueClips) {
-        const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
+        const media = latestMediaFiles.find((m) => m.id === clip.sourceFileId);
         if (!media || media.type !== "photo") continue;
 
         // Determine the animation prompt:

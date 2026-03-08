@@ -117,6 +117,9 @@ export function pollBatched(
   // If already being polled, return a new promise that piggybacks
   const existing = pendingTasks.get(predictionId);
   if (existing) {
+    // Extend deadline to whichever caller has the longer timeout
+    const newDeadline = Date.now() + (options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    existing.deadline = Math.max(existing.deadline, newDeadline);
     return new Promise<string>((resolve, reject) => {
       const orig = existing;
       const origResolve = orig.resolve;
@@ -141,10 +144,14 @@ export function pollBatched(
 
 /**
  * Cancel polling for a specific prediction ID.
- * The promise will neither resolve nor reject (it stays pending).
+ * The associated promise is rejected with a cancellation error.
  */
 export function cancelPoll(predictionId: string) {
-  pendingTasks.delete(predictionId);
+  const task = pendingTasks.get(predictionId);
+  if (task) {
+    pendingTasks.delete(predictionId);
+    task.reject(new Error(`Polling cancelled for ${predictionId}`));
+  }
 }
 
 /**

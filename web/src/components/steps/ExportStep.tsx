@@ -209,14 +209,30 @@ export default function ExportStep() {
       if (media.type === "video") {
         const video = document.createElement("video");
         video.crossOrigin = "anonymous";
+        video.preload = "auto";
         video.src = media.url;
-        video.currentTime = plan.thumbnail.frameTime;
-        await new Promise<void>((resolve) => { video.onseeked = () => resolve(); video.load(); });
-        if (abort.signal.aborted) return;
+        // Correct lifecycle: load → wait for loadeddata → seek → wait for seeked
+        await new Promise<void>((resolve, reject) => {
+          video.onloadeddata = () => {
+            video.currentTime = plan.thumbnail!.frameTime;
+            video.onseeked = () => resolve();
+          };
+          video.onerror = () => reject(new Error("Failed to load video for thumbnail"));
+          video.load();
+        });
+        if (abort.signal.aborted) {
+          video.src = "";
+          video.removeAttribute("src");
+          return;
+        }
         const c = document.createElement("canvas");
         c.width = 1080; c.height = 1920;
         const ctx = c.getContext("2d")!;
         ctx.drawImage(video, 0, 0, c.width, c.height);
+        // Clean up the video element to release memory
+        video.src = "";
+        video.removeAttribute("src");
+        video.load();
         const frameDataUri = c.toDataURL("image/jpeg", 0.9);
 
         // Submit to BG removal
@@ -960,6 +976,8 @@ function renderVideoClip(
           if (canvasElapsedMs >= canvasDurationMs || video.paused) {
             video.pause();
             disconnectAudio();
+            video.src = "";
+            video.removeAttribute("src");
             resolve();
             return;
           }
@@ -973,6 +991,8 @@ function renderVideoClip(
             }
             video.pause();
             disconnectAudio();
+            video.src = "";
+            video.removeAttribute("src");
             resolve();
             return;
           }
@@ -1042,6 +1062,8 @@ function renderVideoClip(
 
     video.onerror = () => {
       disconnectAudio();
+      video.src = "";
+      video.removeAttribute("src");
       reject(new Error("Failed to load video for rendering"));
     };
   });
