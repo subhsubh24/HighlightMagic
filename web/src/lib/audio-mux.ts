@@ -55,8 +55,10 @@ export interface ScheduledAudioLayer {
   volume: number;      // 0-1
 }
 
-/** Volume for background music when clip audio is also playing (0-1). */
-const MUSIC_VOLUME_WITH_CLIPS = 0.25;
+/** Volume for background music — matches TapePreviewPlayer (0.5). */
+const MUSIC_VOLUME = 0.5;
+/** Ducked music volume when voiceover is playing. */
+const MUSIC_DUCKED_VOLUME = 0.15;
 
 /**
  * Create a persistent audio pipeline for the render session.
@@ -85,6 +87,8 @@ export async function createAudioPipeline(
     ? (track.id === "__ai_generated__" && aiMusicUrl ? aiMusicUrl : `/audio/${track.fileName}.mp3`)
     : aiMusicUrl || null;
 
+  let musicGainNode: GainNode | null = null;
+
   if (musicUrl) {
     try {
       const response = await fetch(musicUrl);
@@ -94,10 +98,10 @@ export async function createAudioPipeline(
         musicSource = audioCtx.createBufferSource();
         musicSource.buffer = buffer;
         musicSource.loop = true;
-        const musicGain = audioCtx.createGain();
-        musicGain.gain.value = MUSIC_VOLUME_WITH_CLIPS;
-        musicSource.connect(musicGain);
-        musicGain.connect(dest);
+        musicGainNode = audioCtx.createGain();
+        musicGainNode.gain.value = MUSIC_VOLUME;
+        musicSource.connect(musicGainNode);
+        musicGainNode.connect(dest);
         musicSource.start(0);
       }
     } catch {
@@ -107,6 +111,9 @@ export async function createAudioPipeline(
 
   // Schedule voiceover / SFX layers at their designated times
   const scheduledSources: AudioBufferSourceNode[] = [];
+  // Track voiceover timing for auto-ducking music
+  const voiceovers: { startTime: number; duration: number }[] = [];
+
   if (scheduledLayers && scheduledLayers.length > 0) {
     for (const layer of scheduledLayers) {
       try {
@@ -122,9 +129,25 @@ export async function createAudioPipeline(
         gain.connect(dest);
         source.start(Math.max(0, layer.startTime));
         scheduledSources.push(source);
+
+        // If this is a voiceover layer (volume 1.0), record timing for ducking
+        if (layer.volume === 1.0) {
+          voiceovers.push({ startTime: layer.startTime, duration: buffer.duration });
+        }
       } catch {
         // Skip failed layer
       }
+    }
+  }
+
+  // Auto-duck music during voiceover — matches TapePreviewPlayer behavior
+  if (musicGainNode && voiceovers.length > 0) {
+    for (const vo of voiceovers) {
+      const voEnd = vo.startTime + vo.duration;
+      musicGainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, Math.max(0, vo.startTime - 0.2));
+      musicGainNode.gain.linearRampToValueAtTime(MUSIC_DUCKED_VOLUME, vo.startTime);
+      musicGainNode.gain.linearRampToValueAtTime(MUSIC_DUCKED_VOLUME, voEnd);
+      musicGainNode.gain.linearRampToValueAtTime(MUSIC_VOLUME, voEnd + 0.3);
     }
   }
 
