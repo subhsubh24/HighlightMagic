@@ -451,6 +451,18 @@ export default function ExportStep() {
         });
       }
 
+      // Pre-validate: remove clips with missing media URLs (expired blobs, missing sources)
+      const validRenderClips = renderClips.filter((rc) => {
+        if (!rc.mediaUrl) {
+          console.warn(`Export: dropping clip "${rc.clip.id}" — empty media URL (source may have been removed)`);
+          return false;
+        }
+        return true;
+      });
+      if (validRenderClips.length === 0) {
+        throw new Error("No valid clips to render — all media URLs are missing. Try re-uploading your files.");
+      }
+
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
@@ -497,7 +509,7 @@ export default function ExportStep() {
       }
 
       const blob = await renderHighlightTape(
-        renderClips,
+        validRenderClips,
         isFree ? WATERMARK_TEXT : null,
         state.detectedTheme,
         state.viralOptions,
@@ -1125,6 +1137,11 @@ function renderVideoClip(
   globalTimelineOffset: number = 0
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (!instruction.mediaUrl) {
+      console.warn(`Export: skipping clip "${instruction.clip.id}" — no media URL`);
+      resolve();
+      return;
+    }
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
     video.src = instruction.mediaUrl;
@@ -1274,12 +1291,15 @@ function renderVideoClip(
       };
     };
 
-    video.onerror = () => {
+    video.onerror = (e) => {
+      const clipId = instruction.clip.id;
+      const src = instruction.mediaUrl?.slice(0, 80);
+      console.error(`Export: video load failed for clip "${clipId}", src="${src}"`, e);
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
       video.load();
-      reject(new Error("Failed to load video for rendering"));
+      reject(new Error(`Failed to load video for clip "${clipId}" — the media URL may have expired or the format is unsupported. src: ${src}`));
     };
   });
 }
@@ -1306,6 +1326,11 @@ function renderPhotoClip(
   globalTimelineOffset: number = 0
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (!instruction.mediaUrl) {
+      console.warn(`Export: skipping photo clip "${instruction.clip.id}" — no media URL`);
+      resolve();
+      return;
+    }
     const img = new window.Image();
     img.crossOrigin = "anonymous";
 
@@ -1389,7 +1414,12 @@ function renderPhotoClip(
       requestAnimationFrame(drawFrame);
     };
 
-    img.onerror = () => { img.src = ""; reject(new Error("Failed to load image for rendering")); };
+    img.onerror = (e) => {
+      const clipId = instruction.clip.id;
+      console.error(`Export: image load failed for clip "${clipId}"`, e);
+      img.src = "";
+      reject(new Error(`Failed to load image for clip "${clipId}" — the media URL may have expired`));
+    };
     img.src = instruction.mediaUrl;
   });
 }
