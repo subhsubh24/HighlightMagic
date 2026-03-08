@@ -240,7 +240,16 @@ export default function ExportStep() {
   }, [blobUrl]);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
-  const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const totalDuration = sortedClips.reduce((sum, c, i) => {
+    let dur = sum + (c.trimEnd - c.trimStart);
+    if (i < sortedClips.length - 1) {
+      dur -= sortedClips[i + 1]?.transitionDuration ?? defaultTransDurPreview;
+    }
+    return dur;
+  }, 0)
+    + (state.introCard?.status === "completed" && state.introCard.videoUrl ? (state.introCard.duration ?? 4) : 0)
+    + (state.outroCard?.status === "completed" && state.outroCard.videoUrl ? (state.outroCard.duration ?? 4) : 0);
   const style = getEditingStyle(state.detectedTheme);
   const hasMusic = sortedClips.some((c) => c.selectedMusicTrack);
 
@@ -496,6 +505,7 @@ export default function ExportStep() {
         cPlan?.beatSyncToleranceMs ?? 50,
         cPlan ? {
           beatPulseIntensity: cPlan.beatPulseIntensity,
+          beatFlashOpacity: cPlan.beatFlashOpacity,
           captionFontSize: cPlan.captionFontSize,
           captionVerticalPosition: cPlan.captionVerticalPosition,
           captionShadowColor: cPlan.captionShadowColor,
@@ -957,11 +967,11 @@ async function renderHighlightTape(
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs, aiRenderOpts);
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs, aiRenderOpts, elapsedTotal);
     } else {
       await renderVideoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts);
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts, elapsedTotal);
     }
 
     // Save first frame for seamless loop
@@ -983,6 +993,10 @@ async function renderHighlightTape(
     }
 
     elapsedTotal += clipDuration;
+    // Subtract transition overlap to keep elapsedTotal aligned with totalDuration
+    if (i < clips.length - 1) {
+      elapsedTotal -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
+    }
   }
 
   // Seamless loop: cross-fade last frame into first frame
@@ -995,6 +1009,9 @@ async function renderHighlightTape(
   return new Promise((resolve) => {
     recorder.onstop = () => {
       audioPipeline.cleanup();
+      // Clean up temporary canvases
+      crossfadeCanvas = null;
+      firstFrameCanvas = null;
       onProgress(100);
       const blobType = mimeType.includes("mp4") ? "video/mp4" : "video/webm";
       resolve(new Blob(chunks, { type: blobType }));
@@ -1019,17 +1036,16 @@ function renderLoopCrossfade(
     lastFrameCanvas.height = canvas.height;
     lastFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
 
-    const durationMs = durationSec * 1000;
-    const startTime = performance.now();
+    const totalFrames = Math.max(1, Math.round(durationSec * EXPORT_FRAME_RATE));
+    let frame = 0;
 
     const drawFrame = () => {
-      const elapsed = performance.now() - startTime;
-      if (elapsed >= durationMs) {
+      if (frame >= totalFrames) {
         resolve();
         return;
       }
 
-      const progress = elapsed / durationMs;
+      const progress = frame / totalFrames;
 
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1046,6 +1062,7 @@ function renderLoopCrossfade(
       ctx.drawImage(firstFrameCanvas, 0, 0);
       ctx.restore();
 
+      frame++;
       requestAnimationFrame(drawFrame);
     };
 
@@ -1056,6 +1073,7 @@ function renderLoopCrossfade(
 /** AI rendering options passed through to export render functions */
 interface ExportAiRenderOptions {
   beatPulseIntensity?: number;
+  beatFlashOpacity?: number;
   captionFontSize?: number;
   captionVerticalPosition?: number;
   captionShadowColor?: string;
@@ -1087,7 +1105,8 @@ function renderVideoClip(
   captionExit: number = 0.3,
   neonColorHexes?: string[],
   beatTolerance: number = 50,
-  aiRenderOpts?: ExportAiRenderOptions
+  aiRenderOpts?: ExportAiRenderOptions,
+  globalTimelineOffset: number = 0
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -1125,20 +1144,24 @@ function renderVideoClip(
         const drawFrame = () => {
           const canvasElapsedMs = performance.now() - renderStartTime;
           const canvasElapsedSec = canvasElapsedMs / 1000;
+          const globalTime = globalTimelineOffset + canvasElapsedSec;
 
           if (canvasElapsedMs >= canvasDurationMs || video.paused) {
             video.pause();
             disconnectAudio();
             video.src = "";
             video.removeAttribute("src");
+            video.load();
             resolve();
             return;
           }
 
           // Stop if video reached trim end
           if (video.currentTime >= trimEnd) {
-            // Hold last frame for remaining canvas time
+            // Hold last frame for remaining canvas time — still draw overlays
             if (canvasElapsedMs < canvasDurationMs) {
+              onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
+              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
               requestAnimationFrame(drawFrame);
               return;
             }
@@ -1146,6 +1169,7 @@ function renderVideoClip(
             disconnectAudio();
             video.src = "";
             video.removeAttribute("src");
+            video.load();
             resolve();
             return;
           }
@@ -1172,11 +1196,12 @@ function renderVideoClip(
 
           const entryScale = getClipEntryScale(canvasElapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-          // Beat pulse — AI controls intensity
+          // Beat pulse — AI controls intensity (use global timeline time for beat sync)
           let beatPulse = 1;
+          let currentBeatIntensity = 0;
           if (beatGrid) {
-            const intensity = getBeatIntensity(canvasElapsedSec, beatGrid, beatTolerance);
-            beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
+            currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
+            beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
           }
 
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
@@ -1207,7 +1232,7 @@ function renderVideoClip(
 
           // Beat flash overlay — matches TapePreviewPlayer behavior
           if (beatGrid) {
-            const beatInt = getBeatIntensity(canvasElapsedSec, beatGrid, beatTolerance);
+            const beatInt = currentBeatIntensity;
             const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
             if (beatInt > 0.5 && beatFlashMax > 0) {
               ctx.save();
@@ -1230,6 +1255,7 @@ function renderVideoClip(
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
+      video.load();
       reject(new Error("Failed to load video for rendering"));
     };
   });
@@ -1253,7 +1279,8 @@ function renderPhotoClip(
   neonColorHexes?: string[],
   photoDisplayDur: number = 3,
   beatTolerance: number = 50,
-  aiRenderOpts?: ExportAiRenderOptions
+  aiRenderOpts?: ExportAiRenderOptions,
+  globalTimelineOffset: number = 0
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -1272,19 +1299,21 @@ function renderPhotoClip(
 
       const drawFrame = () => {
         const elapsedMs = performance.now() - startTime;
-        if (elapsedMs >= durationMs) { onProgress(100); resolve(); return; }
+        if (elapsedMs >= durationMs) { onProgress(100); img.src = ""; resolve(); return; }
 
         const elapsedSec = elapsedMs / 1000;
+        const globalTime = globalTimelineOffset + elapsedSec;
         onProgress((elapsedMs / durationMs) * 100);
 
         const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
         const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-        // Beat pulse — AI controls intensity
+        // Beat pulse — AI controls intensity (use global timeline time for beat sync)
         let beatPulse = 1;
+        let currentBeatIntensity = 0;
         if (beatGrid) {
-          const intensity = getBeatIntensity(elapsedSec, beatGrid, beatTolerance);
-          beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
+          currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
+          beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
         }
 
         if (crossfadeFrom && transType && elapsedMs < transitionMs) {
@@ -1315,11 +1344,10 @@ function renderPhotoClip(
 
         // Beat flash overlay — matches TapePreviewPlayer behavior
         if (beatGrid) {
-          const beatInt = getBeatIntensity(elapsedSec, beatGrid, beatTolerance);
           const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
-          if (beatInt > 0.5 && beatFlashMax > 0) {
+          if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
             ctx.save();
-            ctx.globalAlpha = (beatInt - 0.5) * beatFlashMax;
+            ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
             ctx.fillStyle = "white";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.restore();
@@ -1333,7 +1361,7 @@ function renderPhotoClip(
       requestAnimationFrame(drawFrame);
     };
 
-    img.onerror = () => reject(new Error("Failed to load image for rendering"));
+    img.onerror = () => { img.src = ""; reject(new Error("Failed to load image for rendering")); };
     img.src = instruction.mediaUrl;
   });
 }

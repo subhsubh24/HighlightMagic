@@ -366,10 +366,11 @@ export default function TapePreviewPlayer() {
         const voLayers = layers.filter((l) => l.type === "voiceover");
         for (const vo of voLayers) {
           const voEnd = vo.startTime + vo.buffer.duration;
-          // Duck music 0.2s before voiceover, restore 0.3s after
-          musicGain.gain.linearRampToValueAtTime(musicVol, Math.max(0, vo.startTime - 0.2));
+          const duckStart = Math.max(0, vo.startTime - 0.2);
+          // Anchor at full volume before ducking, then ramp down/up
+          musicGain.gain.setValueAtTime(musicVol, duckStart);
           musicGain.gain.linearRampToValueAtTime(duckedVol, vo.startTime);
-          musicGain.gain.linearRampToValueAtTime(duckedVol, voEnd);
+          musicGain.gain.setValueAtTime(duckedVol, voEnd);
           musicGain.gain.linearRampToValueAtTime(musicVol, voEnd + 0.3);
         }
       }
@@ -576,7 +577,7 @@ export default function TapePreviewPlayer() {
 
       ctx.restore();
     },
-    []
+    [state.aiProductionPlan]
   );
 
   // Draw the full canvas state at a given time
@@ -706,7 +707,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, fallbackTransition, drawMediaFrame, beatGrid]
+    [timeline, fallbackTransition, drawMediaFrame, beatGrid, state.aiProductionPlan]
   );
 
   // Animation loop with adaptive frame skipping for mobile performance

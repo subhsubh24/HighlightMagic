@@ -288,7 +288,7 @@ export function drawTransitionOverlay(
     // ── Stylized ──
 
     case "color_flash": {
-      const neonColors = neonColorHexes && neonColorHexes.length >= 3
+      const neonColors = neonColorHexes && neonColorHexes.length > 0
         ? neonColorHexes.map(hexToRgb)
         : DEFAULT_NEON_COLORS;
       const [r, g, b] = neonColors[seed % neonColors.length];

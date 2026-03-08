@@ -361,15 +361,23 @@ function drawSpacedText(
   const totalWidth = baseWidths.reduce((sum, w) => sum + w * spacing, 0);
   let currentX = x - totalWidth / 2;
 
-  ctx.shadowColor = sColor;
-  ctx.shadowBlur = sBlur;
   ctx.fillStyle = textColor;
 
-  if (transform.glowRadius > 0) {
+  // Glow pass first (if active)
+  if (transform.glowRadius > 0 && transform.glowAlpha > 0) {
     ctx.shadowColor = hexToRgba(glowColor, transform.glowAlpha);
     ctx.shadowBlur = transform.glowRadius;
+    for (let i = 0; i < chars.length; i++) {
+      ctx.fillText(chars[i], currentX + baseWidths[i] / 2, y);
+      currentX += baseWidths[i] * spacing;
+    }
+    // Reset for shadow pass
+    currentX = x - totalWidth / 2;
   }
 
+  // Main text with shadow
+  ctx.shadowColor = sColor;
+  ctx.shadowBlur = sBlur;
   for (let i = 0; i < chars.length; i++) {
     ctx.fillText(chars[i], currentX + baseWidths[i] / 2, y);
     currentX += baseWidths[i] * spacing;
