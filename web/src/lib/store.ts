@@ -81,7 +81,7 @@ export type Action =
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
   | { type: "UPDATE_CLIP"; clipId: string; updates: Partial<EditedClip> }
-  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number; clipId?: string; targetClipId?: string }
+  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number }
   | { type: "REMOVE_CLIP"; clipId: string }
   | { type: "INCREMENT_EXPORTS" }
   | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }

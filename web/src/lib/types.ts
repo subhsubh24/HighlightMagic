@@ -61,7 +61,8 @@ export interface VoiceoverSegment {
   clipIndex: number;
   text: string;
   audioUrl?: string;
-  duration?: number;
+  /** Duration in seconds — 0 until audio is generated */
+  duration: number;
   status: GenerationStatus;
 }
 

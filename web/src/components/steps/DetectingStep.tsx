@@ -925,6 +925,7 @@ export default function DetectingStep() {
               segments: vo.segments.map((s) => ({
                 clipIndex: s.clipIndex,
                 text: s.text,
+                duration: 0,
                 status: "generating" as const,
               })),
             });
