@@ -3,6 +3,9 @@
 import { FRAME_SAMPLE_INTERVAL_SECONDS } from "./constants";
 import type { MediaFile } from "./types";
 
+const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
+function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
+
 /** Adaptive sampling: bonus frames within ±RADIUS of interest points at DENSITY intervals. */
 const ADAPTIVE_RADIUS_S = 0.5;    // sample ±0.5s around each interest point
 const ADAPTIVE_DENSITY_S = 0.25;  // 4fps in interest regions
@@ -391,7 +394,7 @@ export async function extractFrames(
   const allFrames = [...baseFrames, ...bonusFrames].sort((a, b) => a.timestamp - b.timestamp);
 
   if (bonusFrames.length > 0) {
-    console.log(`Adaptive sampling: ${baseFrames.length} base + ${bonusFrames.length} bonus frames (${onsetPeaks.length} audio peaks, ${sceneChangeTimestamps.length} scene changes)`);
+    debugLog(`Adaptive sampling: ${baseFrames.length} base + ${bonusFrames.length} bonus frames (${onsetPeaks.length} audio peaks, ${sceneChangeTimestamps.length} scene changes)`);
   }
 
   // ── Full audio analysis on all final timestamps (reuses decoded buffer) ──

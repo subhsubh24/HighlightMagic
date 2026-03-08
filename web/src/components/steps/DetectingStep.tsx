@@ -633,8 +633,6 @@ export default function DetectingStep() {
           console.warn("[Detection] Abort signal was already aborted (React Strict Mode) — creating fresh controller");
           const fresh = new AbortController();
           abortRef.current = fresh;
-          // Reassign so the rest of this function (and cleanup) uses the new one
-          // eslint-disable-next-line no-param-reassign
           abort = fresh;
         }
         const plannerClientStart = Date.now();

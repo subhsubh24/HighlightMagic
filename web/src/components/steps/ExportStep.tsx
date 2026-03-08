@@ -30,6 +30,9 @@ import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions, AppState } from "@/lib/types";
 import { EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_FRAME_RATE } from "@/lib/constants";
 
+const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
+function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
+
 type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
 type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
 
@@ -99,9 +102,27 @@ async function tryServerRender(
 
     const data = await res.json();
     if (data.jobId) {
-      // TODO: Poll for job completion and download result
-      // For now, fall back to client-side rendering
-      console.log(`[render] Server render job queued: ${data.jobId}`);
+      debugLog(`[render] Server render job queued: ${data.jobId}`);
+      // Poll for server-side render completion using the shared poll endpoint
+      const POLL_INTERVAL = 5_000;
+      const MAX_POLLS = 60; // 5 min max
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+        const check = await fetch("/api/animate/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ predictionId: data.jobId }),
+        });
+        if (!check.ok) continue;
+        const status = await check.json();
+        if (status.status === "completed" && status.videoUrl) {
+          // Download rendered video as Blob
+          const videoRes = await fetch(status.videoUrl);
+          if (videoRes.ok) return await videoRes.blob();
+        }
+        if (status.status === "failed") break;
+      }
+      // Timed out or failed — fall back to client-side rendering
       return null;
     }
 
@@ -789,7 +810,7 @@ async function renderHighlightTape(
   }
   if (renderValidation.beatSync) {
     const bs = renderValidation.beatSync;
-    console.log(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
+    debugLog(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
   }
 
   // Audio pipeline: captures original clip audio + optional background music
