@@ -1168,7 +1168,7 @@ function renderVideoClip(
           let beatPulse = 1;
           if (beatGrid) {
             const intensity = getBeatIntensity(canvasElapsedSec, beatGrid, beatTolerance);
-            beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.012);
+            beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
           }
 
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
@@ -1195,6 +1195,19 @@ function renderVideoClip(
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(video, dx, dy, dw, dh);
             ctx.filter = "none";
+          }
+
+          // Beat flash overlay — matches TapePreviewPlayer behavior
+          if (beatGrid) {
+            const beatInt = getBeatIntensity(canvasElapsedSec, beatGrid, beatTolerance);
+            const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
+            if (beatInt > 0.5 && beatFlashMax > 0) {
+              ctx.save();
+              ctx.globalAlpha = (beatInt - 0.5) * beatFlashMax;
+              ctx.fillStyle = "white";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.restore();
+            }
           }
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
@@ -1263,7 +1276,7 @@ function renderPhotoClip(
         let beatPulse = 1;
         if (beatGrid) {
           const intensity = getBeatIntensity(elapsedSec, beatGrid, beatTolerance);
-          beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.012);
+          beatPulse = 1 + intensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
         }
 
         if (crossfadeFrom && transType && elapsedMs < transitionMs) {
@@ -1290,6 +1303,19 @@ function renderPhotoClip(
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
           ctx.drawImage(img, dx, dy, dw, dh);
           ctx.filter = "none";
+        }
+
+        // Beat flash overlay — matches TapePreviewPlayer behavior
+        if (beatGrid) {
+          const beatInt = getBeatIntensity(elapsedSec, beatGrid, beatTolerance);
+          const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
+          if (beatInt > 0.5 && beatFlashMax > 0) {
+            ctx.save();
+            ctx.globalAlpha = (beatInt - 0.5) * beatFlashMax;
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+          }
         }
 
         drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
@@ -1392,9 +1418,7 @@ function drawOverlays(
   // Kinetic text instead of static caption
   if (captionText) {
     const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height, captionCustom, captionEntrance, captionExit);
-    const fontSize = aiRenderOpts?.captionFontSize
-      ? Math.round(canvas.height * aiRenderOpts.captionFontSize)
-      : 48;
+    const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
       ctx,
       captionText,
