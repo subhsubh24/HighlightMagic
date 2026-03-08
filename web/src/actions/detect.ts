@@ -1422,6 +1422,9 @@ Examples — but DESIGN YOUR OWN for each clip:
 - Constant speed: [{position:0,speed:1.0},{position:1,speed:1.0}]
 
 Place the slow-mo exactly where the peak moment is. Each clip should have a DIFFERENT curve.
+IMPORTANT: Not every clip needs dramatic speed ramping. If a clip's strength is its natural flow
+(a conversation, a scenic pan, a calm moment), use a gentle curve or near-constant speed:
+[{position:0,speed:1.0},{position:1,speed:1.0}]. Dramatic velocity = dramatic content only.
 If you must, you can set "velocityPreset" instead: "hero","bullet","ramp_out","ramp_in","montage","normal"
 — but custom keyframes are STRONGLY preferred. Using the same preset on multiple clips looks lazy.
 
@@ -1479,10 +1482,13 @@ Examples — but DESIGN YOUR OWN for each clip:
 - Cool editorial: "saturate(0.6) contrast(1.1) brightness(1.08) hue-rotate(15deg)"
 - Natural clean: "saturate(1.05) contrast(1.05) brightness(1.0)"
 
-Each clip should get its OWN custom grade — never use the same filterCSS on two clips.
+Each clip should get its own grade, but COHERENCE matters more than variety.
+2-3 grades that shift intentionally across the tape > 10 wildly different grades that feel random.
+It's OK for adjacent clips to share a similar grade if they're in the same "chapter" of the tape.
+Natural-looking content (well-lit events, nature) often only needs subtle grading:
+"saturate(1.05) contrast(1.05) brightness(1.0)" — don't force heavy color on content that looks good already.
 If you must, you can set "filter" to a named preset ("TealOrange","GoldenHour","MoodyCinematic",
-"Vibrant","Warm","Cool","CleanAiry","VintageFilm","Noir","Fade","None") — but custom CSS is
-STRONGLY preferred. Reusing the same named preset looks generic.
+"Vibrant","Warm","Cool","CleanAiry","VintageFilm","Noir","Fade","None") — but custom CSS is preferred.
 
 COLOR SHIFT PATTERNS that create emotional journeys:
 - Warm opener → intense action → warm close = "cozy → intense → cozy" (satisfaction loop)
@@ -1491,7 +1497,8 @@ COLOR SHIFT PATTERNS that create emotional journeys:
 Don't use one grade for everything. 2-3 intentional shifts across the tape = professional.
 
 ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
-Action clips → 1.03-1.05 (impactful pop). Emotional clips → 1.0-1.01 (gentle or none).
+Action clips → 1.03-1.05 (impactful pop). Emotional/calm clips → 1.0 (no punch).
+Use 1.0 (none) on at least half the clips. If EVERY clip punches in, nothing feels special.
 
 CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes the moment HIT harder:
 2-5 words max. The text should add a layer the visual alone can't provide.
@@ -1563,49 +1570,113 @@ Beyond clip selection and visual style, you direct the FULL AUDIO-VISUAL PRODUCT
 Your plan drives automated generation of intro/outro cards, sound effects, voiceover, music, and thumbnails.
 Every decision cascades from the content's theme AND the user's creative direction (if any).
 
+╔═══════════════════════════════════════════════════════════════╗
+║  HOLISTIC CREATIVE PHILOSOPHY — READ THIS BEFORE ANYTHING    ║
+╚═══════════════════════════════════════════════════════════════╝
+Think about the ENTIRE tape as a unified experience before filling in any field.
+Ask yourself: "Does this specific element genuinely make the tape BETTER, or am I adding it
+just because the field exists?" Every feature you activate competes for the viewer's attention.
+
+GOLDEN RULE: The best reels use 2-4 production elements well, not 10 elements mediocrely.
+A tape with just great clip selection + music + smart transitions can outperform one drowning
+in SFX, voiceover, intro cards, captions on every clip, and heavy filters all at once.
+
+BEFORE setting any field, consider the tape holistically:
+- What is the CORE EXPERIENCE? (e.g. "feel the energy of this game" or "relive this trip")
+- Which 2-3 elements MOST serve that core experience?
+- What should be LEFT OUT so the content itself can breathe?
+
+ANTI-PATTERNS TO AVOID:
+- Adding intro + outro + voiceover + SFX + captions on every clip = sensory overload
+- Using heavy velocity curves + aggressive transitions + punchy entry scales = chaotic, exhausting
+- Captions on every clip = amateur; dramatic filters on every clip = gaudy
+- Voiceover that narrates what the viewer can already see = redundant
+- SFX that fight the music instead of complementing it = noisy
+
+RESTRAINT SIGNALS — dial back when:
+- Content is already visually strong (nature, well-shot events) → let it breathe
+- The tape is short (≤5 clips) → fewer production elements, more impact per element
+- The mood is calm/emotional → heavy effects destroy the feeling
+- There's no clear theme → don't force one with a title card
+
 Use TASTE and RESTRAINT. Not every tape needs every element. A clean travel montage may only
-need music + a subtle intro. A hype sports reel may benefit from SFX + voiceover + intro/outro.
+need music + subtle transitions. A hype sports reel may benefit from SFX + voiceover + intro.
 A quiet wedding highlight might need nothing but music and gentle transitions.
 Only add elements that genuinely elevate the content. Less is often more.
+
+For each optional feature below, null / empty / disabled is a VALID and often BEST choice.
 
 INTRO CARD — An AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
 "duration" is in seconds (3-5). Pick based on content pacing: 3s for fast/hype, 5s for cinematic/slow.
-The stylePrompt describes the visual: particles, lights, motion — matched to the creative direction.
-IMPORTANT: The video is rendered in 9:16 PORTRAIT format (1080x1920, very tall and narrow).
-Text MUST fit within the narrow frame. In the stylePrompt:
-- ALWAYS include "small centered text, compact, fits within narrow portrait frame"
-- NEVER use "large text", "bold title", "big letters", or "fullscreen text"
-- Keep the "text" field to 2-4 words MAX (e.g. "Game Day", "Our Wedding", "Summer 2025")
-- If the title is longer, abbreviate it — the text must be SHORT to fit the vertical frame
-- Prefer abstract motion backgrounds (particles, gradients, light leaks) with minimal text overlay
-DEFAULT TO null (no intro) in most cases. Intros are only justified for:
-  - Long tapes (8+ clips) that benefit from a title card to set the mood
-  - Event/occasion content (weddings, graduations, game days) where a title adds context
-  - User explicitly requested an intro in their creative direction
+
+DEFAULT TO null. Most tapes should NOT have an intro.
+Only add an intro when ALL of these are true:
+  1. The tape is long enough to justify it (8+ clips, 30+ seconds of content)
+  2. There's a clear theme/event/occasion that benefits from a title (weddings, game days, "Europe 2025")
+  3. The intro won't feel like it's delaying the good stuff — the first clip should hook, not a title card
+  4. The user explicitly requested an intro, OR the content clearly demands one
 SKIP intro (set null) for:
   - Small collections (≤6 clips/photos) — the content speaks for itself
   - Art, product, or aesthetic collections — jump straight into the visuals
   - Any tape under 30 seconds total — an intro eats too much runtime
   - When no clear title/theme exists beyond "look at these"
+  - When you're already using voiceover to set context — don't double up
+
+TEXT FITTING — The video renders at 9:16 PORTRAIT (1080×1920, very tall and narrow).
+The "text" field is the displayed title. It MUST be extremely short:
+- 1-3 words ONLY. Examples: "Game Day", "Summer '25", "Our Story", "NYC"
+- NEVER more than 3 words. If the theme is long, distill to its essence.
+- Single words are often best: "Highlights", "Recap", "Memories"
+
+The "stylePrompt" is sent to a text-to-video AI model. It MUST produce a video where the text
+is legible and fits within the narrow vertical frame. Structure it EXACTLY like this:
+  "9:16 vertical portrait video, [BACKGROUND DESCRIPTION], the word(s) '[YOUR TEXT]' displayed
+   as small centered text in the middle of the frame, compact elegant font, text occupies less
+   than 40% of frame width, [MOTION/PARTICLE EFFECTS]"
+
+stylePrompt RULES:
+- ALWAYS explicitly include the text content in the prompt so the T2V model renders it
+- ALWAYS specify "small centered text", "compact", "less than 40% of frame width"
+- ALWAYS start with "9:16 vertical portrait video" to enforce aspect ratio
+- NEVER use "large text", "bold title", "big letters", "fullscreen text", "wide text"
+- Prefer abstract motion backgrounds (particles, gradients, light leaks, bokeh) — they render
+  more reliably than complex scenes
+- Keep stylePrompt under 250 characters for best T2V results
+
+Good stylePrompt examples:
+  "9:16 vertical portrait video, dark background with floating golden particles, the word 'Highlights' displayed as small centered white text in the middle of the frame, compact elegant font, text occupies less than 30% of frame width, particles drift upward slowly"
+  "9:16 vertical portrait video, soft blue gradient background with gentle light leaks, the words 'Game Day' displayed as small centered text in the middle of the frame, compact bold font, text occupies less than 40% of frame width, subtle lens flare"
 
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
-Same 9:16 portrait text rules as intro — 2-4 words max, "small centered text" in stylePrompt, fits narrow vertical frame.
+Same text fitting rules as intro — 1-3 words max, same stylePrompt structure with explicit text content.
 "duration" 3-5 seconds, match the intro's pacing.
-DEFAULT TO null. Only add an outro if the tape is long (8+ clips) AND has a clear closing message.
-Most tapes should NOT have an outro.
+DEFAULT TO null. Only add an outro if the tape has an intro AND has a clear closing message.
+Outros without intros look odd. Most tapes should NOT have an outro — let the last clip be the ending.
 
 SOUND EFFECTS — Transition whooshes, impact hits, crowd accents.
 Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
-Use an empty array [] if SFX would clutter the content (e.g. calm/cinematic content).
-When used, match SFX style to content mood. 2-6 cues max — quality over quantity.
+DEFAULT TO [] (empty array). SFX should be the exception, not the norm.
+Only add SFX when:
+  - The content has clear impact moments (sports hits, reveals, dramatic drops)
+  - The SFX would complement the music, not compete with it
+  - You're NOT already using voiceover on that clip (SFX + VO + music = muddy)
+Use [] for: calm/cinematic content, emotional content, short tapes, nature/travel.
+When used, 2-4 cues max — each one should be a deliberate accent, not background noise.
 
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
 "delaySec" (0-1s): delay before voiceover starts after clip begins. Use 0 for immediate, 0.3 for natural pause, 0.5-1 for dramatic reveals.
-Set enabled: false if narration would feel intrusive (most content doesn't need voiceover).
-When enabled, 2-4 segments max. Less is more — narrate only pivotal moments.
+DEFAULT TO enabled: false. Most content does NOT need voiceover.
+Only enable voiceover when:
+  - The content has a clear narrative to enhance (sports play-by-play, event recap, tutorial)
+  - The VO adds information the viewer can't get from visuals alone
+  - The tape is long enough (6+ clips) to justify a narrator
+  - You're NOT already using heavy captions — captions + voiceover saying similar things = redundant
+SKIP voiceover for: aesthetic content, music-driven content, short tapes, emotional/quiet content,
+anything where the visuals should speak for themselves.
+When enabled, 2-3 segments max. Each line should be punchy (under 10 words). Narrate only pivotal moments.
 Choose voice character that matches the content's energy and audience.
 
 MUSIC — AI instrumental soundtrack.
@@ -1654,8 +1725,10 @@ Set "thumbnail": {sourceClipIndex, frameTime, stylePrompt} or null.
 
 STYLE TRANSFER — Optional visual post-processing look applied to the entire tape.
 Set "styleTransfer": {"prompt": "cinematic film grain, warm tones, subtle vignette", "strength": 0.4} or null.
-Only use when a specific look would elevate the content (cinematic, neon, vintage, etc.).
-null means no post-processing — the per-clip filters are enough. Most content should be null.
+DEFAULT TO null. Style transfer stacks ON TOP of per-clip filterCSS — using both aggressively = over-processed.
+Only use when: the user explicitly requests a unified look, OR the content would clearly benefit
+from a cohesive style (e.g. vintage wedding, neon gaming). If your per-clip filters already
+create the right mood, style transfer is redundant. Most content should be null.
 
 TALKING HEAD INTRO — If a voice clone sample is provided, write a short intro speech (5-10 words).
 Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or null.
@@ -2028,20 +2101,50 @@ Respond with ONLY a JSON object:
         "female-narrator-warm", "female-broadcaster-hype", "female-young-energetic",
       ];
 
+      // Helper: truncate card text to 3 words max for frame fitting
+      const truncateCardText = (text: string): string => {
+        const words = text.trim().split(/\s+/).slice(0, 3);
+        return words.join(" ").slice(0, 30); // 3 words, max 30 chars
+      };
+
+      // Helper: ensure stylePrompt references the text and enforces portrait framing
+      const ensureCardPrompt = (stylePrompt: string, text: string): string => {
+        let prompt = stylePrompt.slice(0, 500);
+        // Prepend portrait aspect ratio if not mentioned
+        if (!prompt.toLowerCase().includes("9:16") && !prompt.toLowerCase().includes("portrait")) {
+          prompt = "9:16 vertical portrait video, " + prompt;
+        }
+        // Ensure the actual text content is referenced in the prompt
+        if (!prompt.includes(text)) {
+          prompt = prompt.replace(/,\s*$/, "") + `, the text '${text}' displayed as small centered text`;
+        }
+        // Enforce small text if not mentioned
+        if (!prompt.toLowerCase().includes("small") && !prompt.toLowerCase().includes("compact")) {
+          prompt += ", compact text, fits within narrow frame";
+        }
+        return prompt.slice(0, 500);
+      };
+
       const productionPlan: ProductionPlan = {
         intro: (parsed.intro && typeof parsed.intro.text === "string" && typeof parsed.intro.stylePrompt === "string")
-          ? {
-              text: parsed.intro.text.slice(0, 200),
-              stylePrompt: parsed.intro.stylePrompt.slice(0, 500),
-              duration: typeof parsed.intro.duration === "number" ? Math.max(3, Math.min(5, parsed.intro.duration)) : 4,
-            }
+          ? (() => {
+              const text = truncateCardText(parsed.intro.text);
+              return {
+                text,
+                stylePrompt: ensureCardPrompt(parsed.intro.stylePrompt, text),
+                duration: typeof parsed.intro.duration === "number" ? Math.max(3, Math.min(5, parsed.intro.duration)) : 4,
+              };
+            })()
           : null,
         outro: (parsed.outro && typeof parsed.outro.text === "string" && typeof parsed.outro.stylePrompt === "string")
-          ? {
-              text: parsed.outro.text.slice(0, 200),
-              stylePrompt: parsed.outro.stylePrompt.slice(0, 500),
-              duration: typeof parsed.outro.duration === "number" ? Math.max(3, Math.min(5, parsed.outro.duration)) : 4,
-            }
+          ? (() => {
+              const text = truncateCardText(parsed.outro.text);
+              return {
+                text,
+                stylePrompt: ensureCardPrompt(parsed.outro.stylePrompt, text),
+                duration: typeof parsed.outro.duration === "number" ? Math.max(3, Math.min(5, parsed.outro.duration)) : 4,
+              };
+            })()
           : null,
         sfx: Array.isArray(parsed.sfx)
           ? parsed.sfx
