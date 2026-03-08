@@ -193,7 +193,7 @@ async function callPlannerSSE(
     // stops sending data (including keepalive pings).
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Lost connection to server — no data received for 90 seconds. Please try again.")), SSE_READ_TIMEOUT_MS);
+      timer = setTimeout(() => reject(new Error("Lost connection to server — no data received for 5 minutes. Please try again.")), SSE_READ_TIMEOUT_MS);
     });
     let chunk: ReadableStreamReadResult<Uint8Array>;
     try {
@@ -755,7 +755,7 @@ export default function DetectingStep() {
         ? (async (): Promise<string | null> => {
             const prompt = productionPlan?.musicPrompt
               || state.aiMusicPrompt?.trim()
-              || `Instrumental background music for a ${theme} highlight reel. ${result.contentSummary ?? ""}`.trim();
+              || `Instrumental background music for a ${theme || "cinematic"} highlight reel. ${result.contentSummary ?? ""}`.trim();
             if (!prompt) return null;
 
             // Check asset cache first
