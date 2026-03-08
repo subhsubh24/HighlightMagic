@@ -256,8 +256,8 @@ async function consumeSSEStream(
         } else if (event.type === "error") {
           console.error(`[Planner SSE] Stream error event:`, JSON.stringify(event));
         }
-      } catch {
-        // Ignore unparseable SSE events (e.g. event: prefixes)
+      } catch (e) {
+        console.warn("[Planner SSE] Unparseable SSE event:", line.slice(0, 100), e);
       }
     }
   }
@@ -701,8 +701,8 @@ Rules:
       issues: Array.isArray(result.issues) ? result.issues.slice(0, 5) : [],
       suggestions: Array.isArray(result.suggestions) ? result.suggestions.slice(0, 5) : [],
     };
-  } catch {
-    console.warn("Tape validation: JSON parse error");
+  } catch (e) {
+    console.error("[Validation] Tape validation failed — bypassing QA gate:", e);
     return { passed: true, issues: [], suggestions: [] };
   }
 }
@@ -1834,7 +1834,7 @@ Respond with ONLY a JSON object:
   // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
   const objMatch = text.match(/\{[\s\S]*\}/);
   if (objMatch) {
-    const parsed = JSON.parse(objMatch[0]) as {
+    let parsed: {
         contentSummary?: string;
         theme?: string;
         clips?: Array<{
@@ -1903,6 +1903,12 @@ Respond with ONLY a JSON object:
         lightLeakColor?: string;
         glitchColors?: [string, string];
       };
+    try {
+      parsed = JSON.parse(objMatch[0]);
+    } catch (e) {
+      console.error("Planner: Failed to parse AI output as JSON (possibly truncated):", e, objMatch[0].slice(0, 300));
+      throw new Error(`Planner: AI output was not valid JSON — possibly truncated by max_tokens. Raw start: ${objMatch[0].slice(0, 100)}`);
+    }
 
       if (!parsed.contentSummary) {
         console.warn("Planner: AI returned no contentSummary");

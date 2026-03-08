@@ -79,7 +79,7 @@ export async function createAudioPipeline(
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const audioCtx = new AudioCtx();
   if (audioCtx.state === "suspended") {
-    await audioCtx.resume().catch(() => {});
+    await audioCtx.resume().catch((e) => console.warn("[Audio] AudioContext resume failed:", e));
   }
   const dest = audioCtx.createMediaStreamDestination();
 
@@ -108,8 +108,8 @@ export async function createAudioPipeline(
         musicGainNode.connect(dest);
         musicSource.start(0);
       }
-    } catch {
-      // Music load failed — continue without it
+    } catch (e) {
+      console.error("[Audio] Music load failed:", musicUrl, e);
     }
   }
 
@@ -142,8 +142,8 @@ export async function createAudioPipeline(
         if (layer.layerType === "voiceover") {
           voiceovers.push({ startTime: layer.startTime, duration: buffer.duration });
         }
-      } catch {
-        // Skip failed layer
+      } catch (e) {
+        console.error(`[Audio] Scheduled layer failed (${layer.layerType ?? "unknown"}):`, layer.url, e);
       }
     }
   }
@@ -205,7 +205,8 @@ export async function createAudioPipeline(
             // Already disconnected
           }
         };
-      } catch {
+      } catch (e) {
+        console.warn("[Audio] MediaElementSource failed (CORS?), muting video:", e);
         // Fallback: if MediaElementSource fails (e.g. CORS), just mute
         video.muted = true;
         return () => {};

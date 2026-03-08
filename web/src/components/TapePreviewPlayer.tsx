@@ -317,7 +317,7 @@ export default function TapePreviewPlayer() {
         const buffer = await fetchBuffer(vo.audioUrl);
         if (!buffer || cancelled) continue;
 
-        const voDelay = state.aiProductionPlan?.voiceover.delaySec ?? 0.3;
+        const voDelay = state.aiProductionPlan?.voiceover?.delaySec ?? 0.3;
         const voVol = state.aiProductionPlan?.voiceoverVolume ?? 1.0;
         layers.push({
           buffer,
@@ -530,8 +530,8 @@ export default function TapePreviewPlayer() {
 
       try {
         ctx.drawImage(el, dx, dy, dw, dh);
-      } catch {
-        /* media not ready */
+      } catch (e) {
+        console.warn("[Preview] drawImage failed (media not ready):", e);
       }
 
       ctx.filter = "none";
@@ -692,7 +692,7 @@ export default function TapePreviewPlayer() {
 
           if (!activeClipsRef.current.has(id)) {
             el.currentTime = e.clip.trimStart + (t - e.globalStart);
-            el.play().catch(() => {});
+            el.play().catch((e) => console.warn("[Preview] Video play rejected:", e));
           }
         }
       }

@@ -158,7 +158,8 @@ export default function UploadStep() {
         reader.readAsDataURL(file);
       });
       dispatch({ type: "SET_VOICE_SAMPLE", url: dataUri });
-    } catch {
+    } catch (e) {
+      console.error("[Upload] Voice sample processing failed:", e);
       setError("Failed to process voice sample.");
     }
     setVoiceUploading(false);

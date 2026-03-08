@@ -59,7 +59,7 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     selectedFilter: (c.filter ?? selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
     velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
       ? (c.velocityPreset as VelocityPreset)
-      : ("normal" as VelocityPreset),
+      : (c.velocityPreset ? console.warn(`[AI] Unknown velocity preset "${c.velocityPreset}" for clip ${i}, falling back to "normal"`) : null, "normal" as VelocityPreset),
     transitionType: c.transitionType,
     transitionDuration: c.transitionDuration,
     entryPunchScale: c.entryPunchScale,
@@ -175,13 +175,13 @@ async function callPlannerSSE(
         try {
           const { phase } = JSON.parse(data);
           onPhase?.(phase);
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[SSE] Failed to parse phase event:", e, data); }
       }
       if (eventType === "partial") {
         try {
           const { field, value } = JSON.parse(data);
           onPartial?.(field, value);
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[SSE] Failed to parse partial event:", e, data); }
       }
       // keepalive events — just ignore, they keep the connection alive
     }
@@ -336,7 +336,8 @@ export default function DetectingStep() {
           setCachedAsset(musicCK, data.audioUrl);
           dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
           return data.audioUrl as string;
-        } catch {
+        } catch (e) {
+          console.error("[Music] Early start failed:", e);
           dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
           return null;
         }
@@ -387,7 +388,8 @@ export default function DetectingStep() {
           } else {
             dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
           }
-        } catch {
+        } catch (e) {
+          console.error(`[SFX] Early cue ${sfxCue.clipIndex} failed:`, e);
           dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
         }
       }
@@ -858,7 +860,8 @@ export default function DetectingStep() {
               setCachedAsset(musicCacheKey, data.audioUrl);
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
               return data.audioUrl as string;
-            } catch {
+            } catch (e) {
+              console.error("[Music] Generation failed:", e);
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
               return null;
             }
@@ -906,7 +909,8 @@ export default function DetectingStep() {
                   } else {
                     dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
                   }
-                } catch {
+                } catch (e) {
+                  console.error(`[SFX] Cue ${sfxCue.clipIndex} failed:`, e);
                   dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
                 }
               };
@@ -915,7 +919,8 @@ export default function DetectingStep() {
                 await Promise.all(sfxQueue.slice(i, i + SFX_CONCURRENCY).map(processSfxCue));
               }
               dispatch({ type: "SET_SFX_STATUS", status: "completed" });
-            } catch {
+            } catch (e) {
+              console.error("[SFX] Pipeline failed:", e);
               dispatch({ type: "SET_SFX_STATUS", status: "failed" });
             }
           })()
@@ -949,7 +954,8 @@ export default function DetectingStep() {
             }
             dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
             return null;
-          } catch {
+          } catch (e) {
+            console.error("[VoiceClone] Cloning failed:", e);
             dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
             return null;
           }
@@ -1019,7 +1025,8 @@ export default function DetectingStep() {
                       status: "failed",
                     });
                   }
-                } catch {
+                } catch (e) {
+                  console.error(`[Voiceover] Segment ${segment.clipIndex} failed:`, e);
                   dispatch({
                     type: "UPDATE_VOICEOVER_SEGMENT",
                     clipIndex: segment.clipIndex,
@@ -1030,7 +1037,8 @@ export default function DetectingStep() {
                 }
               }
               dispatch({ type: "SET_VOICEOVER_STATUS", status: "completed" });
-            } catch {
+            } catch (e) {
+              console.error("[Voiceover] Pipeline failed:", e);
               dispatch({ type: "SET_VOICEOVER_STATUS", status: "failed" });
             }
           })()
@@ -1071,7 +1079,8 @@ export default function DetectingStep() {
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[Intro] Card generation failed:", e);
               dispatch({
                 type: "SET_INTRO_CARD",
                 card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
@@ -1114,7 +1123,8 @@ export default function DetectingStep() {
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[Outro] Card generation failed:", e);
               dispatch({
                 type: "SET_OUTRO_CARD",
                 card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
@@ -1146,7 +1156,8 @@ export default function DetectingStep() {
               } else {
                 dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
               }
-            } catch {
+            } catch (e) {
+              console.error("[Stems] Stem separation failed:", e);
               dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
             }
           })()
@@ -1234,7 +1245,8 @@ export default function DetectingStep() {
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[TalkingHead] Pipeline failed:", e);
               dispatch({
                 type: "SET_TALKING_HEAD",
                 talkingHead: { photoUrl: null, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
@@ -1268,8 +1280,8 @@ export default function DetectingStep() {
                 }
               }
             }
-          } catch {
-            // Non-blocking — if upscale fails, animation uses original
+          } catch (e) {
+            console.error("[Upscale] Auto-upscale failed (non-blocking):", e);
           }
         });
 
@@ -1317,7 +1329,8 @@ export default function DetectingStep() {
     async function pollAtlasTask(predictionId: string): Promise<string> {
       try {
         return await pollBatched(predictionId, { timeoutMs: 300_000 });
-      } catch {
+      } catch (e) {
+        console.error(`[Atlas] Poll failed for prediction ${predictionId}:`, e);
         return ""; // Failed or timed out
       }
     }

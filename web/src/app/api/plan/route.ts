@@ -19,7 +19,8 @@ export async function POST(req: Request) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
-  } catch {
+  } catch (e) {
+    console.warn("[Plan API] Invalid JSON body:", e);
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -51,7 +52,8 @@ export async function POST(req: Request) {
       keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode("event: keepalive\ndata: {}\n\n"));
-        } catch {
+        } catch (e) {
+          console.warn("[Plan API] Keepalive enqueue failed (client disconnected?):", e);
           clearInterval(keepalive);
         }
       }, 15_000);

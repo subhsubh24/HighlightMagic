@@ -81,8 +81,8 @@ export async function generateMusic(
           error: errorData.detail.message || "Prompt was rejected — try different wording (no artist/song names).",
         };
       }
-    } catch {
-      // Not JSON, use generic error
+    } catch (e) {
+      console.warn("[Music] Failed to parse error response body:", e);
     }
 
     return {

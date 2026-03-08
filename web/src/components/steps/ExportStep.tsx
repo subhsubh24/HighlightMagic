@@ -62,7 +62,7 @@ async function tryServerRender(
     const outroDur = state.outroCard?.duration ?? 4;
     const introOffset = hasIntro ? introDur : 0;
     const defaultTransDur = plan?.defaultTransitionDuration ?? 0.3;
-    const voDelay = plan?.voiceover.delaySec ?? 0.3;
+    const voDelay = plan?.voiceover?.delaySec ?? 0.3;
     const musicVol = plan?.musicVolume ?? 0.5;
     const sfxVol = plan?.sfxVolume ?? 0.8;
     const voVol = plan?.voiceoverVolume ?? 1.0;
@@ -191,8 +191,8 @@ async function tryServerRender(
     }
 
     return null;
-  } catch {
-    // Server rendering unavailable — silent fallback to client-side
+  } catch (e) {
+    console.error("[Export] Server rendering failed, falling back to client-side:", e);
     return null;
   }
 }
@@ -338,7 +338,8 @@ export default function ExportStep() {
         }
       }
       if (!abort.signal.aborted) setThumbnailPhase("failed");
-    } catch {
+    } catch (e) {
+      console.error("[Export] Thumbnail generation failed:", e);
       if (!abort.signal.aborted) setThumbnailPhase("failed");
     }
   }, [state, sortedClips]);
@@ -380,7 +381,7 @@ export default function ExportStep() {
       const outroDurC = state.outroCard?.duration ?? 4;
       const introOffsetC = hasIntroC ? introDurC : 0;
       const defaultTransDurC = cPlan?.defaultTransitionDuration ?? 0.3;
-      const voDelayC = cPlan?.voiceover.delaySec ?? 0.3;
+      const voDelayC = cPlan?.voiceover?.delaySec ?? 0.3;
       const sfxVolC = cPlan?.sfxVolume ?? 0.8;
       const voVolC = cPlan?.voiceoverVolume ?? 1.0;
 
@@ -569,7 +570,8 @@ export default function ExportStep() {
       } else {
         handleDownload();
       }
-    } catch {
+    } catch (e) {
+      console.warn("[Export] Share failed, falling back to download:", e);
       handleDownload();
     }
   };
