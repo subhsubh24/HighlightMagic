@@ -2,6 +2,8 @@
 
 import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 import type { SourceFileInfo } from "@/lib/frame-batching";
+import { getEffectiveDuration } from "@/lib/velocity";
+import type { VelocityPreset } from "@/lib/velocity";
 
 // ── Debug logging ──
 
@@ -266,6 +268,41 @@ async function consumeSSEStream(
   return { text, stopReason };
 }
 
+// ── JSON extraction helpers ──
+
+/**
+ * Extract the outermost balanced JSON object or array from a string.
+ * Unlike greedy regex `\{[\s\S]*\}`, this correctly handles cases where
+ * the LLM writes prose after the JSON (e.g., "Here is the JSON: {...} Let me know if...").
+ * The greedy regex would capture everything from first `{` to last `}` including the prose.
+ */
+function extractBalancedJSON(text: string, opener: "{" | "["): string | null {
+  const closer = opener === "{" ? "}" : "]";
+  const startIdx = text.indexOf(opener);
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === opener) depth++;
+    else if (ch === closer) {
+      depth--;
+      if (depth === 0) return text.slice(startIdx, i + 1);
+    }
+  }
+  // Unbalanced — fall back to greedy regex as last resort
+  const fallbackPattern = opener === "{" ? /\{[\s\S]*\}/ : /\[[\s\S]*\]/;
+  const m = text.match(fallbackPattern);
+  return m ? m[0] : null;
+}
+
 // ── JSON parsing helpers ──
 
 /**
@@ -336,9 +373,9 @@ function safeParseJSONArray(raw: string): unknown {
 
   // Final attempt: strip everything outside [] and retry
   try {
-    const bracketMatch = sanitized.match(/\[[\s\S]*\]/);
+    const bracketMatch = extractBalancedJSON(sanitized, "[");
     if (bracketMatch) {
-      sanitized = bracketMatch[0]
+      sanitized = bracketMatch
         .replace(/,\s*\]/g, "]")
         .replace(/,\s*\}/g, "}");
       return JSON.parse(sanitized);
@@ -688,14 +725,14 @@ Rules:
   const text = body.content?.[0]?.text ?? "";
 
   // Extract JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonMatchStr = extractBalancedJSON(text, "{");
+  if (!jsonMatchStr) {
     console.warn("Tape validation: no JSON in response");
     return { passed: true, issues: [], suggestions: [] };
   }
 
   try {
-    const result = JSON.parse(jsonMatch[0]);
+    const result = JSON.parse(jsonMatchStr);
     return {
       passed: !!result.passed,
       issues: Array.isArray(result.issues) ? result.issues.slice(0, 5) : [],
@@ -930,9 +967,9 @@ async function analyzeMultiBatch(
       throw new Error(`Scoring returned no text content after ${attempt + 1} attempts`);
     }
 
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const jsonMatchStr = extractBalancedJSON(text, "[");
 
-    if (!jsonMatch) {
+    if (!jsonMatchStr) {
       console.warn(`Scoring: unparsable response (attempt ${attempt + 1}):`, text.slice(0, 300));
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
@@ -941,7 +978,7 @@ async function analyzeMultiBatch(
       throw new Error(`Scoring returned unparsable response after ${attempt + 1} attempts`);
     }
 
-    const parsed = safeParseJSONArray(jsonMatch[0]) as Array<{
+    const parsed = safeParseJSONArray(jsonMatchStr) as Array<{
       index: number;
       score: number;
       label: string;
@@ -1369,7 +1406,7 @@ CONTRAST CUT — Alternate between opposing energies. A ↔ B ↔ A ↔ B.
   Why it works: contrast amplifies both sides. Silence makes the drop LOUDER.
 
 RHYTHM BUILD — Short punchy clips that get longer as stakes increase.
-  0.5s, 0.5s, 0.5s, 0.8s, 0.8s, 1.5s, 3s hero, 0.5s, 0.5s, 2s closer.
+  2s, 2s, 2s, 2.5s, 2.5s, 3s, 5s hero, 2s, 2s, 3s closer.
   Best for: music-driven edits, party content, sports montages, dance compilations.
   Why it works: fast cuts create urgency, longer clips create weight. The rhythm IS the story.
 
@@ -1389,7 +1426,7 @@ Every 3 seconds, something must change: new clip, new energy level, new visual, 
 - ENERGY OSCILLATION: high ↔ low, close ↔ wide, fast ↔ slow, loud ↔ quiet
 - TENSION-RELEASE CYCLES: build → payoff → breathe → build. Never sustain one energy too long.
 - CROSS-SOURCE CUTTING: alternate between sources for variety and implied storytelling
-- DURATION VARIATION: mix 0.5s beats with 3-4s hero holds. Monotonous timing = death.
+- DURATION VARIATION: mix 2-3s beats with 4-6s hero holds. Monotonous timing = death.
 - INFORMATION DENSITY: every clip adds something NEW — angle, emotion, information, energy level
 - MICRO-HOOKS: moments that make the viewer think "wait, what comes next?" — keep them past the mid-point
 
@@ -1416,6 +1453,14 @@ YOU DECIDE EVERYTHING:
   use ONE clip from that source and make it longer instead of picking multiple similar sections.
 - Spread selections across source files when possible, but if one source has the best moments, use it.
   Quality over equal distribution — never pad with weak clips just to balance sources.
+
+HARD CONSTRAINTS (clips violating these will be automatically removed — plan accordingly):
+- MINIMUM clip duration: 2 seconds. Any clip shorter than 2s will be dropped.
+- MAXIMUM clips per source file: 6. If you select more than 6 clips from one source, extras are dropped.
+- MINIMUM temporal gap between clips from the same source: 5 seconds. Clips from the same source
+  within 5s of each other will be dropped. Space your selections at least 5s apart.
+- Overlapping clips from the same source (>50% overlap) will be deduplicated.
+Plan your narrative around these constraints. Don't rely on clips that would violate them.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
@@ -1832,8 +1877,8 @@ Respond with ONLY a JSON object:
   }
 
   // Try to parse as the new object format: {"contentSummary": "...", "theme": "...", "clips": [...]}
-  const objMatch = text.match(/\{[\s\S]*\}/);
-  if (objMatch) {
+  const objMatchStr = extractBalancedJSON(text, "{");
+  if (objMatchStr) {
     let parsed: {
         contentSummary?: string;
         theme?: string;
@@ -1904,10 +1949,10 @@ Respond with ONLY a JSON object:
         glitchColors?: [string, string];
       };
     try {
-      parsed = JSON.parse(objMatch[0]);
+      parsed = JSON.parse(objMatchStr);
     } catch (e) {
-      console.error("Planner: Failed to parse AI output as JSON (possibly truncated):", e, objMatch[0].slice(0, 300));
-      throw new Error(`Planner: AI output was not valid JSON — possibly truncated by max_tokens. Raw start: ${objMatch[0].slice(0, 100)}`);
+      console.error("Planner: Failed to parse AI output as JSON (possibly truncated):", e, objMatchStr.slice(0, 300));
+      throw new Error(`Planner: AI output was not valid JSON — possibly truncated by max_tokens. Raw start: ${objMatchStr.slice(0, 100)}`);
     }
 
       if (!parsed.contentSummary) {
@@ -1940,7 +1985,10 @@ Respond with ONLY a JSON object:
         return { clips: [], detectedTheme: theme, contentSummary };
       }
 
-      const clips = parsed.clips.filter((p, i) => {
+      // Tag each clip with its original AI index before filtering, so we can remap
+      // SFX/voiceover clipIndex references after post-processing drops clips
+      const taggedParsedClips = parsed.clips.map((p, i) => ({ ...p, _aiIndex: i }));
+      const clips = taggedParsedClips.filter((p, i) => {
         // Validate required fields
         if (!p.sourceFileId || typeof p.startTime !== "number" || typeof p.endTime !== "number") {
           console.warn(`Planner: clip ${i} missing required fields, skipping`);
@@ -1997,6 +2045,7 @@ Respond with ONLY a JSON object:
         }
 
         return {
+        _aiIndex: p._aiIndex, // preserve original AI clip index for SFX/voiceover remapping
         id: crypto.randomUUID(),
         sourceFileId: p.sourceFileId,
         startTime: Math.max(0, p.startTime),
@@ -2103,6 +2152,16 @@ Respond with ONLY a JSON object:
         sourceClipCount.set(clip.sourceFileId, srcCount + 1);
       }
 
+      // Build remap table: AI's original clipIndex → post-filtered spacedClips index.
+      // Post-processing (validation, dedup, gap/cap) may drop clips, shifting indices.
+      // Without remapping, SFX/voiceover clipIndex references would point to wrong clips.
+      const aiIndexToFinalIndex = new Map<number, number>();
+      spacedClips.forEach((clip, finalIdx) => {
+        if (typeof clip._aiIndex === "number") {
+          aiIndexToFinalIndex.set(clip._aiIndex, finalIdx);
+        }
+      });
+
       // Extract AI production plan from Claude's output
       const VALID_SFX_TIMINGS = ["before", "on", "after"];
       const VALID_VOICE_CHARS = [
@@ -2116,16 +2175,21 @@ Respond with ONLY a JSON object:
         return words.join(" ").slice(0, 30); // 3 words, max 30 chars
       };
 
-      // Helper: ensure stylePrompt references the text and enforces portrait framing
-      const ensureCardPrompt = (stylePrompt: string, text: string): string => {
+      // Helper: ensure stylePrompt references the truncated text and enforces portrait framing
+      const ensureCardPrompt = (stylePrompt: string, truncatedText: string, originalText: string): string => {
         let prompt = stylePrompt.slice(0, 500);
         // Prepend portrait aspect ratio if not mentioned
         if (!prompt.toLowerCase().includes("9:16") && !prompt.toLowerCase().includes("portrait")) {
           prompt = "9:16 vertical portrait video, " + prompt;
         }
-        // Ensure the actual text content is referenced in the prompt
-        if (!prompt.includes(text)) {
-          prompt = prompt.replace(/,\s*$/, "") + `, the text '${text}' displayed as small centered text`;
+        // If the prompt references the original (pre-truncation) text, replace it with the truncated version
+        // to ensure T2V renders the text that actually fits in the frame
+        if (originalText !== truncatedText && prompt.includes(originalText)) {
+          prompt = prompt.replace(originalText, truncatedText);
+        }
+        // Ensure the truncated text content is referenced in the prompt
+        if (!prompt.includes(truncatedText)) {
+          prompt = prompt.replace(/,\s*$/, "") + `, the text '${truncatedText}' displayed as small centered text`;
         }
         // Enforce small text if not mentioned
         if (!prompt.toLowerCase().includes("small") && !prompt.toLowerCase().includes("compact")) {
@@ -2140,7 +2204,7 @@ Respond with ONLY a JSON object:
               const text = truncateCardText(parsed.intro.text);
               return {
                 text,
-                stylePrompt: ensureCardPrompt(parsed.intro.stylePrompt, text),
+                stylePrompt: ensureCardPrompt(parsed.intro.stylePrompt, text, parsed.intro.text),
                 duration: typeof parsed.intro.duration === "number" ? Math.max(3, Math.min(5, parsed.intro.duration)) : 4,
               };
             })()
@@ -2150,7 +2214,7 @@ Respond with ONLY a JSON object:
               const text = truncateCardText(parsed.outro.text);
               return {
                 text,
-                stylePrompt: ensureCardPrompt(parsed.outro.stylePrompt, text),
+                stylePrompt: ensureCardPrompt(parsed.outro.stylePrompt, text, parsed.outro.text),
                 duration: typeof parsed.outro.duration === "number" ? Math.max(3, Math.min(5, parsed.outro.duration)) : 4,
               };
             })()
@@ -2159,14 +2223,15 @@ Respond with ONLY a JSON object:
           ? parsed.sfx
               .filter((s) =>
                 typeof s.clipIndex === "number" &&
-                s.clipIndex >= 0 && s.clipIndex < spacedClips.length &&
+                // Check if the AI's clipIndex survives post-processing (has a remapped entry)
+                aiIndexToFinalIndex.has(s.clipIndex) &&
                 VALID_SFX_TIMINGS.includes(s.timing) &&
                 typeof s.prompt === "string" && s.prompt.trim().length > 0 &&
                 typeof s.durationMs === "number" && Number.isFinite(s.durationMs)
               )
               .slice(0, 12)
               .map((s) => ({
-                clipIndex: s.clipIndex,
+                clipIndex: aiIndexToFinalIndex.get(s.clipIndex)!,
                 timing: s.timing,
                 prompt: s.prompt.slice(0, 300),
                 durationMs: Math.max(500, Math.min(5000, s.durationMs)),
@@ -2177,9 +2242,9 @@ Respond with ONLY a JSON object:
               enabled: parsed.voiceover.enabled,
               segments: Array.isArray(parsed.voiceover.segments)
                 ? parsed.voiceover.segments
-                    .filter((seg) => typeof seg.clipIndex === "number" && seg.clipIndex >= 0 && seg.clipIndex < spacedClips.length && typeof seg.text === "string" && seg.text.trim().length > 0)
+                    .filter((seg) => typeof seg.clipIndex === "number" && aiIndexToFinalIndex.has(seg.clipIndex) && typeof seg.text === "string" && seg.text.trim().length > 0)
                     .slice(0, 8)
-                    .map((seg) => ({ clipIndex: seg.clipIndex, text: seg.text.slice(0, 200) }))
+                    .map((seg) => ({ clipIndex: aiIndexToFinalIndex.get(seg.clipIndex)!, text: seg.text.slice(0, 200) }))
                 : [],
               voiceCharacter: VALID_VOICE_CHARS.includes(parsed.voiceover.voiceCharacter)
                 ? parsed.voiceover.voiceCharacter
@@ -2191,9 +2256,18 @@ Respond with ONLY a JSON object:
           : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype", delaySec: 0.3 },
         musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
         musicDurationMs: (() => {
-          // Compute total tape duration from clips so music always covers the full video
+          // Compute total tape duration from clips, accounting for velocity effects
+          // A slow-mo clip plays longer than its source duration; fast clips play shorter
           const tapeDurationMs = spacedClips.reduce(
-            (sum, c) => sum + (c.endTime - c.startTime) * 1000, 0
+            (sum, c) => {
+              const sourceDuration = c.endTime - c.startTime;
+              const effectiveDuration = getEffectiveDuration(
+                sourceDuration,
+                (c.velocityPreset ?? "normal") as VelocityPreset,
+                c.customVelocityKeyframes
+              );
+              return sum + effectiveDuration * 1000;
+            }, 0
           );
           const floor = Math.max(3000, tapeDurationMs);
           if (typeof parsed.musicDurationMs === "number") {
@@ -2235,9 +2309,9 @@ Respond with ONLY a JSON object:
         lightLeakColor: (typeof parsed.lightLeakColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(parsed.lightLeakColor)) ? parsed.lightLeakColor : undefined,
         glitchColors: (Array.isArray(parsed.glitchColors) && parsed.glitchColors.length === 2 && parsed.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? parsed.glitchColors as [string, string] : undefined,
 
-        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && parsed.thumbnail.sourceClipIndex >= 0 && parsed.thumbnail.sourceClipIndex < spacedClips.length)
+        thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && aiIndexToFinalIndex.has(parsed.thumbnail.sourceClipIndex))
           ? {
-              sourceClipIndex: parsed.thumbnail.sourceClipIndex,
+              sourceClipIndex: aiIndexToFinalIndex.get(parsed.thumbnail.sourceClipIndex)!,
               frameTime: typeof parsed.thumbnail.frameTime === "number" ? Math.max(0, parsed.thumbnail.frameTime) : 0,
               stylePrompt: typeof parsed.thumbnail.stylePrompt === "string" ? parsed.thumbnail.stylePrompt.slice(0, 300) : "",
             }
@@ -2469,13 +2543,13 @@ export async function retrieveScoringResults(
       }
 
       // Parse JSON array from text
-      const jsonMatch = textBlock.text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
+      const jsonMatchStr = extractBalancedJSON(textBlock.text, "[");
+      if (!jsonMatchStr) {
         console.warn(`Batch result ${entry.custom_id}: unparsable response`);
         continue;
       }
 
-      const parsed = safeParseJSONArray(jsonMatch[0]) as Array<{
+      const parsed = safeParseJSONArray(jsonMatchStr) as Array<{
         index: number;
         score: number;
         label: string;
