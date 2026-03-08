@@ -8,7 +8,7 @@ import type { SourceFileInfo } from "@/lib/frame-batching";
 const DEBUG = process.env.NODE_ENV === "development" || process.env.DEBUG_DETECT === "1";
 /** Debug-only logger — gated behind NODE_ENV or DEBUG_DETECT flag to avoid production noise. */
 function debugLog(...args: unknown[]) {
-  if (DEBUG) debugLog(...args);
+  if (DEBUG) console.log(...args);
 }
 
 // ── API helpers ──

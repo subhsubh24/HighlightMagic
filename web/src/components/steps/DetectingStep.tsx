@@ -21,7 +21,7 @@ import { pollBatched, cancelAllPolls } from "@/lib/poll-manager";
 import { cacheKey, getCachedAsset, setCachedAsset } from "@/lib/asset-cache";
 
 const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
-function debugLog(...args: unknown[]) { if (DEBUG) debugLog(...args); }
+function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
 
 /** Convert DetectedClips to app-level highlights. */
 function buildHighlights(detectedClips: DetectedClip[]) {
