@@ -1983,9 +1983,18 @@ Respond with ONLY a JSON object:
             }
           : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype" },
         musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
-        musicDurationMs: typeof parsed.musicDurationMs === "number"
-          ? Math.max(3000, Math.min(300000, parsed.musicDurationMs))
-          : 60000,
+        musicDurationMs: (() => {
+          // Compute total tape duration from clips so music always covers the full video
+          const tapeDurationMs = spacedClips.reduce(
+            (sum, c) => sum + (c.endTime - c.startTime) * 1000, 0
+          );
+          const floor = Math.max(3000, tapeDurationMs);
+          if (typeof parsed.musicDurationMs === "number") {
+            // Use the AI value but never shorter than the tape itself
+            return Math.max(floor, Math.min(300000, parsed.musicDurationMs));
+          }
+          return Math.min(300000, Math.max(floor, 60000));
+        })(),
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number")
           ? {
               sourceClipIndex: parsed.thumbnail.sourceClipIndex,

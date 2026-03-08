@@ -304,6 +304,10 @@ export default function DetectingStep() {
     function startMusicEarly(prompt: string, durationMs?: number) {
       if (earlyMusicPromiseRef.current) return; // Already started
       if (!state.aiMusicEnabled || state.aiMusicStatus === "completed") return;
+      // Skip early start if duration is suspiciously short — the planner may have
+      // emitted a per-clip duration rather than the total tape length. The full
+      // plan path in processResult will use the corrected duration.
+      if (durationMs !== undefined && durationMs < 10_000) return;
 
       const musicCK = cacheKey("music", { prompt, durationMs });
       const cached = getCachedAsset(musicCK);
