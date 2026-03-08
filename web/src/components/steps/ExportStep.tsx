@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music, CheckCircle, AlertTriangle } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -21,7 +21,7 @@ import {
   getClipEntryScale,
   type TransitionType,
 } from "@/lib/transitions";
-import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid, type TimelineValidation } from "@/lib/beat-sync";
+import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import { createAudioPipeline, type AudioPipeline } from "@/lib/audio-mux";
@@ -183,30 +183,7 @@ export default function ExportStep() {
   const isFree = !state.isProUser;
   const canExport = state.isProUser || canExportFree(state);
 
-  // Pre-export validation: beat-sync alignment + timeline integrity
-  const validation = useMemo<TimelineValidation | null>(() => {
-    if (sortedClips.length === 0) return null;
-    const beatGrid = state.viralOptions.beatSync
-      ? (() => {
-          const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
-          return track ? buildBeatGrid(track.bpm, 300) : null;
-        })()
-      : null;
-    return validateTimeline(
-      sortedClips.map((clip) => {
-        const media = getMediaFile(state, clip.sourceFileId);
-        return {
-          sourceFileId: clip.sourceFileId,
-          trimStart: clip.trimStart,
-          trimEnd: clip.trimEnd,
-          sourceDuration: media?.duration ?? 0,
-          transitionDuration: clip.transitionDuration,
-        };
-      }),
-      0.3,
-      beatGrid
-    );
-  }, [sortedClips, state]);
+
 
   const generateThumbnail = useCallback(async () => {
     const plan = state.aiProductionPlan;
@@ -396,9 +373,6 @@ export default function ExportStep() {
     dispatch({ type: "SET_VIRAL_OPTIONS", options: { [key]: !state.viralOptions[key] } });
   };
 
-  const { mimeType: detectedMime } = typeof MediaRecorder !== "undefined" ? pickMimeType() : { mimeType: "video/webm" };
-  const formatLabel = detectedMime.includes("mp4") ? "MP4 · H.264" : "WebM · VP9";
-
   return (
     <div className="flex flex-1 flex-col items-center gap-6 animate-fade-in">
       {phase === "done" && <Confetti />}
@@ -422,39 +396,21 @@ export default function ExportStep() {
           <div className="glass-card w-full p-4">
             <div className="flex flex-col gap-2 text-sm">
               <Row label="Clips" value={`${sortedClips.length} clips combined`} />
-              <Row label="Total Duration" value={`~${Math.round(totalDuration)}s`} />
-              <Row label="Editing Style" value={`${style.label} — ${style.description.split("—")[0].trim()}`} />
-              <Row label="Format" value={`${formatLabel} · 1080×1920`} />
-              {isFree && <Row label="Watermark" value="Included (Free tier)" />}
+              <Row label="Duration" value={`~${Math.round(totalDuration)}s`} />
+              <Row label="Style" value={style.label} />
               {isFree && (
                 <Row
-                  label="Exports remaining"
+                  label="Free exports left"
                   value={`${FREE_EXPORT_LIMIT - state.exportsUsed}/${FREE_EXPORT_LIMIT}`}
                 />
               )}
             </div>
-
-            <div className="mt-4 flex gap-1 overflow-x-auto">
-              {sortedClips.map((clip, i) => {
-                const m = getMediaFile(state, clip.sourceFileId);
-                return (
-                  <div
-                    key={clip.id}
-                    className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-[10px] text-[var(--text-secondary)]"
-                  >
-                    <Film className="h-3 w-3" />
-                    {i + 1}. {Math.round(clip.trimEnd - clip.trimStart)}s
-                    {m && <span className="max-w-[60px] truncate text-[var(--text-tertiary)]">{m.name}</span>}
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
-          {/* Viral options */}
+          {/* Extra options */}
           <div className="glass-card w-full p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-              Viral Optimization
+              Extras
             </p>
             <div className="flex flex-col gap-2.5">
               <label className="flex cursor-pointer items-center justify-between rounded-lg bg-white/5 px-3 py-2.5">
@@ -463,7 +419,7 @@ export default function ExportStep() {
                   <div>
                     <p className="text-sm font-medium text-white">Beat Sync</p>
                     <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Snap cuts to the music&apos;s beat grid
+                      Cuts land on the beat of the music
                     </p>
                   </div>
                 </div>
@@ -478,9 +434,9 @@ export default function ExportStep() {
                 <div className="flex items-center gap-2.5">
                   <Repeat className="h-4 w-4 text-blue-400" />
                   <div>
-                    <p className="text-sm font-medium text-white">Seamless Loop</p>
+                    <p className="text-sm font-medium text-white">Loop</p>
                     <p className="text-[11px] text-[var(--text-tertiary)]">
-                      Cross-fade end into start for TikTok replay
+                      Blends the end into the start for infinite replay
                     </p>
                   </div>
                 </div>
@@ -493,76 +449,6 @@ export default function ExportStep() {
               </label>
             </div>
           </div>
-
-          {/* Pre-export validation report */}
-          {validation && (
-            <div className="glass-card w-full p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                Rendering Validation
-              </p>
-              <div className="flex flex-col gap-2">
-                {/* Timeline validity */}
-                <div className="flex items-center gap-2">
-                  {validation.valid ? (
-                    <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-amber-400" />
-                  )}
-                  <span className="text-sm text-white">
-                    {validation.valid ? "Timeline OK" : `${validation.issues.length} issue${validation.issues.length !== 1 ? "s" : ""} found`}
-                  </span>
-                  <span className="ml-auto text-xs text-[var(--text-tertiary)]">
-                    ~{Math.round(validation.totalDuration)}s rendered
-                  </span>
-                </div>
-                {/* Timeline issues */}
-                {validation.issues.length > 0 && (
-                  <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                    {validation.issues.map((issue, i) => (
-                      <p key={i}>{issue.message}</p>
-                    ))}
-                  </div>
-                )}
-                {/* Beat-sync quality */}
-                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Music className="h-4 w-4 text-emerald-400" />
-                    <span className="text-sm text-white">Beat Sync</span>
-                    <div className="ml-auto flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={`h-full rounded-full ${
-                            validation.beatSync.quality >= 0.85
-                              ? "bg-emerald-400"
-                              : validation.beatSync.quality >= 0.65
-                                ? "bg-yellow-400"
-                                : "bg-red-400"
-                          }`}
-                          style={{ width: `${validation.beatSync.quality * 100}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-medium ${
-                        validation.beatSync.quality >= 0.85
-                          ? "text-emerald-400"
-                          : validation.beatSync.quality >= 0.65
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                      }`}>
-                        {validation.beatSync.label}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {validation.beatSync && validation.beatSync.totalTransitions > 0 && (
-                  <p className="text-[11px] text-[var(--text-tertiary)]">
-                    {validation.beatSync.tightCount}/{validation.beatSync.totalTransitions} cuts within 1 frame
-                    {" · "}avg offset {validation.beatSync.avgOffsetMs.toFixed(0)}ms
-                    {" · "}max {validation.beatSync.maxOffsetMs.toFixed(0)}ms
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
 
           <button onClick={handleExport} className="btn-primary flex w-full items-center justify-center gap-2">
             <Download className="h-5 w-5" />
