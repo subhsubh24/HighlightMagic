@@ -20,6 +20,9 @@ import { cacheDetectionData, getCachedDetectionData } from "@/lib/detection-cach
 import { pollBatched, cancelAllPolls } from "@/lib/poll-manager";
 import { cacheKey, getCachedAsset, setCachedAsset } from "@/lib/asset-cache";
 
+const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
+function debugLog(...args: unknown[]) { if (DEBUG) debugLog(...args); }
+
 /** Convert DetectedClips to app-level highlights. */
 function buildHighlights(detectedClips: DetectedClip[]) {
   return detectedClips.map((c) => ({
@@ -305,13 +308,13 @@ export default function DetectingStep() {
       const musicCK = cacheKey("music", { prompt, durationMs });
       const cached = getCachedAsset(musicCK);
       if (cached) {
-        console.log("[Music] Early start — cache hit");
+        debugLog("[Music] Early start — cache hit");
         dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: cached.data });
         earlyMusicPromiseRef.current = Promise.resolve(cached.data);
         return;
       }
 
-      console.log("[Music] Early start from streaming partial field");
+      debugLog("[Music] Early start from streaming partial field");
       dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
       earlyMusicPromiseRef.current = (async () => {
         try {
@@ -338,7 +341,7 @@ export default function DetectingStep() {
     function startSfxEarly(sfxCues: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>) {
       if (earlySfxStartedRef.current || sfxCues.length === 0) return;
       earlySfxStartedRef.current = true;
-      console.log(`[SFX] Early start from streaming partial — ${sfxCues.length} cues`);
+      debugLog(`[SFX] Early start from streaming partial — ${sfxCues.length} cues`);
 
       dispatch({ type: "SET_SFX_STATUS", status: "generating" });
       dispatch({
@@ -572,17 +575,17 @@ export default function DetectingStep() {
       try {
         // Phase 1: Extract frames from all media files (0-30%)
         setPassIndex(0);
-        console.log(`[Detection] Starting frame extraction for ${state.mediaFiles.length} files (${state.mediaFiles.map(f => f.type).join(", ")})`);
+        debugLog(`[Detection] Starting frame extraction for ${state.mediaFiles.length} files (${state.mediaFiles.map(f => f.type).join(", ")})`);
         const frames = await extractFramesFromMultiple(
           state.mediaFiles,
           (pct) => setProgress(pct * 0.3)
         );
-        console.log(`[Detection] Extracted ${frames.length} frames`);
+        debugLog(`[Detection] Extracted ${frames.length} frames`);
 
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
         const useBatchMode = frames.length >= BATCH_MODE_FRAME_THRESHOLD;
-        console.log(`[Detection] ${frames.length} frames, ${batches.length} batches, batchMode=${useBatchMode} (threshold=${BATCH_MODE_FRAME_THRESHOLD} frames)`);
+        debugLog(`[Detection] ${frames.length} frames, ${batches.length} batches, batchMode=${useBatchMode} (threshold=${BATCH_MODE_FRAME_THRESHOLD} frames)`);
         if (useBatchMode) {
           batchModeRef.current = true;
           setBatchMode(true);
@@ -592,14 +595,14 @@ export default function DetectingStep() {
 
         if (useBatchMode) {
           // ── Batch API scoring (50% cost savings) ──
-          console.log(`[Detection] Starting batch API scoring...`);
+          debugLog(`[Detection] Starting batch API scoring...`);
           scores = await runBatchScoring(batches, sourceFileList);
         } else {
           // ── Real-time scoring (low latency) ──
-          console.log(`[Detection] Starting real-time scoring...`);
+          debugLog(`[Detection] Starting real-time scoring...`);
           scores = await runRealtimeScoring(batches, sourceFileList);
         }
-        console.log(`[Detection] Scoring complete — ${scores.length} scores`);
+        debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
         cacheDetectionData(frames, scores);
@@ -622,7 +625,7 @@ export default function DetectingStep() {
           });
         }, 500);
 
-        console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
+        debugLog(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         // React Strict Mode aborts the signal during its simulated cleanup,
         // but this async function keeps running. Create a fresh controller
         // if the original was killed by Strict Mode (not a real unmount).
@@ -642,7 +645,7 @@ export default function DetectingStep() {
           undefined,
           state.creativeDirection || undefined,
           (phase) => {
-            console.log(`[Detection] Planner phase: ${phase} (+${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s)`);
+            debugLog(`[Detection] Planner phase: ${phase} (+${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s)`);
             phaseReceived = true;
             clearInterval(plannerTimer);
             if (phase === "thinking") {
@@ -657,7 +660,7 @@ export default function DetectingStep() {
           abort.signal,
           handlePartialField
         );
-        console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
+        debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
         await processResult(result);
@@ -753,7 +756,7 @@ export default function DetectingStep() {
             const musicCacheKey = cacheKey("music", { prompt, durationMs: productionPlan?.musicDurationMs });
             const cached = getCachedAsset(musicCacheKey);
             if (cached) {
-              console.log("[Music] Cache hit — skipping ElevenLabs API call");
+              debugLog("[Music] Cache hit — skipping ElevenLabs API call");
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: cached.data });
               return cached.data;
             }
@@ -1183,7 +1186,7 @@ export default function DetectingStep() {
                 const upscaledUrl = await pollAtlasTask(data.predictionId);
                 if (upscaledUrl) {
                   upscaledUrls.set(media.id, upscaledUrl);
-                  console.log(`[auto-upscale] Upscaled ${media.name}`);
+                  debugLog(`[auto-upscale] Upscaled ${media.name}`);
                 }
               }
             }
@@ -1302,7 +1305,7 @@ export default function DetectingStep() {
         console.warn("[Detection] triggerPhotoAnimations: no photo clips to animate, skipping");
         return Promise.resolve();
       }
-      console.log(`[Detection] Animating ${totalAnimations} photos...`);
+      debugLog(`[Detection] Animating ${totalAnimations} photos...`);
 
       const promises: Promise<void>[] = [];
 
