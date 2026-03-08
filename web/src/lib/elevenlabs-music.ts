@@ -39,7 +39,8 @@ export interface MusicGenerateResult {
  */
 export async function generateMusic(
   prompt: string,
-  durationMs: number = DEFAULT_MUSIC_LENGTH_MS
+  durationMs: number = DEFAULT_MUSIC_LENGTH_MS,
+  _isRetry: boolean = false
 ): Promise<MusicGenerateResult> {
   const apiKey = getApiKey();
   const safeDuration = Number.isFinite(durationMs) ? durationMs : DEFAULT_MUSIC_LENGTH_MS;
@@ -69,6 +70,12 @@ export async function generateMusic(
     try {
       const errorData = JSON.parse(errorText);
       if (errorData?.detail?.status === "bad_prompt") {
+        // ElevenLabs often returns a sanitized prompt_suggestion — retry with it
+        const suggestion = errorData.detail?.data?.prompt_suggestion;
+        if (!_isRetry && suggestion && typeof suggestion === "string" && suggestion !== prompt) {
+          console.log(`[elevenlabs-music] Prompt rejected, retrying with suggestion: "${suggestion.slice(0, 80)}..."`);
+          return generateMusic(suggestion, durationMs, true);
+        }
         return {
           status: "failed",
           error: errorData.detail.message || "Prompt was rejected — try different wording (no artist/song names).",

@@ -358,33 +358,52 @@ export default function DetectingStep() {
           status: "generating" as const,
         })),
       });
-      // Fire off all SFX in parallel (same logic as processResult)
-      Promise.all(
-        sfxCues.map(async (sfxCue) => {
-          try {
-            const sfxCK = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
-            const cachedSfx = getCachedAsset(sfxCK);
-            if (cachedSfx) {
-              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: cachedSfx.data, status: "completed" });
-              return;
-            }
-            const res = await fetch("/api/sfx", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
-            });
-            const data = await res.json();
-            if (res.ok && data.status === "completed" && data.audioUrl) {
-              setCachedAsset(sfxCK, data.audioUrl);
-              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: data.audioUrl, status: "completed" });
-            } else {
-              dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
-            }
-          } catch {
+      // Fire off SFX with concurrency limit (ElevenLabs allows max 4 parallel)
+      const SFX_CONCURRENCY = 3;
+      const sfxQueue = [...sfxCues];
+      let activeCount = 0;
+      let resolveAll: () => void;
+      const allDone = new Promise<void>((r) => { resolveAll = r; });
+
+      async function processSfx(sfxCue: typeof sfxCues[number]) {
+        try {
+          const sfxCK = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
+          const cachedSfx = getCachedAsset(sfxCK);
+          if (cachedSfx) {
+            dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: cachedSfx.data, status: "completed" });
+            return;
+          }
+          const res = await fetch("/api/sfx", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            setCachedAsset(sfxCK, data.audioUrl);
+            dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: data.audioUrl, status: "completed" });
+          } else {
             dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
           }
-        })
-      ).then(() => dispatch({ type: "SET_SFX_STATUS", status: "completed" }))
+        } catch {
+          dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+        }
+      }
+
+      function runNext() {
+        if (sfxQueue.length === 0 && activeCount === 0) {
+          resolveAll!();
+          return;
+        }
+        while (activeCount < SFX_CONCURRENCY && sfxQueue.length > 0) {
+          const next = sfxQueue.shift()!;
+          activeCount++;
+          processSfx(next).finally(() => { activeCount--; runNext(); });
+        }
+      }
+      runNext();
+
+      allDone.then(() => dispatch({ type: "SET_SFX_STATUS", status: "completed" }))
         .catch(() => dispatch({ type: "SET_SFX_STATUS", status: "failed" }));
     }
 
