@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { reducer, initialState, canExportFree, getMediaFile, getTotalDuration } from "./store";
+import { reducer, initialState, canExportFree, getMediaFile } from "./store";
 import type { AppState, MediaFile } from "./types";
 
 // Mock URL.revokeObjectURL since it's not available in test env
@@ -126,14 +126,3 @@ describe("getMediaFile", () => {
   });
 });
 
-describe("getTotalDuration", () => {
-  it("sums durations of all media files", () => {
-    const files = [makeMediaFile({ duration: 10 }), makeMediaFile({ id: "2", duration: 20 })];
-    const state = { ...initialState, mediaFiles: files };
-    expect(getTotalDuration(state)).toBe(30);
-  });
-
-  it("returns 0 for empty media", () => {
-    expect(getTotalDuration(initialState)).toBe(0);
-  });
-});

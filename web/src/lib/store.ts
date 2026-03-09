@@ -331,10 +331,6 @@ export function getMediaFile(state: AppState, fileId: string): MediaFile | undef
   return state.mediaFiles.find((f) => f.id === fileId);
 }
 
-export function getTotalDuration(state: AppState): number {
-  return state.mediaFiles.reduce((sum, f) => sum + f.duration, 0);
-}
-
 // ── Context ──
 
 export const AppContext = createContext<{

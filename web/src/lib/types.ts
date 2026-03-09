@@ -266,13 +266,6 @@ export interface ViralExportOptions {
   seamlessLoop: boolean;
 }
 
-export interface FrameAnalysis {
-  timestamp: number;
-  score: number;
-  label: string;
-  reasoning: string;
-}
-
 // ── Editing theme (AI-detected or template-derived) ──
 
 export type EditingTheme =
