@@ -22,6 +22,30 @@ export interface CustomCaptionParams {
   glowRadius?: number;       // 0-30
 }
 
+/** AI-controllable kinetic text internals. All optional — defaults used when absent. */
+export interface KineticTextParams {
+  /** Pop entrance start scale (0.1-0.8). Default 0.3. */
+  popStartScale?: number;
+  /** Pop exit scale expansion (0.1-0.8). Default 0.3. */
+  popExitScale?: number;
+  /** Slide exit distance in pixels (5-40). Default 20. */
+  slideExitDistance?: number;
+  /** Fade exit vertical offset in pixels (-30 to 30). Default -10. */
+  fadeExitOffset?: number;
+  /** Flicker entrance speed multiplier (4-16). Default 8. */
+  flickerSpeed?: number;
+  /** Pop idle pulse frequency in Hz (0.5-4). Default 1.5. */
+  popIdleFreq?: number;
+  /** Flicker idle glow frequency in Hz (1-6). Default 3. */
+  flickerIdleFreq?: number;
+  /** Bold font size multiplier (0.8-1.6). Default 1.2. */
+  boldSizeMultiplier?: number;
+  /** Minimal font size multiplier (0.6-1.0). Default 0.9. */
+  minimalSizeMultiplier?: number;
+  /** Pop easeOutBack overshoot (1.0-3.0). Default 1.70158. Higher = bouncier. */
+  popOvershoot?: number;
+}
+
 export interface KineticTransform {
   /** Scale factor (1.0 = normal). */
   scale: number;
@@ -64,7 +88,8 @@ export function getKineticTransform(
   exitDuration: number = DEFAULT_EXIT_DURATION,
   animationIntensity: number = 1.0,
   idlePulse: number = 1.0,
-  exitAnimation: string = "fade"
+  exitAnimation: string = "fade",
+  kineticParams?: KineticTextParams
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -82,7 +107,7 @@ export function getKineticTransform(
   // Entrance animation — intensity scales the effect magnitude
   if (localTime < entranceDuration) {
     const t = localTime / entranceDuration;
-    const raw = getEntranceAnimationByType(animation, t, canvasHeight, custom);
+    const raw = getEntranceAnimationByType(animation, t, canvasHeight, custom, kineticParams);
     if (animationIntensity < 1.0) {
       const ai = Math.max(0, Math.min(1, animationIntensity));
       return {
@@ -104,19 +129,19 @@ export function getKineticTransform(
     const t = timeToEnd / exitDuration; // 1 → 0 as clip ends
     switch (exitAnimation) {
       case "pop":
-        return { ...base, alpha: t, scale: 1 + (1 - t) * 0.3, offsetY: 0 };
+        return { ...base, alpha: t, scale: 1 + (1 - t) * (kineticParams?.popExitScale ?? 0.3), offsetY: 0 };
       case "slide":
-        return { ...base, alpha: t, offsetY: (1 - t) * 20 };
+        return { ...base, alpha: t, offsetY: (1 - t) * (kineticParams?.slideExitDistance ?? 20) };
       case "dissolve":
         return { ...base, alpha: t * t, offsetY: 0 }; // quadratic fade = smoother dissolve
       case "fade":
       default:
-        return { ...base, alpha: t, offsetY: (1 - t) * -10 };
+        return { ...base, alpha: t, offsetY: (1 - t) * (kineticParams?.fadeExitOffset ?? -10) };
     }
   }
 
   // Steady state — apply idle effects based on animation type
-  return getIdleAnimationByType(animation, localTime, custom, idlePulse);
+  return getIdleAnimationByType(animation, localTime, custom, idlePulse, kineticParams);
 }
 
 /** Map named caption styles to their default animation type. */
@@ -138,16 +163,17 @@ function getEntranceAnimationByType(
   animation: string,
   t: number,
   canvasHeight: number,
-  custom?: CustomCaptionParams
+  custom?: CustomCaptionParams,
+  kp?: KineticTextParams
 ): KineticTransform {
   const glowR = custom?.glowRadius ?? 0;
 
   switch (animation) {
     case "pop": {
-      // Start from a small visible scale (0.3) and ease-out-back to full scale (1.0)
-      // easeOutBack overshoots past 1.0 then settles, creating a satisfying "pop" bounce
-      const bounceT = easeOutBack(t);
-      const scale = 0.3 + bounceT * 0.7; // 0.3 → overshoot → 1.0
+      // Start from a small visible scale and ease-out-back to full scale (1.0)
+      const startScale = kp?.popStartScale ?? 0.3;
+      const bounceT = easeOutBack(t, kp?.popOvershoot);
+      const scale = startScale + bounceT * (1 - startScale);
       return {
         scale,
         offsetY: 0,
@@ -173,7 +199,7 @@ function getEntranceAnimationByType(
     }
 
     case "flicker": {
-      const flickerPhase = t * 8;
+      const flickerPhase = t * (kp?.flickerSpeed ?? 8);
       const flicker = t < 0.4
         ? (Math.sin(flickerPhase * Math.PI * 5) > 0 ? 0.8 : 0.1)
         : 1;
@@ -225,7 +251,7 @@ function getEntranceAnimationByType(
 /**
  * Idle animations by animation type.
  */
-function getIdleAnimationByType(animation: string, time: number, custom?: CustomCaptionParams, idlePulse: number = 1.0): KineticTransform {
+function getIdleAnimationByType(animation: string, time: number, custom?: CustomCaptionParams, idlePulse: number = 1.0, kp?: KineticTextParams): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
     offsetY: 0,
@@ -239,13 +265,16 @@ function getIdleAnimationByType(animation: string, time: number, custom?: Custom
 
   switch (animation) {
     case "flicker": {
-      const pulse = 0.6 + Math.sin(time * 3) * 0.2 * idlePulse;
+      const flickerIdleF = kp?.flickerIdleFreq ?? 3;
+      const pulse = 0.6 + Math.sin(time * flickerIdleF) * 0.2 * idlePulse;
       const r = glowR > 0 ? glowR : 15;
       return { ...base, glowRadius: r + Math.sin(time * 2) * (r / 3) * idlePulse, glowAlpha: pulse };
     }
 
-    case "pop":
-      return { ...base, scale: 1 + Math.sin(time * 1.5) * 0.008 * idlePulse, glowRadius: glowR, glowAlpha: glowR > 0 ? 0.6 : 0 };
+    case "pop": {
+      const popIdleF = kp?.popIdleFreq ?? 1.5;
+      return { ...base, scale: 1 + Math.sin(time * popIdleF) * 0.008 * idlePulse, glowRadius: glowR, glowAlpha: glowR > 0 ? 0.6 : 0 };
+    }
 
     default:
       return glowR > 0 ? { ...base, glowRadius: glowR, glowAlpha: 0.6 + Math.sin(time * 2) * 0.15 * idlePulse } : base;
@@ -271,7 +300,9 @@ export function drawKineticCaption(
   /** AI-decided shadow blur (pixels, default 8) */
   shadowBlur?: number,
   /** AI-decided glow spread multiplier (default 1.5) */
-  glowSpread?: number
+  glowSpread?: number,
+  /** AI-controllable kinetic text params */
+  kineticParams?: KineticTextParams
 ) {
   if (!text || transform.alpha <= 0) return;
 
@@ -297,10 +328,10 @@ export function drawKineticCaption(
   } else {
     switch (style) {
       case "Bold":
-        ctx.font = `900 ${fontSize * 1.2}px -apple-system, sans-serif`;
+        ctx.font = `900 ${fontSize * (kineticParams?.boldSizeMultiplier ?? 1.2)}px -apple-system, sans-serif`;
         break;
       case "Minimal":
-        ctx.font = `300 ${fontSize * 0.9}px -apple-system, sans-serif`;
+        ctx.font = `300 ${fontSize * (kineticParams?.minimalSizeMultiplier ?? 0.9)}px -apple-system, sans-serif`;
         break;
       case "Neon":
         ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
@@ -425,8 +456,8 @@ function easeOutQuad(t: number): number {
   return 1 - (1 - t) * (1 - t);
 }
 
-function easeOutBack(t: number): number {
-  const c1 = 1.70158;
+function easeOutBack(t: number, overshoot?: number): number {
+  const c1 = overshoot ?? 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }

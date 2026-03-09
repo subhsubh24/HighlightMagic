@@ -239,8 +239,68 @@ export interface AiProductionPlan {
   /** Letterbox/pillarbox fill color as hex (default "black"). AI can use dark tones to match mood. */
   letterboxColor?: string;
 
+  /** Watermark text color as hex (default "white"). AI can tint to match tape mood. */
+  watermarkColor?: string;
+
+  /** Film grain block size in pixels (2 = fine cinematic, 4 = default, 8 = coarse retro). */
+  grainBlockSize?: number;
+
   /** Caption exit animation type: "fade" (default), "pop", "slide", "dissolve". */
   captionExitAnimation?: string;
+
+  // ── Transition overlay fine-tuning ──
+
+  /** Light leak gradient opacity peak (0-1). Default 0.35. */
+  lightLeakOpacity?: number;
+  /** Hard flash darken-phase duration as fraction of transition (0-0.5). Default 0.3. */
+  hardFlashDarkenPhase?: number;
+  /** Hard flash white-blast duration as fraction of transition. Default 0.25. */
+  hardFlashBlastPhase?: number;
+  /** Glitch scanline count (2-12). Default 6. */
+  glitchScanlineCount?: number;
+  /** Glitch channel band width as fraction (0.1-0.5). Default 0.34. */
+  glitchBandWidth?: number;
+  /** Whip motion blur line count (4-16). Default 8. */
+  whipBlurLineCount?: number;
+  /** Whip brightness overlay opacity (0-0.5). Default 0.15. */
+  whipBrightnessAlpha?: number;
+  /** Hard cut brightness bump opacity (0-0.3). Default 0.15. */
+  hardCutBumpAlpha?: number;
+
+  // ── Kinetic text fine-tuning ──
+
+  /** Pop entrance start scale (0.1-0.8). Default 0.3. Lower = more dramatic entrance. */
+  captionPopStartScale?: number;
+  /** Pop exit scale expansion (0.1-0.8). Default 0.3. */
+  captionPopExitScale?: number;
+  /** Slide exit distance in pixels (5-40). Default 20. */
+  captionSlideExitDistance?: number;
+  /** Fade exit vertical offset in pixels (-30 to 30). Default -10. */
+  captionFadeExitOffset?: number;
+  /** Flicker entrance speed multiplier (4-16). Default 8. Controls how fast the neon flickers. */
+  captionFlickerSpeed?: number;
+  /** Pop idle pulse frequency in Hz (0.5-4). Default 1.5. */
+  captionPopIdleFreq?: number;
+  /** Flicker idle glow frequency in Hz (1-6). Default 3. */
+  captionFlickerIdleFreq?: number;
+  /** Bold caption font size multiplier (0.8-1.6). Default 1.2. */
+  captionBoldSizeMultiplier?: number;
+  /** Minimal caption font size multiplier (0.6-1.0). Default 0.9. */
+  captionMinimalSizeMultiplier?: number;
+  /** Pop easeOutBack overshoot constant (1.0-3.0). Default 1.70158. Higher = bouncier. */
+  captionPopOvershoot?: number;
+
+  // ── Editing philosophy (AI articulates its vision before making choices) ──
+
+  /** AI's high-level editing philosophy for this tape. */
+  editingPhilosophy?: {
+    /** The overall feel: raw & authentic, polished & cinematic, energetic & chaotic, etc. */
+    vibe?: string;
+    /** Pacing arc: escalation, double_peak, sine_wave, slow_build, front_loaded, even */
+    paceProfile?: string;
+    /** How transitions should evolve across the tape */
+    transitionArc?: string;
+  };
 
   /** Audio breath moments — planned silence dips at emotional peaks. */
   audioBreaths?: Array<{
@@ -379,6 +439,14 @@ export interface EditedClip {
   audioFadeOut?: number;
   /** Per-clip caption animation intensity (0-1). Scales entrance animation magnitude. */
   captionAnimationIntensity?: number;
+  /** Per-clip light leak color as hex. Overrides plan-level lightLeakColor. */
+  lightLeakColor?: string;
+  /** Per-clip glitch colors as [primary, secondary] hex. */
+  glitchColors?: [string, string];
+  /** Per-clip light leak opacity (0-1). */
+  lightLeakOpacity?: number;
+  /** Per-clip whip motion blur alpha (0-1). */
+  whipMotionBlurAlpha?: number;
 }
 
 export interface ViralExportOptions {

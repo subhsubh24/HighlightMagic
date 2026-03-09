@@ -485,6 +485,30 @@ export interface ProductionPlan {
   glitchColors?: [string, string];
   letterboxColor?: string;
   captionExitAnimation?: string;
+  watermarkColor?: string;
+  grainBlockSize?: number;
+  // Transition overlay fine-tuning
+  lightLeakOpacity?: number;
+  hardFlashDarkenPhase?: number;
+  hardFlashBlastPhase?: number;
+  glitchScanlineCount?: number;
+  glitchBandWidth?: number;
+  whipBlurLineCount?: number;
+  whipBrightnessAlpha?: number;
+  hardCutBumpAlpha?: number;
+  // Kinetic text fine-tuning
+  captionPopStartScale?: number;
+  captionPopExitScale?: number;
+  captionSlideExitDistance?: number;
+  captionFadeExitOffset?: number;
+  captionFlickerSpeed?: number;
+  captionPopIdleFreq?: number;
+  captionFlickerIdleFreq?: number;
+  captionBoldSizeMultiplier?: number;
+  captionMinimalSizeMultiplier?: number;
+  captionPopOvershoot?: number;
+  // Editing philosophy
+  editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string };
   // AI-controlled post-processing
   grainOpacity?: number;
   vignetteIntensity?: number;
@@ -1595,6 +1619,32 @@ TRANSITION FINE-TUNING — Each clip can set "transitionParams" to tune the tran
 A zoom_punch at zoomOutScale 0.15 is a gentle push. At 0.4 it's a violent slam.
 Match these to the moment's energy — don't let every zoom_punch look identical.
 
+TRANSITION OVERLAY FINE-TUNING — Plan-level controls for transition overlay effects:
+  "lightLeakOpacity" — peak opacity of light_leak warm glow (default 0.35). Lower = subtle warmth, higher = dreamy.
+  "hardFlashDarkenPhase" — how long the darken phase lasts in hard_flash (0-0.5, default 0.3). Longer = more dramatic build.
+  "hardFlashBlastPhase" — when the white blast ends (0.3-0.8, default 0.55). Later = longer flash.
+  "glitchScanlineCount" — number of scanline artifacts in glitch (2-12, default 6). More = more chaotic.
+  "glitchBandWidth" — width of glitch color bands (0.1-0.5, default 0.34). Wider = more distortion.
+  "whipBlurLineCount" — motion blur lines in whip (4-16, default 8). More = smoother motion.
+  "whipBrightnessAlpha" — brightness overlay in whip (0-0.5, default 0.15). Higher = more energetic.
+  "hardCutBumpAlpha" — subtle brightness bump at hard cuts (0-0.3, default 0.15). 0 = invisible cut.
+Per-clip, set "lightLeakColor" (hex), "glitchColors" ([primary, secondary] hex),
+"lightLeakOpacity" and "whipMotionBlurAlpha" to tune individual transitions.
+
+KINETIC TEXT FINE-TUNING — Plan-level controls for caption animation feel:
+  "captionPopStartScale" — where pop animation starts (0.1-0.8, default 0.3). Lower = more dramatic entrance.
+  "captionPopExitScale" — how much text scales up during pop exit (0.1-0.8, default 0.3).
+  "captionSlideExitDistance" — pixels text slides during slide exit (5-40, default 20).
+  "captionFadeExitOffset" — vertical offset during fade exit (-30 to 30, default -10). Negative = drifts up.
+  "captionFlickerSpeed" — flicker entrance oscillation speed (4-16, default 8). Higher = more rapid flicker.
+  "captionPopIdleFreq" — pop text idle breathing frequency in Hz (0.5-4, default 1.5). Slower = calmer.
+  "captionFlickerIdleFreq" — flicker glow idle pulse speed in Hz (1-6, default 3).
+  "captionBoldSizeMultiplier" — Bold style font scale (0.8-1.6, default 1.2). For IMPACT try 1.4.
+  "captionMinimalSizeMultiplier" — Minimal style font scale (0.6-1.0, default 0.9). For whisper-quiet try 0.7.
+  "captionPopOvershoot" — bounce magnitude in pop entrance (1.0-3.0, default 1.7). Higher = bouncier.
+Match these to the tape's personality. Hype content gets fast flickers and big pops.
+Cinematic content gets slow pops and gentle fades. Wedding gets minimal idle pulse.
+
 COLOR GRADING — Design a UNIQUE color grade for each clip using "filterCSS":
 Set "filterCSS" to a CSS filter string using any combination of:
 saturate(), contrast(), brightness(), sepia(), hue-rotate(), grayscale(), blur(), invert(), opacity()
@@ -1746,6 +1796,42 @@ Think like you're scoring a film: every layer (music, sound design, pacing, colo
 be intentional and reinforce the same emotional throughline. If two elements compete with each
 other or feel redundant for THIS tape, choose the stronger one. If stacking everything creates
 the exact vibe the content needs, stack everything. Trust your eye.
+
+═══════════════════════════════════════════════
+EDITING PHILOSOPHY — ARTICULATE YOUR VISION FIRST
+═══════════════════════════════════════════════
+Before choosing ANY values, articulate your vision in "editingPhilosophy":
+  "vibe" — your overall editing philosophy in a sentence. Examples:
+    "raw documentary energy — letting imperfect moments breathe"
+    "polished cinematic — every frame composed, every transition intentional"
+    "frenetic chaos — overwhelming sensory density, cuts faster than processing"
+    "elegant restraint — saying more with less, trusting the footage"
+  "paceProfile" — the energy shape of your edit:
+    "escalation" (builds continuously to a peak)
+    "double_peak" (two climaxes with a valley between)
+    "sine_wave" (rhythmic oscillation of intensity)
+    "slow_build" (patience → explosive payoff)
+    "front_loaded" (hook hard, coast to close)
+    "even" (consistent energy — montage style)
+  "transitionArc" — how your transitions should evolve across the tape:
+    "aggressive → smooth → aggressive" for impact-valley-impact
+    "minimal throughout — letting cuts do the talking" for documentary
+    "escalating intensity — each transition more dramatic than the last"
+    "mixed grammar — whips for action, dissolves for emotion, cuts for pace"
+This philosophy guides EVERY subsequent choice. Your values aren't random — they serve this vision.
+
+TRANSITION GRAMMAR — Your transitions tell a story too:
+Don't pick each transition in isolation. Think about the SEQUENCE of transitions as its own narrative.
+A human editor develops a pattern: punchy transitions in act 1, softer in the emotional middle,
+aggressive for the climax. The transition choices should read as intentional WHEN VIEWED TOGETHER.
+Consider using hard cuts (no transition effect) deliberately — a hard cut after a slow dissolve
+creates contrast. Silence after noise. Not every clip boundary needs a fancy transition.
+
+"watermarkColor" — hex color for watermark text (default "white"). On bright content, white is
+invisible. Try "#1a1a1a" on bright, "#e0e0e0" on dark, or tint to match the tape's color story.
+
+"grainBlockSize" — film grain pixel size (1-12, default 4). Fine grain (2) = modern cinema.
+Coarse grain (6-8) = retro/lo-fi/VHS. Match to the tape's era and mood.
 
 ═══════════════════════════════════════════════
 CREATIVE RISK — KNOW WHEN TO BREAK THE RULES
@@ -2224,7 +2310,7 @@ sharp release creates "tension building... then SNAP back to reality." Shape eac
 These are incredibly powerful when used sparingly. Overuse kills the effect.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7, "beatPulseIntensity": 0.02, "beatFlashOpacity": 0.15, "beatFlashThreshold": 0.4, "captionIdlePulse": 0.5, "captionGlowSpread": 1.5, "audioFadeIn": 0.02, "audioFadeOut": 0.08, "captionAnimationIntensity": 0.8, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.3, "zoomInScale": 0.2}, "beatFlashColor": "#ffd700"}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.5, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "vignetteTightness": 0.4, "vignetteHardness": 0.5, "watermarkFontSize": 0.015, "watermarkYOffset": 0.03, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.4, "finalClipWarmth": {"sepia": 0.06, "saturation": 0.04, "fadeIn": 2.0}, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1, "attack": 0.08, "release": 0.4}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop"}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7, "beatPulseIntensity": 0.02, "beatFlashOpacity": 0.15, "beatFlashThreshold": 0.4, "captionIdlePulse": 0.5, "captionGlowSpread": 1.5, "audioFadeIn": 0.02, "audioFadeOut": 0.08, "captionAnimationIntensity": 0.8, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.3, "zoomInScale": 0.2}, "beatFlashColor": "#ffd700"}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.5, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "vignetteTightness": 0.4, "vignetteHardness": 0.5, "watermarkFontSize": 0.015, "watermarkYOffset": 0.03, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.4, "finalClipWarmth": {"sepia": 0.06, "saturation": 0.04, "fadeIn": 2.0}, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1, "attack": 0.08, "release": 0.4}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop", "watermarkColor": "#e0e0e0", "grainBlockSize": 4, "lightLeakOpacity": 0.3, "glitchScanlineCount": 6, "whipBlurLineCount": 8, "captionPopStartScale": 0.3, "captionPopOvershoot": 1.7, "captionFlickerSpeed": 8, "captionBoldSizeMultiplier": 1.2, "editingPhilosophy": {"vibe": "polished cinematic — every frame composed", "paceProfile": "escalation", "transitionArc": "soft openers → aggressive peaks → gentle close"}}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2383,6 +2469,10 @@ Respond with ONLY a JSON object:
             motionBlurAlpha?: number;
             softZoomScale?: number;
           };
+          lightLeakColor?: string;
+          glitchColors?: [string, string];
+          lightLeakOpacity?: number;
+          whipMotionBlurAlpha?: number;
         }>;
         // AI Production plan fields
         intro?: { text: string; stylePrompt: string; duration?: number } | null;
@@ -2432,6 +2522,27 @@ Respond with ONLY a JSON object:
         beatFlashColor?: string;
         letterboxColor?: string;
         captionExitAnimation?: string;
+        watermarkColor?: string;
+        grainBlockSize?: number;
+        lightLeakOpacity?: number;
+        hardFlashDarkenPhase?: number;
+        hardFlashBlastPhase?: number;
+        glitchScanlineCount?: number;
+        glitchBandWidth?: number;
+        whipBlurLineCount?: number;
+        whipBrightnessAlpha?: number;
+        hardCutBumpAlpha?: number;
+        captionPopStartScale?: number;
+        captionPopExitScale?: number;
+        captionSlideExitDistance?: number;
+        captionFadeExitOffset?: number;
+        captionFlickerSpeed?: number;
+        captionPopIdleFreq?: number;
+        captionFlickerIdleFreq?: number;
+        captionBoldSizeMultiplier?: number;
+        captionMinimalSizeMultiplier?: number;
+        captionPopOvershoot?: number;
+        editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string };
         // AI-controlled post-processing
         grainOpacity?: number;
         vignetteIntensity?: number;
@@ -2616,6 +2727,10 @@ Respond with ONLY a JSON object:
         audioFadeIn: typeof p.audioFadeIn === "number" ? Math.max(0.01, Math.min(0.3, p.audioFadeIn)) : undefined,
         audioFadeOut: typeof p.audioFadeOut === "number" ? Math.max(0.01, Math.min(0.3, p.audioFadeOut)) : undefined,
         captionAnimationIntensity: typeof p.captionAnimationIntensity === "number" ? Math.max(0, Math.min(1, p.captionAnimationIntensity)) : undefined,
+        lightLeakColor: (typeof p.lightLeakColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(p.lightLeakColor)) ? p.lightLeakColor : undefined,
+        glitchColors: (Array.isArray(p.glitchColors) && p.glitchColors.length === 2 && p.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? p.glitchColors as [string, string] : undefined,
+        lightLeakOpacity: typeof p.lightLeakOpacity === "number" ? Math.max(0, Math.min(1, p.lightLeakOpacity)) : undefined,
+        whipMotionBlurAlpha: typeof p.whipMotionBlurAlpha === "number" ? Math.max(0, Math.min(1, p.whipMotionBlurAlpha)) : undefined,
       }; });
 
       // Deduplicate: drop clips with identical or overlapping time ranges from the same source
@@ -2735,7 +2850,7 @@ Respond with ONLY a JSON object:
               return {
                 text,
                 stylePrompt: ensureCardPrompt(parsed.intro.stylePrompt, text, parsed.intro.text),
-                duration: typeof parsed.intro.duration === "number" ? Math.max(3, Math.min(5, parsed.intro.duration)) : 4,
+                duration: typeof parsed.intro.duration === "number" ? Math.max(2, Math.min(8, parsed.intro.duration)) : 4,
               };
             })()
           : null,
@@ -2745,7 +2860,7 @@ Respond with ONLY a JSON object:
               return {
                 text,
                 stylePrompt: ensureCardPrompt(parsed.outro.stylePrompt, text, parsed.outro.text),
-                duration: typeof parsed.outro.duration === "number" ? Math.max(3, Math.min(5, parsed.outro.duration)) : 4,
+                duration: typeof parsed.outro.duration === "number" ? Math.max(2, Math.min(8, parsed.outro.duration)) : 4,
               };
             })()
           : null,
@@ -2834,9 +2949,7 @@ Respond with ONLY a JSON object:
             const valid = parsed.neonColors
               .filter((c: unknown): c is string => typeof c === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c))
               .slice(0, 8);
-            if (valid.length >= 2) return valid;
-            // AI provided colors but too few survived validation — keep what we have and pad
-            if (valid.length === 1) return [valid[0], valid[0]];
+            if (valid.length >= 1) return valid;
           }
           // Only use default palette when AI provided nothing at all
           return ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"];
@@ -2860,6 +2973,34 @@ Respond with ONLY a JSON object:
         glitchColors: (Array.isArray(parsed.glitchColors) && parsed.glitchColors.length === 2 && parsed.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? parsed.glitchColors as [string, string] : undefined,
         letterboxColor: (typeof parsed.letterboxColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(parsed.letterboxColor)) ? parsed.letterboxColor : undefined,
         captionExitAnimation: (typeof parsed.captionExitAnimation === "string" && ["fade", "pop", "slide", "dissolve"].includes(parsed.captionExitAnimation)) ? parsed.captionExitAnimation : undefined,
+        watermarkColor: (typeof parsed.watermarkColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(parsed.watermarkColor)) ? parsed.watermarkColor : undefined,
+        grainBlockSize: typeof parsed.grainBlockSize === "number" ? Math.max(1, Math.min(12, Math.round(parsed.grainBlockSize))) : undefined,
+        // Transition overlay fine-tuning
+        lightLeakOpacity: typeof parsed.lightLeakOpacity === "number" ? Math.max(0, Math.min(1, parsed.lightLeakOpacity)) : undefined,
+        hardFlashDarkenPhase: typeof parsed.hardFlashDarkenPhase === "number" ? Math.max(0.05, Math.min(0.5, parsed.hardFlashDarkenPhase)) : undefined,
+        hardFlashBlastPhase: typeof parsed.hardFlashBlastPhase === "number" ? Math.max(0.3, Math.min(0.8, parsed.hardFlashBlastPhase)) : undefined,
+        glitchScanlineCount: typeof parsed.glitchScanlineCount === "number" ? Math.max(2, Math.min(12, Math.round(parsed.glitchScanlineCount))) : undefined,
+        glitchBandWidth: typeof parsed.glitchBandWidth === "number" ? Math.max(0.1, Math.min(0.5, parsed.glitchBandWidth)) : undefined,
+        whipBlurLineCount: typeof parsed.whipBlurLineCount === "number" ? Math.max(4, Math.min(16, Math.round(parsed.whipBlurLineCount))) : undefined,
+        whipBrightnessAlpha: typeof parsed.whipBrightnessAlpha === "number" ? Math.max(0, Math.min(0.5, parsed.whipBrightnessAlpha)) : undefined,
+        hardCutBumpAlpha: typeof parsed.hardCutBumpAlpha === "number" ? Math.max(0, Math.min(0.3, parsed.hardCutBumpAlpha)) : undefined,
+        // Kinetic text fine-tuning
+        captionPopStartScale: typeof parsed.captionPopStartScale === "number" ? Math.max(0.1, Math.min(0.8, parsed.captionPopStartScale)) : undefined,
+        captionPopExitScale: typeof parsed.captionPopExitScale === "number" ? Math.max(0.1, Math.min(0.8, parsed.captionPopExitScale)) : undefined,
+        captionSlideExitDistance: typeof parsed.captionSlideExitDistance === "number" ? Math.max(5, Math.min(40, parsed.captionSlideExitDistance)) : undefined,
+        captionFadeExitOffset: typeof parsed.captionFadeExitOffset === "number" ? Math.max(-30, Math.min(30, parsed.captionFadeExitOffset)) : undefined,
+        captionFlickerSpeed: typeof parsed.captionFlickerSpeed === "number" ? Math.max(4, Math.min(16, parsed.captionFlickerSpeed)) : undefined,
+        captionPopIdleFreq: typeof parsed.captionPopIdleFreq === "number" ? Math.max(0.5, Math.min(4, parsed.captionPopIdleFreq)) : undefined,
+        captionFlickerIdleFreq: typeof parsed.captionFlickerIdleFreq === "number" ? Math.max(1, Math.min(6, parsed.captionFlickerIdleFreq)) : undefined,
+        captionBoldSizeMultiplier: typeof parsed.captionBoldSizeMultiplier === "number" ? Math.max(0.8, Math.min(1.6, parsed.captionBoldSizeMultiplier)) : undefined,
+        captionMinimalSizeMultiplier: typeof parsed.captionMinimalSizeMultiplier === "number" ? Math.max(0.6, Math.min(1.0, parsed.captionMinimalSizeMultiplier)) : undefined,
+        captionPopOvershoot: typeof parsed.captionPopOvershoot === "number" ? Math.max(1.0, Math.min(3.0, parsed.captionPopOvershoot)) : undefined,
+        // Editing philosophy
+        editingPhilosophy: (parsed.editingPhilosophy && typeof parsed.editingPhilosophy === "object") ? {
+          vibe: typeof parsed.editingPhilosophy.vibe === "string" ? parsed.editingPhilosophy.vibe.slice(0, 200) : undefined,
+          paceProfile: typeof parsed.editingPhilosophy.paceProfile === "string" ? parsed.editingPhilosophy.paceProfile.slice(0, 100) : undefined,
+          transitionArc: typeof parsed.editingPhilosophy.transitionArc === "string" ? parsed.editingPhilosophy.transitionArc.slice(0, 200) : undefined,
+        } : undefined,
 
         // ── AI-controlled post-processing ──
         grainOpacity: typeof parsed.grainOpacity === "number" ? Math.max(0, Math.min(0.1, parsed.grainOpacity)) : undefined,

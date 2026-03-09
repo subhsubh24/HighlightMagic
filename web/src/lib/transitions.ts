@@ -164,6 +164,22 @@ export interface TransitionRenderOptions {
   glitchColors?: [string, string];
   /** Whip motion blur overlay alpha (default 0.25) */
   motionBlurAlpha?: number;
+  /** Light leak gradient peak opacity (default 0.35) */
+  lightLeakOpacity?: number;
+  /** Hard flash darken-phase duration as fraction (default 0.3) */
+  hardFlashDarkenPhase?: number;
+  /** Hard flash white-blast end as fraction (default 0.55) */
+  hardFlashBlastPhase?: number;
+  /** Glitch scanline count (default 6) */
+  glitchScanlineCount?: number;
+  /** Glitch channel band width as fraction (default 0.34) */
+  glitchBandWidth?: number;
+  /** Whip motion blur line count (default 8) */
+  whipBlurLineCount?: number;
+  /** Whip brightness overlay opacity (default 0.15) */
+  whipBrightnessAlpha?: number;
+  /** Hard cut brightness bump opacity (default 0.15) */
+  hardCutBumpAlpha?: number;
 }
 
 export function drawTransitionOverlay(
@@ -206,29 +222,32 @@ export function drawTransitionOverlay(
       // Horizontal motion-blur lines
       ctx.globalAlpha = intensity * (renderOptions?.motionBlurAlpha ?? 0.25) * ti;
       ctx.fillStyle = "white";
-      const lineCount = 8;
+      const lineCount = renderOptions?.whipBlurLineCount ?? 8;
       for (let i = 0; i < lineCount; i++) {
         const y = (h / lineCount) * i + h / lineCount * 0.5;
         ctx.fillRect(0, y - 1, w, 2);
       }
       // Slight brightness
-      ctx.globalAlpha = intensity * 0.15 * ti;
+      ctx.globalAlpha = intensity * (renderOptions?.whipBrightnessAlpha ?? 0.15) * ti;
       ctx.fillRect(0, 0, w, h);
       break;
     }
 
     case "hard_flash": {
+      const darkenEnd = renderOptions?.hardFlashDarkenPhase ?? 0.3;
+      const blastEnd = renderOptions?.hardFlashBlastPhase ?? 0.55;
+      const fadeLen = 1 - blastEnd;
       let a: number;
-      if (progress < 0.3) {
-        a = progress / 0.3;
+      if (progress < darkenEnd) {
+        a = progress / darkenEnd;
         ctx.fillStyle = `rgba(0,0,0,${a * 0.7 * ti})`;
         ctx.fillRect(0, 0, w, h);
-      } else if (progress < 0.55) {
+      } else if (progress < blastEnd) {
         ctx.globalAlpha = ti;
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, w, h);
       } else {
-        a = 1 - (progress - 0.55) / 0.45;
+        a = fadeLen > 0 ? 1 - (progress - blastEnd) / fadeLen : 0;
         ctx.fillStyle = `rgba(255,255,255,${a * 0.95 * ti})`;
         ctx.fillRect(0, 0, w, h);
       }
@@ -237,6 +256,7 @@ export function drawTransitionOverlay(
 
     case "glitch": {
       const intensity = Math.sin(progress * Math.PI);
+      const bandW = renderOptions?.glitchBandWidth ?? 0.34;
       // RGB channel bands — AI can customize colors
       const glitchPrimary = renderOptions?.glitchColors?.[0];
       const glitchSecondary = renderOptions?.glitchColors?.[1];
@@ -247,18 +267,19 @@ export function drawTransitionOverlay(
       } else {
         ctx.fillStyle = "rgba(255,0,80,0.4)";
       }
-      ctx.fillRect(0, 0, w * 0.34, h);
+      ctx.fillRect(0, 0, w * bandW, h);
       if (glitchSecondary) {
         const [gr, gg, gb] = hexToRgb(glitchSecondary);
         ctx.fillStyle = `rgba(${gr},${gg},${gb},0.3)`;
       } else {
         ctx.fillStyle = "rgba(0,200,255,0.3)";
       }
-      ctx.fillRect(w * 0.66, 0, w * 0.34, h);
+      ctx.fillRect(w * (1 - bandW), 0, w * bandW, h);
       // Scan-line artifacts
+      const scanCount = renderOptions?.glitchScanlineCount ?? 6;
       ctx.globalAlpha = intensity * 0.4 * ti;
       ctx.fillStyle = "black";
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < scanCount; i++) {
         const s = Math.sin((i + 1) * 1337 + progress * 100);
         const y = ((s + 1) / 2) * h;
         ctx.fillRect(0, y, w, 3 + Math.abs(s) * 8);
@@ -280,8 +301,8 @@ export function drawTransitionOverlay(
       break;
 
     case "light_leak": {
-      // Glow peaking at midpoint — AI can customize tint color
-      const a = Math.sin(progress * Math.PI) * 0.35 * ti;
+      // Glow peaking at midpoint — AI can customize tint color and opacity
+      const a = Math.sin(progress * Math.PI) * (renderOptions?.lightLeakOpacity ?? 0.35) * ti;
       const leakHex = renderOptions?.lightLeakColor;
       const gradient = ctx.createLinearGradient(0, 0, w, h);
       if (leakHex) {
@@ -332,7 +353,7 @@ export function drawTransitionOverlay(
     case "hard_cut": {
       // Very brief, subtle brightness bump right at the cut
       if (progress > 0.4 && progress < 0.6) {
-        const a = (1 - Math.abs(progress - 0.5) / 0.1) * 0.15 * ti;
+        const a = (1 - Math.abs(progress - 0.5) / 0.1) * (renderOptions?.hardCutBumpAlpha ?? 0.15) * ti;
         ctx.fillStyle = `rgba(255,255,255,${Math.max(0, a)})`;
         ctx.fillRect(0, 0, w, h);
       }

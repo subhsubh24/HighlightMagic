@@ -599,6 +599,18 @@ export default function TapePreviewPlayer() {
               glowRadius: entry.clip.customCaptionGlowRadius,
             }
           : undefined;
+        const previewKineticParams = state.aiProductionPlan ? {
+          popStartScale: state.aiProductionPlan.captionPopStartScale,
+          popExitScale: state.aiProductionPlan.captionPopExitScale,
+          slideExitDistance: state.aiProductionPlan.captionSlideExitDistance,
+          fadeExitOffset: state.aiProductionPlan.captionFadeExitOffset,
+          flickerSpeed: state.aiProductionPlan.captionFlickerSpeed,
+          popIdleFreq: state.aiProductionPlan.captionPopIdleFreq,
+          flickerIdleFreq: state.aiProductionPlan.captionFlickerIdleFreq,
+          boldSizeMultiplier: state.aiProductionPlan.captionBoldSizeMultiplier,
+          minimalSizeMultiplier: state.aiProductionPlan.captionMinimalSizeMultiplier,
+          popOvershoot: state.aiProductionPlan.captionPopOvershoot,
+        } : undefined;
         const kTransform = getKineticTransform(
           entry.clip.captionStyle,
           localTime,
@@ -607,9 +619,10 @@ export default function TapePreviewPlayer() {
           captionCustom,
           state.aiProductionPlan?.captionEntranceDuration ?? 0.5,
           state.aiProductionPlan?.captionExitDuration ?? 0.3,
-          1.0,
-          1.0,
-          entry.clip.captionExitAnimation ?? state.aiProductionPlan?.captionExitAnimation ?? "fade"
+          entry.clip.captionAnimationIntensity ?? 1.0,
+          entry.clip.captionIdlePulse ?? 1.0,
+          entry.clip.captionExitAnimation ?? state.aiProductionPlan?.captionExitAnimation ?? "fade",
+          previewKineticParams
         );
         drawKineticCaption(
           ctx,
@@ -622,7 +635,9 @@ export default function TapePreviewPlayer() {
           captionCustom,
           state.aiProductionPlan?.captionVerticalPosition,
           state.aiProductionPlan?.captionShadowColor,
-          state.aiProductionPlan?.captionShadowBlur
+          state.aiProductionPlan?.captionShadowBlur,
+          entry.clip.customCaptionGlowSpread,
+          previewKineticParams
         );
       }
 
@@ -705,6 +720,14 @@ export default function TapePreviewPlayer() {
           strobeFlashAlpha: state.aiProductionPlan?.strobeFlashAlpha,
           lightLeakColor: state.aiProductionPlan?.lightLeakColor,
           glitchColors: state.aiProductionPlan?.glitchColors,
+          lightLeakOpacity: state.aiProductionPlan?.lightLeakOpacity,
+          hardFlashDarkenPhase: state.aiProductionPlan?.hardFlashDarkenPhase,
+          hardFlashBlastPhase: state.aiProductionPlan?.hardFlashBlastPhase,
+          glitchScanlineCount: state.aiProductionPlan?.glitchScanlineCount,
+          glitchBandWidth: state.aiProductionPlan?.glitchBandWidth,
+          whipBlurLineCount: state.aiProductionPlan?.whipBlurLineCount,
+          whipBrightnessAlpha: state.aiProductionPlan?.whipBrightnessAlpha,
+          hardCutBumpAlpha: state.aiProductionPlan?.hardCutBumpAlpha,
         }, activeTransInfo.intensity);
       }
 

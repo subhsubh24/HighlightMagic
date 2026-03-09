@@ -639,6 +639,26 @@ export default function ExportStep() {
           exitDecelEasing: cPlan.exitDecelEasing,
           letterboxColor: cPlan.letterboxColor,
           captionExitAnimation: cPlan.captionExitAnimation,
+          watermarkColor: cPlan.watermarkColor,
+          grainBlockSize: cPlan.grainBlockSize,
+          lightLeakOpacity: cPlan.lightLeakOpacity,
+          hardFlashDarkenPhase: cPlan.hardFlashDarkenPhase,
+          hardFlashBlastPhase: cPlan.hardFlashBlastPhase,
+          glitchScanlineCount: cPlan.glitchScanlineCount,
+          glitchBandWidth: cPlan.glitchBandWidth,
+          whipBlurLineCount: cPlan.whipBlurLineCount,
+          whipBrightnessAlpha: cPlan.whipBrightnessAlpha,
+          hardCutBumpAlpha: cPlan.hardCutBumpAlpha,
+          captionPopStartScale: cPlan.captionPopStartScale,
+          captionPopExitScale: cPlan.captionPopExitScale,
+          captionSlideExitDistance: cPlan.captionSlideExitDistance,
+          captionFadeExitOffset: cPlan.captionFadeExitOffset,
+          captionFlickerSpeed: cPlan.captionFlickerSpeed,
+          captionPopIdleFreq: cPlan.captionPopIdleFreq,
+          captionFlickerIdleFreq: cPlan.captionFlickerIdleFreq,
+          captionBoldSizeMultiplier: cPlan.captionBoldSizeMultiplier,
+          captionMinimalSizeMultiplier: cPlan.captionMinimalSizeMultiplier,
+          captionPopOvershoot: cPlan.captionPopOvershoot,
         } : undefined,
       );
 
@@ -1023,13 +1043,14 @@ function getExitDeceleration(elapsedSec: number, clipDuration: number, minSpeed:
  */
 let _grainCanvas: HTMLCanvasElement | null = null;
 let _grainCtx: CanvasRenderingContext2D | null = null;
-const GRAIN_BLOCK = 4;
-function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number, opacity: number = 0.045) {
+let _grainBlock: number = 4;
+function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number, opacity: number = 0.045, blockSize: number = 4) {
   if (opacity <= 0) return;
-  // Lazy-init a small grain canvas (render at 1/4 res for perf, scale up)
-  const gw = Math.ceil(w / GRAIN_BLOCK);
-  const gh = Math.ceil(h / GRAIN_BLOCK);
-  if (!_grainCanvas || _grainCanvas.width !== gw || _grainCanvas.height !== gh) {
+  // Lazy-init a small grain canvas (render at reduced res for perf, scale up)
+  const gw = Math.ceil(w / blockSize);
+  const gh = Math.ceil(h / blockSize);
+  if (!_grainCanvas || _grainCanvas.width !== gw || _grainCanvas.height !== gh || _grainBlock !== blockSize) {
+    _grainBlock = blockSize;
     _grainCanvas = document.createElement("canvas");
     _grainCanvas.width = gw;
     _grainCanvas.height = gh;
@@ -1452,6 +1473,28 @@ interface ExportAiRenderOptions {
   finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
   filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
   audioBreaths?: Array<{ time: number; duration: number; depth: number; attack?: number; release?: number }>;
+  // New AI-controllable fields
+  watermarkColor?: string;
+  grainBlockSize?: number;
+  lightLeakOpacity?: number;
+  hardFlashDarkenPhase?: number;
+  hardFlashBlastPhase?: number;
+  glitchScanlineCount?: number;
+  glitchBandWidth?: number;
+  whipBlurLineCount?: number;
+  whipBrightnessAlpha?: number;
+  hardCutBumpAlpha?: number;
+  // Kinetic text params
+  captionPopStartScale?: number;
+  captionPopExitScale?: number;
+  captionSlideExitDistance?: number;
+  captionFadeExitOffset?: number;
+  captionFlickerSpeed?: number;
+  captionPopIdleFreq?: number;
+  captionFlickerIdleFreq?: number;
+  captionBoldSizeMultiplier?: number;
+  captionMinimalSizeMultiplier?: number;
+  captionPopOvershoot?: number;
 }
 
 
@@ -1654,7 +1697,7 @@ function renderVideoClip(
           // Film stock base + grain + vignette — pro post-processing overlays
           applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
           drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
-          drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
+          drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
 
@@ -1840,7 +1883,7 @@ async function renderPhotoClip(
       // Film stock base + grain + vignette — pro post-processing overlays
       applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
       drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
-      drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
+      drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
 
       drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
       scheduleExportFrame(drawFrame);
@@ -1937,7 +1980,7 @@ function drawOverlays(
     const wmFontPx = Math.round(canvas.height * (aiRenderOpts?.watermarkFontSize ?? 0.015));
     const wmYOff = Math.round(canvas.height * (aiRenderOpts?.watermarkYOffset ?? 0.03));
     ctx.font = `bold ${wmFontPx}px -apple-system, sans-serif`;
-    ctx.fillStyle = "white";
+    ctx.fillStyle = aiRenderOpts?.watermarkColor ?? "white";
     ctx.textAlign = "center";
     ctx.fillText(watermarkText, canvas.width / 2, canvas.height - wmYOff);
     ctx.restore();
@@ -1949,7 +1992,19 @@ function drawOverlays(
   if (captionText && localTime >= captionDelay) {
     const adjustedTime = localTime - captionDelay;
     const adjustedDuration = clipDuration - captionDelay;
-    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity, captionIdlePulse, captionExitAnimation);
+    const kineticParams = aiRenderOpts ? {
+      popStartScale: aiRenderOpts.captionPopStartScale,
+      popExitScale: aiRenderOpts.captionPopExitScale,
+      slideExitDistance: aiRenderOpts.captionSlideExitDistance,
+      fadeExitOffset: aiRenderOpts.captionFadeExitOffset,
+      flickerSpeed: aiRenderOpts.captionFlickerSpeed,
+      popIdleFreq: aiRenderOpts.captionPopIdleFreq,
+      flickerIdleFreq: aiRenderOpts.captionFlickerIdleFreq,
+      boldSizeMultiplier: aiRenderOpts.captionBoldSizeMultiplier,
+      minimalSizeMultiplier: aiRenderOpts.captionMinimalSizeMultiplier,
+      popOvershoot: aiRenderOpts.captionPopOvershoot,
+    } : undefined;
+    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity, captionIdlePulse, captionExitAnimation, kineticParams);
     const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
       ctx,
@@ -1963,7 +2018,8 @@ function drawOverlays(
       aiRenderOpts?.captionVerticalPosition,
       aiRenderOpts?.captionShadowColor,
       aiRenderOpts?.captionShadowBlur,
-      captionGlowSpread
+      captionGlowSpread,
+      kineticParams
     );
   }
 }
