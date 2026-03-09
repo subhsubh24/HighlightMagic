@@ -116,10 +116,12 @@ export function buildBeatSyncedTimeline(
     clipStarts.push(clipStart);
     clipDurations.push(syncedDuration);
 
-    // Find beats that fall during the transition zone at the end of this clip
-    const clipTransDuration = clip.transitionDuration ?? 0.3;
+    // Find beats that fall during the transition zone at the end of this clip.
+    // transitionDuration on a clip describes the transition INTO that clip,
+    // so the overlap between clip i and clip i+1 uses clips[i+1]'s duration.
+    const nextTransDuration = clips[i + 1]?.transitionDuration ?? 0.3;
     if (i < clips.length - 1) {
-      const transStart = clipStart + syncedDuration - clipTransDuration;
+      const transStart = clipStart + syncedDuration - nextTransDuration;
       const transEnd = clipStart + syncedDuration;
       const tBeats = grid.beats.filter((b) => b >= transStart && b <= transEnd);
       transitionBeats.push(tBeats);
@@ -129,8 +131,8 @@ export function buildBeatSyncedTimeline(
     cumulativeBeats += beats;
     if (i < clips.length - 1) {
       // Subtract transition overlap in beat units (round to nearest beat, min 1 if overlap > 0)
-      const rawOverlapBeats = clipTransDuration / grid.beatInterval;
-      const overlapBeats = clipTransDuration > 0 ? Math.max(1, Math.round(rawOverlapBeats)) : 0;
+      const rawOverlapBeats = nextTransDuration / grid.beatInterval;
+      const overlapBeats = nextTransDuration > 0 ? Math.max(1, Math.round(rawOverlapBeats)) : 0;
       cumulativeBeats -= overlapBeats;
     }
   }
