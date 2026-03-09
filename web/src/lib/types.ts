@@ -119,6 +119,12 @@ export interface AiProductionPlan {
 
   /** AI-decided default transition duration for clips that don't specify one */
   defaultTransitionDuration: number;
+  /** AI-decided default entry punch scale for clips that don't specify one (1.0-1.1) */
+  defaultEntryPunchScale?: number;
+  /** AI-decided default entry punch duration for clips that don't specify one (0-0.3s) */
+  defaultEntryPunchDuration?: number;
+  /** AI-decided default Ken Burns intensity for photo clips that don't specify one (0-0.08) */
+  defaultKenBurnsIntensity?: number;
 
   // Timing & pacing
   /** AI-decided photo display duration in seconds (2-8s) */

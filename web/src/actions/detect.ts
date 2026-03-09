@@ -1744,6 +1744,14 @@ DEFAULT TRANSITION DURATION — Fallback for clips that don't specify their own.
 Set "defaultTransitionDuration" (0.05-2.0 seconds). 0.05-0.15 for snappy cuts, 0.3 standard, 0.5-2.0 for cinematic/dreamy.
 Match to the overall pacing and energy of the content.
 
+DEFAULT ENTRY PUNCH — Tape-wide default for clips that don't specify entryPunchScale/Duration.
+Set "defaultEntryPunchScale" (1.0-1.1): 1.0 = no punch, 1.03 = subtle pop, 1.06 = dramatic slam.
+Set "defaultEntryPunchDuration" (0-0.3 seconds): 0.1 = snappy, 0.2 = smooth.
+Match to the content's energy: hype sports → 1.04/0.12, calm wedding → 1.01/0.25, vlog → 1.0/0.
+
+DEFAULT KEN BURNS — Tape-wide default zoom intensity for photo clips without kenBurnsIntensity.
+Set "defaultKenBurnsIntensity" (0-0.08): 0 = static, 0.03 = gentle drift, 0.06 = noticeable, 0.08 = dramatic.
+
 PHOTO DISPLAY DURATION — How long static photos show in the final edit.
 Set "photoDisplayDuration" (1-15 seconds). 1-2s for rapid montage, 3-5s for standard, 6-15s for cinematic/contemplative.
 Each photo gets this baseline duration. Consider pacing: fast-cut reels need shorter photo holds.
@@ -1811,7 +1819,7 @@ Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or nu
 null if no voice sample was provided or a talking head intro doesn't fit the content.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2322,6 +2330,9 @@ Respond with ONLY a JSON object:
         sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.8,
         voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 1.0,
         defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.defaultTransitionDuration)) : 0.3,
+        defaultEntryPunchScale: typeof parsed.defaultEntryPunchScale === "number" ? Math.max(1.0, Math.min(1.15, parsed.defaultEntryPunchScale)) : undefined,
+        defaultEntryPunchDuration: typeof parsed.defaultEntryPunchDuration === "number" ? Math.max(0, Math.min(0.5, parsed.defaultEntryPunchDuration)) : undefined,
+        defaultKenBurnsIntensity: typeof parsed.defaultKenBurnsIntensity === "number" ? Math.max(0, Math.min(0.15, parsed.defaultKenBurnsIntensity)) : undefined,
         photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(1, Math.min(15, parsed.photoDisplayDuration)) : 3,
         loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.1, Math.min(3.0, parsed.loopCrossfadeDuration)) : 0.5,
         captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.captionEntranceDuration)) : 0.5,

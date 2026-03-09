@@ -1067,13 +1067,13 @@ async function renderHighlightTape(
       : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
-    // Per-clip style values (AI-specified, neutral defaults as last resort)
+    // Per-clip style: AI per-clip → AI plan-level default → theme default
     const clipStyle = {
       ...style,
       transitionDuration: instruction.clip.transitionDuration ?? defaultTransitionDuration,
-      entryPunchScale: instruction.clip.entryPunchScale ?? 1.0,
-      entryPunchDuration: instruction.clip.entryPunchDuration ?? 0.15,
-      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? 0,
+      entryPunchScale: instruction.clip.entryPunchScale ?? plan?.defaultEntryPunchScale ?? style.entryPunchScale,
+      entryPunchDuration: instruction.clip.entryPunchDuration ?? plan?.defaultEntryPunchDuration ?? style.entryPunchDuration,
+      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? plan?.defaultKenBurnsIntensity ?? style.kenBurnsIntensity,
     };
 
     console.log(`Export: rendering clip ${i + 1}/${clips.length} id="${instruction.clip.id}" type=${instruction.mediaType} dur=${clipDuration.toFixed(2)}s hasFile=${!!instruction.mediaFile} url=${instruction.mediaUrl?.slice(0, 60)}`);

@@ -653,11 +653,12 @@ export default function TapePreviewPlayer() {
         let alpha = 1;
         let transform: TransitionTransform = { scale: 1, offsetX: 0, offsetY: 0 };
 
-        // Per-clip style values (AI-specified, neutral defaults as last resort)
-        const clipTransDuration = e.clip.transitionDuration ?? 0.3;
-        const clipEntryPunch = e.clip.entryPunchScale ?? 1.0;
-        const clipEntryPunchDur = e.clip.entryPunchDuration ?? 0.15;
-        const clipKenBurns = e.clip.kenBurnsIntensity ?? 0;
+        // Per-clip style: AI per-clip → AI plan-level default → theme default
+        const plan = state.aiProductionPlan;
+        const clipTransDuration = e.clip.transitionDuration ?? style.transitionDuration;
+        const clipEntryPunch = e.clip.entryPunchScale ?? plan?.defaultEntryPunchScale ?? style.entryPunchScale;
+        const clipEntryPunchDur = e.clip.entryPunchDuration ?? plan?.defaultEntryPunchDuration ?? style.entryPunchDuration;
+        const clipKenBurns = e.clip.kenBurnsIntensity ?? plan?.defaultKenBurnsIntensity ?? (style.kenBurnsIntensity ?? 0);
 
         // Incoming clip during transition
         if (i > 0 && lt < clipTransDuration) {
