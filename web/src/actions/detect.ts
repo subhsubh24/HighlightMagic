@@ -1,6 +1,5 @@
 "use server";
 
-import { MAX_FRAMES_PER_BATCH } from "@/lib/constants";
 import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
@@ -14,13 +13,6 @@ function debugLog(...args: unknown[]) {
 }
 
 // ── API helpers ──
-
-/** Max concurrent API calls — retry logic handles any 429s from the API */
-const MAX_CONCURRENCY = 5;
-
-/** Stagger delay between launching concurrent batches (ms).
- *  Prevents all workers from hitting the API at t=0, which triggers 429s. */
-const BATCH_STAGGER_MS = 500;
 
 /** Retry config for 429/529 responses */
 const MAX_RETRIES = 5;
@@ -82,25 +74,6 @@ async function fetchWithRetry(
 /**
  * Run async tasks with a concurrency limit.
  */
-async function runWithConcurrency<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number
-): Promise<T[]> {
-  const results: T[] = new Array(tasks.length);
-  let next = 0;
-
-  async function worker() {
-    while (next < tasks.length) {
-      const idx = next++;
-      results[idx] = await tasks[idx]();
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
-}
-
 // ── SSE stream consumer (for streaming API responses) ──
 
 /**
@@ -653,7 +626,6 @@ export async function validateTape(
     return `  ${i + 1}. [${src?.type ?? "?"}${isAnimated ? " ANIMATED" : ""}] "${c.label}" from "${src?.name}" (${c.startTime.toFixed(1)}-${c.endTime.toFixed(1)}s, confidence: ${c.confidenceScore}) transition: ${c.transitionType ?? "none"}, velocity: ${c.velocityPreset}${c.captionText ? `, caption: "${c.captionText}"` : ""}${c.animationPrompt ? `, animationPrompt: "${c.animationPrompt.slice(0, 80)}..."` : ""}`;
   }).join("\n");
 
-  const allSourceIds = new Set(sourceFiles.map((s) => s.id));
   const coveredSourceIds = new Set(clips.map((c) => c.sourceFileId));
   const missingSources = sourceFiles.filter((s) => !coveredSourceIds.has(s.id));
 
@@ -2120,7 +2092,7 @@ Respond with ONLY a JSON object:
         sourceFileId: p.sourceFileId,
         startTime: Math.max(0, p.startTime),
         endTime: Math.max(0, p.endTime),
-        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) ?? 0.5)),
+        confidenceScore: Math.max(0, Math.min(1, Number(p.confidenceScore) || 0.5)),
         label: p.label || "Highlight",
         velocityPreset: (p.velocityPreset && VALID_VELOCITIES.includes(p.velocityPreset))
           ? p.velocityPreset
