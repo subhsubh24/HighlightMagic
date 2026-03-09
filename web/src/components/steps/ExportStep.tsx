@@ -111,7 +111,8 @@ async function tryServerRender(
     const clipEnds: number[] = [];
     let t = introOffset;
     for (let i = 0; i < clips.length; i++) {
-      const dur = clips[i].trimEnd - clips[i].trimStart;
+      const rawDur = clips[i].trimEnd - clips[i].trimStart;
+      const dur = getEffectiveDuration(rawDur, clips[i].velocityPreset, clips[i].customVelocityKeyframes);
       clipStarts.push(t);
       clipEnds.push(t + dur);
       t += dur - (clips[i + 1]?.transitionDuration ?? defaultTransDur);
@@ -500,7 +501,9 @@ export default function ExportStep() {
         const cEnds: number[] = [];
         let st = introOffsetC; // Start after intro card duration
         for (let i = 0; i < sortedClips.length; i++) {
-          let dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          const rawDur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          // Account for velocity curves — effective duration may differ from source
+          let dur = getEffectiveDuration(rawDur, sortedClips[i].velocityPreset, sortedClips[i].customVelocityKeyframes);
           // Apply beat-sync snapping to match actual render durations
           if (audioBeatGrid && audioBeatGrid.beatInterval > 0) {
             const beats = Math.max(2, Math.round(dur / audioBeatGrid.beatInterval));
@@ -526,6 +529,20 @@ export default function ExportStep() {
           else if (sfx.timing === "after") sfxS = (ce ?? cs) - defaultTransDurC;
           scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC, layerType: "sfx" });
         }
+      }
+
+      // Voiceover-aware clip extension: ensure clips are long enough for their audio.
+      // If a voiceover segment is longer than its clip, extend the clip's canvas duration
+      // so the video holds its last frame while the VO finishes — no awkward cutoff.
+      const renderClipIntroOffset = hasIntroC ? 1 : 0;
+      for (const vo of state.voiceoverSegments ?? []) {
+        if (!vo.audioUrl || vo.status !== "completed" || vo.duration <= 0) continue;
+        const renderIdx = vo.clipIndex + renderClipIntroOffset;
+        const rc = validRenderClips[renderIdx];
+        if (!rc) continue;
+        const voEndInClip = voDelayC + vo.duration;
+        // Only extend if VO+delay exceeds the clip's natural duration
+        rc.minCanvasDuration = Math.max(rc.minCanvasDuration ?? 0, voEndInClip);
       }
 
       const blob = await renderHighlightTape(
@@ -895,6 +912,8 @@ interface RenderClipInstruction {
   filterCSS: string;
   captionText: string;
   captionStyle: CaptionStyle;
+  /** Override canvas duration to hold clip longer (e.g. for voiceover that extends past the visual) */
+  minCanvasDuration?: number;
 }
 
 async function renderHighlightTape(
@@ -958,7 +977,7 @@ async function renderHighlightTape(
   const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
   const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio);
-  // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
+  // Calculate totalDuration accounting for velocity, beat-sync, VO extension, and transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
     const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
@@ -966,6 +985,11 @@ async function renderHighlightTape(
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDur / beatGrid.beatInterval));
       clipDur = beats * beatGrid.beatInterval;
+    }
+    // Match VO-aware extension from the render loop
+    const minDur = clips[i].minCanvasDuration;
+    if (minDur != null && minDur > clipDur) {
+      clipDur = minDur;
     }
     totalDuration += clipDur;
     if (i < clips.length - 1) {
@@ -992,12 +1016,18 @@ async function renderHighlightTape(
 
   for (let i = 0; i < clips.length; i++) {
     const instruction = clips[i];
-    let clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+    const sourceDur = instruction.clip.trimEnd - instruction.clip.trimStart;
+    let clipDuration = getEffectiveDuration(sourceDur, instruction.clip.velocityPreset, instruction.clip.customVelocityKeyframes);
 
     // Beat-sync: snap clip duration to beat grid
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDuration / beatGrid.beatInterval));
       clipDuration = beats * beatGrid.beatInterval;
+    }
+
+    // Extend clip to accommodate voiceover/SFX that extends past the visual
+    if (instruction.minCanvasDuration && instruction.minCanvasDuration > clipDuration) {
+      clipDuration = instruction.minCanvasDuration;
     }
 
     // Per-clip transition: AI-decided takes priority, then theme fallback

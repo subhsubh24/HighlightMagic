@@ -136,6 +136,7 @@ export default function TapePreviewPlayer() {
       t = introDur;
     }
 
+    const voDelay = state.aiProductionPlan?.voiceover?.delaySec ?? 0.3;
     for (let i = 0; i < sortedClips.length; i++) {
       const clip = sortedClips[i];
       const media = getMediaFile(state, clip.sourceFileId);
@@ -148,6 +149,15 @@ export default function TapePreviewPlayer() {
       if (beatGrid && beatGrid.beatInterval > 0) {
         const beats = Math.max(2, Math.round(dur / beatGrid.beatInterval));
         dur = beats * beatGrid.beatInterval;
+      }
+
+      // Voiceover-aware extension: hold clip longer if VO extends past its visual
+      const vo = state.voiceoverSegments.find(
+        (s) => s.clipIndex === i && s.status === "completed" && s.duration > 0
+      );
+      if (vo) {
+        const voEnd = voDelay + vo.duration;
+        if (voEnd > dur) dur = voEnd;
       }
 
       entries.push({
@@ -198,7 +208,7 @@ export default function TapePreviewPlayer() {
     }
 
     return entries;
-  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard, state.aiProductionPlan?.defaultTransitionDuration]);
+  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard, state.aiProductionPlan?.defaultTransitionDuration, state.voiceoverSegments, state.aiProductionPlan?.voiceover?.delaySec]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 

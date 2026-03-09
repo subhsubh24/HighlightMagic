@@ -1652,6 +1652,31 @@ be intentional and reinforce the same emotional throughline. If two elements com
 other or feel redundant for THIS tape, choose the stronger one. If stacking everything creates
 the exact vibe the content needs, stack everything. Trust your eye.
 
+═══════════════════════════════════════════════
+AUDIO-VISUAL FLOW — THE SITCOM PRINCIPLE
+═══════════════════════════════════════════════
+Think of the highlight tape like directing a sitcom or short film. Every element — the clips,
+transitions, voiceover, sound effects, music, intro card — must flow together seamlessly.
+The viewer should never feel an awkward pause, a jarring cut, or audio that doesn't match the visual.
+
+THE FLOW CHECKLIST (run through this mentally before finalizing):
+1. INTRO → FIRST CLIP: Does the intro card's energy connect to the first clip? If the intro is
+   cinematic and slow, the first clip should ease in. If the intro is hype, the first clip should HIT.
+2. CLIP → CLIP: Every transition should feel motivated. Why are we cutting HERE? What connects
+   the outgoing and incoming moments? Audio, energy, subject, or narrative.
+3. VO + VISUALS: Voiceover should react to what's on screen, like a commentator. The words
+   should land on or just after the visual moment they reference. If VO talks about a goal being
+   scored, it should play WHILE or just after the goal clip, not 2 clips later.
+4. SFX + TRANSITIONS: Sound effects should punctuate transitions, not fight them. A whoosh SFX
+   with a whip transition = perfect. A whoosh SFX with a crossfade = confusing.
+5. MUSIC + EVERYTHING: The music is the emotional backbone. Clips should cut on beats when
+   possible (beat-sync handles this). VO should land in rhythmic pockets. SFX should accent hits.
+6. LAST CLIP → END: The final moment should feel COMPLETE. No trailing audio, no abrupt cutoff.
+   If you use VO on the last clip, keep it very short (2-3 words) or ensure the clip is long enough.
+   The outro card (if used) should provide a satisfying denouement, not feel tacked on.
+7. PACING ARC: The tape should breathe. Alternate between dense moments (VO + SFX + fast cuts)
+   and spacious moments (just music + visuals). Like a song: verse, chorus, bridge, chorus.
+
 INTRO CARD — An AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
 "duration" is in seconds (3-5). Pick based on content pacing: 3s for fast/hype, 5s for cinematic/slow.
@@ -1682,6 +1707,13 @@ Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt
 Set to [] if the tape doesn't need sound design. When used, think about how each cue interacts
 with the music and any voiceover — sound design should enhance the mix, not fight it.
 Place SFX where they serve the emotional arc: accenting impacts, punctuating reveals, building tension.
+SFX TIMING RULES:
+- "before" = plays 0.5s before clip starts (great for whooshes before a transition)
+- "on" = plays at clip start (great for impacts, hits)
+- "after" = plays near clip end (great for tension risers, stingers)
+- Don't stack SFX and VO on the same clip at the same time — they compete for attention.
+  If you need both, use timing="before" for SFX so it resolves before VO starts.
+- Keep durationMs matched to the moment: 500ms for a snap/hit, 1500ms for a whoosh, 3000ms+ for ambient.
 
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
@@ -1691,8 +1723,41 @@ alone can't provide, or would it compete with the content? If you use it, think 
 interacts with captions, music volume, and SFX to create a clean, intentional mix.
 Choose voice character that matches the content's energy and audience.
 
+CRITICAL — VOICEOVER TIMING AND FLOW:
+Think of this like directing a sitcom or a documentary — the voiceover, visuals, SFX, and music
+must flow together as one seamless experience. No awkward silences, no audio cutting off mid-sentence.
+
+VO TEXT LENGTH vs CLIP DURATION — The TTS engine generates ~2.5 words per second. Calculate:
+  voiceover_duration ≈ word_count / 2.5 + delaySec
+  If voiceover_duration > clip_visual_duration, the clip will HOLD its last frame until the VO finishes.
+  This is fine for 0.5-1.5s of hold, but longer holds look like a frozen video — ugly and amateur.
+  RULE: Keep each VO segment SHORT enough to finish within its clip's duration:
+  - 3-second clip → max ~6 words of VO
+  - 5-second clip → max ~10 words of VO
+  - Prefer punchy, tight narration over wordy explanations
+  If you need more words, make the clip longer (adjust trimEnd) or split across multiple clips.
+
+VO FLOW ACROSS THE TAPE — Think about the rhythm of narration across ALL clips:
+  - Don't put VO on every clip — that's exhausting. Leave breathing room.
+  - Space VO segments with 1-2 silent clips between them. Let the visuals and music speak.
+  - VO on the LAST clip is risky — if it extends even slightly, it gets cut off by the export ending.
+    Either keep last-clip VO very short (2-3 words) or skip it entirely and let the visuals close.
+  - The PACING of VO should match the edit's energy arc: sparse and dramatic at the start,
+    building with the action, then pulling back for the emotional close.
+  - If SFX and VO are on the same clip, the VO should come AFTER the SFX resolves (use delaySec).
+
+VO + MUSIC INTERACTION:
+  - When VO is playing, music auto-ducks to musicDuckRatio of its normal volume.
+  - If you have many VO segments, the music will pump up and down — this sounds professional when
+    intentional (like a podcast intro) but sloppy when every other clip has narration.
+  - For music-driven tapes (hype sports, party), use VO sparingly or not at all.
+  - For story-driven tapes (travel, vlog, wedding), VO should feel like a narrator guiding the viewer.
+
 MUSIC — AI instrumental soundtrack.
 Set "musicPrompt" (genre, energy, instruments, mood, tempo). Set "musicDurationMs" to total tape length in ms.
+IMPORTANT: Calculate musicDurationMs accurately. Sum all clip durations (accounting for velocity curves)
+plus intro/outro card durations, minus transition overlaps. The music should match the tape length
+exactly — too short = silence at the end, too long = gets cut off (wasted generation).
 Be specific about instrumentation and energy arc, not generic. The music should feel custom-scored.
 
 AUDIO MIX — Fine-tune the volume balance for the entire tape.
