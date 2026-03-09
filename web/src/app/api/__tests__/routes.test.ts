@@ -14,9 +14,7 @@ vi.mock("@/lib/elevenlabs-sfx", () => ({
 vi.mock("@/lib/elevenlabs-tts", () => ({
   generateVoiceover: vi.fn(),
 }));
-vi.mock("@/lib/elevenlabs-scribe", () => ({
-  transcribeAudio: vi.fn(),
-}));
+vi.mock("@/lib/elevenlabs-scribe", () => ({}));
 vi.mock("@/lib/elevenlabs-stems", () => ({
   isolateInstrumental: vi.fn(),
 }));
@@ -28,7 +26,6 @@ vi.mock("@/lib/atlascloud", () => ({
   submitPhotoAnimation: vi.fn(),
   submitBackgroundRemoval: vi.fn(),
   submitImageUpscale: vi.fn(),
-  submitStyleTransfer: vi.fn(),
   submitLipSync: vi.fn(),
 }));
 vi.mock("@/lib/sfx-library", () => ({
@@ -198,41 +195,6 @@ describe("POST /api/upscale", () => {
     const res = await POST(jsonRequest({ imageData: "data:image/jpeg;base64,abc" }));
     const data = await res.json();
     expect(data.predictionId).toBe("pred_up_789");
-  });
-});
-
-// ── Style Transfer Route ──
-
-describe("POST /api/style-transfer", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("returns 400 when videoUrl is missing", async () => {
-    const { POST } = await import("@/app/api/style-transfer/route");
-    const res = await POST(jsonRequest({ stylePrompt: "cinematic" }));
-    expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when stylePrompt is missing", async () => {
-    const { POST } = await import("@/app/api/style-transfer/route");
-    const res = await POST(jsonRequest({ videoUrl: "https://example.com/v.mp4" }));
-    expect(res.status).toBe(400);
-  });
-
-  it("returns prediction ID with clamped strength", async () => {
-    const { submitStyleTransfer } = await import("@/lib/atlascloud");
-    (submitStyleTransfer as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_st_101");
-
-    const { POST } = await import("@/app/api/style-transfer/route");
-    const res = await POST(jsonRequest({
-      videoUrl: "https://example.com/v.mp4",
-      stylePrompt: "teal and orange cinematic",
-      strength: 1.5, // Should be clamped to 1.0
-    }));
-    const data = await res.json();
-    expect(data.predictionId).toBe("pred_st_101");
-
-    // Verify strength was clamped
-    expect((submitStyleTransfer as ReturnType<typeof vi.fn>).mock.calls[0][2]).toBe(1.0);
   });
 });
 
