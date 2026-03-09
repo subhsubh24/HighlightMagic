@@ -355,6 +355,7 @@ export default function ExportStep() {
     setProgress(0);
     haptic();
 
+    const blobUrlsToRevoke: string[] = [];
     try {
       // Attempt server-side FFmpeg rendering first (Arch #1)
       // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
@@ -463,6 +464,25 @@ export default function ExportStep() {
         throw new Error("No valid clips to render — all media URLs are missing. Try re-uploading your files.");
       }
 
+      // Pre-fetch remote URLs as local blobs to avoid CORS issues with canvas rendering.
+      // Blob URLs (from user uploads) are fine as-is, but external URLs (intro/outro cards
+      // from Atlas Cloud / DashScope) need to be fetched and converted to blob URLs so the
+      // video element with crossOrigin="anonymous" can load them without CORS errors.
+      for (const rc of validRenderClips) {
+        if (rc.mediaUrl && !rc.mediaUrl.startsWith("blob:")) {
+          try {
+            const resp = await fetch(rc.mediaUrl);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            const localUrl = URL.createObjectURL(blob);
+            blobUrlsToRevoke.push(localUrl);
+            rc.mediaUrl = localUrl;
+          } catch (err) {
+            console.warn(`Export: failed to pre-fetch media for clip "${rc.clip.id}", will try direct load`, err);
+          }
+        }
+      }
+
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
@@ -558,6 +578,9 @@ export default function ExportStep() {
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
+    } finally {
+      // Clean up pre-fetched blob URLs
+      blobUrlsToRevoke.forEach((u) => URL.revokeObjectURL(u));
     }
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
