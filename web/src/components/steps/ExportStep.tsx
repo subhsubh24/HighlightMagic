@@ -356,7 +356,6 @@ export default function ExportStep() {
     setProgress(0);
     haptic();
 
-    const blobUrlsToRevoke: string[] = [];
     try {
       // Attempt server-side FFmpeg rendering first (Arch #1)
       // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
@@ -454,28 +453,6 @@ export default function ExportStep() {
       }
 
       // Pre-validate: remove clips with missing media URLs (expired blobs, missing sources)
-      // Also refresh any expired blob URLs from the original File objects.
-      for (const rc of renderClips) {
-        if (rc.mediaUrl && rc.mediaUrl.startsWith("blob:") && rc.clip.sourceFileId !== "__intro__" && rc.clip.sourceFileId !== "__outro__") {
-          // Verify the blob URL is still valid — blob URLs can expire if the browser
-          // garbage-collected the underlying Blob (rare) or if the URL was revoked.
-          const media = getMediaFile(state, rc.clip.sourceFileId);
-          if (media?.file) {
-            try {
-              const testResp = await fetch(rc.mediaUrl);
-              if (!testResp.ok) throw new Error("blob fetch failed");
-              testResp.body?.cancel();
-            } catch {
-              // Blob URL expired — recreate from the original File object
-              const freshUrl = URL.createObjectURL(media.file);
-              blobUrlsToRevoke.push(freshUrl);
-              console.warn(`Export: refreshed expired blob URL for clip "${rc.clip.id}"`);
-              rc.mediaUrl = freshUrl;
-            }
-          }
-        }
-      }
-
       const validRenderClips = renderClips.filter((rc) => {
         if (!rc.mediaUrl) {
           console.warn(`Export: dropping clip "${rc.clip.id}" — empty media URL (source may have been removed)`);
@@ -485,38 +462,6 @@ export default function ExportStep() {
       });
       if (validRenderClips.length === 0) {
         throw new Error("No valid clips to render — all media URLs are missing. Try re-uploading your files.");
-      }
-
-      // Pre-fetch remote URLs as local blobs to avoid CORS issues with canvas rendering.
-      // Blob URLs (from user uploads) are fine as-is, but external URLs (intro/outro cards
-      // from Atlas Cloud / DashScope) need to be fetched and converted to blob URLs so the
-      // video element can load them without CORS errors.
-      for (const rc of validRenderClips) {
-        if (rc.mediaUrl && !rc.mediaUrl.startsWith("blob:")) {
-          try {
-            const resp = await fetch(rc.mediaUrl);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const rawBlob = await resp.blob();
-            console.log(`Export: pre-fetched clip "${rc.clip.id}" — type="${rawBlob.type}", size=${rawBlob.size}`);
-            // Ensure the blob has a proper video MIME type — some CDNs return
-            // application/octet-stream which prevents the <video> element from loading.
-            const videoBlob = rawBlob.type && rawBlob.type.startsWith("video/")
-              ? rawBlob
-              : new Blob([rawBlob], { type: "video/mp4" });
-            const localUrl = URL.createObjectURL(videoBlob);
-            blobUrlsToRevoke.push(localUrl);
-            // Verify the blob is actually playable before using it
-            const probeOk = await probeVideoBlob(localUrl);
-            if (probeOk) {
-              rc.mediaUrl = localUrl;
-            } else {
-              console.warn(`Export: pre-fetched blob for "${rc.clip.id}" is not playable (type="${rawBlob.type}", size=${rawBlob.size}), keeping original URL`);
-              URL.revokeObjectURL(localUrl);
-            }
-          } catch (err) {
-            console.warn(`Export: failed to pre-fetch media for clip "${rc.clip.id}", will try direct load`, err);
-          }
-        }
       }
 
       const { mimeType, ext } = pickMimeType();
@@ -630,9 +575,6 @@ export default function ExportStep() {
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
-    } finally {
-      // Clean up pre-fetched blob URLs
-      blobUrlsToRevoke.forEach((u) => URL.revokeObjectURL(u));
     }
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
@@ -1203,19 +1145,6 @@ interface ExportAiRenderOptions {
   glitchColors?: [string, string];
 }
 
-/** Quick probe: can the browser actually decode this blob URL as video? */
-function probeVideoBlob(blobUrl: string, timeoutMs = 5000): Promise<boolean> {
-  return new Promise((resolve) => {
-    const v = document.createElement("video");
-    v.muted = true;
-    v.preload = "auto";
-    const cleanup = () => { v.src = ""; v.removeAttribute("src"); v.load(); };
-    const timer = setTimeout(() => { cleanup(); resolve(false); }, timeoutMs);
-    v.onloadedmetadata = () => { clearTimeout(timer); cleanup(); resolve(true); };
-    v.onerror = () => { clearTimeout(timer); cleanup(); resolve(false); };
-    v.src = blobUrl;
-  });
-}
 
 function renderVideoClip(
   ctx: CanvasRenderingContext2D,
@@ -1245,33 +1174,19 @@ function renderVideoClip(
       return;
     }
     const video = document.createElement("video");
-    const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
-    // Only set crossOrigin for remote URLs — blob URLs are same-origin and
-    // setting crossOrigin on them causes load failures (no CORS headers).
-    // Also skip for intro/outro cards which have no meaningful audio track.
-    if (!instruction.mediaUrl.startsWith("blob:") && !isCardClip) {
-      video.crossOrigin = "anonymous";
-    }
+    // No crossOrigin needed — the rendering pipeline uses captureStream() + MediaRecorder
+    // which works on tainted canvases. Setting crossOrigin causes load failures for
+    // remote URLs without CORS headers (intro/outro cards from Atlas Cloud).
+    video.src = instruction.mediaUrl;
     video.preload = "auto";
-    video.playsInline = true;
-    // Muted initially for autoplay compliance; audio pipeline will capture the stream.
-    // Intro/outro cards stay muted since they have no audio content.
-    video.muted = true;
-
-    // Connect audio pipeline AFTER load to avoid interfering with the loading process.
-    // createMediaElementSource() before load can prevent the element from loading on some browsers.
-    let disconnectAudio: (() => void) = () => {};
+    // Route original audio through the audio pipeline (not muted)
+    const disconnectAudio = audioPipeline.connectVideo(video);
 
     video.onloadeddata = () => {
-      // Now that the video is loaded, connect audio pipeline (skip for intro/outro cards)
-      if (!isCardClip) {
-        video.muted = false;
-        disconnectAudio = audioPipeline.connectVideo(video);
-      }
-
       const va = video.videoWidth / video.videoHeight;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
+      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
       if (isCardClip) {
         // Contain-fit for intro/outro cards: show full video without cropping
         if (va > ca) { baseW = canvas.width; baseH = baseW / va; }
@@ -1417,12 +1332,8 @@ function renderVideoClip(
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
-      video.load();
       reject(new Error(`Failed to load video for clip "${clipId}" — code=${mediaErr?.code} "${mediaErr?.message}". src: ${src}`));
     };
-
-    // Set src AFTER event handlers to avoid missing events on fast-loading blob URLs
-    video.src = instruction.mediaUrl;
   });
 }
 
@@ -1454,10 +1365,7 @@ function renderPhotoClip(
       return;
     }
     const img = new window.Image();
-    // Only set crossOrigin for remote URLs — blob URLs are same-origin
-    if (!instruction.mediaUrl.startsWith("blob:")) {
-      img.crossOrigin = "anonymous";
-    }
+    // No crossOrigin needed — captureStream() + MediaRecorder works on tainted canvases.
 
     img.onload = () => {
       const ia = img.width / img.height;
