@@ -823,6 +823,9 @@ export default function DetectingStep() {
             strobeFlashAlpha: productionPlan.strobeFlashAlpha,
             lightLeakColor: productionPlan.lightLeakColor,
             glitchColors: productionPlan.glitchColors,
+            defaultEntryPunchScale: productionPlan.defaultEntryPunchScale,
+            defaultEntryPunchDuration: productionPlan.defaultEntryPunchDuration,
+            defaultKenBurnsIntensity: productionPlan.defaultKenBurnsIntensity,
             thumbnail: remappedThumbnail,
             photoAnimationPrompts: Object.fromEntries(
               detectedClips.filter((c) => c.animationPrompt).map((c) => [c.sourceFileId, c.animationPrompt!])

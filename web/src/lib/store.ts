@@ -219,6 +219,10 @@ export function reducer(state: AppState, action: Action): AppState {
           voiceoverStatus: "idle" as const,
           aiMusicStatus: "idle" as const,
           aiMusicUrl: null,
+          instrumentalMusicUrl: null,
+          stemSeparationStatus: "idle" as const,
+          thumbnail: null,
+          talkingHead: null,
         } : {}),
       };
     case "SET_CREATIVE_DIRECTION":
