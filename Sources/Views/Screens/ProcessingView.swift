@@ -224,41 +224,59 @@ struct ProcessingView: View {
     private func generateAIProduction(for clips: [EditedClip]) async {
         // Intro card — generate a text-to-video intro
         if appState.introCardEnabled {
-            let prompt = appState.userPrompt.isEmpty
+            let introPrompt = appState.userPrompt.isEmpty
                 ? "cinematic highlight reel intro with glowing text"
                 : "intro card for: \(appState.userPrompt)"
+            await MainActor.run {
+                appState.introCard = GeneratedCard(
+                    text: introPrompt, stylePrompt: introPrompt, duration: 3, status: .generating
+                )
+            }
             do {
                 let introURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: prompt,
+                    prompt: introPrompt,
                     duration: 3
                 )
                 await MainActor.run {
+                    appState.introCard?.videoUrl = introURL
+                    appState.introCard?.status = .done
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].introVideoURL = introURL
                     }
                 }
             } catch {
-                // Non-fatal — continue without intro
+                await MainActor.run {
+                    appState.introCard?.status = .failed
+                }
             }
         }
 
         // Outro card — generate a text-to-video outro
         if appState.outroCardEnabled {
-            let prompt = appState.userPrompt.isEmpty
+            let outroPrompt = appState.userPrompt.isEmpty
                 ? "cinematic outro card with subscribe and follow call to action"
                 : "outro card for: \(appState.userPrompt)"
+            await MainActor.run {
+                appState.outroCard = GeneratedCard(
+                    text: outroPrompt, stylePrompt: outroPrompt, duration: 3, status: .generating
+                )
+            }
             do {
                 let outroURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: prompt,
+                    prompt: outroPrompt,
                     duration: 3
                 )
                 await MainActor.run {
+                    appState.outroCard?.videoUrl = outroURL
+                    appState.outroCard?.status = .done
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].outroVideoURL = outroURL
                     }
                 }
             } catch {
-                // Non-fatal — continue without outro
+                await MainActor.run {
+                    appState.outroCard?.status = .failed
+                }
             }
         }
 

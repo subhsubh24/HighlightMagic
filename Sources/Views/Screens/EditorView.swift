@@ -357,6 +357,13 @@ struct EditorView: View {
                     )
                 )
 
+                if appState.introCardEnabled, let introCard = appState.introCard {
+                    HStack(spacing: 8) {
+                        statusBadge(for: introCard.status)
+                    }
+                    .padding(.leading, 30)
+                }
+
                 Divider().overlay(Theme.surfaceLight)
 
                 // Outro Card toggle
@@ -369,6 +376,13 @@ struct EditorView: View {
                         set: { appState.outroCardEnabled = $0 }
                     )
                 )
+
+                if appState.outroCardEnabled, let outroCard = appState.outroCard {
+                    HStack(spacing: 8) {
+                        statusBadge(for: outroCard.status)
+                    }
+                    .padding(.leading, 30)
+                }
 
                 Divider().overlay(Theme.surfaceLight)
 

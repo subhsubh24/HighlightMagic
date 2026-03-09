@@ -31,6 +31,11 @@ final class AppState {
     var voiceoverEnabled: Bool = false
     var sfxEnabled: Bool = false
 
+    // AI music generation state (matches web aiMusic* fields)
+    var aiMusicStatus: GenerationStatus = .idle
+    nonisolated(unsafe) var aiMusicData: Data?
+    var aiMusicPrompt: String = ""
+
     // AI production features (AtlasCloud + ElevenLabs)
     var introCardEnabled: Bool = false
     var outroCardEnabled: Bool = false
@@ -38,13 +43,40 @@ final class AppState {
     var stemSeparationEnabled: Bool = false
     var styleTransferPrompt: String = ""
 
+    // ── AI Production pipeline state (matches web) ──
+
+    /// Claude's expanded creative plan — drives all downstream generation
+    var aiProductionPlan: AiProductionPlan?
+
+    // Intro/outro video cards (Atlas Cloud T2V) — matches web introCard/outroCard
+    var introCard: GeneratedCard?
+    var outroCard: GeneratedCard?
+
+    // Sound effects (ElevenLabs SFX v2) — matches web sfxTracks/sfxStatus
+    var sfxTracks: [SfxTrack] = []
+    var sfxStatus: GenerationStatus = .idle
+
+    // Voiceover segments (ElevenLabs TTS v3) — matches web voiceoverSegments/voiceoverStatus
+    var voiceoverSegments: [VoiceoverSegment] = []
+    var voiceoverStatus: GenerationStatus = .idle
+
+    // Auto-generated thumbnail — matches web thumbnail
+    var thumbnail: GeneratedThumbnail?
+
+    // Audio transcript from Scribe — matches web audioTranscript
+    var audioTranscript: String?
+
     // Voice cloning state
+    var voiceSampleData: Data?
     var clonedVoiceId: String?
     var voiceCloneStatus: GenerationStatus = .idle
 
     // Stem separation state
     var instrumentalMusicData: Data?
     var stemSeparationStatus: GenerationStatus = .idle
+
+    // Talking head intro — matches web talkingHead
+    var talkingHead: TalkingHeadState?
 
     var canExportFree: Bool {
         exportsUsedThisMonth < Constants.freeExportLimit
@@ -77,7 +109,7 @@ final class AppState {
         isProcessing = false
         processingProgress = 0
         errorMessage = nil
-        // Reset AI feature state
+        // Reset AI feature toggles
         aiMusicEnabled = false
         voiceoverEnabled = false
         sfxEnabled = false
@@ -86,10 +118,29 @@ final class AppState {
         voiceCloneEnabled = false
         stemSeparationEnabled = false
         styleTransferPrompt = ""
+        // Reset AI music generation state
+        aiMusicStatus = .idle
+        aiMusicData = nil
+        aiMusicPrompt = ""
+        // Reset AI production pipeline state
+        aiProductionPlan = nil
+        introCard = nil
+        outroCard = nil
+        sfxTracks = []
+        sfxStatus = .idle
+        voiceoverSegments = []
+        voiceoverStatus = .idle
+        thumbnail = nil
+        audioTranscript = nil
+        // Reset voice cloning
+        voiceSampleData = nil
         clonedVoiceId = nil
         voiceCloneStatus = .idle
+        // Reset stem separation
         instrumentalMusicData = nil
         stemSeparationStatus = .idle
+        // Reset talking head
+        talkingHead = nil
     }
 }
 
