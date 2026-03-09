@@ -139,9 +139,10 @@ export function getSourceTimeAtPosition(
   position: number,
   clipDuration: number,
   preset: VelocityPreset,
-  steps: number = 100
+  steps: number = 100,
+  customKeyframes?: VelocityKeyframe[]
 ): number {
-  if (preset === "normal") return position * clipDuration;
+  if (!customKeyframes && preset === "normal") return position * clipDuration;
 
   const p = Math.max(0, Math.min(1, position));
   const dt = p / steps;
@@ -149,7 +150,9 @@ export function getSourceTimeAtPosition(
 
   for (let i = 0; i < steps; i++) {
     const t = (i + 0.5) * dt;
-    const speed = getSpeedAtPosition(t, preset);
+    const speed = customKeyframes
+      ? getSpeedFromKeyframes(t, customKeyframes)
+      : getSpeedAtPosition(t, preset);
     sourceTime += speed * dt * clipDuration;
   }
 

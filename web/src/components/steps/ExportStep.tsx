@@ -229,7 +229,6 @@ export default function ExportStep() {
   const [exportExt, setExportExt] = useState("webm");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbnailAbortRef = useRef<AbortController | null>(null);
 
   // Cleanup blob URL and abort thumbnail polling on unmount
@@ -919,7 +918,6 @@ export default function ExportStep() {
         </div>
       )}
 
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 }

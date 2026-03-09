@@ -14,7 +14,7 @@ import {
   type TransitionTransform,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration, getSourceTimeAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
 import type { EditedClip, SfxTrack, VoiceoverSegment } from "@/lib/types";
 
@@ -736,7 +736,14 @@ export default function TapePreviewPlayer() {
           }
 
           if (!activeClipsRef.current.has(id)) {
-            el.currentTime = e.clip.trimStart + (t - e.globalStart);
+            // Account for velocity curves when seeking — a speed-ramped clip's
+            // source time doesn't map linearly to timeline time
+            const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
+            const sourceDur = e.clip.trimEnd - e.clip.trimStart;
+            const sourceOffset = (customKf && customKf.length >= 2)
+              ? getSourceTimeAtPosition(posInClip, sourceDur, preset, 50, customKf)
+              : getSourceTimeAtPosition(posInClip, sourceDur, preset, 50);
+            el.currentTime = e.clip.trimStart + sourceOffset;
             el.play().catch((e) => console.warn("[Preview] Video play rejected:", e));
           }
         }

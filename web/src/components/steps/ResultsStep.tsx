@@ -3,7 +3,7 @@
 import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { getCachedDetectionData } from "@/lib/detection-cache";
 
 const QUICK_PRESETS = [
@@ -20,7 +20,7 @@ export default function ResultsStep() {
   const [showRegenerate, setShowRegenerate] = useState(false);
   const [customFeedback, setCustomFeedback] = useState("");
 
-  const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
+  const sortedClips = useMemo(() => [...state.clips].sort((a, b) => a.order - b.order), [state.clips]);
   const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
   const totalDuration = sortedClips.reduce((sum, c, i) => {
     const dur = c.trimEnd - c.trimStart;
