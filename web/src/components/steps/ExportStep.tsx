@@ -430,6 +430,7 @@ export default function ExportStep() {
         } else {
           mediaUrl = media?.url ?? "";
         }
+        console.log(`Export: clip "${clip.id}" source="${clip.sourceFileId}" mediaType=${media?.type} animated=${!!hasAnimatedVideo} hasFile=${!!media?.file} fileSize=${media?.file?.size ?? 0} fileType=${media?.file?.type ?? "n/a"} url=${mediaUrl.slice(0, 60)}`);
         renderClips.push({
           clip,
           mediaUrl,
@@ -437,6 +438,7 @@ export default function ExportStep() {
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
+          mediaFile: (!hasAnimatedVideo && media?.file) ? media.file : undefined,
         });
       }
 
@@ -907,6 +909,8 @@ interface RenderClipInstruction {
   captionStyle: CaptionStyle;
   /** Override canvas duration to hold clip longer (e.g. for voiceover that extends past the visual) */
   minCanvasDuration?: number;
+  /** Original File/Blob for photos — used by createImageBitmap to avoid blob URL issues */
+  mediaFile?: File | Blob;
 }
 
 async function renderHighlightTape(
@@ -1038,6 +1042,8 @@ async function renderHighlightTape(
       kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? 0,
     };
 
+    console.log(`Export: rendering clip ${i + 1}/${clips.length} id="${instruction.clip.id}" type=${instruction.mediaType} dur=${clipDuration.toFixed(2)}s hasFile=${!!instruction.mediaFile} url=${instruction.mediaUrl?.slice(0, 60)}`);
+
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
@@ -1047,6 +1053,7 @@ async function renderHighlightTape(
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts, elapsedTotal);
     }
+    console.log(`Export: clip ${i + 1}/${clips.length} done`);
 
     // Save first frame for seamless loop
     if (i === 0 && viralOptions.seamlessLoop) {
@@ -1374,105 +1381,126 @@ function renderPhotoClip(
   aiRenderOpts?: ExportAiRenderOptions,
   globalTimelineOffset: number = 0
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!instruction.mediaUrl) {
-      console.warn(`Export: skipping photo clip "${instruction.clip.id}" — no media URL`);
-      resolve();
-      return;
+  // Use createImageBitmap with the original File/Blob when available — avoids
+  // blob URL loading issues entirely. Falls back to Image element + URL.
+  const loadImage = async (): Promise<ImageBitmap | HTMLImageElement> => {
+    if (instruction.mediaFile) {
+      console.log(`Export: loading photo clip "${instruction.clip.id}" via createImageBitmap (${instruction.mediaFile.size} bytes, type=${instruction.mediaFile.type})`);
+      try {
+        return await createImageBitmap(instruction.mediaFile);
+      } catch (bmpErr) {
+        console.warn(`Export: createImageBitmap failed for clip "${instruction.clip.id}", falling back to Image element`, bmpErr);
+      }
     }
-    const img = new window.Image();
-    // Do NOT set crossOrigin — blob URLs don't serve CORS headers and the
-    // browser will refuse to load the image. Not needed anyway since the
-    // render pipeline uses captureStream() which works on tainted canvases.
 
-    img.onload = () => {
-      const ia = img.width / img.height;
-      const ca = canvas.width / canvas.height;
-      let baseW: number, baseH: number;
-      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
-      if (isCardClip) {
-        // Contain-fit for intro/outro cards: show full image without cropping
-        if (ia > ca) { baseW = canvas.width; baseH = baseW / ia; }
-        else { baseH = canvas.height; baseW = baseH * ia; }
-      } else if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
-      else { baseW = canvas.width; baseH = baseW / ia; }
+    // Fallback: load via Image element + URL
+    return new Promise<HTMLImageElement>((res, rej) => {
+      if (!instruction.mediaUrl) {
+        rej(new Error(`No media URL for clip "${instruction.clip.id}"`));
+        return;
+      }
+      const img = new window.Image();
+      img.onload = () => res(img);
+      img.onerror = (e) => {
+        const src = instruction.mediaUrl?.slice(0, 80);
+        console.error(`Export: image load failed for clip "${instruction.clip.id}", src="${src}"`, e);
+        img.src = "";
+        rej(new Error(`Failed to load image for clip "${instruction.clip.id}" — src: ${src}`));
+      };
+      img.src = instruction.mediaUrl;
+    });
+  };
 
-      const durationMs = (canvasDuration > 0 ? canvasDuration : photoDisplayDur) * 1000;
-      const transitionMs = style.transitionDuration * 1000;
-      const startTime = performance.now();
+  let imgSource: ImageBitmap | HTMLImageElement;
+  try {
+    imgSource = await loadImage();
+  } catch (err) {
+    console.warn(`Export: skipping photo clip "${instruction.clip.id}" — load failed`, err);
+    return;
+  }
 
-      const drawFrame = () => {
-        const elapsedMs = performance.now() - startTime;
-        if (elapsedMs >= durationMs) { onProgress(100); img.src = ""; resolve(); return; }
+  return new Promise((resolve) => {
+    const ia = imgSource.width / imgSource.height;
+    const ca = canvas.width / canvas.height;
+    let baseW: number, baseH: number;
+    const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+    if (isCardClip) {
+      if (ia > ca) { baseW = canvas.width; baseH = baseW / ia; }
+      else { baseH = canvas.height; baseW = baseH * ia; }
+    } else if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
+    else { baseW = canvas.width; baseH = baseW / ia; }
 
-        const elapsedSec = elapsedMs / 1000;
-        const globalTime = globalTimelineOffset + elapsedSec;
-        onProgress((elapsedMs / durationMs) * 100);
+    const durationMs = (canvasDuration > 0 ? canvasDuration : photoDisplayDur) * 1000;
+    const transitionMs = style.transitionDuration * 1000;
+    const startTime = performance.now();
 
-        const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
-        const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
+    const drawFrame = () => {
+      const elapsedMs = performance.now() - startTime;
+      if (elapsedMs >= durationMs) {
+        onProgress(100);
+        if (imgSource instanceof ImageBitmap) imgSource.close();
+        resolve();
+        return;
+      }
 
-        // Beat pulse — AI controls intensity (use global timeline time for beat sync)
-        let beatPulse = 1;
-        let currentBeatIntensity = 0;
-        if (beatGrid) {
-          currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
-          beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
-        }
+      const elapsedSec = elapsedMs / 1000;
+      const globalTime = globalTimelineOffset + elapsedSec;
+      onProgress((elapsedMs / durationMs) * 100);
 
-        if (crossfadeFrom && transType && elapsedMs < transitionMs) {
-          const progress = elapsedMs / transitionMs;
-          renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-            const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-            const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse;
-            const dw = baseW * totalScale;
-            const dh = baseH * totalScale;
-            const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
-            const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
-            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-            ctx.drawImage(img, dx, dy, dw, dh);
-            ctx.filter = "none";
-          }, neonColorHexes, aiRenderOpts);
-        } else {
-          const totalScale = kenBurnsScale * entryScale * beatPulse;
+      const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
+      const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
+
+      // Beat pulse — AI controls intensity (use global timeline time for beat sync)
+      let beatPulse = 1;
+      let currentBeatIntensity = 0;
+      if (beatGrid) {
+        currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
+        beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
+      }
+
+      if (crossfadeFrom && transType && elapsedMs < transitionMs) {
+        const progress = elapsedMs / transitionMs;
+        renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
+          const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
+          const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
-          const dx = (canvas.width - dw) / 2;
-          const dy = (canvas.height - dh) / 2;
-          ctx.fillStyle = "black";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
+          const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-          ctx.drawImage(img, dx, dy, dw, dh);
+          ctx.drawImage(imgSource, dx, dy, dw, dh);
           ctx.filter = "none";
+        }, neonColorHexes, aiRenderOpts);
+      } else {
+        const totalScale = kenBurnsScale * entryScale * beatPulse;
+        const dw = baseW * totalScale;
+        const dh = baseH * totalScale;
+        const dx = (canvas.width - dw) / 2;
+        const dy = (canvas.height - dh) / 2;
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+        ctx.drawImage(imgSource, dx, dy, dw, dh);
+        ctx.filter = "none";
+      }
+
+      // Beat flash overlay — matches TapePreviewPlayer behavior
+      if (beatGrid) {
+        const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
+        if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
+          ctx.save();
+          ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
         }
+      }
 
-        // Beat flash overlay — matches TapePreviewPlayer behavior
-        if (beatGrid) {
-          const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
-          if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
-            ctx.save();
-            ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.restore();
-          }
-        }
-
-        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
-        requestAnimationFrame(drawFrame);
-      };
-
+      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
       requestAnimationFrame(drawFrame);
     };
 
-    img.onerror = (e) => {
-      const clipId = instruction.clip.id;
-      const src = instruction.mediaUrl?.slice(0, 80);
-      console.error(`Export: image load failed for clip "${clipId}", src="${src}"`, e);
-      img.src = "";
-      reject(new Error(`Failed to load image for clip "${clipId}" — the media URL may have expired. src: ${src}`));
-    };
-    img.src = instruction.mediaUrl;
+    requestAnimationFrame(drawFrame);
   });
 }
 
