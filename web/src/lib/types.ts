@@ -187,6 +187,49 @@ export interface AiProductionPlan {
   /** Glitch channel colors as [primary hex, secondary hex] (default red/cyan). */
   glitchColors?: [string, string];
 
+  // ── AI-controlled post-processing (replaces hardcoded values) ──
+
+  /** Film grain noise opacity (0 = none, 0.03 = subtle, 0.06 = heavy). AI decides per-tape. */
+  grainOpacity?: number;
+  /** Vignette edge darkening intensity (0 = none, 0.15 = subtle, 0.3 = dramatic). */
+  vignetteIntensity?: number;
+  /** Caption appear delay after cut in seconds (0 = instant, 0.12 = natural, 0.3 = dramatic). */
+  captionAppearDelay?: number;
+  /** Exit deceleration speed multiplier (0.92 = heavy, 0.97 = subtle, 1.0 = none). */
+  exitDecelSpeed?: number;
+  /** Exit deceleration duration in seconds (0 = none, 0.12 = quick, 0.2 = smooth). */
+  exitDecelDuration?: number;
+  /** Micro-settle scale on clip entry (1.0 = none, 1.004 = subtle, 1.01 = noticeable). */
+  settleScale?: number;
+  /** Micro-settle duration in seconds (0.1 = snappy, 0.18 = smooth, 0.25 = cinematic). */
+  settleDuration?: number;
+  /** Default clip audio volume when music is present (0-1). Per-clip overrides this. */
+  clipAudioVolume?: number;
+  /** Whether to apply warmth shift on the final clip (true/false). */
+  finalClipWarmth?: boolean;
+
+  /** Film stock — tape-level base post-processing applied uniformly under per-clip grades. */
+  filmStock?: {
+    /** Base grain opacity (0-0.08). Stacks with grainOpacity. */
+    grain: number;
+    /** Base warmth shift (0 = neutral, 0.05 = warm, -0.03 = cool). Positive = sepia tint. */
+    warmth: number;
+    /** Base contrast multiplier (0.9-1.2). Applied before per-clip filterCSS. */
+    contrast: number;
+    /** Faded/lifted blacks (0-0.1). 0 = true black, 0.05 = lifted matte look. */
+    fadedBlacks: number;
+  };
+
+  /** Audio breath moments — planned silence dips at emotional peaks. */
+  audioBreaths?: Array<{
+    /** Timestamp in seconds from tape start */
+    time: number;
+    /** Duration of the breath in seconds (0.3-1.0) */
+    duration: number;
+    /** How much to duck ALL audio (0 = full silence, 0.15 = whisper, 0.3 = subtle dip) */
+    depth: number;
+  }>;
+
   // Thumbnail
   thumbnail: {
     sourceClipIndex: number;
@@ -273,6 +316,10 @@ export interface EditedClip {
   customCaptionGlowColor?: string;
   /** Custom caption glow radius in pixels (0-30). */
   customCaptionGlowRadius?: number;
+  /** Per-clip original audio volume (0-1). Overrides plan-level clipAudioVolume. */
+  clipAudioVolume?: number;
+  /** Per-clip transition intensity (0-1). Scales the effect magnitude. */
+  transitionIntensity?: number;
 }
 
 export interface ViralExportOptions {

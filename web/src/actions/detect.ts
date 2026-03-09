@@ -425,6 +425,9 @@ export interface DetectedClip {
   customCaptionAnimation?: string;
   customCaptionGlowColor?: string;
   customCaptionGlowRadius?: number;
+  // Per-clip audio & transition
+  clipAudioVolume?: number;
+  transitionIntensity?: number;
   // Photo animation — AI-generated motion prompt for Kling
   animationPrompt?: string;
 }
@@ -470,6 +473,18 @@ export interface ProductionPlan {
   strobeFlashAlpha?: number;
   lightLeakColor?: string;
   glitchColors?: [string, string];
+  // AI-controlled post-processing
+  grainOpacity?: number;
+  vignetteIntensity?: number;
+  captionAppearDelay?: number;
+  exitDecelSpeed?: number;
+  exitDecelDuration?: number;
+  settleScale?: number;
+  settleDuration?: number;
+  clipAudioVolume?: number;
+  finalClipWarmth?: boolean;
+  filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
+  audioBreaths?: Array<{ time: number; duration: number; depth: number }>;
   thumbnail: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
   styleTransfer: { prompt: string; strength: number } | null;
   talkingHeadSpeech: string | null;
@@ -1987,8 +2002,75 @@ TALKING HEAD INTRO — If a voice clone sample is provided, write a short intro 
 Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or null.
 null if no voice sample was provided or a talking head intro doesn't fit the content.
 
+═══════════════════════════════════════════════
+POST-PROCESSING & FILM LOOK — You are the colorist and finishing artist
+═══════════════════════════════════════════════
+You control the final look of the tape. Every value below should be chosen for THIS specific content.
+
+FILM STOCK — The base visual foundation applied uniformly to every frame:
+Set "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03} or omit for clean digital.
+Think of this like choosing a film stock: Kodak Portra (warm, soft grain), Fuji Velvia (saturated, contrasty),
+Kodak Tri-X (heavy grain, high contrast). Per-clip filterCSS stacks ON TOP of this base.
+- "grain" (0-0.08): base noise texture. 0 = clean digital, 0.02 = subtle texture, 0.05 = analog feel.
+- "warmth" (−0.1 to 0.1): color temperature shift. −0.05 = cool/blue, 0 = neutral, 0.05 = warm/golden.
+- "contrast" (0.85-1.25): global contrast. 0.9 = flat/matte, 1.0 = neutral, 1.15 = punchy.
+- "fadedBlacks" (0-0.12): lift shadows from true black. 0 = deep blacks, 0.05 = matte film look, 0.1 = faded vintage.
+Choose a film stock that matches the content's era/mood. Sports → punchy contrast, no faded blacks.
+Wedding → warm, soft grain, slightly lifted blacks. Vintage → heavy grain, warm, faded.
+
+GRAIN & VIGNETTE — Frame-level texture:
+"grainOpacity" (0-0.1): noise overlay intensity. 0 = none, 0.03 = subtle film, 0.06 = pronounced, 0.08 = heavy analog.
+  This stacks with filmStock.grain — together they create the full texture look.
+"vignetteIntensity" (0-0.4): edge darkening. 0 = none, 0.12 = subtle lens feel, 0.2 = standard, 0.3 = dramatic.
+  Strong vignette works for cinematic/emotional. No vignette for bright/fun/clean content.
+
+CAPTION TIMING:
+"captionAppearDelay" (0-0.5 seconds): delay before caption shows after clip starts.
+  0 = instant (punchy hype content), 0.1 = natural (standard), 0.2-0.3 = dramatic (let visual land first),
+  0.4-0.5 = very deliberate (shock/awe — the silence IS the commentary before the text).
+
+CLIP ENTRY FEEL:
+"settleScale" (1.0-1.02): micro zoom on clip entry that eases out. 1.0 = no settle, 1.005 = subtle, 1.01 = noticeable.
+"settleDuration" (0.05-0.35 seconds): how long the settle eases. 0.1 = snappy, 0.18 = smooth, 0.3 = cinematic.
+Hype content → higher scale (1.008), shorter duration (0.1). Calm content → lower scale (1.003), longer duration (0.25).
+
+CLIP EXIT FEEL:
+"exitDecelSpeed" (0.85-1.0): subtle playback slowdown at clip end. 1.0 = none, 0.97 = subtle, 0.93 = dramatic.
+"exitDecelDuration" (0-0.3 seconds): how long before clip end the decel starts. 0 = none, 0.12 = quick, 0.2 = smooth.
+Fast-cut content → no decel (1.0/0). Cinematic → subtle decel (0.96/0.15). Emotional → heavier (0.93/0.2).
+
+CLIP AUDIO:
+"clipAudioVolume" (0-1): default volume for original clip audio when music is playing.
+  0 = fully muted (music-only), 0.3 = ambient bed, 0.5 = balanced, 0.8 = clip audio forward, 1.0 = full.
+  Nature/crowd footage → higher (0.6-0.8). Music-driven content → lower (0.2-0.3). Talking head → high (0.9).
+  PER-CLIP OVERRIDE: Each clip can set its own "clipAudioVolume" to override this default.
+  A cheering crowd clip should be 0.7 even if the tape default is 0.3. Ride the faders per moment.
+
+FINAL CLIP WARMTH:
+"finalClipWarmth" (true/false): whether to apply a subtle warm grade shift in the last 2 seconds.
+  true = tape resolves with warmth (satisfying ending). false = no shift (if the last clip's grade is already perfect).
+  Most tapes benefit from this. Skip it for cold/moody/dark endings.
+
+TRANSITION INTENSITY — Per-clip:
+Each clip can set "transitionIntensity" (0-1) to scale the transition effect's magnitude.
+0.3 = barely there (subtle, elegant). 0.6 = standard. 1.0 = maximum (dramatic, in-your-face).
+Build an intensity arc: start subtle → build toward the climax → pull back for the close.
+A zoom_punch at 0.3 is a gentle push. At 1.0 it's a slam. A crossfade at 0.3 is barely visible.
+This lets you create progressive intensity without changing transition types.
+
+AUDIO BREATHS — Planned moments of silence:
+Set "audioBreaths" to an array of [{time, duration, depth}] or omit for none.
+"time": seconds from tape start where the breath occurs.
+"duration" (0.3-1.0 seconds): how long all audio dips.
+"depth" (0-0.4): how much to duck. 0 = full silence, 0.15 = whisper, 0.3 = subtle dip.
+Use 1-3 per tape MAX. Place them at:
+- The moment of peak emotional impact (shock, awe, beauty)
+- Right before a dramatic reveal (build silence → SLAM)
+- After a climactic moment (the exhale)
+These are incredibly powerful when used sparingly. Overuse kills the effect.
+
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "clipAudioVolume": 0.4, "finalClipWarmth": true, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2128,6 +2210,8 @@ Respond with ONLY a JSON object:
           captionGlowColor?: string;
           captionGlowRadius?: number;
           animationPrompt?: string;
+          clipAudioVolume?: number;
+          transitionIntensity?: number;
         }>;
         // AI Production plan fields
         intro?: { text: string; stylePrompt: string; duration?: number } | null;
@@ -2173,6 +2257,18 @@ Respond with ONLY a JSON object:
         strobeFlashAlpha?: number;
         lightLeakColor?: string;
         glitchColors?: [string, string];
+        // AI-controlled post-processing
+        grainOpacity?: number;
+        vignetteIntensity?: number;
+        captionAppearDelay?: number;
+        exitDecelSpeed?: number;
+        exitDecelDuration?: number;
+        settleScale?: number;
+        settleDuration?: number;
+        clipAudioVolume?: number;
+        finalClipWarmth?: boolean;
+        filmStock?: { grain?: number; warmth?: number; contrast?: number; fadedBlacks?: number };
+        audioBreaths?: Array<{ time?: number; duration?: number; depth?: number }>;
       };
     try {
       parsed = JSON.parse(objMatchStr);
@@ -2319,6 +2415,9 @@ Respond with ONLY a JSON object:
         // Photo animation prompt from AI
         animationPrompt: (typeof p.animationPrompt === "string" && p.animationPrompt.trim())
           ? p.animationPrompt.trim().slice(0, 500) : undefined,
+        // Per-clip audio and transition intensity
+        clipAudioVolume: typeof p.clipAudioVolume === "number" ? Math.max(0, Math.min(1, p.clipAudioVolume)) : undefined,
+        transitionIntensity: typeof p.transitionIntensity === "number" ? Math.max(0, Math.min(1, p.transitionIntensity)) : undefined,
       }; });
 
       // Deduplicate: drop clips with identical or overlapping time ranges from the same source
@@ -2552,6 +2651,36 @@ Respond with ONLY a JSON object:
         strobeFlashAlpha: typeof parsed.strobeFlashAlpha === "number" ? Math.max(0, Math.min(1, parsed.strobeFlashAlpha)) : undefined,
         lightLeakColor: (typeof parsed.lightLeakColor === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(parsed.lightLeakColor)) ? parsed.lightLeakColor : undefined,
         glitchColors: (Array.isArray(parsed.glitchColors) && parsed.glitchColors.length === 2 && parsed.glitchColors.every((c: unknown) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c as string))) ? parsed.glitchColors as [string, string] : undefined,
+
+        // ── AI-controlled post-processing ──
+        grainOpacity: typeof parsed.grainOpacity === "number" ? Math.max(0, Math.min(0.1, parsed.grainOpacity)) : undefined,
+        vignetteIntensity: typeof parsed.vignetteIntensity === "number" ? Math.max(0, Math.min(0.4, parsed.vignetteIntensity)) : undefined,
+        captionAppearDelay: typeof parsed.captionAppearDelay === "number" ? Math.max(0, Math.min(0.5, parsed.captionAppearDelay)) : undefined,
+        exitDecelSpeed: typeof parsed.exitDecelSpeed === "number" ? Math.max(0.85, Math.min(1.0, parsed.exitDecelSpeed)) : undefined,
+        exitDecelDuration: typeof parsed.exitDecelDuration === "number" ? Math.max(0, Math.min(0.3, parsed.exitDecelDuration)) : undefined,
+        settleScale: typeof parsed.settleScale === "number" ? Math.max(1.0, Math.min(1.02, parsed.settleScale)) : undefined,
+        settleDuration: typeof parsed.settleDuration === "number" ? Math.max(0.05, Math.min(0.35, parsed.settleDuration)) : undefined,
+        clipAudioVolume: typeof parsed.clipAudioVolume === "number" ? Math.max(0, Math.min(1, parsed.clipAudioVolume)) : undefined,
+        finalClipWarmth: typeof parsed.finalClipWarmth === "boolean" ? parsed.finalClipWarmth : undefined,
+        filmStock: (parsed.filmStock && typeof parsed.filmStock === "object")
+          ? {
+              grain: typeof parsed.filmStock.grain === "number" ? Math.max(0, Math.min(0.08, parsed.filmStock.grain)) : 0,
+              warmth: typeof parsed.filmStock.warmth === "number" ? Math.max(-0.1, Math.min(0.1, parsed.filmStock.warmth)) : 0,
+              contrast: typeof parsed.filmStock.contrast === "number" ? Math.max(0.85, Math.min(1.25, parsed.filmStock.contrast)) : 1.0,
+              fadedBlacks: typeof parsed.filmStock.fadedBlacks === "number" ? Math.max(0, Math.min(0.12, parsed.filmStock.fadedBlacks)) : 0,
+            }
+          : undefined,
+        audioBreaths: Array.isArray(parsed.audioBreaths)
+          ? parsed.audioBreaths
+              .filter((b: { time?: number; duration?: number; depth?: number }) =>
+                typeof b.time === "number" && typeof b.duration === "number" && typeof b.depth === "number")
+              .slice(0, 6)
+              .map((b: { time?: number; duration?: number; depth?: number }) => ({
+                time: Math.max(0, b.time!),
+                duration: Math.max(0.2, Math.min(1.5, b.duration!)),
+                depth: Math.max(0, Math.min(0.4, b.depth!)),
+              }))
+          : undefined,
 
         thumbnail: (parsed.thumbnail && typeof parsed.thumbnail.sourceClipIndex === "number" && aiIndexToFinalIndex.has(parsed.thumbnail.sourceClipIndex))
           ? {

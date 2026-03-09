@@ -43,7 +43,7 @@ export interface AudioPipeline {
   /** The combined MediaStream (video + mixed audio) for the MediaRecorder. */
   stream: MediaStream;
   /** Connect a video element's audio to the mix. Returns a disconnect function. */
-  connectVideo(video: HTMLVideoElement): () => void;
+  connectVideo(video: HTMLVideoElement, perClipVolume?: number): () => void;
   /** Clean up all resources. */
   cleanup(): void;
 }
@@ -84,6 +84,8 @@ export async function createAudioPipeline(
   musicFadeInDuration: number = 0,
   musicFadeOutDuration: number = 0,
   totalTapeDurationSec: number = 0,
+  defaultClipAudioVolume?: number,
+  audioBreaths?: Array<{ time: number; duration: number; depth: number }>,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -229,6 +231,22 @@ export async function createAudioPipeline(
     }
   }
 
+  // Audio breath moments — planned silence dips at emotional peaks.
+  // These duck the music gain node at specific timestamps.
+  if (audioBreaths && audioBreaths.length > 0 && musicGainNode) {
+    const renderStart = audioCtx.currentTime;
+    for (const breath of audioBreaths) {
+      const breathStart = renderStart + breath.time;
+      const breathEnd = breathStart + breath.duration;
+      const breathVolume = musicVolume * breath.depth;
+      // Quick attack into silence, gentle release back
+      musicGainNode.gain.setValueAtTime(musicVolume, Math.max(renderStart, breathStart - 0.1));
+      musicGainNode.gain.linearRampToValueAtTime(breathVolume, breathStart);
+      musicGainNode.gain.setValueAtTime(breathVolume, breathEnd);
+      musicGainNode.gain.linearRampToValueAtTime(musicVolume, breathEnd + 0.2);
+    }
+  }
+
   // Combine video tracks from canvas + audio tracks from our destination
   const combinedStream = new MediaStream([
     ...canvasStream.getVideoTracks(),
@@ -238,15 +256,15 @@ export async function createAudioPipeline(
   return {
     stream: combinedStream,
 
-    connectVideo(video: HTMLVideoElement): () => void {
+    connectVideo(video: HTMLVideoElement, perClipVolume?: number): () => void {
       try {
         // Route the video element's audio through Web Audio API
         const source = audioCtx.createMediaElementSource(video);
         const gain = audioCtx.createGain();
 
-        // Clip audio ducking: lower original audio when music is playing
-        // This mimics real editors who balance clip audio against the soundtrack
-        const clipVolume = musicGainNode ? 0.45 : 1.0;
+        // Clip audio volume: per-clip override → plan-level default → 0.45 when music present
+        const defaultClipVol = musicGainNode ? (defaultClipAudioVolume ?? 0.45) : 1.0;
+        const clipVolume = perClipVolume ?? defaultClipVol;
 
         // Audio bleed: fade-in over 50ms to avoid hard audio starts at cuts
         gain.gain.setValueAtTime(0, audioCtx.currentTime);

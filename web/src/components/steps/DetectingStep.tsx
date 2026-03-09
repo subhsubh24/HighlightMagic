@@ -74,6 +74,8 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     customCaptionAnimation: c.customCaptionAnimation,
     customCaptionGlowColor: c.customCaptionGlowColor,
     customCaptionGlowRadius: c.customCaptionGlowRadius,
+    clipAudioVolume: c.clipAudioVolume,
+    transitionIntensity: c.transitionIntensity,
   }));
 }
 
@@ -827,6 +829,17 @@ export default function DetectingStep() {
             strobeFlashAlpha: productionPlan.strobeFlashAlpha,
             lightLeakColor: productionPlan.lightLeakColor,
             glitchColors: productionPlan.glitchColors,
+            grainOpacity: productionPlan.grainOpacity,
+            vignetteIntensity: productionPlan.vignetteIntensity,
+            captionAppearDelay: productionPlan.captionAppearDelay,
+            exitDecelSpeed: productionPlan.exitDecelSpeed,
+            exitDecelDuration: productionPlan.exitDecelDuration,
+            settleScale: productionPlan.settleScale,
+            settleDuration: productionPlan.settleDuration,
+            clipAudioVolume: productionPlan.clipAudioVolume,
+            finalClipWarmth: productionPlan.finalClipWarmth,
+            filmStock: productionPlan.filmStock,
+            audioBreaths: productionPlan.audioBreaths,
             defaultEntryPunchScale: productionPlan.defaultEntryPunchScale,
             defaultEntryPunchDuration: productionPlan.defaultEntryPunchDuration,
             defaultKenBurnsIntensity: productionPlan.defaultKenBurnsIntensity,

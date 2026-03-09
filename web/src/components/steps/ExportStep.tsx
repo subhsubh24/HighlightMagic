@@ -618,6 +618,17 @@ export default function ExportStep() {
           defaultEntryPunchScale: cPlan.defaultEntryPunchScale,
           defaultEntryPunchDuration: cPlan.defaultEntryPunchDuration,
           defaultKenBurnsIntensity: cPlan.defaultKenBurnsIntensity,
+          grainOpacity: cPlan.grainOpacity,
+          vignetteIntensity: cPlan.vignetteIntensity,
+          captionAppearDelay: cPlan.captionAppearDelay,
+          exitDecelSpeed: cPlan.exitDecelSpeed,
+          exitDecelDuration: cPlan.exitDecelDuration,
+          settleScale: cPlan.settleScale,
+          settleDuration: cPlan.settleDuration,
+          clipAudioVolume: cPlan.clipAudioVolume,
+          finalClipWarmth: cPlan.finalClipWarmth,
+          filmStock: cPlan.filmStock,
+          audioBreaths: cPlan.audioBreaths,
         } : undefined,
       );
 
@@ -962,16 +973,12 @@ interface RenderClipInstruction {
  * that eases out with cubic-out, simulating the physical settle of a camera cut.
  * Returns {scale, offsetY} — multiply scale into totalScale, add offsetY to dy.
  */
-const SETTLE_DURATION = 0.18; // seconds
-const SETTLE_SCALE = 1.006;   // very subtle extra scale at t=0
-const SETTLE_OFFSET_Y = -2;   // pixels: tiny upward offset that settles down
-function getMicroSettle(elapsedSec: number): { scale: number; offsetY: number } {
-  if (elapsedSec >= SETTLE_DURATION) return { scale: 1, offsetY: 0 };
-  // Cubic-out easing: 1 - (1-t)^3
-  const t = Math.min(1, elapsedSec / SETTLE_DURATION);
+function getMicroSettle(elapsedSec: number, settleScale: number = 1.006, settleDuration: number = 0.18): { scale: number; offsetY: number } {
+  if (settleScale <= 1.0 || settleDuration <= 0 || elapsedSec >= settleDuration) return { scale: 1, offsetY: 0 };
+  const t = Math.min(1, elapsedSec / settleDuration);
   const ease = 1 - Math.pow(1 - t, 3);
-  const scale = SETTLE_SCALE + (1 - SETTLE_SCALE) * ease; // starts at SETTLE_SCALE, eases to 1
-  const offsetY = SETTLE_OFFSET_Y * (1 - ease); // starts at SETTLE_OFFSET_Y, eases to 0
+  const scale = settleScale + (1 - settleScale) * ease;
+  const offsetY = -2 * (settleScale - 1) / 0.006 * (1 - ease); // scale offset proportionally
   return { scale, offsetY };
 }
 
@@ -979,14 +986,12 @@ function getMicroSettle(elapsedSec: number): { scale: number; offsetY: number } 
  * End-of-clip micro-deceleration — subtle slowdown in the last 0.15s.
  * Returns a speed multiplier (0.96-1.0) that creates a "weight" before the cut.
  */
-const EXIT_DECEL_DURATION = 0.15;
-const EXIT_DECEL_MIN_SPEED = 0.96;
-function getExitDeceleration(elapsedSec: number, clipDuration: number): number {
+function getExitDeceleration(elapsedSec: number, clipDuration: number, minSpeed: number = 0.96, decelDuration: number = 0.15): number {
+  if (minSpeed >= 1.0 || decelDuration <= 0) return 1.0;
   const remaining = clipDuration - elapsedSec;
-  if (remaining >= EXIT_DECEL_DURATION || remaining <= 0) return 1.0;
-  // Ease into deceleration: quadratic
-  const t = 1 - remaining / EXIT_DECEL_DURATION; // 0 at start of decel, 1 at clip end
-  return 1.0 + (EXIT_DECEL_MIN_SPEED - 1.0) * t * t;
+  if (remaining >= decelDuration || remaining <= 0) return 1.0;
+  const t = 1 - remaining / decelDuration;
+  return 1.0 + (minSpeed - 1.0) * t * t;
 }
 
 /**
@@ -996,9 +1001,9 @@ function getExitDeceleration(elapsedSec: number, clipDuration: number): number {
  */
 let _grainCanvas: HTMLCanvasElement | null = null;
 let _grainCtx: CanvasRenderingContext2D | null = null;
-const GRAIN_OPACITY = 0.045;
-const GRAIN_BLOCK = 4; // pixel block size for performance (1=pixel, 4=4x4 blocks)
-function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number) {
+const GRAIN_BLOCK = 4;
+function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number, opacity: number = 0.045) {
+  if (opacity <= 0) return;
   // Lazy-init a small grain canvas (render at 1/4 res for perf, scale up)
   const gw = Math.ceil(w / GRAIN_BLOCK);
   const gh = Math.ceil(h / GRAIN_BLOCK);
@@ -1020,7 +1025,7 @@ function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number) {
   }
   gCtx.putImageData(imageData, 0, 0);
   ctx.save();
-  ctx.globalAlpha = GRAIN_OPACITY;
+  ctx.globalAlpha = opacity;
   ctx.globalCompositeOperation = "overlay";
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(_grainCanvas, 0, 0, w, h);
@@ -1032,8 +1037,8 @@ function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number) {
  * Creates the "lens" quality that pro edits have.
  */
 let _vignetteCanvas: HTMLCanvasElement | null = null;
-const VIGNETTE_OPACITY = 0.18;
-function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number = 0.18) {
+  if (intensity <= 0) return;
   // Cache the vignette gradient on a canvas (doesn't change per frame)
   if (!_vignetteCanvas || _vignetteCanvas.width !== w || _vignetteCanvas.height !== h) {
     _vignetteCanvas = document.createElement("canvas");
@@ -1051,7 +1056,7 @@ function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
     vCtx.fillRect(0, 0, w, h);
   }
   ctx.save();
-  ctx.globalAlpha = VIGNETTE_OPACITY;
+  ctx.globalAlpha = intensity;
   ctx.drawImage(_vignetteCanvas, 0, 0);
   ctx.restore();
 }
@@ -1060,11 +1065,52 @@ function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
  * Warmth shift for final clip — subtle warm grade on the last 2s.
  * Creates the visual equivalent of a musical resolve.
  */
-function getWarmthShiftCSS(elapsedSec: number, clipDuration: number): string | null {
-  const WARMTH_FADE_IN = 2.0; // start warming up in the last 2s
+/**
+ * Film stock base post-processing — applied after the clip is drawn.
+ * Creates the coherent "film look" that ties all clips together.
+ */
+/** Scale a transition transform by intensity (0-1). 1.0 = full effect, 0 = no effect. */
+function scaleTransform(t: { scale: number; offsetX: number; offsetY: number }, intensity: number): { scale: number; offsetX: number; offsetY: number } {
+  if (intensity >= 1.0) return t;
+  return {
+    scale: 1 + (t.scale - 1) * intensity,
+    offsetX: t.offsetX * intensity,
+    offsetY: t.offsetY * intensity,
+  };
+}
+
+function applyFilmStock(ctx: CanvasRenderingContext2D, w: number, h: number, stock: { grain: number; warmth: number; contrast: number; fadedBlacks: number } | undefined) {
+  if (!stock) return;
+  // Apply contrast + warmth via CSS filter on a self-draw
+  const parts: string[] = [];
+  if (stock.contrast !== 1.0) parts.push(`contrast(${stock.contrast.toFixed(3)})`);
+  if (stock.warmth > 0) parts.push(`sepia(${stock.warmth.toFixed(3)})`);
+  else if (stock.warmth < 0) parts.push(`hue-rotate(${(stock.warmth * 60).toFixed(1)}deg)`);
+  if (parts.length > 0) {
+    ctx.filter = parts.join(" ");
+    ctx.drawImage(ctx.canvas, 0, 0);
+    ctx.filter = "none";
+  }
+  // Faded/lifted blacks — draw a semi-transparent dark gray overlay
+  if (stock.fadedBlacks > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighten";
+    const gray = Math.round(stock.fadedBlacks * 255);
+    ctx.fillStyle = `rgb(${gray},${gray},${gray})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+  // Film stock grain stacks with the per-frame grain overlay
+  if (stock.grain > 0) {
+    drawFilmGrain(ctx, w, h, stock.grain);
+  }
+}
+
+function getWarmthShiftCSS(elapsedSec: number, clipDuration: number, enabled: boolean = true): string | null {
+  if (!enabled) return null;
+  const WARMTH_FADE_IN = 2.0;
   const remaining = clipDuration - elapsedSec;
   if (remaining >= WARMTH_FADE_IN) return null;
-  // Ease in the warmth
   const t = Math.min(1, (WARMTH_FADE_IN - remaining) / WARMTH_FADE_IN);
   const sepia = (0.06 * t).toFixed(3);
   const sat = (1 + 0.04 * t).toFixed(3);
@@ -1156,7 +1202,7 @@ async function renderHighlightTape(
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, aiRenderOpts?.audioBreaths);
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,
@@ -1350,6 +1396,18 @@ interface ExportAiRenderOptions {
   defaultEntryPunchScale?: number;
   defaultEntryPunchDuration?: number;
   defaultKenBurnsIntensity?: number;
+  // AI-controlled post-processing
+  grainOpacity?: number;
+  vignetteIntensity?: number;
+  captionAppearDelay?: number;
+  exitDecelSpeed?: number;
+  exitDecelDuration?: number;
+  settleScale?: number;
+  settleDuration?: number;
+  clipAudioVolume?: number;
+  finalClipWarmth?: boolean;
+  filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
+  audioBreaths?: Array<{ time: number; duration: number; depth: number }>;
 }
 
 
@@ -1389,7 +1447,7 @@ function renderVideoClip(
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
-    const disconnectAudio = audioPipeline.connectVideo(video);
+    const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume);
 
     video.onloadeddata = () => {
       const va = video.videoWidth / video.videoHeight;
@@ -1458,7 +1516,7 @@ function renderVideoClip(
 
           // Apply velocity — custom keyframes take priority over presets
           // End-of-clip micro-deceleration stacks on top for natural exit feel
-          const exitDecel = getExitDeceleration(canvasElapsedSec, canvasDuration);
+          const exitDecel = getExitDeceleration(canvasElapsedSec, canvasDuration, aiRenderOpts?.exitDecelSpeed ?? 0.96, aiRenderOpts?.exitDecelDuration ?? 0.15);
           const customKf = instruction.clip.customVelocityKeyframes;
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
@@ -1495,12 +1553,13 @@ function renderVideoClip(
           }
 
           // Micro-settle: subtle scale+position ease on clip entry
-          const settle = getMicroSettle(canvasElapsedSec);
+          const settle = getMicroSettle(canvasElapsedSec, aiRenderOpts?.settleScale ?? 1.006, aiRenderOpts?.settleDuration ?? 0.18);
 
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
             const progress = canvasElapsedSec / style.transitionDuration;
+            const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-              const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
+              const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width), transIntensity);
               const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale * settle.scale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
@@ -1525,7 +1584,7 @@ function renderVideoClip(
 
           // Warmth shift on final clip — subtle warm grade in last 2s
           if (isLastClip) {
-            const warmCSS = getWarmthShiftCSS(canvasElapsedSec, canvasDuration);
+            const warmCSS = getWarmthShiftCSS(canvasElapsedSec, canvasDuration, aiRenderOpts?.finalClipWarmth !== false);
             if (warmCSS) {
               ctx.filter = warmCSS;
               ctx.drawImage(canvas, 0, 0);
@@ -1546,9 +1605,10 @@ function renderVideoClip(
             }
           }
 
-          // Film grain + vignette — pro post-processing overlays
-          drawVignette(ctx, canvas.width, canvas.height);
-          drawFilmGrain(ctx, canvas.width, canvas.height);
+          // Film stock base + grain + vignette — pro post-processing overlays
+          applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
+          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18);
+          drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
 
@@ -1678,12 +1738,13 @@ async function renderPhotoClip(
       }
 
       // Micro-settle: subtle scale+position ease on clip entry
-      const settle = getMicroSettle(elapsedSec);
+      const settle = getMicroSettle(elapsedSec, aiRenderOpts?.settleScale ?? 1.006, aiRenderOpts?.settleDuration ?? 0.18);
 
       if (crossfadeFrom && transType && elapsedMs < transitionMs) {
         const progress = elapsedMs / transitionMs;
+        const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
         renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-          const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
+          const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width), transIntensity);
           const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse * settle.scale;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
@@ -1708,7 +1769,7 @@ async function renderPhotoClip(
 
       // Warmth shift on final clip
       if (isLastClip) {
-        const warmCSS = getWarmthShiftCSS(elapsedSec, canvasDuration || photoDisplayDur);
+        const warmCSS = getWarmthShiftCSS(elapsedSec, canvasDuration || photoDisplayDur, aiRenderOpts?.finalClipWarmth !== false);
         if (warmCSS) {
           ctx.filter = warmCSS;
           ctx.drawImage(canvas, 0, 0);
@@ -1728,9 +1789,10 @@ async function renderPhotoClip(
         }
       }
 
-      // Film grain + vignette — pro post-processing overlays
-      drawVignette(ctx, canvas.width, canvas.height);
-      drawFilmGrain(ctx, canvas.width, canvas.height);
+      // Film stock base + grain + vignette — pro post-processing overlays
+      applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
+      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18);
+      drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
       drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
       scheduleExportFrame(drawFrame);
@@ -1826,11 +1888,11 @@ function drawOverlays(
   }
 
   // Kinetic text instead of static caption
-  // Caption appear delay: let the visual land first (120ms) before showing text
-  const CAPTION_APPEAR_DELAY = 0.12;
-  if (captionText && localTime >= CAPTION_APPEAR_DELAY) {
-    const adjustedTime = localTime - CAPTION_APPEAR_DELAY;
-    const adjustedDuration = clipDuration - CAPTION_APPEAR_DELAY;
+  // Caption appear delay: AI-controlled, let the visual land first before showing text
+  const captionDelay = aiRenderOpts?.captionAppearDelay ?? 0.12;
+  if (captionText && localTime >= captionDelay) {
+    const adjustedTime = localTime - captionDelay;
+    const adjustedDuration = clipDuration - captionDelay;
     const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit);
     const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
