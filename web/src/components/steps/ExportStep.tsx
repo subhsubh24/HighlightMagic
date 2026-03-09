@@ -609,6 +609,9 @@ export default function ExportStep() {
           strobeFlashAlpha: cPlan.strobeFlashAlpha,
           lightLeakColor: cPlan.lightLeakColor,
           glitchColors: cPlan.glitchColors,
+          defaultEntryPunchScale: cPlan.defaultEntryPunchScale,
+          defaultEntryPunchDuration: cPlan.defaultEntryPunchDuration,
+          defaultKenBurnsIntensity: cPlan.defaultKenBurnsIntensity,
         } : undefined,
       );
 
@@ -1071,9 +1074,9 @@ async function renderHighlightTape(
     const clipStyle = {
       ...style,
       transitionDuration: instruction.clip.transitionDuration ?? defaultTransitionDuration,
-      entryPunchScale: instruction.clip.entryPunchScale ?? plan?.defaultEntryPunchScale ?? style.entryPunchScale,
-      entryPunchDuration: instruction.clip.entryPunchDuration ?? plan?.defaultEntryPunchDuration ?? style.entryPunchDuration,
-      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? plan?.defaultKenBurnsIntensity ?? style.kenBurnsIntensity,
+      entryPunchScale: instruction.clip.entryPunchScale ?? aiRenderOpts?.defaultEntryPunchScale ?? style.entryPunchScale,
+      entryPunchDuration: instruction.clip.entryPunchDuration ?? aiRenderOpts?.defaultEntryPunchDuration ?? style.entryPunchDuration,
+      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? aiRenderOpts?.defaultKenBurnsIntensity ?? style.kenBurnsIntensity,
     };
 
     console.log(`Export: rendering clip ${i + 1}/${clips.length} id="${instruction.clip.id}" type=${instruction.mediaType} dur=${clipDuration.toFixed(2)}s hasFile=${!!instruction.mediaFile} url=${instruction.mediaUrl?.slice(0, 60)}`);
@@ -1215,6 +1218,9 @@ interface ExportAiRenderOptions {
   strobeFlashAlpha?: number;
   lightLeakColor?: string;
   glitchColors?: [string, string];
+  defaultEntryPunchScale?: number;
+  defaultEntryPunchDuration?: number;
+  defaultKenBurnsIntensity?: number;
 }
 
 

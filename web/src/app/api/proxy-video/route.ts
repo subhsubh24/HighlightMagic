@@ -8,6 +8,10 @@ const ALLOWED_DOMAINS = [
   "api.atlascloud.ai",
   "cdn.atlascloud.ai",
   "storage.googleapis.com",
+  // Atlas Cloud Wan 2.6 T2V outputs (Alibaba OSS)
+  "dashscope-463f.oss-ap-southeast-1.aliyuncs.com",
+  // Atlas Cloud Kling i2v outputs
+  "klingai.com",
 ];
 
 /** Max response size to buffer (100 MB) — prevents OOM from malicious/huge URLs. */
