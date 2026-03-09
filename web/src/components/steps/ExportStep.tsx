@@ -389,15 +389,18 @@ export default function ExportStep() {
       const sfxVolC = cPlan?.sfxVolume ?? 0.8;
       const voVolC = cPlan?.voiceoverVolume ?? 1.0;
 
-      // Pre-fetch remote intro/outro videos as local blobs to avoid canvas tainting.
-      // Cross-origin videos drawn to canvas taint it, causing captureStream() to
-      // produce blank frames. Fetching as blobs makes them same-origin.
+      // Pre-fetch remote intro/outro videos through a same-origin proxy to avoid
+      // canvas tainting. Cross-origin videos drawn to canvas taint it, causing
+      // captureStream() to produce blank frames.
       let introBlobUrl: string | null = null;
       let outroBlobUrl: string | null = null;
       if (hasIntroC) {
         try {
-          const res = await fetch(state.introCard!.videoUrl!);
+          const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(state.introCard!.videoUrl!)}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
           const blob = await res.blob();
+          console.log(`Export: pre-fetched intro video as blob (${blob.size} bytes, type=${blob.type})`);
           introBlobUrl = URL.createObjectURL(blob);
           exportBlobUrls.push(introBlobUrl);
         } catch (e) {
@@ -407,8 +410,11 @@ export default function ExportStep() {
       }
       if (hasOutroC) {
         try {
-          const res = await fetch(state.outroCard!.videoUrl!);
+          const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(state.outroCard!.videoUrl!)}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
           const blob = await res.blob();
+          console.log(`Export: pre-fetched outro video as blob (${blob.size} bytes, type=${blob.type})`);
           outroBlobUrl = URL.createObjectURL(blob);
           exportBlobUrls.push(outroBlobUrl);
         } catch (e) {
