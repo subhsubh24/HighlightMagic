@@ -1381,7 +1381,9 @@ function renderPhotoClip(
       return;
     }
     const img = new window.Image();
-    img.crossOrigin = "anonymous";
+    // Do NOT set crossOrigin — blob URLs don't serve CORS headers and the
+    // browser will refuse to load the image. Not needed anyway since the
+    // render pipeline uses captureStream() which works on tainted canvases.
 
     img.onload = () => {
       const ia = img.width / img.height;
