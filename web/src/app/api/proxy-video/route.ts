@@ -26,12 +26,14 @@ export async function GET(req: Request) {
     }
 
     const contentType = upstream.headers.get("content-type") || "video/mp4";
-    const body = upstream.body;
+    // Buffer the full response to avoid streaming issues through Next.js
+    const buffer = await upstream.arrayBuffer();
 
-    return new Response(body, {
+    return new Response(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
+        "Content-Length": String(buffer.byteLength),
         "Cache-Control": "private, max-age=3600",
       },
     });
