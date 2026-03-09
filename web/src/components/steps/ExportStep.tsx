@@ -389,6 +389,34 @@ export default function ExportStep() {
       const sfxVolC = cPlan?.sfxVolume ?? 0.8;
       const voVolC = cPlan?.voiceoverVolume ?? 1.0;
 
+      // Pre-fetch remote intro/outro videos as local blobs to avoid canvas tainting.
+      // Cross-origin videos drawn to canvas taint it, causing captureStream() to
+      // produce blank frames. Fetching as blobs makes them same-origin.
+      let introBlobUrl: string | null = null;
+      let outroBlobUrl: string | null = null;
+      if (hasIntroC) {
+        try {
+          const res = await fetch(state.introCard!.videoUrl!);
+          const blob = await res.blob();
+          introBlobUrl = URL.createObjectURL(blob);
+          exportBlobUrls.push(introBlobUrl);
+        } catch (e) {
+          console.warn("Export: failed to pre-fetch intro card video, using remote URL", e);
+          introBlobUrl = state.introCard!.videoUrl!;
+        }
+      }
+      if (hasOutroC) {
+        try {
+          const res = await fetch(state.outroCard!.videoUrl!);
+          const blob = await res.blob();
+          outroBlobUrl = URL.createObjectURL(blob);
+          exportBlobUrls.push(outroBlobUrl);
+        } catch (e) {
+          console.warn("Export: failed to pre-fetch outro card video, using remote URL", e);
+          outroBlobUrl = state.outroCard!.videoUrl!;
+        }
+      }
+
       if (hasIntroC) {
         const introClip: EditedClip = {
           id: "__intro__",
@@ -405,7 +433,7 @@ export default function ExportStep() {
         };
         renderClips.push({
           clip: introClip,
-          mediaUrl: state.introCard!.videoUrl!,
+          mediaUrl: introBlobUrl!,
           mediaType: "video",
           filterCSS: "",
           captionText: "",
@@ -459,7 +487,7 @@ export default function ExportStep() {
         };
         renderClips.push({
           clip: outroClip,
-          mediaUrl: state.outroCard!.videoUrl!,
+          mediaUrl: outroBlobUrl!,
           mediaType: "video",
           filterCSS: "",
           captionText: "",
@@ -1197,9 +1225,9 @@ function renderVideoClip(
       return;
     }
     const video = document.createElement("video");
-    // No crossOrigin needed — the rendering pipeline uses captureStream() + MediaRecorder
-    // which works on tainted canvases. Setting crossOrigin causes load failures for
-    // remote URLs without CORS headers (intro/outro cards from Atlas Cloud).
+    // Remote URLs (intro/outro cards) are pre-fetched as local blobs before reaching
+    // here, so no crossOrigin attribute is needed. Cross-origin videos would taint the
+    // canvas and cause captureStream() to produce blank frames.
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
