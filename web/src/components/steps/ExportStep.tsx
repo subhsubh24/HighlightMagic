@@ -468,14 +468,19 @@ export default function ExportStep() {
       // Pre-fetch remote URLs as local blobs to avoid CORS issues with canvas rendering.
       // Blob URLs (from user uploads) are fine as-is, but external URLs (intro/outro cards
       // from Atlas Cloud / DashScope) need to be fetched and converted to blob URLs so the
-      // video element with crossOrigin="anonymous" can load them without CORS errors.
+      // video element can load them without CORS errors.
       for (const rc of validRenderClips) {
         if (rc.mediaUrl && !rc.mediaUrl.startsWith("blob:")) {
           try {
             const resp = await fetch(rc.mediaUrl);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const blob = await resp.blob();
-            const localUrl = URL.createObjectURL(blob);
+            const rawBlob = await resp.blob();
+            // Ensure the blob has a proper video MIME type — some CDNs return
+            // application/octet-stream which prevents the <video> element from loading.
+            const videoBlob = rawBlob.type && rawBlob.type.startsWith("video/")
+              ? rawBlob
+              : new Blob([rawBlob], { type: "video/mp4" });
+            const localUrl = URL.createObjectURL(videoBlob);
             blobUrlsToRevoke.push(localUrl);
             rc.mediaUrl = localUrl;
           } catch (err) {
@@ -1196,7 +1201,11 @@ function renderVideoClip(
       return;
     }
     const video = document.createElement("video");
-    video.crossOrigin = "anonymous";
+    // Only set crossOrigin for remote URLs — blob URLs are same-origin and
+    // setting crossOrigin on them causes load failures (no CORS headers).
+    if (!instruction.mediaUrl.startsWith("blob:")) {
+      video.crossOrigin = "anonymous";
+    }
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
@@ -1385,7 +1394,10 @@ function renderPhotoClip(
       return;
     }
     const img = new window.Image();
-    img.crossOrigin = "anonymous";
+    // Only set crossOrigin for remote URLs — blob URLs are same-origin
+    if (!instruction.mediaUrl.startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
 
     img.onload = () => {
       const ia = img.width / img.height;
