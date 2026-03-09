@@ -440,6 +440,9 @@ export interface ProductionPlan {
   sfxVolume: number;
   voiceoverVolume: number;
   defaultTransitionDuration: number;
+  defaultEntryPunchScale?: number;
+  defaultEntryPunchDuration?: number;
+  defaultKenBurnsIntensity?: number;
   photoDisplayDuration: number;
   loopCrossfadeDuration: number;
   captionEntranceDuration: number;
@@ -447,6 +450,8 @@ export interface ProductionPlan {
   musicDuckRatio: number;
   musicDuckAttack?: number;
   musicDuckRelease?: number;
+  musicFadeInDuration?: number;
+  musicFadeOutDuration?: number;
   beatSyncToleranceMs: number;
   exportBitrate: number;
   watermarkOpacity: number;
@@ -1427,6 +1432,26 @@ A real editor NEVER starts a clip at the beginning of an action or ends after it
 - Every frame that doesn't serve the moment is a frame that reveals it's AI.
 - The goal: when the viewer watches, each clip feels like it starts at EXACTLY the right moment
   and ends at EXACTLY the right moment. No dead air, no overstaying, no setup filler.
+
+MICRO-PAUSES & NEGATIVE SPACE — The secret weapon of elite editors:
+Not every cut should be tight. Occasionally, a clip should BREATHE — hold 0.3-0.8s of
+quiet/still footage before or after the action. This creates:
+- Anticipation: a brief hold before the action makes the viewer lean in
+- Weight: a pause after an emotional moment lets it LAND
+- Rhythm break: after 3-4 fast cuts, one slightly-longer hold resets the viewer's attention
+Think of it like music: the rests between notes matter as much as the notes themselves.
+Use this sparingly — 1-2 moments per tape. Too many pauses = boring. Zero pauses = exhausting.
+
+BEAT-ALIGNED TRIM POINTS — Cuts should feel like they land on a musical grid:
+When choosing startTime and endTime, think about where the music's beats will land:
+- If the music is ~120 BPM, beats land every 0.5s. Trim your clips so transitions land
+  close to these rhythmic intervals (even before beat-sync post-processing).
+- Clip durations that are multiples of the beat interval (2s, 2.5s, 3s at 120 BPM) feel
+  natural because the cuts land on downbeats.
+- Occasional off-beat cuts (syncopation) create energy — like a drummer hitting off-beat.
+  Use these intentionally, not accidentally.
+- The beat-sync engine will fine-tune, but starting with musically-aware trims means
+  the engine has to adjust less, resulting in tighter, more natural-feeling cuts.
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
   If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
@@ -1469,6 +1494,16 @@ designed for what's happening in THAT specific clip. Some clips need dramatic ra
 need subtle curves or even constant speed — match the velocity to the moment's energy.
 If you must, you can set "velocityPreset" instead: "hero","bullet","ramp_out","ramp_in","montage","normal"
 — but custom keyframes are STRONGLY preferred. Using the same preset on multiple clips looks lazy.
+
+VELOCITY IMPERFECTION — The secret to human-feeling speed curves:
+Real editors don't use round numbers. Their muscle memory lands on 0.73x, not 0.75x. On 2.3x, not 2.0x.
+- NEVER use exact values like 0.25, 0.5, 1.0, 2.0, 3.0 for speed — use nearby irregular values
+  like 0.27, 0.48, 1.03, 2.15, 2.8. The irregularity reads as human intuition, not a preset.
+- Position values should also be slightly irregular: 0.33 not 0.3, 0.67 not 0.7, 0.82 not 0.8.
+- Speed transitions should have slightly different acceleration in vs out — real editors ease INTO
+  slow-mo gradually but snap OUT of it harder (or vice versa). The asymmetry feels organic.
+- Occasionally leave a clip at near-constant speed (e.g. 0.97-1.03) — not everything needs ramping.
+  Some of the most powerful moments play at real-time. The contrast makes the speed changes meaningful.
 
 KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
 Place clip boundaries so the moment you want emphasized lands in the slow part of your curve.
@@ -1549,6 +1584,18 @@ COLOR SHIFT PATTERNS that create emotional journeys:
 - Desaturated past → bright present = nostalgia → now (time contrast)
 Don't use one grade for everything. 2-3 intentional shifts across the tape = professional.
 
+COLOR GRADE IMPERFECTION — Real colorists work from a base grade with per-clip tweaks:
+In professional editing, there's a BASE GRADE (the overall look) and per-clip ADJUSTMENTS.
+- Start with a cohesive base: e.g. "saturate(1.15) contrast(1.1) brightness(1.0)"
+- Then TWEAK each clip slightly from that base: one clip gets "brightness(0.95)", another
+  gets "sepia(0.05)" added, another gets "hue-rotate(3deg)" — small, intentional departures.
+- The tweaks should be SUBTLE (±5-10% from base values). If every clip has a wildly different
+  grade, it looks like a random filter slideshow, not a cohesive edit.
+- Exception: 1-2 clips can have a DRAMATICALLY different grade for narrative contrast
+  (e.g. a flashback in desaturated cold tones within an otherwise warm tape).
+- The base grade should feel like a FILM STOCK choice, and the tweaks like exposure/WB
+  corrections a colorist would make shot-by-shot. This reads as "professional color work."
+
 ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
 Match the punch intensity to each clip's entrance energy and the transition preceding it.
 A punch amplifies the transition's impact — use it where it serves the moment.
@@ -1566,6 +1613,18 @@ CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes th
 - Context that transforms meaning: "day 1 vs day 365" / "she had no idea" / "watch this"
 - Reaction trigger: "wait for it" / "the precision." / "obsessed"
 Use captions where they genuinely amplify the moment. You decide the right density for this tape.
+
+CAPTION VOICE AUTHENTICITY — Captions must sound like a REAL PERSON, not AI:
+Write captions the way people actually type on social media — fragments, lowercase, punctuation
+as rhythm, not grammar. The difference between AI captions and human captions:
+  AI: "An incredible goal scored at the perfect moment"  ← sounds like a press release
+  Human: "bro." / "nah this is crazy" / "the way she—" / "not him 💀" / "IT'S GIVING"
+- Use incomplete thoughts, trailing punctuation, reaction words, internet slang
+- Match the voice to the content's audience: sports bros talk different than aesthetic girlies
+- Periods after 1-2 word captions hit HARD: "insane." "finally." "obsessed." "nah."
+- ALL CAPS for peak hype: "NO WAY" "ARE YOU SERIOUS" "LETS GOOO"
+- Em dashes for interrupted thoughts: "the way he just—" "when she said—"
+- Never use complete grammatically correct sentences. Never sound like marketing copy.
 
 CAPTION STYLING — You have FULL CREATIVE CONTROL over every caption's look:
 
@@ -1852,6 +1911,19 @@ Pro editors use SLOW attack + SLOWER release for emotional content, and FAST att
 for hype content. The duck shape is as important as the duck depth.
 Think holistically about the audio stack: if a clip has VO + SFX + music all playing, the mix must breathe.
 
+MUSIC FADE IN/OUT — Professional tapes NEVER start or end with a hard music edge.
+Set "musicFadeInDuration" (0-3 seconds): how long the music fades up from silence at the start.
+  0 = music starts at full volume instantly (only for hard-hitting intros where music IS the hook).
+  0.3-0.5s = quick swell (energy content — music appears fast but not jarring).
+  1.0-2.0s = cinematic fade (emotional content — music gently emerges, builds anticipation).
+  2.0-3.0s = slow bloom (contemplative/artistic — the silence before the music IS the experience).
+Set "musicFadeOutDuration" (0-3 seconds): how long the music fades to silence at the end.
+  0 = hard stop (almost never correct — sounds like a bug).
+  0.5-1.0s = clean exit (standard — music resolves cleanly).
+  1.5-3.0s = graceful tail (emotional content — the music lingers like a memory fading).
+MATCH fade duration to the tape's energy: hype content gets short fades, cinematic gets long ones.
+The fade-out should feel like the music was COMPOSED to end there, not chopped off.
+
 BEAT-SYNC TOLERANCE — How close a cut must be to a beat to snap.
 Set "beatSyncToleranceMs" (5-500 ms): 5-20 for extremely tight sync, 50 standard, 100-500 for loose/relaxed feel.
 
@@ -1903,7 +1975,7 @@ Set "talkingHeadSpeech": "What's up everyone, check out these highlights!" or nu
 null if no voice sample was provided or a talking head intro doesn't fit the content.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2055,6 +2127,9 @@ Respond with ONLY a JSON object:
         sfxVolume?: number;
         voiceoverVolume?: number;
         defaultTransitionDuration?: number;
+        defaultEntryPunchScale?: number;
+        defaultEntryPunchDuration?: number;
+        defaultKenBurnsIntensity?: number;
         thumbnail?: { sourceClipIndex: number; frameTime: number; stylePrompt: string } | null;
         styleTransfer?: { prompt: string; strength: number } | null;
         talkingHeadSpeech?: string | null;
@@ -2065,6 +2140,8 @@ Respond with ONLY a JSON object:
         musicDuckRatio?: number;
         musicDuckAttack?: number;
         musicDuckRelease?: number;
+        musicFadeInDuration?: number;
+        musicFadeOutDuration?: number;
         beatSyncToleranceMs?: number;
         exportBitrate?: number;
         watermarkOpacity?: number;
@@ -2430,6 +2507,8 @@ Respond with ONLY a JSON object:
         musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0, Math.min(1.0, parsed.musicDuckRatio)) : 0.3,
         musicDuckAttack: typeof parsed.musicDuckAttack === "number" ? Math.max(0.05, Math.min(1.0, parsed.musicDuckAttack)) : undefined,
         musicDuckRelease: typeof parsed.musicDuckRelease === "number" ? Math.max(0.1, Math.min(2.0, parsed.musicDuckRelease)) : undefined,
+        musicFadeInDuration: typeof parsed.musicFadeInDuration === "number" ? Math.max(0, Math.min(3, parsed.musicFadeInDuration)) : undefined,
+        musicFadeOutDuration: typeof parsed.musicFadeOutDuration === "number" ? Math.max(0, Math.min(3, parsed.musicFadeOutDuration)) : undefined,
         beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 50,
         exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(4_000_000, Math.min(30_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
         watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,

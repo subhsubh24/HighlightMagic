@@ -808,6 +808,8 @@ export default function DetectingStep() {
             musicDuckRatio: productionPlan.musicDuckRatio ?? 0.3,
             musicDuckAttack: productionPlan.musicDuckAttack,
             musicDuckRelease: productionPlan.musicDuckRelease,
+            musicFadeInDuration: productionPlan.musicFadeInDuration,
+            musicFadeOutDuration: productionPlan.musicFadeOutDuration,
             beatSyncToleranceMs: productionPlan.beatSyncToleranceMs ?? 50,
             exportBitrate: productionPlan.exportBitrate ?? 12_000_000,
             watermarkOpacity: productionPlan.watermarkOpacity ?? 0.4,

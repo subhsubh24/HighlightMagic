@@ -143,6 +143,10 @@ export interface AiProductionPlan {
   musicDuckAttack?: number;
   /** Music duck release time in seconds — how fast music fades back up after VO/SFX (0.1-2.0s) */
   musicDuckRelease?: number;
+  /** Music fade-in duration at tape start (0-3s). 0 = no fade, starts at full volume. */
+  musicFadeInDuration?: number;
+  /** Music fade-out duration at tape end (0-3s). 0 = hard stop, >0 = graceful fade. */
+  musicFadeOutDuration?: number;
   /** AI-decided beat-sync tolerance in ms (20-200ms) */
   beatSyncToleranceMs: number;
   /** AI-decided export bitrate in bps */

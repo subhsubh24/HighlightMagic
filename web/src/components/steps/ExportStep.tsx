@@ -591,6 +591,8 @@ export default function ExportStep() {
         cPlan?.musicDuckRatio ?? 0.3,
         cPlan?.musicDuckAttack ?? 0.2,
         cPlan?.musicDuckRelease ?? 0.3,
+        cPlan?.musicFadeInDuration ?? 0,
+        cPlan?.musicFadeOutDuration ?? 0,
         cPlan?.loopCrossfadeDuration ?? 0.5,
         cPlan?.exportBitrate ?? 12_000_000,
         cPlan?.watermarkOpacity ?? 0.4,
@@ -954,6 +956,25 @@ interface RenderClipInstruction {
   mediaFile?: File | Blob;
 }
 
+/**
+ * Micro-settle easing — gives each clip a subtle "landing" feel.
+ * In the first SETTLE_DURATION seconds, the clip has a tiny extra scale and Y offset
+ * that eases out with cubic-out, simulating the physical settle of a camera cut.
+ * Returns {scale, offsetY} — multiply scale into totalScale, add offsetY to dy.
+ */
+const SETTLE_DURATION = 0.18; // seconds
+const SETTLE_SCALE = 1.006;   // very subtle extra scale at t=0
+const SETTLE_OFFSET_Y = -2;   // pixels: tiny upward offset that settles down
+function getMicroSettle(elapsedSec: number): { scale: number; offsetY: number } {
+  if (elapsedSec >= SETTLE_DURATION) return { scale: 1, offsetY: 0 };
+  // Cubic-out easing: 1 - (1-t)^3
+  const t = Math.min(1, elapsedSec / SETTLE_DURATION);
+  const ease = 1 - Math.pow(1 - t, 3);
+  const scale = SETTLE_SCALE + (1 - SETTLE_SCALE) * ease; // starts at SETTLE_SCALE, eases to 1
+  const offsetY = SETTLE_OFFSET_Y * (1 - ease); // starts at SETTLE_OFFSET_Y, eases to 0
+  return { scale, offsetY };
+}
+
 async function renderHighlightTape(
   clips: RenderClipInstruction[],
   watermarkText: string | null,
@@ -968,6 +989,8 @@ async function renderHighlightTape(
   musicDuckRatio: number = 0.3,
   musicDuckAttack: number = 0.2,
   musicDuckRelease: number = 0.3,
+  musicFadeInDuration: number = 0,
+  musicFadeOutDuration: number = 0,
   loopCrossfadeDuration: number = 0.5,
   exportBitrate: number = 12_000_000,
   watermarkOpacity: number = 0.4,
@@ -1013,11 +1036,8 @@ async function renderHighlightTape(
     debugLog(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
   }
 
-  // Audio pipeline: captures original clip audio + optional background music
-  const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
-  const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease);
   // Calculate totalDuration accounting for velocity, beat-sync, VO extension, and transition overlaps
+  // (computed before audio pipeline so we can pass it for music fade-out timing)
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
     const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
@@ -1036,6 +1056,11 @@ async function renderHighlightTape(
       totalDuration -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
     }
   }
+
+  // Audio pipeline: captures original clip audio + optional background music
+  const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
+  const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration);
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,
@@ -1363,25 +1388,28 @@ function renderVideoClip(
             beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
           }
 
+          // Micro-settle: subtle scale+position ease on clip entry
+          const settle = getMicroSettle(canvasElapsedSec);
+
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
             const progress = canvasElapsedSec / style.transitionDuration;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
               const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-              const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale;
+              const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale * settle.scale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
               const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
-              const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
+              const dy = (canvas.height - dh) / 2 + inTransform.offsetY + settle.offsetY;
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, dx, dy, dw, dh);
               ctx.filter = "none";
             }, neonColorHexes, aiRenderOpts);
           } else {
-            const totalScale = entryScale * beatPulse * kenBurnsScale;
+            const totalScale = entryScale * beatPulse * kenBurnsScale * settle.scale;
             const dw = baseW * totalScale;
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2;
-            const dy = (canvas.height - dh) / 2;
+            const dy = (canvas.height - dh) / 2 + settle.offsetY;
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
@@ -1528,25 +1556,28 @@ async function renderPhotoClip(
         beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
       }
 
+      // Micro-settle: subtle scale+position ease on clip entry
+      const settle = getMicroSettle(elapsedSec);
+
       if (crossfadeFrom && transType && elapsedMs < transitionMs) {
         const progress = elapsedMs / transitionMs;
         renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
           const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-          const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse;
+          const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse * settle.scale;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
           const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
-          const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
+          const dy = (canvas.height - dh) / 2 + inTransform.offsetY + settle.offsetY;
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
           ctx.drawImage(imgSource, dx, dy, dw, dh);
           ctx.filter = "none";
         }, neonColorHexes, aiRenderOpts);
       } else {
-        const totalScale = kenBurnsScale * entryScale * beatPulse;
+        const totalScale = kenBurnsScale * entryScale * beatPulse * settle.scale;
         const dw = baseW * totalScale;
         const dh = baseH * totalScale;
         const dx = (canvas.width - dw) / 2;
-        const dy = (canvas.height - dh) / 2;
+        const dy = (canvas.height - dh) / 2 + settle.offsetY;
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
