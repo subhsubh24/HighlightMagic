@@ -81,6 +81,9 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     audioFadeIn: c.audioFadeIn,
     audioFadeOut: c.audioFadeOut,
     captionAnimationIntensity: c.captionAnimationIntensity,
+    beatFlashThreshold: c.beatFlashThreshold,
+    captionIdlePulse: c.captionIdlePulse,
+    customCaptionGlowSpread: c.customCaptionGlowSpread,
   }));
 }
 
@@ -846,6 +849,12 @@ export default function DetectingStep() {
             finalClipWarmth: productionPlan.finalClipWarmth,
             filmStock: productionPlan.filmStock,
             audioBreaths: productionPlan.audioBreaths,
+            beatFlashThreshold: productionPlan.beatFlashThreshold,
+            vignetteHardness: productionPlan.vignetteHardness,
+            watermarkFontSize: productionPlan.watermarkFontSize,
+            watermarkYOffset: productionPlan.watermarkYOffset,
+            settleEasing: productionPlan.settleEasing,
+            exitDecelEasing: productionPlan.exitDecelEasing,
             defaultEntryPunchScale: productionPlan.defaultEntryPunchScale,
             defaultEntryPunchDuration: productionPlan.defaultEntryPunchDuration,
             defaultKenBurnsIntensity: productionPlan.defaultKenBurnsIntensity,

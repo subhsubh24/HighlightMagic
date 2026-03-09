@@ -162,6 +162,8 @@ export interface AiProductionPlan {
   beatPulseIntensity?: number;
   /** Beat flash overlay max opacity (0 = none, 0.12 = subtle, 0.3 = punchy) */
   beatFlashOpacity?: number;
+  /** Beat intensity threshold for flash trigger (0-1). Lower = reacts to weaker beats. */
+  beatFlashThreshold?: number;
 
   /** Caption font size as fraction of canvas height (0.02 = small, 0.025 = default, 0.04 = large) */
   captionFontSize?: number;
@@ -195,6 +197,12 @@ export interface AiProductionPlan {
   vignetteIntensity?: number;
   /** Vignette inner radius as fraction of outer (0.2 = tight spotlight, 0.45 = default, 0.7 = wide). */
   vignetteTightness?: number;
+  /** Vignette gradient hardness (0-1). 0 = smooth falloff, 0.5 = standard, 1 = sharp edge. */
+  vignetteHardness?: number;
+  /** Watermark font size as fraction of canvas height (0.012 = small, 0.015 = default, 0.025 = large). */
+  watermarkFontSize?: number;
+  /** Watermark vertical position as fraction of canvas height from bottom (0.02 = tight, 0.03 = default, 0.06 = high). */
+  watermarkYOffset?: number;
   /** Caption appear delay after cut in seconds (0 = instant, 0.12 = natural, 0.3 = dramatic). */
   captionAppearDelay?: number;
   /** Exit deceleration speed multiplier (0.92 = heavy, 0.97 = subtle, 1.0 = none). */
@@ -205,6 +213,10 @@ export interface AiProductionPlan {
   settleScale?: number;
   /** Micro-settle duration in seconds (0.1 = snappy, 0.18 = smooth, 0.25 = cinematic). */
   settleDuration?: number;
+  /** Micro-settle easing curve: 'cubic' (default), 'quad' (softer), 'expo' (snappy), 'linear'. */
+  settleEasing?: string;
+  /** Exit decel easing curve: 'quad' (default), 'cubic' (heavier), 'linear' (mechanical). */
+  exitDecelEasing?: string;
   /** Default clip audio volume when music is present (0-1). Per-clip overrides this. */
   clipAudioVolume?: number;
   /** Warmth shift on the final clip. true = default warmth, false = none, object = custom. */
@@ -326,6 +338,12 @@ export interface EditedClip {
   beatPulseIntensity?: number;
   /** Per-clip beat flash overlay opacity (0-0.5). Overrides plan-level beatFlashOpacity. */
   beatFlashOpacity?: number;
+  /** Per-clip beat flash threshold (0-1). Lower = reacts to weaker beats. */
+  beatFlashThreshold?: number;
+  /** Per-clip caption idle pulse intensity (0-1). Controls how much text "breathes" during steady state. */
+  captionIdlePulse?: number;
+  /** Per-clip caption glow spread multiplier (0.5-3). Controls second glow layer blur ratio. */
+  customCaptionGlowSpread?: number;
   /** Per-clip audio bleed fade-in duration in seconds (0.01-0.3). Controls how clip audio starts. */
   audioFadeIn?: number;
   /** Per-clip audio bleed fade-out duration in seconds (0.01-0.3). Controls how clip audio ends. */

@@ -430,6 +430,9 @@ export interface DetectedClip {
   transitionIntensity?: number;
   beatPulseIntensity?: number;
   beatFlashOpacity?: number;
+  beatFlashThreshold?: number;
+  captionIdlePulse?: number;
+  customCaptionGlowSpread?: number;
   audioFadeIn?: number;
   audioFadeOut?: number;
   captionAnimationIntensity?: number;
@@ -467,6 +470,7 @@ export interface ProductionPlan {
   // Rendering fine-tuning (all optional — AI creative control)
   beatPulseIntensity?: number;
   beatFlashOpacity?: number;
+  beatFlashThreshold?: number;
   captionFontSize?: number;
   captionVerticalPosition?: number;
   captionShadowColor?: string;
@@ -482,11 +486,16 @@ export interface ProductionPlan {
   grainOpacity?: number;
   vignetteIntensity?: number;
   vignetteTightness?: number;
+  vignetteHardness?: number;
+  watermarkFontSize?: number;
+  watermarkYOffset?: number;
   captionAppearDelay?: number;
   exitDecelSpeed?: number;
   exitDecelDuration?: number;
   settleScale?: number;
   settleDuration?: number;
+  settleEasing?: string;
+  exitDecelEasing?: string;
   clipAudioVolume?: number;
   finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
   filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
@@ -2032,6 +2041,15 @@ GRAIN & VIGNETTE — Frame-level texture:
 "vignetteTightness" (0.15-0.75): how tight the vignette spotlight is. 0.2 = dramatic tight spotlight, 0.45 = standard lens,
   0.65 = wide/subtle. Tight vignette draws the eye to center. Wide vignette is barely noticeable.
   Emotional/cinematic → tighter (0.25-0.35). Bright/fun → wider (0.55-0.7).
+"vignetteHardness" (0-1): gradient falloff sharpness. 0 = smooth dreamy falloff. 0.5 = standard.
+  1 = sharp edge (almost a mask). Soft for romantic/dreamy, sharp for thriller/dark.
+  This matters — a hard vignette feels claustrophobic, a soft one feels cozy. Match the mood.
+
+WATERMARK SIZING:
+"watermarkFontSize" (0.008-0.04): watermark text size as fraction of canvas height.
+  0.012 = small/discreet, 0.015 = standard, 0.025 = prominent. Match content professionalism.
+"watermarkYOffset" (0.01-0.1): distance from bottom as fraction of canvas height.
+  0.02 = tight to edge, 0.03 = default, 0.06 = higher. Adjust based on content near bottom of frame.
 
 CAPTION TIMING:
 "captionAppearDelay" (0-0.5 seconds): delay before caption shows after clip starts.
@@ -2041,12 +2059,16 @@ CAPTION TIMING:
 CLIP ENTRY FEEL:
 "settleScale" (1.0-1.02): micro zoom on clip entry that eases out. 1.0 = no settle, 1.005 = subtle, 1.01 = noticeable.
 "settleDuration" (0.05-0.35 seconds): how long the settle eases. 0.1 = snappy, 0.18 = smooth, 0.3 = cinematic.
-Hype content → higher scale (1.008), shorter duration (0.1). Calm content → lower scale (1.003), longer duration (0.25).
+"settleEasing": the curve shape. "cubic" = smooth natural (default). "quad" = softer/gentler. "expo" = sharp snap-to-stop.
+  "linear" = mechanical/robotic (rarely good). Hype → "expo" (snaps into place). Cinematic → "cubic". Dreamy → "quad".
+Hype content → higher scale (1.008), shorter duration (0.1), "expo". Calm → lower scale (1.003), longer (0.25), "quad".
 
 CLIP EXIT FEEL:
 "exitDecelSpeed" (0.85-1.0): subtle playback slowdown at clip end. 1.0 = none, 0.97 = subtle, 0.93 = dramatic.
 "exitDecelDuration" (0-0.3 seconds): how long before clip end the decel starts. 0 = none, 0.12 = quick, 0.2 = smooth.
-Fast-cut content → no decel (1.0/0). Cinematic → subtle decel (0.96/0.15). Emotional → heavier (0.93/0.2).
+"exitDecelEasing": curve shape. "quad" = natural weight (default). "cubic" = heavier/dramatic. "linear" = mechanical.
+  Cinematic → "cubic" (heavy settle). Punchy → "quad" (natural). Hype → "linear" or no decel.
+Fast-cut content → no decel (1.0/0). Cinematic → subtle decel (0.96/0.15/"cubic"). Emotional → heavier (0.93/0.2).
 
 CLIP AUDIO:
 "clipAudioVolume" (0-1): default volume for original clip audio when music is playing.
@@ -2075,8 +2097,26 @@ Each clip can set "beatPulseIntensity" (0-0.1) to override the tape default.
   0 = no beat reaction. 0.015 = subtle. 0.04 = pronounced. 0.08 = aggressive.
 Each clip can set "beatFlashOpacity" (0-0.5) to override the tape default.
   0 = no flash. 0.12 = subtle. 0.25 = punchy. 0.4 = dramatic.
+Each clip can set "beatFlashThreshold" (0-1) to control WHICH beats trigger the flash.
+  0.2 = reacts to every weak beat (hyperactive). 0.5 = standard (only clear beats). 0.8 = only the strongest downbeats.
+  This is CRITICAL for feel. An intro clip at 0.8 → only responds to big hits, creating tension.
+  The drop clip at 0.3 → every beat fires the flash, creating overwhelming energy. Then pull back to 0.7 for the close.
+  A human editor instinctively does this — they don't flash on every beat, they CHOOSE which beats to honor.
+  The tape-level "beatFlashThreshold" sets the default. Per-clip overrides it.
 Create a DYNAMIC ARC: mellow intro clips → barely react to beats. Climax clips → every beat HITS.
 This is what separates pro edits from amateur — the energy builds, not flatlines.
+
+CAPTION IDLE PULSE — Per-clip:
+Each clip can set "captionIdlePulse" (0-1) to control how much the text "breathes" while visible.
+  0 = dead still (serious, intense). 0.3 = barely alive. 0.5 = gentle breathing (default). 1.0 = lively pulsing.
+  Emotional/quiet → 0.1 (still, contemplative). Fun/party → 0.7 (bouncy). Action → 0 (no distraction from visuals).
+  Text that sits perfectly still feels dead. Text that pulses too much feels amateur. Find the moment's truth.
+
+CAPTION GLOW SPREAD — Per-clip:
+Each clip can set "captionGlowSpread" (0.5-3.0) to control the glow halo radius ratio.
+  The glow has two layers: inner (sharp) and outer (soft). This controls how far the outer extends.
+  0.5 = tight concentrated glow. 1.0 = compact (good for neon). 1.5 = standard spread. 2.5 = wide dreamy aura.
+  Neon/cyberpunk → 1.0 (sharp). Dreamy/romantic → 2.0+. Clean/minimal → skip glow entirely.
 
 AUDIO BLEED SHAPING — Per-clip:
 Each clip can set "audioFadeIn" (0.01-0.3 seconds) and "audioFadeOut" (0.01-0.3 seconds).
@@ -2092,15 +2132,27 @@ Each clip can set "captionAnimationIntensity" (0-1) to scale how dramatic the ca
   Emotional/quiet clips → lower (0.3-0.5). Hype/action clips → higher (0.8-1.0).
   This makes text feel matched to the moment rather than uniformly animated.
 
-CUSTOM VELOCITY KEYFRAMES — Per-clip:
-Each clip can set "velocityKeyframes" as [{position: 0-1, speed: 0.1-4.0}] for custom speed ramping.
-  position = normalized position in clip (0 = start, 1 = end). speed = playback rate.
-  PREFER custom keyframes over presets when the moment needs specific timing.
-  Time the slow-mo to the EXACT moment of impact, not a generic curve.
-  Example: a dunk → [{position: 0, speed: 2.0}, {position: 0.3, speed: 2.5}, {position: 0.4, speed: 0.2},
-    {position: 0.55, speed: 0.2}, {position: 0.7, speed: 1.5}, {position: 1, speed: 1.0}]
-  The slow-mo hits at 0.4 — right when the ball goes through the hoop. That precision is what makes it viral.
-  A kiss → slow-mo earlier. An explosion → slow-mo later. Read the content and TIME IT.
+CUSTOM VELOCITY KEYFRAMES — Per-clip (STRONGLY PREFERRED over velocity presets):
+ALWAYS use "velocityKeyframes" instead of generic presets for any clip that has a clear moment of impact.
+  Named presets ("hero", "bullet", "montage") are training wheels — they apply generic curves blind to content.
+  You can SEE the frames. You know WHERE the peak moment is. Author the speed curve to HIT that exact moment.
+  Format: [{position: 0-1, speed: 0.1-4.0}]. position = normalized clip position. speed = playback rate.
+
+  The secret: vary the CONTRAST between speeds. A dunk at constant 0.3x is boring.
+  Fast → SLAM to 0.15x at impact → fast out is electrifying. The bigger the speed contrast, the more dramatic.
+
+  Example patterns:
+  - Impact moment (dunk, hit, catch): [{position:0, speed:2.0}, {position:0.3, speed:2.5}, {position:0.38, speed:0.15},
+    {position:0.55, speed:0.15}, {position:0.7, speed:1.8}, {position:1, speed:1.0}]
+  - Emotional reveal: [{position:0, speed:1.0}, {position:0.4, speed:0.6}, {position:0.5, speed:0.25},
+    {position:0.7, speed:0.4}, {position:1, speed:1.0}]
+  - Build-up: [{position:0, speed:0.5}, {position:0.3, speed:0.8}, {position:0.6, speed:1.5},
+    {position:0.8, speed:2.5}, {position:1, speed:3.0}]
+  - Montage beat hit: [{position:0, speed:1.5}, {position:0.45, speed:0.3}, {position:0.55, speed:0.3},
+    {position:1, speed:2.0}]
+
+  Only fall back to named presets for clips where you genuinely can't identify a specific moment.
+  Set velocityPreset to "normal" and use velocityKeyframes for custom curves — keyframes take priority.
 
 AUDIO BREATHS — Planned moments of silence:
 Set "audioBreaths" to an array of [{time, duration, depth}] or omit for none.
@@ -2114,7 +2166,7 @@ Use 1-3 per tape MAX. Place them at:
 These are incredibly powerful when used sparingly. Overuse kills the effect.
 
 Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7, "beatPulseIntensity": 0.02, "beatFlashOpacity": 0.15, "audioFadeIn": 0.02, "audioFadeOut": 0.08, "captionAnimationIntensity": 0.8}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "vignetteTightness": 0.4, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "clipAudioVolume": 0.4, "finalClipWarmth": {"sepia": 0.06, "saturation": 0.04, "fadeIn": 2.0}, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1}]}`;
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7, "beatPulseIntensity": 0.02, "beatFlashOpacity": 0.15, "beatFlashThreshold": 0.4, "captionIdlePulse": 0.5, "captionGlowSpread": 1.5, "audioFadeIn": 0.02, "audioFadeOut": 0.08, "captionAnimationIntensity": 0.8}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.5, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "vignetteTightness": 0.4, "vignetteHardness": 0.5, "watermarkFontSize": 0.015, "watermarkYOffset": 0.03, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.4, "finalClipWarmth": {"sepia": 0.06, "saturation": 0.04, "fadeIn": 2.0}, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1}]}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2258,6 +2310,9 @@ Respond with ONLY a JSON object:
           transitionIntensity?: number;
           beatPulseIntensity?: number;
           beatFlashOpacity?: number;
+          beatFlashThreshold?: number;
+          captionIdlePulse?: number;
+          captionGlowSpread?: number;
           audioFadeIn?: number;
           audioFadeOut?: number;
           captionAnimationIntensity?: number;
@@ -2295,6 +2350,7 @@ Respond with ONLY a JSON object:
         // Rendering fine-tuning
         beatPulseIntensity?: number;
         beatFlashOpacity?: number;
+        beatFlashThreshold?: number;
         captionFontSize?: number;
         captionVerticalPosition?: number;
         captionShadowColor?: string;
@@ -2310,11 +2366,16 @@ Respond with ONLY a JSON object:
         grainOpacity?: number;
         vignetteIntensity?: number;
         vignetteTightness?: number;
+        vignetteHardness?: number;
+        watermarkFontSize?: number;
+        watermarkYOffset?: number;
         captionAppearDelay?: number;
         exitDecelSpeed?: number;
         exitDecelDuration?: number;
         settleScale?: number;
         settleDuration?: number;
+        settleEasing?: string;
+        exitDecelEasing?: string;
         clipAudioVolume?: number;
         finalClipWarmth?: boolean | { sepia?: number; saturation?: number; fadeIn?: number };
         filmStock?: { grain?: number; warmth?: number; contrast?: number; fadedBlacks?: number };
@@ -2470,6 +2531,9 @@ Respond with ONLY a JSON object:
         transitionIntensity: typeof p.transitionIntensity === "number" ? Math.max(0, Math.min(1, p.transitionIntensity)) : undefined,
         beatPulseIntensity: typeof p.beatPulseIntensity === "number" ? Math.max(0, Math.min(0.1, p.beatPulseIntensity)) : undefined,
         beatFlashOpacity: typeof p.beatFlashOpacity === "number" ? Math.max(0, Math.min(0.5, p.beatFlashOpacity)) : undefined,
+        beatFlashThreshold: typeof p.beatFlashThreshold === "number" ? Math.max(0, Math.min(1, p.beatFlashThreshold)) : undefined,
+        captionIdlePulse: typeof p.captionIdlePulse === "number" ? Math.max(0, Math.min(1, p.captionIdlePulse)) : undefined,
+        customCaptionGlowSpread: typeof p.captionGlowSpread === "number" ? Math.max(0.5, Math.min(3, p.captionGlowSpread)) : undefined,
         audioFadeIn: typeof p.audioFadeIn === "number" ? Math.max(0.01, Math.min(0.3, p.audioFadeIn)) : undefined,
         audioFadeOut: typeof p.audioFadeOut === "number" ? Math.max(0.01, Math.min(0.3, p.audioFadeOut)) : undefined,
         captionAnimationIntensity: typeof p.captionAnimationIntensity === "number" ? Math.max(0, Math.min(1, p.captionAnimationIntensity)) : undefined,
@@ -2695,6 +2759,7 @@ Respond with ONLY a JSON object:
         // ── New AI rendering controls ──
         beatPulseIntensity: typeof parsed.beatPulseIntensity === "number" ? Math.max(0, Math.min(0.1, parsed.beatPulseIntensity)) : undefined,
         beatFlashOpacity: typeof parsed.beatFlashOpacity === "number" ? Math.max(0, Math.min(0.5, parsed.beatFlashOpacity)) : undefined,
+        beatFlashThreshold: typeof parsed.beatFlashThreshold === "number" ? Math.max(0, Math.min(1, parsed.beatFlashThreshold)) : undefined,
         captionFontSize: typeof parsed.captionFontSize === "number" ? Math.max(0.01, Math.min(0.08, parsed.captionFontSize)) : undefined,
         captionVerticalPosition: typeof parsed.captionVerticalPosition === "number" ? Math.max(0.1, Math.min(0.95, parsed.captionVerticalPosition)) : undefined,
         captionShadowColor: typeof parsed.captionShadowColor === "string" ? parsed.captionShadowColor.slice(0, 50) : undefined,
@@ -2711,11 +2776,16 @@ Respond with ONLY a JSON object:
         grainOpacity: typeof parsed.grainOpacity === "number" ? Math.max(0, Math.min(0.1, parsed.grainOpacity)) : undefined,
         vignetteIntensity: typeof parsed.vignetteIntensity === "number" ? Math.max(0, Math.min(0.4, parsed.vignetteIntensity)) : undefined,
         vignetteTightness: typeof parsed.vignetteTightness === "number" ? Math.max(0.15, Math.min(0.75, parsed.vignetteTightness)) : undefined,
+        vignetteHardness: typeof parsed.vignetteHardness === "number" ? Math.max(0, Math.min(1, parsed.vignetteHardness)) : undefined,
+        watermarkFontSize: typeof parsed.watermarkFontSize === "number" ? Math.max(0.008, Math.min(0.04, parsed.watermarkFontSize)) : undefined,
+        watermarkYOffset: typeof parsed.watermarkYOffset === "number" ? Math.max(0.01, Math.min(0.1, parsed.watermarkYOffset)) : undefined,
         captionAppearDelay: typeof parsed.captionAppearDelay === "number" ? Math.max(0, Math.min(0.5, parsed.captionAppearDelay)) : undefined,
         exitDecelSpeed: typeof parsed.exitDecelSpeed === "number" ? Math.max(0.85, Math.min(1.0, parsed.exitDecelSpeed)) : undefined,
         exitDecelDuration: typeof parsed.exitDecelDuration === "number" ? Math.max(0, Math.min(0.3, parsed.exitDecelDuration)) : undefined,
         settleScale: typeof parsed.settleScale === "number" ? Math.max(1.0, Math.min(1.02, parsed.settleScale)) : undefined,
         settleDuration: typeof parsed.settleDuration === "number" ? Math.max(0.05, Math.min(0.35, parsed.settleDuration)) : undefined,
+        settleEasing: (typeof parsed.settleEasing === "string" && ["cubic", "quad", "expo", "linear"].includes(parsed.settleEasing)) ? parsed.settleEasing : undefined,
+        exitDecelEasing: (typeof parsed.exitDecelEasing === "string" && ["quad", "cubic", "linear"].includes(parsed.exitDecelEasing)) ? parsed.exitDecelEasing : undefined,
         clipAudioVolume: typeof parsed.clipAudioVolume === "number" ? Math.max(0, Math.min(1, parsed.clipAudioVolume)) : undefined,
         finalClipWarmth: (() => {
           if (typeof parsed.finalClipWarmth === "boolean") return parsed.finalClipWarmth;

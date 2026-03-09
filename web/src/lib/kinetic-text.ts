@@ -62,7 +62,8 @@ export function getKineticTransform(
   custom?: CustomCaptionParams,
   entranceDuration: number = DEFAULT_ENTRANCE_DURATION,
   exitDuration: number = DEFAULT_EXIT_DURATION,
-  animationIntensity: number = 1.0
+  animationIntensity: number = 1.0,
+  idlePulse: number = 1.0
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -104,7 +105,7 @@ export function getKineticTransform(
   }
 
   // Steady state — apply idle effects based on animation type
-  return getIdleAnimationByType(animation, localTime, custom);
+  return getIdleAnimationByType(animation, localTime, custom, idlePulse);
 }
 
 /** Map named caption styles to their default animation type. */
@@ -213,7 +214,7 @@ function getEntranceAnimationByType(
 /**
  * Idle animations by animation type.
  */
-function getIdleAnimationByType(animation: string, time: number, custom?: CustomCaptionParams): KineticTransform {
+function getIdleAnimationByType(animation: string, time: number, custom?: CustomCaptionParams, idlePulse: number = 1.0): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
     offsetY: 0,
@@ -227,16 +228,16 @@ function getIdleAnimationByType(animation: string, time: number, custom?: Custom
 
   switch (animation) {
     case "flicker": {
-      const pulse = 0.6 + Math.sin(time * 3) * 0.2;
+      const pulse = 0.6 + Math.sin(time * 3) * 0.2 * idlePulse;
       const r = glowR > 0 ? glowR : 15;
-      return { ...base, glowRadius: r + Math.sin(time * 2) * (r / 3), glowAlpha: pulse };
+      return { ...base, glowRadius: r + Math.sin(time * 2) * (r / 3) * idlePulse, glowAlpha: pulse };
     }
 
     case "pop":
-      return { ...base, scale: 1 + Math.sin(time * 1.5) * 0.008, glowRadius: glowR, glowAlpha: glowR > 0 ? 0.6 : 0 };
+      return { ...base, scale: 1 + Math.sin(time * 1.5) * 0.008 * idlePulse, glowRadius: glowR, glowAlpha: glowR > 0 ? 0.6 : 0 };
 
     default:
-      return glowR > 0 ? { ...base, glowRadius: glowR, glowAlpha: 0.6 + Math.sin(time * 2) * 0.15 } : base;
+      return glowR > 0 ? { ...base, glowRadius: glowR, glowAlpha: 0.6 + Math.sin(time * 2) * 0.15 * idlePulse } : base;
   }
 }
 
@@ -257,7 +258,9 @@ export function drawKineticCaption(
   /** AI-decided shadow color (CSS color, default "rgba(0,0,0,0.7)") */
   shadowColor?: string,
   /** AI-decided shadow blur (pixels, default 8) */
-  shadowBlur?: number
+  shadowBlur?: number,
+  /** AI-decided glow spread multiplier (default 1.5) */
+  glowSpread?: number
 ) {
   if (!text || transform.alpha <= 0) return;
 
@@ -323,7 +326,7 @@ export function drawKineticCaption(
 
       // Second glow layer
       ctx.shadowColor = hexToRgba(glowColor2, transform.glowAlpha * 0.7);
-      ctx.shadowBlur = transform.glowRadius * 1.5;
+      ctx.shadowBlur = transform.glowRadius * (glowSpread ?? 1.5);
       ctx.fillText(text, 0, 0);
 
       ctx.shadowBlur = 0;
