@@ -1360,7 +1360,7 @@ function renderVideoClip(
   });
 }
 
-function renderPhotoClip(
+async function renderPhotoClip(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
