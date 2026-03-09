@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image as ImageIcon, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
@@ -305,7 +305,7 @@ export default function ResultsStep() {
                     <AlertTriangle className="h-2.5 w-2.5 text-red-400" />
                   ) : hasAnimatedVideo ? (
                     <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
-                  ) : isPhoto ? <Image className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
+                  ) : isPhoto ? <ImageIcon className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                 </div>
               </div>
 

@@ -208,6 +208,7 @@ export default function TapePreviewPlayer() {
     }
 
     return entries;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally list specific state slices to avoid full-state rebuilds
   }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard, state.aiProductionPlan?.defaultTransitionDuration, state.voiceoverSegments, state.aiProductionPlan?.voiceover?.delaySec]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
@@ -245,6 +246,7 @@ export default function TapePreviewPlayer() {
         }
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- getMediaFile only reads state.mediaFiles which is already a dep
   }, [timeline, state.mediaFiles]);
 
   // Sync mute state to all active video elements + audio mixer
@@ -440,6 +442,7 @@ export default function TapePreviewPlayer() {
         mixerRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mute/volume changes handled by separate sync effects; plan props read once at build time
   }, [timeline, state.sfxTracks, state.voiceoverSegments, state.aiMusicStatus, state.aiMusicUrl]);
 
   /** Start all audio layers at the correct offset from the given playback time */
@@ -760,6 +763,7 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- style props are stable during playback; including them would reset the render loop
     [timeline, fallbackTransition, drawMediaFrame, beatGrid, state.aiProductionPlan]
   );
 
@@ -840,9 +844,11 @@ export default function TapePreviewPlayer() {
 
   // Cleanup on unmount
   useEffect(() => {
+    const pb = pbRef.current;
+    const mediaMap = mediaMapRef.current;
     return () => {
-      cancelAnimationFrame(pbRef.current.raf);
-      for (const [, el] of mediaMapRef.current) {
+      cancelAnimationFrame(pb.raf);
+      for (const [, el] of mediaMap) {
         if (el instanceof HTMLVideoElement) el.pause();
       }
       if (mixerRef.current) {

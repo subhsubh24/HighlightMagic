@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2, Wand2, Volume2, Type, Palette, Video, Zap } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image as ImageIcon, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2, Wand2, Volume2, Type, Palette, Video, Zap } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { haptic, uuid } from "@/lib/utils";
@@ -271,7 +271,7 @@ export default function UploadStep() {
 
                   {/* Type badge + duration */}
                   <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <Image className="h-2.5 w-2.5" />}
+                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
                     {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
                   </div>
 

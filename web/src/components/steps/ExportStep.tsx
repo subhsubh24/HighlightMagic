@@ -656,6 +656,7 @@ export default function ExportStep() {
       // Clean up fresh blob URLs created for this export
       exportBlobUrls.forEach((u) => URL.revokeObjectURL(u));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- generateThumbnail is stable and called conditionally at end of export
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
   const handleDownload = () => {

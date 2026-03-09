@@ -2616,7 +2616,14 @@ Respond with ONLY a JSON object:
       // Helper: truncate card text to 3 words max for frame fitting
       const truncateCardText = (text: string): string => {
         const words = text.trim().split(/\s+/).slice(0, 3);
-        return words.join(" ").slice(0, 30); // 3 words, max 30 chars
+        let result = words.join(" ");
+        // Trim to 30 chars but avoid cutting mid-word
+        if (result.length > 30) {
+          result = result.slice(0, 30);
+          const lastSpace = result.lastIndexOf(" ");
+          if (lastSpace > 0) result = result.slice(0, lastSpace);
+        }
+        return result;
       };
 
       // Helper: ensure stylePrompt references the truncated text and enforces portrait framing
@@ -2629,7 +2636,7 @@ Respond with ONLY a JSON object:
         // If the prompt references the original (pre-truncation) text, replace it with the truncated version
         // to ensure T2V renders the text that actually fits in the frame
         if (originalText !== truncatedText && prompt.includes(originalText)) {
-          prompt = prompt.replace(originalText, truncatedText);
+          prompt = prompt.replaceAll(originalText, truncatedText);
         }
         // Ensure the truncated text content is referenced in the prompt
         if (!prompt.includes(truncatedText)) {

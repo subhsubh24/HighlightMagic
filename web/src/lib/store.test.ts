@@ -78,7 +78,7 @@ describe("reducer", () => {
   });
 
   it("SET_AI_MUSIC_ENABLED resets state when toggling off", () => {
-    let state = reducer(initialState, { type: "SET_AI_MUSIC_RESULT", status: "done", audioUrl: "url" });
+    let state = reducer(initialState, { type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: "url" });
     state = reducer(state, { type: "SET_AI_MUSIC_ENABLED", enabled: false });
     expect(state.aiMusicEnabled).toBe(false);
     expect(state.aiMusicStatus).toBe("idle");
@@ -86,7 +86,7 @@ describe("reducer", () => {
   });
 
   it("RESET preserves isProUser and exportsUsed", () => {
-    let state = { ...initialState, isProUser: true, exportsUsed: 3, step: "export" as const };
+    let state: AppState = { ...initialState, isProUser: true, exportsUsed: 3, step: "export" as const };
     state = reducer(state, { type: "RESET" });
     expect(state.step).toBe("upload");
     expect(state.isProUser).toBe(true);

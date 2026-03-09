@@ -9,7 +9,7 @@ import {
   Trash2,
   ChevronRight,
   Film,
-  Image,
+  Image as ImageIcon,
   Sparkles,
   CheckCircle2,
   Loader2,
@@ -177,7 +177,7 @@ export default function EditorStep() {
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10">
                   {m?.type === "photo" ? (
-                    <Image className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+                    <ImageIcon className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
                   ) : (
                     <Film className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
                   )}
