@@ -148,28 +148,60 @@ export async function createAudioPipeline(
     }
   }
 
-  // Auto-duck music during voiceover — matches TapePreviewPlayer behavior
-  // Sort by start time and merge overlapping/adjacent segments to avoid conflicting ramps
-  if (musicGainNode && voiceovers.length > 0) {
-    const sorted = [...voiceovers].sort((a, b) => a.startTime - b.startTime);
-    const merged: { startTime: number; endTime: number }[] = [];
-    for (const vo of sorted) {
-      const voEnd = vo.startTime + vo.duration;
-      const last = merged[merged.length - 1];
-      // Merge if overlapping or within 0.5s gap (avoids rapid duck/unduck)
-      if (last && vo.startTime <= last.endTime + 0.5) {
-        last.endTime = Math.max(last.endTime, voEnd);
-      } else {
-        merged.push({ startTime: vo.startTime, endTime: voEnd });
+  // Auto-duck music during voiceover and SFX — professional mixing behavior.
+  // Voiceover gets full ducking (musicDuckRatio), SFX gets lighter ducking
+  // to keep the mix clean without killing the energy.
+  // Sort by start time and merge overlapping/adjacent segments to avoid conflicting ramps.
+  if (musicGainNode) {
+    const duckSegments: { startTime: number; endTime: number; ratio: number }[] = [];
+
+    // Full duck for voiceover
+    for (const vo of voiceovers) {
+      duckSegments.push({
+        startTime: vo.startTime,
+        endTime: vo.startTime + vo.duration,
+        ratio: musicDuckRatio,
+      });
+    }
+
+    // Lighter duck for SFX (halfway between normal and VO duck level)
+    if (scheduledLayers) {
+      for (const layer of scheduledLayers) {
+        if (layer.layerType === "sfx") {
+          // Estimate SFX duration from the loaded buffer or use a conservative 2s
+          const sfxDuration = 2;
+          const sfxDuckRatio = Math.min(1, musicDuckRatio + (1 - musicDuckRatio) * 0.5);
+          duckSegments.push({
+            startTime: layer.startTime,
+            endTime: layer.startTime + sfxDuration,
+            ratio: sfxDuckRatio,
+          });
+        }
       }
     }
-    const duckedVolume = musicVolume * musicDuckRatio;
-    for (const seg of merged) {
-      const duckStart = Math.max(0, seg.startTime - 0.2);
-      musicGainNode.gain.setValueAtTime(musicVolume, duckStart);
-      musicGainNode.gain.linearRampToValueAtTime(duckedVolume, seg.startTime);
-      musicGainNode.gain.setValueAtTime(duckedVolume, seg.endTime);
-      musicGainNode.gain.linearRampToValueAtTime(musicVolume, seg.endTime + 0.3);
+
+    if (duckSegments.length > 0) {
+      // Sort and merge overlapping segments, keeping the strongest duck ratio
+      const sorted = [...duckSegments].sort((a, b) => a.startTime - b.startTime);
+      const merged: { startTime: number; endTime: number; ratio: number }[] = [];
+      for (const seg of sorted) {
+        const last = merged[merged.length - 1];
+        if (last && seg.startTime <= last.endTime + 0.5) {
+          last.endTime = Math.max(last.endTime, seg.endTime);
+          last.ratio = Math.min(last.ratio, seg.ratio); // stronger duck wins
+        } else {
+          merged.push({ ...seg });
+        }
+      }
+
+      for (const seg of merged) {
+        const duckedVolume = musicVolume * seg.ratio;
+        const duckStart = Math.max(0, seg.startTime - 0.2);
+        musicGainNode.gain.setValueAtTime(musicVolume, duckStart);
+        musicGainNode.gain.linearRampToValueAtTime(duckedVolume, seg.startTime);
+        musicGainNode.gain.setValueAtTime(duckedVolume, seg.endTime);
+        musicGainNode.gain.linearRampToValueAtTime(musicVolume, seg.endTime + 0.3);
+      }
     }
   }
 

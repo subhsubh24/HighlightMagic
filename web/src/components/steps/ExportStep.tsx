@@ -133,7 +133,7 @@ async function tryServerRender(
       const clipEnd = clipEnds[sfx.clipIndex];
       if (clipStart == null) continue;
       let sfxStart = clipStart;
-      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - 0.5);
+      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - sfx.durationMs / 1000);
       else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - defaultTransDur;
       audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: sfxVol });
     }
@@ -554,7 +554,8 @@ export default function ExportStep() {
           const ce = cEnds[sfx.clipIndex];
           if (cs == null) continue;
           let sfxS = cs;
-          if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
+          // Use AI-decided SFX duration for "before" lead-in instead of fixed offset
+          if (sfx.timing === "before") sfxS = Math.max(0, cs - sfx.durationMs / 1000);
           else if (sfx.timing === "after") sfxS = (ce ?? cs) - defaultTransDurC;
           scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC, layerType: "sfx" });
         }

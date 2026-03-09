@@ -1708,12 +1708,14 @@ Set to [] if the tape doesn't need sound design. When used, think about how each
 with the music and any voiceover — sound design should enhance the mix, not fight it.
 Place SFX where they serve the emotional arc: accenting impacts, punctuating reveals, building tension.
 SFX TIMING RULES:
-- "before" = plays 0.5s before clip starts (great for whooshes before a transition)
+- "before" = plays durationMs BEFORE clip starts (the SFX finishes right as the clip appears —
+  perfect for whooshes leading into transitions). A 1500ms whoosh starts 1.5s before the clip.
 - "on" = plays at clip start (great for impacts, hits)
 - "after" = plays near clip end (great for tension risers, stingers)
 - Don't stack SFX and VO on the same clip at the same time — they compete for attention.
   If you need both, use timing="before" for SFX so it resolves before VO starts.
 - Keep durationMs matched to the moment: 500ms for a snap/hit, 1500ms for a whoosh, 3000ms+ for ambient.
+- Music auto-ducks slightly during SFX to keep the mix clean. Heavier ducking happens during VO.
 
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
@@ -1781,8 +1783,10 @@ CAPTION TIMING — Animation durations for caption text:
 Set "captionEntranceDuration" (0.05-2.0 seconds): how long the entrance animation plays. 0.3 for snappy, 0.5 standard, 1.0-2.0 for slow/cinematic.
 Set "captionExitDuration" (0.05-1.0 seconds): how long the exit fade plays. 0.15 for quick, 0.3 standard, 0.5-1.0 for drawn-out.
 
-MUSIC DUCKING — How much to lower music volume during voiceover.
-Set "musicDuckRatio" (0-1.0): ratio of normal volume. 0 = complete mute, 0.15 for heavy ducking, 0.3 standard, 0.5 for subtle, 1.0 = no ducking.
+MUSIC DUCKING — How much to lower music volume during voiceover and SFX.
+Set "musicDuckRatio" (0-1.0): ratio of normal volume during VO. 0 = complete mute, 0.15 for heavy ducking, 0.3 standard, 0.5 for subtle, 1.0 = no ducking.
+Music also ducks lightly during SFX (halfway between normal and VO duck level) to keep the mix clean.
+Think holistically about the audio stack: if a clip has VO + SFX + music all playing, the mix must breathe.
 
 BEAT-SYNC TOLERANCE — How close a cut must be to a beat to snap.
 Set "beatSyncToleranceMs" (5-500 ms): 5-20 for extremely tight sync, 50 standard, 100-500 for loose/relaxed feel.

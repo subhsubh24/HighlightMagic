@@ -314,7 +314,8 @@ export default function TapePreviewPlayer() {
 
         const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
         let startTime = clipEntry.globalStart;
-        if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - 0.5);
+        // Use AI-decided SFX duration for "before" lead-in
+        if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - sfx.durationMs / 1000);
         else if (sfx.timing === "after") startTime = clipEntry.globalEnd - defaultTransDur;
 
         const sfxVol = state.aiProductionPlan?.sfxVolume ?? 0.8;
@@ -370,20 +371,52 @@ export default function TapePreviewPlayer() {
         if (layer.type === "music") musicGain = gain;
       }
 
-      // Auto-duck music when voiceover is playing
+      // Auto-duck music when voiceover or SFX is playing
       if (musicGain) {
         const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
         const duckRatio = state.aiProductionPlan?.musicDuckRatio ?? 0.3;
-        const duckedVol = musicVol * duckRatio;
-        const voLayers = layers.filter((l) => l.type === "voiceover");
-        for (const vo of voLayers) {
-          const voEnd = vo.startTime + vo.buffer.duration;
-          const duckStart = Math.max(0, vo.startTime - 0.2);
-          // Anchor at full volume before ducking, then ramp down/up
-          musicGain.gain.setValueAtTime(musicVol, duckStart);
-          musicGain.gain.linearRampToValueAtTime(duckedVol, vo.startTime);
-          musicGain.gain.setValueAtTime(duckedVol, voEnd);
-          musicGain.gain.linearRampToValueAtTime(musicVol, voEnd + 0.3);
+
+        // Collect all ducking segments: full duck for VO, lighter duck for SFX
+        const duckSegments: { startTime: number; endTime: number; ratio: number }[] = [];
+        for (const layer of layers) {
+          if (layer.type === "voiceover") {
+            duckSegments.push({
+              startTime: layer.startTime,
+              endTime: layer.startTime + layer.buffer.duration,
+              ratio: duckRatio,
+            });
+          } else if (layer.type === "sfx") {
+            // Lighter duck for SFX — halfway between normal and VO duck level
+            const sfxDuckRatio = Math.min(1, duckRatio + (1 - duckRatio) * 0.5);
+            duckSegments.push({
+              startTime: layer.startTime,
+              endTime: layer.startTime + layer.buffer.duration,
+              ratio: sfxDuckRatio,
+            });
+          }
+        }
+
+        // Sort and merge overlapping segments, keeping strongest duck
+        if (duckSegments.length > 0) {
+          const sorted = [...duckSegments].sort((a, b) => a.startTime - b.startTime);
+          const merged: { startTime: number; endTime: number; ratio: number }[] = [];
+          for (const seg of sorted) {
+            const last = merged[merged.length - 1];
+            if (last && seg.startTime <= last.endTime + 0.5) {
+              last.endTime = Math.max(last.endTime, seg.endTime);
+              last.ratio = Math.min(last.ratio, seg.ratio);
+            } else {
+              merged.push({ ...seg });
+            }
+          }
+          for (const seg of merged) {
+            const duckedVol = musicVol * seg.ratio;
+            const duckStart = Math.max(0, seg.startTime - 0.2);
+            musicGain.gain.setValueAtTime(musicVol, duckStart);
+            musicGain.gain.linearRampToValueAtTime(duckedVol, seg.startTime);
+            musicGain.gain.setValueAtTime(duckedVol, seg.endTime);
+            musicGain.gain.linearRampToValueAtTime(musicVol, seg.endTime + 0.3);
+          }
         }
       }
 
