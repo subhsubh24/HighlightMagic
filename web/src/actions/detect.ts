@@ -2408,7 +2408,9 @@ Respond with ONLY a JSON object:
 
       debugLog(`[Planner] Production plan: intro=${!!productionPlan.intro}, outro=${!!productionPlan.outro}, sfx=${productionPlan.sfx.length}, voiceover=${productionPlan.voiceover.enabled ? productionPlan.voiceover.segments.length + " segments" : "disabled"}, music=${productionPlan.musicPrompt.length > 0 ? "yes" : "no"}, thumbnail=${!!productionPlan.thumbnail}`);
 
-      return { clips: spacedClips, detectedTheme: theme, contentSummary, productionPlan };
+      // Strip internal _aiIndex field before returning — it was only needed for SFX/voiceover remapping
+      const cleanClips = spacedClips.map(({ _aiIndex, ...clip }) => clip);
+      return { clips: cleanClips, detectedTheme: theme, contentSummary, productionPlan };
   }
 
   throw new Error("Planner response could not be parsed as JSON");

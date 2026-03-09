@@ -115,8 +115,9 @@ export async function createAudioPipeline(
 
   // Schedule voiceover / SFX layers at their designated times
   const scheduledSources: AudioBufferSourceNode[] = [];
-  // Track voiceover timing for auto-ducking music
+  // Track voiceover and SFX timing for auto-ducking music
   const voiceovers: { startTime: number; duration: number }[] = [];
+  const sfxTimings: { startTime: number; duration: number }[] = [];
 
   if (scheduledLayers && scheduledLayers.length > 0) {
     // Capture the current AudioContext time as the render start reference.
@@ -138,9 +139,11 @@ export async function createAudioPipeline(
         source.start(renderStartTime + Math.max(0, layer.startTime));
         scheduledSources.push(source);
 
-        // If this is a voiceover layer, record timing for auto-ducking music
+        // Record timing for auto-ducking music using actual decoded buffer duration
         if (layer.layerType === "voiceover") {
           voiceovers.push({ startTime: layer.startTime, duration: buffer.duration });
+        } else if (layer.layerType === "sfx") {
+          sfxTimings.push({ startTime: layer.startTime, duration: buffer.duration });
         }
       } catch (e) {
         console.error(`[Audio] Scheduled layer failed (${layer.layerType ?? "unknown"}):`, layer.url, e);
@@ -165,19 +168,14 @@ export async function createAudioPipeline(
     }
 
     // Lighter duck for SFX (halfway between normal and VO duck level)
-    if (scheduledLayers) {
-      for (const layer of scheduledLayers) {
-        if (layer.layerType === "sfx") {
-          // Estimate SFX duration from the loaded buffer or use a conservative 2s
-          const sfxDuration = 2;
-          const sfxDuckRatio = Math.min(1, musicDuckRatio + (1 - musicDuckRatio) * 0.5);
-          duckSegments.push({
-            startTime: layer.startTime,
-            endTime: layer.startTime + sfxDuration,
-            ratio: sfxDuckRatio,
-          });
-        }
-      }
+    // Uses actual decoded buffer duration recorded during layer scheduling
+    for (const sfx of sfxTimings) {
+      const sfxDuckRatio = Math.min(1, musicDuckRatio + (1 - musicDuckRatio) * 0.5);
+      duckSegments.push({
+        startTime: sfx.startTime,
+        endTime: sfx.startTime + sfx.duration,
+        ratio: sfxDuckRatio,
+      });
     }
 
     if (duckSegments.length > 0) {
