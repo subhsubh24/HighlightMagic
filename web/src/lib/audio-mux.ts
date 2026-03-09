@@ -66,6 +66,8 @@ const DEFAULT_MUSIC_DUCK_RATIO = 0.3;
  * drowning out the original audio from the clips.
  * @param musicVolume AI-decided music volume (0-1), defaults to 0.5
  * @param musicDuckRatio AI-decided ducking ratio during voiceover (0.1-0.6), defaults to 0.3
+ * @param musicDuckAttack AI-decided attack time in seconds (how fast music fades down), defaults to 0.2
+ * @param musicDuckRelease AI-decided release time in seconds (how fast music fades back up), defaults to 0.3
  */
 export async function createAudioPipeline(
   canvasStream: MediaStream,
@@ -74,6 +76,8 @@ export async function createAudioPipeline(
   scheduledLayers?: ScheduledAudioLayer[],
   musicVolume: number = 0.5,
   musicDuckRatio: number = DEFAULT_MUSIC_DUCK_RATIO,
+  musicDuckAttack: number = 0.2,
+  musicDuckRelease: number = 0.3,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -194,11 +198,13 @@ export async function createAudioPipeline(
 
       for (const seg of merged) {
         const duckedVolume = musicVolume * seg.ratio;
-        const duckStart = Math.max(0, seg.startTime - 0.2);
+        // AI-controlled attack/release envelope — pro editors use slow ramps for
+        // cinematic content, fast ramps for hype/energy content
+        const duckStart = Math.max(0, seg.startTime - musicDuckAttack);
         musicGainNode.gain.setValueAtTime(musicVolume, duckStart);
         musicGainNode.gain.linearRampToValueAtTime(duckedVolume, seg.startTime);
         musicGainNode.gain.setValueAtTime(duckedVolume, seg.endTime);
-        musicGainNode.gain.linearRampToValueAtTime(musicVolume, seg.endTime + 0.3);
+        musicGainNode.gain.linearRampToValueAtTime(musicVolume, seg.endTime + musicDuckRelease);
       }
     }
   }

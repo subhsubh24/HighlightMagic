@@ -118,12 +118,13 @@ async function tryServerRender(
       t += dur - (clips[i + 1]?.transitionDuration ?? defaultTransDur);
     }
 
-    // Voiceover segments
+    // Voiceover segments — use per-segment delay when available for natural timing
     for (const vo of state.voiceoverSegments ?? []) {
       if (!vo.audioUrl || vo.status !== "completed") continue;
       const start = clipStarts[vo.clipIndex];
       if (start == null) continue;
-      audioLayers.push({ url: vo.audioUrl, startTime: start + voDelay, volume: voVol });
+      const segDelay = vo.delaySec ?? voDelay;
+      audioLayers.push({ url: vo.audioUrl, startTime: start + segDelay, volume: voVol });
     }
 
     // SFX tracks
@@ -546,7 +547,8 @@ export default function ExportStep() {
           if (!vo.audioUrl || vo.status !== "completed") continue;
           const s = cStarts[vo.clipIndex];
           if (s == null) continue;
-          scheduled.push({ url: vo.audioUrl, startTime: s + voDelayC, volume: voVolC, layerType: "voiceover" });
+          const segDelay = vo.delaySec ?? voDelayC;
+          scheduled.push({ url: vo.audioUrl, startTime: s + segDelay, volume: voVolC, layerType: "voiceover" });
         }
         for (const sfx of state.sfxTracks ?? []) {
           if (!sfx.audioUrl || sfx.status !== "completed") continue;
@@ -570,7 +572,7 @@ export default function ExportStep() {
         const renderIdx = vo.clipIndex + renderClipIntroOffset;
         const rc = validRenderClips[renderIdx];
         if (!rc) continue;
-        const voEndInClip = voDelayC + vo.duration;
+        const voEndInClip = (vo.delaySec ?? voDelayC) + vo.duration;
         // Only extend if VO+delay exceeds the clip's natural duration
         rc.minCanvasDuration = Math.max(rc.minCanvasDuration ?? 0, voEndInClip);
       }
@@ -587,6 +589,8 @@ export default function ExportStep() {
         defaultTransDurC,
         cPlan?.musicVolume ?? 0.5,
         cPlan?.musicDuckRatio ?? 0.3,
+        cPlan?.musicDuckAttack ?? 0.2,
+        cPlan?.musicDuckRelease ?? 0.3,
         cPlan?.loopCrossfadeDuration ?? 0.5,
         cPlan?.exportBitrate ?? 12_000_000,
         cPlan?.watermarkOpacity ?? 0.4,
@@ -962,6 +966,8 @@ async function renderHighlightTape(
   defaultTransitionDuration: number = 0.3,
   musicVolume: number = 0.5,
   musicDuckRatio: number = 0.3,
+  musicDuckAttack: number = 0.2,
+  musicDuckRelease: number = 0.3,
   loopCrossfadeDuration: number = 0.5,
   exportBitrate: number = 12_000_000,
   watermarkOpacity: number = 0.4,
@@ -1010,7 +1016,7 @@ async function renderHighlightTape(
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease);
   // Calculate totalDuration accounting for velocity, beat-sync, VO extension, and transition overlaps
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {

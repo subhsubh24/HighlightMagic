@@ -433,7 +433,7 @@ export interface ProductionPlan {
   intro: { text: string; stylePrompt: string; duration: number } | null;
   outro: { text: string; stylePrompt: string; duration: number } | null;
   sfx: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
-  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string; delaySec: number };
+  voiceover: { enabled: boolean; segments: Array<{ clipIndex: number; text: string; delaySec?: number }>; voiceCharacter: string; delaySec: number };
   musicPrompt: string;
   musicDurationMs: number;
   musicVolume: number;
@@ -445,6 +445,8 @@ export interface ProductionPlan {
   captionEntranceDuration: number;
   captionExitDuration: number;
   musicDuckRatio: number;
+  musicDuckAttack?: number;
+  musicDuckRelease?: number;
   beatSyncToleranceMs: number;
   exportBitrate: number;
   watermarkOpacity: number;
@@ -1415,6 +1417,16 @@ YOU DECIDE EVERYTHING:
 - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
 - How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
+
+ENTER LATE, EXIT EARLY — The #1 rule that separates pro editors from amateurs.
+A real editor NEVER starts a clip at the beginning of an action or ends after it resolves.
+- CUT IN when the motion/energy is already happening. Skip the windup, start at the swing.
+- CUT OUT the instant the peak passes. Don't linger — leave while the energy is still alive.
+- If someone is speaking, start mid-sentence at the key phrase, not at "so basically..."
+- If there's a reaction shot, enter ON the reaction face, not on the walk-up.
+- Every frame that doesn't serve the moment is a frame that reveals it's AI.
+- The goal: when the viewer watches, each clip feels like it starts at EXACTLY the right moment
+  and ends at EXACTLY the right moment. No dead air, no overstaying, no setup filler.
 - Avoid consecutive clips from the same source file when possible — variety keeps attention
 - NEVER repeat the same clip. Each (sourceFileId, startTime, endTime) must be UNIQUE.
   If a moment deserves emphasis, make the clip longer or use a different section — don't duplicate it.
@@ -1499,6 +1511,18 @@ The transition PREPARES the viewer for what's coming. A zoom_punch into a calm s
 A crossfade into an explosion = underwhelming. The transition is the PROMISE, the next clip is the DELIVERY.
 Never repeat the same transition twice in a row. Set transitionDuration: 0.15s (snappy) to 1.0s (cinematic).
 
+TRANSITION TIMING MUST FEEL MUSICAL — not uniform:
+- Each clip MUST have its own transitionDuration. A uniform 0.3s on every cut screams "AI."
+- Fast energy clips: 0.1-0.2s (hard, punchy, lands on a beat)
+- Emotional/cinematic moments: 0.4-0.8s (breathe, let it land)
+- Hero slow-mo reveals: 0.6-1.0s (build anticipation)
+- Comedic timing: sometimes 0.0s (hard cut for surprise) or 0.5s (lingering for effect)
+- Think about WHERE the cut lands in relation to the music beat. If the music has a prominent
+  downbeat, time the transition so the new clip appears ON that beat, not between beats.
+  This means adjusting clip trimEnd or the next clip's trimStart by fractions of a second.
+- VARY the rhythm. Three fast cuts (0.15s) then one slow dissolve (0.7s) creates a groove.
+  The pattern of fast/slow transitions IS the rhythm of the edit, separate from the music.
+
 COLOR GRADING — Design a UNIQUE color grade for each clip using "filterCSS":
 Set "filterCSS" to a CSS filter string using any combination of:
 saturate(), contrast(), brightness(), sepia(), hue-rotate(), grayscale(), blur(), invert(), opacity()
@@ -1528,6 +1552,13 @@ Don't use one grade for everything. 2-3 intentional shifts across the tape = pro
 ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic):
 Match the punch intensity to each clip's entrance energy and the transition preceding it.
 A punch amplifies the transition's impact — use it where it serves the moment.
+VARIATION IS KEY — set entryPunchScale AND entryPunchDuration per-clip, not just the defaults:
+- Opening hook clip: strong punch (1.04-1.06) with snappy duration (0.08-0.12s) — GRAB attention
+- Middle rhythm clips: subtle or no punch (1.0-1.02) — don't fatigue the eye
+- Climax/hero moments: biggest punch (1.05-1.08) with moderate duration (0.12-0.18s) — IMPACT
+- Emotional/slow clips: no punch (1.0) — serenity, let the content speak
+- Finale: moderate punch (1.03) with slow settle (0.2-0.3s) — satisfying but controlled
+The punch curve across the tape should mirror the energy arc. NOT every clip needs a punch.
 
 CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes the moment HIT harder:
 2-5 words max. The text should add a layer the visual alone can't provide.
@@ -1651,10 +1682,16 @@ THE FLOW CHECKLIST (run through this mentally before finalizing):
 
 INTRO CARD — An AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
-"duration" is in seconds (3-5). Pick based on content pacing: 3s for fast/hype, 5s for cinematic/slow.
-Use your judgment: does this tape benefit from a title card that sets the mood, or should it
-jump straight into the action? Consider how the intro relates to the overall pacing, the first
-clip's energy, and whether the viewer needs context before the content begins.
+"duration" is in seconds (3-5). MATCH DURATION TO CONTENT ENERGY:
+- Fast/hype content (sports, gaming, party): 3s MAX. The intro is a quick brand hit, then GO.
+  Viewers are here for action — every second of intro is a second without content.
+- Standard content (vlogs, travel, food): 3-4s. Set the tone without overstaying.
+- Cinematic/emotional (wedding, memorial, art): 4-5s. The intro IS part of the experience.
+  A slow, beautiful intro card builds anticipation.
+- Comedy/meme content: 3s or SKIP entirely. Jump straight into the funny.
+The intro-to-first-clip transition matters MORE than the intro itself. Energy must FLOW.
+If the intro is slow and moody, the first clip should ease in gently, not slam cut.
+If the intro is hype, the first clip should HIT immediately after.
 
 TEXT FITTING (technical constraint, not creative — the T2V model renders in a narrow frame):
 The video renders at 9:16 PORTRAIT (1080×1920, very tall and narrow).
@@ -1671,14 +1708,37 @@ The video renders at 9:16 PORTRAIT (1080×1920, very tall and narrow).
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
 Same text fitting rules as intro — 1-3 words, same stylePrompt structure.
-"duration" 3-5 seconds. Consider whether the tape needs a closing beat or if the last clip
-is the natural ending point.
+"duration" 3-5 seconds. MATCH TO CONTENT:
+- Hype/fast content: 3s or null (skip). The last clip IS the ending. An outro can kill momentum.
+- Story/emotional content: 4-5s. The outro is the denouement — a place to exhale.
+- Content with a CTA: 3-4s. Quick "follow for more" then done — don't linger.
+Consider whether the tape needs a closing beat or if the last clip is the natural ending point.
+When in doubt, SKIP the outro. A strong last clip > a generic outro card.
 
-SOUND EFFECTS — Transition whooshes, impact hits, crowd accents, ambient textures.
+SOUND EFFECTS — The secret weapon that separates amateur from pro.
 Set "sfx" to an array of cues: {clipIndex, timing: "before"|"on"|"after", prompt, durationMs: 500-5000}.
 Set to [] if the tape doesn't need sound design. When used, think about how each cue interacts
 with the music and any voiceover — sound design should enhance the mix, not fight it.
-Place SFX where they serve the emotional arc: accenting impacts, punctuating reveals, building tension.
+
+SFX VARIETY IS CRITICAL — Never use the same type of sound twice in a row:
+- Impact sounds: bass hit, punch impact, door slam, basketball bounce, metal clang
+- Whooshes: cinematic swoosh, air rush, fabric whip, quick flyby, sword slash
+- Risers/tension: reverse cymbal, ascending synth, tape rewind, building white noise
+- Stingers: comedy sting, dramatic reveal chord, record scratch, vinyl stop
+- Ambient: crowd cheer, camera shutter burst, heartbeat pulse, rain ambience
+- Musical accents: orchestral hit, 808 bass drop, DJ air horn, trap hi-hat roll
+- Comedic: sad trombone, cartoon boing, slide whistle, sitcom audience laugh
+- Textural: glitch static, digital corruption, glass shatter, deep sub bass rumble
+
+Match each SFX prompt to the SPECIFIC visual moment. Don't write generic "whoosh" — write
+"quick metallic swoosh with bass undertone" or "dramatic bass drop impact hit with reverb tail."
+The more specific the prompt, the more unique and professional the result.
+
+USE SFX SPARINGLY — strategic silence is powerful:
+- NOT every clip needs SFX. Use on 30-60% of cuts maximum.
+- Let some cuts be CLEAN (music + visuals only). The contrast makes the SFX cuts hit harder.
+- Think about the SFX arc: sparse at the start, denser during the climax, pull back for the close.
+
 SFX TIMING RULES:
 - "before" = plays durationMs BEFORE clip starts (the SFX finishes right as the clip appears —
   perfect for whooshes leading into transitions). A 1500ms whoosh starts 1.5s before the clip.
@@ -1687,11 +1747,18 @@ SFX TIMING RULES:
 - Don't stack SFX and VO on the same clip at the same time — they compete for attention.
   If you need both, use timing="before" for SFX so it resolves before VO starts.
 - Keep durationMs matched to the moment: 500ms for a snap/hit, 1500ms for a whoosh, 3000ms+ for ambient.
-- Music auto-ducks slightly during SFX to keep the mix clean. Heavier ducking happens during VO.
+- Music auto-ducks during SFX to keep the mix clean. Heavier ducking happens during VO.
 
 VOICEOVER — AI-generated narration on key moments.
-Set "voiceover": {enabled: true/false, segments: [{clipIndex, text}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
-"delaySec" (0-1s): delay before voiceover starts after clip begins. Use 0 for immediate, 0.3 for natural pause, 0.5-1 for dramatic reveals.
+Set "voiceover": {enabled: true/false, segments: [{clipIndex, text, delaySec}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
+Global "delaySec" (0-1s): fallback delay before VO starts. But EACH SEGMENT can override this
+with its own "delaySec" — and they SHOULD for natural timing:
+- 0.0s: VO starts immediately with clip (punchy commentary, "Watch this.")
+- 0.2-0.4s: Natural reaction timing (viewer sees → narrator reacts)
+- 0.5-0.8s: VO TRAILS the visual for dramatic reveals (let the image land FIRST, then comment)
+- 1.0-2.0s: Long pause before speaking — the silence IS the commentary (shock, awe)
+A human editor would NEVER use the same delay on every VO segment. Vary it per moment.
+
 Consider what role narration plays in the overall experience — does it add a layer the visuals
 alone can't provide, or would it compete with the content? If you use it, think about how VO
 interacts with captions, music volume, and SFX to create a clean, intentional mix.
@@ -1702,12 +1769,12 @@ Think of this like directing a sitcom or a documentary — the voiceover, visual
 must flow together as one seamless experience. No awkward silences, no audio cutting off mid-sentence.
 
 VO TEXT LENGTH vs CLIP DURATION — The TTS engine generates ~2.5 words per second. Calculate:
-  voiceover_duration ≈ word_count / 2.5 + delaySec
+  voiceover_duration ≈ word_count / 2.5 + segment.delaySec
   If voiceover_duration > clip_visual_duration, the clip will HOLD its last frame until the VO finishes.
   This is fine for 0.5-1.5s of hold, but longer holds look like a frozen video — ugly and amateur.
-  RULE: Keep each VO segment SHORT enough to finish within its clip's duration:
-  - 3-second clip → max ~6 words of VO
-  - 5-second clip → max ~10 words of VO
+  RULE: Keep each VO segment SHORT enough to finish within its clip's duration + 1s max hold:
+  - 3-second clip → max ~5 words of VO (leaves room for delay)
+  - 5-second clip → max ~8 words of VO
   - Prefer punchy, tight narration over wordy explanations
   If you need more words, make the clip longer (adjust trimEnd) or split across multiple clips.
 
@@ -1718,7 +1785,9 @@ VO FLOW ACROSS THE TAPE — Think about the rhythm of narration across ALL clips
     Either keep last-clip VO very short (2-3 words) or skip it entirely and let the visuals close.
   - The PACING of VO should match the edit's energy arc: sparse and dramatic at the start,
     building with the action, then pulling back for the emotional close.
-  - If SFX and VO are on the same clip, the VO should come AFTER the SFX resolves (use delaySec).
+  - If SFX and VO are on the same clip, the VO should come AFTER the SFX resolves (use higher delaySec).
+  - VARY THE RHYTHM: don't create metronomic narration. Sometimes rapid-fire ("Look." "Wait." "Boom."),
+    sometimes a long pause then a slow observation. The irregularity is what makes it feel HUMAN.
 
 VO + MUSIC INTERACTION:
   - When VO is playing, music auto-ducks to musicDuckRatio of its normal volume.
@@ -1751,6 +1820,9 @@ Match to the content's energy: hype sports → 1.04/0.12, calm wedding → 1.01/
 
 DEFAULT KEN BURNS — Tape-wide default zoom intensity for photo clips without kenBurnsIntensity.
 Set "defaultKenBurnsIntensity" (0-0.08): 0 = static, 0.03 = gentle drift, 0.06 = noticeable, 0.08 = dramatic.
+IMPORTANT: Set per-clip kenBurnsIntensity when you have multiple photos — vary the drift speed
+for visual interest. Some photos should be nearly static (0.01), others should drift noticeably (0.06).
+A mix of static and moving photos creates rhythm. All the same intensity = robotic.
 
 PHOTO DISPLAY DURATION — How long static photos show in the final edit.
 Set "photoDisplayDuration" (1-15 seconds). 1-2s for rapid montage, 3-5s for standard, 6-15s for cinematic/contemplative.
@@ -1759,13 +1831,25 @@ Each photo gets this baseline duration. Consider pacing: fast-cut reels need sho
 LOOP CROSSFADE DURATION — Cross-fade length for the seamless loop (last→first frame blend).
 Set "loopCrossfadeDuration" (0.1-3.0 seconds). 0.2-0.3s for punchy/beat-driven, 0.5 standard, 1.0-3.0s for dreamy/cinematic loops.
 
-CAPTION TIMING — Animation durations for caption text:
-Set "captionEntranceDuration" (0.05-2.0 seconds): how long the entrance animation plays. 0.3 for snappy, 0.5 standard, 1.0-2.0 for slow/cinematic.
-Set "captionExitDuration" (0.05-1.0 seconds): how long the exit fade plays. 0.15 for quick, 0.3 standard, 0.5-1.0 for drawn-out.
+CAPTION TIMING — Make captions feel SYNCED, not slapped on:
+Set "captionEntranceDuration" (0.05-2.0 seconds): how long the entrance animation plays.
+Set "captionExitDuration" (0.05-1.0 seconds): how long the exit fade plays.
+CRITICAL: Caption timing should match the tape's energy, NOT be uniform:
+- Short punchy captions ("no way.") → fast entrance (0.08-0.15s), quick exit (0.1s). Pop in, pop out.
+- Dramatic reveals ("she had no idea") → slow entrance (0.4-0.8s), slow exit (0.4s). Let it breathe.
+- Comedic timing → the caption should appear AFTER a beat of visual-only time. The delay IS the joke.
+- If the tape has voiceover, captions should NOT compete — use captions only on VO-free clips, OR
+  use them as visual echo (caption appears as VO says the words, then lingers).
 
 MUSIC DUCKING — How much to lower music volume during voiceover and SFX.
 Set "musicDuckRatio" (0-1.0): ratio of normal volume during VO. 0 = complete mute, 0.15 for heavy ducking, 0.3 standard, 0.5 for subtle, 1.0 = no ducking.
 Music also ducks lightly during SFX (halfway between normal and VO duck level) to keep the mix clean.
+Set "musicDuckAttack" (0.05-1.0 seconds): how fast the music fades DOWN before VO/SFX starts.
+  0.05-0.1s = sharp cut (radio-style), 0.2s = smooth professional, 0.5-1.0s = cinematic slow fade.
+Set "musicDuckRelease" (0.1-2.0 seconds): how fast the music fades BACK UP after VO/SFX ends.
+  0.15-0.3s = quick return (keeps energy), 0.5s = smooth, 1.0-2.0s = cinematic slow swell.
+Pro editors use SLOW attack + SLOWER release for emotional content, and FAST attack + FAST release
+for hype content. The duck shape is as important as the duck depth.
 Think holistically about the audio stack: if a clip has VO + SFX + music all playing, the mix must breathe.
 
 BEAT-SYNC TOLERANCE — How close a cut must be to a beat to snap.
@@ -1964,7 +2048,7 @@ Respond with ONLY a JSON object:
         intro?: { text: string; stylePrompt: string; duration?: number } | null;
         outro?: { text: string; stylePrompt: string; duration?: number } | null;
         sfx?: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>;
-        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string }>; voiceCharacter: string; delaySec?: number };
+        voiceover?: { enabled: boolean; segments: Array<{ clipIndex: number; text: string; delaySec?: number }>; voiceCharacter: string; delaySec?: number };
         musicPrompt?: string;
         musicDurationMs?: number;
         musicVolume?: number;
@@ -1979,6 +2063,8 @@ Respond with ONLY a JSON object:
         captionEntranceDuration?: number;
         captionExitDuration?: number;
         musicDuckRatio?: number;
+        musicDuckAttack?: number;
+        musicDuckRelease?: number;
         beatSyncToleranceMs?: number;
         exportBitrate?: number;
         watermarkOpacity?: number;
@@ -2294,7 +2380,11 @@ Respond with ONLY a JSON object:
                 ? parsed.voiceover.segments
                     .filter((seg) => typeof seg.clipIndex === "number" && aiIndexToFinalIndex.has(seg.clipIndex) && typeof seg.text === "string" && seg.text.trim().length > 0)
                     .slice(0, 8)
-                    .map((seg) => ({ clipIndex: aiIndexToFinalIndex.get(seg.clipIndex)!, text: seg.text.slice(0, 200) }))
+                    .map((seg) => ({
+                      clipIndex: aiIndexToFinalIndex.get(seg.clipIndex)!,
+                      text: seg.text.slice(0, 200),
+                      ...(typeof seg.delaySec === "number" ? { delaySec: Math.max(0, Math.min(2, seg.delaySec)) } : {}),
+                    }))
                 : [],
               voiceCharacter: VALID_VOICE_CHARS.includes(parsed.voiceover.voiceCharacter)
                 ? parsed.voiceover.voiceCharacter
@@ -2338,6 +2428,8 @@ Respond with ONLY a JSON object:
         captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.captionEntranceDuration)) : 0.5,
         captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.05, Math.min(1.0, parsed.captionExitDuration)) : 0.3,
         musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0, Math.min(1.0, parsed.musicDuckRatio)) : 0.3,
+        musicDuckAttack: typeof parsed.musicDuckAttack === "number" ? Math.max(0.05, Math.min(1.0, parsed.musicDuckAttack)) : undefined,
+        musicDuckRelease: typeof parsed.musicDuckRelease === "number" ? Math.max(0.1, Math.min(2.0, parsed.musicDuckRelease)) : undefined,
         beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 50,
         exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(4_000_000, Math.min(30_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
         watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,

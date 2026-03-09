@@ -63,6 +63,8 @@ export interface VoiceoverSegment {
   audioUrl?: string;
   /** Duration in seconds — 0 until audio is generated */
   duration: number;
+  /** Per-segment delay override — seconds after clip start before VO begins */
+  delaySec?: number;
   status: GenerationStatus;
 }
 
@@ -102,9 +104,9 @@ export interface AiProductionPlan {
   // Voiceover
   voiceover: {
     enabled: boolean;
-    segments: Array<{ clipIndex: number; text: string }>;
+    segments: Array<{ clipIndex: number; text: string; /** Per-segment delay override (0-2s) */ delaySec?: number }>;
     voiceCharacter: string;
-    /** AI-decided delay in seconds before voiceover starts after clip begins (0-1s) */
+    /** Global fallback delay in seconds before voiceover starts after clip begins (0-1s) */
     delaySec: number;
   };
 
@@ -137,6 +139,10 @@ export interface AiProductionPlan {
   captionExitDuration: number;
   /** AI-decided music ducking ratio during voiceover (0.1-0.6) */
   musicDuckRatio: number;
+  /** Music duck attack time in seconds — how fast music fades down before VO/SFX (0.05-1.0s) */
+  musicDuckAttack?: number;
+  /** Music duck release time in seconds — how fast music fades back up after VO/SFX (0.1-2.0s) */
+  musicDuckRelease?: number;
   /** AI-decided beat-sync tolerance in ms (20-200ms) */
   beatSyncToleranceMs: number;
   /** AI-decided export bitrate in bps */

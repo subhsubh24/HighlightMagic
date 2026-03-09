@@ -806,6 +806,8 @@ export default function DetectingStep() {
             captionEntranceDuration: productionPlan.captionEntranceDuration ?? 0.5,
             captionExitDuration: productionPlan.captionExitDuration ?? 0.3,
             musicDuckRatio: productionPlan.musicDuckRatio ?? 0.3,
+            musicDuckAttack: productionPlan.musicDuckAttack,
+            musicDuckRelease: productionPlan.musicDuckRelease,
             beatSyncToleranceMs: productionPlan.beatSyncToleranceMs ?? 50,
             exportBitrate: productionPlan.exportBitrate ?? 12_000_000,
             watermarkOpacity: productionPlan.watermarkOpacity ?? 0.4,
@@ -991,6 +993,7 @@ export default function DetectingStep() {
                 clipIndex: s.clipIndex,
                 text: s.text,
                 duration: 0,
+                delaySec: s.delaySec,
                 status: "generating" as const,
               })),
             });
