@@ -631,11 +631,14 @@ export default function ExportStep() {
           filmStock: cPlan.filmStock,
           audioBreaths: cPlan.audioBreaths,
           beatFlashThreshold: cPlan.beatFlashThreshold,
+          beatFlashColor: cPlan.beatFlashColor,
           vignetteHardness: cPlan.vignetteHardness,
           watermarkFontSize: cPlan.watermarkFontSize,
           watermarkYOffset: cPlan.watermarkYOffset,
           settleEasing: cPlan.settleEasing,
           exitDecelEasing: cPlan.exitDecelEasing,
+          letterboxColor: cPlan.letterboxColor,
+          captionExitAnimation: cPlan.captionExitAnimation,
         } : undefined,
       );
 
@@ -1414,6 +1417,7 @@ interface ExportAiRenderOptions {
   beatPulseIntensity?: number;
   beatFlashOpacity?: number;
   beatFlashThreshold?: number;
+  beatFlashColor?: string;
   captionFontSize?: number;
   captionVerticalPosition?: number;
   captionShadowColor?: string;
@@ -1425,6 +1429,8 @@ interface ExportAiRenderOptions {
   strobeFlashAlpha?: number;
   lightLeakColor?: string;
   glitchColors?: [string, string];
+  letterboxColor?: string;
+  captionExitAnimation?: string;
   defaultEntryPunchScale?: number;
   defaultEntryPunchDuration?: number;
   defaultKenBurnsIntensity?: number;
@@ -1445,7 +1451,7 @@ interface ExportAiRenderOptions {
   clipAudioVolume?: number;
   finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
   filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
-  audioBreaths?: Array<{ time: number; duration: number; depth: number }>;
+  audioBreaths?: Array<{ time: number; duration: number; depth: number; attack?: number; release?: number }>;
 }
 
 
@@ -1537,7 +1543,7 @@ function renderVideoClip(
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               ctx.filter = "none";
-              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread);
+              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
               scheduleExportFrame(drawFrame);
               return;
             }
@@ -1598,7 +1604,7 @@ function renderVideoClip(
             const progress = canvasElapsedSec / style.transitionDuration;
             const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-              const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width), transIntensity);
+              const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width, instruction.clip.transitionParams), transIntensity);
               const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale * settle.scale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
@@ -1614,7 +1620,7 @@ function renderVideoClip(
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2;
             const dy = (canvas.height - dh) / 2 + settle.offsetY;
-            ctx.fillStyle = "black";
+            ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(video, dx, dy, dw, dh);
@@ -1639,7 +1645,7 @@ function renderVideoClip(
             if (beatInt > clipBeatThreshold && clipBeatFlash > 0) {
               ctx.save();
               ctx.globalAlpha = (beatInt - clipBeatThreshold) * clipBeatFlash;
-              ctx.fillStyle = "white";
+              ctx.fillStyle = instruction.clip.beatFlashColor ?? aiRenderOpts?.beatFlashColor ?? "white";
               ctx.fillRect(0, 0, canvas.width, canvas.height);
               ctx.restore();
             }
@@ -1650,7 +1656,7 @@ function renderVideoClip(
           drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
           drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
-          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread);
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
 
           // Capture first frame for seamless loop crossfade
           if (!firstFrameCaptured && onFirstFrame) {
@@ -1785,7 +1791,7 @@ async function renderPhotoClip(
         const progress = elapsedMs / transitionMs;
         const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
         renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-          const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width), transIntensity);
+          const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width, instruction.clip.transitionParams), transIntensity);
           const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse * settle.scale;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
@@ -1801,7 +1807,7 @@ async function renderPhotoClip(
         const dh = baseH * totalScale;
         const dx = (canvas.width - dw) / 2;
         const dy = (canvas.height - dh) / 2 + settle.offsetY;
-        ctx.fillStyle = "black";
+        ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
         ctx.drawImage(imgSource, dx, dy, dw, dh);
@@ -1825,7 +1831,7 @@ async function renderPhotoClip(
         if (currentBeatIntensity > clipBeatThresholdPhoto && clipBeatFlashPhoto > 0) {
           ctx.save();
           ctx.globalAlpha = (currentBeatIntensity - clipBeatThresholdPhoto) * clipBeatFlashPhoto;
-          ctx.fillStyle = "white";
+          ctx.fillStyle = instruction.clip.beatFlashColor ?? aiRenderOpts?.beatFlashColor ?? "white";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.restore();
         }
@@ -1836,7 +1842,7 @@ async function renderPhotoClip(
       drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
       drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
-      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread);
+      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
       scheduleExportFrame(drawFrame);
     };
 
@@ -1861,10 +1867,10 @@ function renderTransitionFrame(
 ) {
   const outAlpha = getClipAlpha(transType, progress, true);
   const inAlpha = getClipAlpha(transType, progress, false);
-  const rawOutTransform = getTransitionTransform(transType, progress, true, canvas.width);
+  const rawOutTransform = getTransitionTransform(transType, progress, true, canvas.width, undefined);
   const outTransform = scaleTransform(rawOutTransform, transitionIntensity);
 
-  ctx.fillStyle = "black";
+  ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Draw outgoing frame
@@ -1922,7 +1928,8 @@ function drawOverlays(
   aiRenderOpts?: ExportAiRenderOptions,
   captionAnimationIntensity: number = 1.0,
   captionIdlePulse: number = 1.0,
-  captionGlowSpread?: number
+  captionGlowSpread?: number,
+  captionExitAnimation: string = "fade"
 ) {
   if (watermarkText) {
     ctx.save();
@@ -1942,7 +1949,7 @@ function drawOverlays(
   if (captionText && localTime >= captionDelay) {
     const adjustedTime = localTime - captionDelay;
     const adjustedDuration = clipDuration - captionDelay;
-    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity, captionIdlePulse);
+    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity, captionIdlePulse, captionExitAnimation);
     const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
       ctx,

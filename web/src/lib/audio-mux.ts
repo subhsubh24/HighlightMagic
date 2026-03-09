@@ -85,7 +85,7 @@ export async function createAudioPipeline(
   musicFadeOutDuration: number = 0,
   totalTapeDurationSec: number = 0,
   defaultClipAudioVolume?: number,
-  audioBreaths?: Array<{ time: number; duration: number; depth: number }>,
+  audioBreaths?: Array<{ time: number; duration: number; depth: number; attack?: number; release?: number }>,
 ): Promise<AudioPipeline> {
   // Use webkit prefix for older Safari; resume() for iOS suspended-by-default policy
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -239,11 +239,13 @@ export async function createAudioPipeline(
       const breathStart = renderStart + breath.time;
       const breathEnd = breathStart + breath.duration;
       const breathVolume = musicVolume * breath.depth;
-      // Quick attack into silence, gentle release back
-      musicGainNode.gain.setValueAtTime(musicVolume, Math.max(renderStart, breathStart - 0.1));
+      const attack = breath.attack ?? 0.1;
+      const release = breath.release ?? 0.2;
+      // AI-controlled attack into silence, AI-controlled release back
+      musicGainNode.gain.setValueAtTime(musicVolume, Math.max(renderStart, breathStart - attack));
       musicGainNode.gain.linearRampToValueAtTime(breathVolume, breathStart);
       musicGainNode.gain.setValueAtTime(breathVolume, breathEnd);
-      musicGainNode.gain.linearRampToValueAtTime(musicVolume, breathEnd + 0.2);
+      musicGainNode.gain.linearRampToValueAtTime(musicVolume, breathEnd + release);
     }
   }
 

@@ -164,6 +164,8 @@ export interface AiProductionPlan {
   beatFlashOpacity?: number;
   /** Beat intensity threshold for flash trigger (0-1). Lower = reacts to weaker beats. */
   beatFlashThreshold?: number;
+  /** Beat flash overlay color as hex (default "white"). AI can tint flashes to match mood. */
+  beatFlashColor?: string;
 
   /** Caption font size as fraction of canvas height (0.02 = small, 0.025 = default, 0.04 = large) */
   captionFontSize?: number;
@@ -234,6 +236,12 @@ export interface AiProductionPlan {
     fadedBlacks: number;
   };
 
+  /** Letterbox/pillarbox fill color as hex (default "black"). AI can use dark tones to match mood. */
+  letterboxColor?: string;
+
+  /** Caption exit animation type: "fade" (default), "pop", "slide", "dissolve". */
+  captionExitAnimation?: string;
+
   /** Audio breath moments — planned silence dips at emotional peaks. */
   audioBreaths?: Array<{
     /** Timestamp in seconds from tape start */
@@ -242,6 +250,10 @@ export interface AiProductionPlan {
     duration: number;
     /** How much to duck ALL audio (0 = full silence, 0.15 = whisper, 0.3 = subtle dip) */
     depth: number;
+    /** Attack time in seconds — how fast audio dips into the breath (0.05-0.5). Default 0.1. */
+    attack?: number;
+    /** Release time in seconds — how fast audio recovers after the breath (0.1-1.0). Default 0.2. */
+    release?: number;
   }>;
 
   // Thumbnail
@@ -334,12 +346,29 @@ export interface EditedClip {
   clipAudioVolume?: number;
   /** Per-clip transition intensity (0-1). Scales the effect magnitude. */
   transitionIntensity?: number;
+  /** Per-clip transition params — fine-tune the chosen transition type's internals. */
+  transitionParams?: {
+    /** Zoom punch outgoing scale factor (default 0.25). Higher = more aggressive zoom-out. */
+    zoomOutScale?: number;
+    /** Zoom punch incoming scale factor (default 0.18). Higher = more aggressive zoom-in. */
+    zoomInScale?: number;
+    /** Glitch jitter amplitude in pixels (default 12). Higher = more chaotic. */
+    glitchJitter?: number;
+    /** Whip motion blur intensity/alpha (default 0.25). */
+    motionBlurAlpha?: number;
+    /** Soft zoom scale factor (default 0.04). */
+    softZoomScale?: number;
+  };
+  /** Per-clip caption exit animation type: "fade" (default), "pop", "slide", "dissolve". */
+  captionExitAnimation?: string;
   /** Per-clip beat pulse scale intensity (0-0.1). Overrides plan-level beatPulseIntensity. */
   beatPulseIntensity?: number;
   /** Per-clip beat flash overlay opacity (0-0.5). Overrides plan-level beatFlashOpacity. */
   beatFlashOpacity?: number;
   /** Per-clip beat flash threshold (0-1). Lower = reacts to weaker beats. */
   beatFlashThreshold?: number;
+  /** Per-clip beat flash color as hex (default "white"). */
+  beatFlashColor?: string;
   /** Per-clip caption idle pulse intensity (0-1). Controls how much text "breathes" during steady state. */
   captionIdlePulse?: number;
   /** Per-clip caption glow spread multiplier (0.5-3). Controls second glow layer blur ratio. */

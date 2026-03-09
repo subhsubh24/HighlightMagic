@@ -63,7 +63,8 @@ export function getKineticTransform(
   entranceDuration: number = DEFAULT_ENTRANCE_DURATION,
   exitDuration: number = DEFAULT_EXIT_DURATION,
   animationIntensity: number = 1.0,
-  idlePulse: number = 1.0
+  idlePulse: number = 1.0,
+  exitAnimation: string = "fade"
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -97,11 +98,21 @@ export function getKineticTransform(
     return raw;
   }
 
-  // Exit animation — gentle fade
+  // Exit animation — varies by type
   const timeToEnd = clipDuration - localTime;
   if (timeToEnd < exitDuration && timeToEnd >= 0) {
-    const t = timeToEnd / exitDuration;
-    return { ...base, alpha: t, offsetY: (1 - t) * -10 };
+    const t = timeToEnd / exitDuration; // 1 → 0 as clip ends
+    switch (exitAnimation) {
+      case "pop":
+        return { ...base, alpha: t, scale: 1 + (1 - t) * 0.3, offsetY: 0 };
+      case "slide":
+        return { ...base, alpha: t, offsetY: (1 - t) * 20 };
+      case "dissolve":
+        return { ...base, alpha: t * t, offsetY: 0 }; // quadratic fade = smoother dissolve
+      case "fade":
+      default:
+        return { ...base, alpha: t, offsetY: (1 - t) * -10 };
+    }
   }
 
   // Steady state — apply idle effects based on animation type

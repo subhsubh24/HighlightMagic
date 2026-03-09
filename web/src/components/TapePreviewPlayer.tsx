@@ -606,7 +606,10 @@ export default function TapePreviewPlayer() {
           h,
           captionCustom,
           state.aiProductionPlan?.captionEntranceDuration ?? 0.5,
-          state.aiProductionPlan?.captionExitDuration ?? 0.3
+          state.aiProductionPlan?.captionExitDuration ?? 0.3,
+          1.0,
+          1.0,
+          entry.clip.captionExitAnimation ?? state.aiProductionPlan?.captionExitAnimation ?? "fade"
         );
         drawKineticCaption(
           ctx,
@@ -636,7 +639,7 @@ export default function TapePreviewPlayer() {
       const ctx = c.getContext("2d");
       if (!ctx) return;
 
-      ctx.fillStyle = "black";
+      ctx.fillStyle = state.aiProductionPlan?.letterboxColor ?? "black";
       ctx.fillRect(0, 0, c.width, c.height);
 
       // Beat intensity for visual pulse
@@ -668,7 +671,7 @@ export default function TapePreviewPlayer() {
           const transType = (e.clip.transitionType as TransitionType) ?? fallbackTransition;
           const progress = lt / clipTransDuration;
           alpha = getClipAlpha(transType, progress, false);
-          transform = getTransitionTransform(transType, progress, false, c.width);
+          transform = getTransitionTransform(transType, progress, false, c.width, e.clip.transitionParams);
           if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1, intensity: e.clip.transitionIntensity ?? 1.0 };
         }
 
@@ -680,7 +683,7 @@ export default function TapePreviewPlayer() {
             const transType = (nextClip?.clip.transitionType as TransitionType) ?? fallbackTransition;
             const progress = 1 - timeToEnd / nextTransDuration;
             alpha = getClipAlpha(transType, progress, true);
-            transform = getTransitionTransform(transType, progress, true, c.width);
+            transform = getTransitionTransform(transType, progress, true, c.width, nextClip?.clip.transitionParams);
             if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i, intensity: nextClip?.clip.transitionIntensity ?? 1.0 };
           }
         }
@@ -705,12 +708,12 @@ export default function TapePreviewPlayer() {
         }, activeTransInfo.intensity);
       }
 
-      // Beat flash overlay — AI controls opacity
+      // Beat flash overlay — AI controls opacity and color
       const beatFlashMax = state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
       if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
         ctx.save();
         ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = state.aiProductionPlan?.beatFlashColor ?? "white";
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.restore();
       }

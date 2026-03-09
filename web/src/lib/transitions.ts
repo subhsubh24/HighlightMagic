@@ -78,17 +78,27 @@ export function getClipAlpha(
 
 // ── Spatial transforms (scale / offset) ──
 
+/** Per-clip transition parameters for fine-tuning transition internals. */
+export interface TransitionParams {
+  zoomOutScale?: number;
+  zoomInScale?: number;
+  glitchJitter?: number;
+  motionBlurAlpha?: number;
+  softZoomScale?: number;
+}
+
 export function getTransitionTransform(
   type: TransitionType,
   progress: number,
   isOutgoing: boolean,
-  canvasWidth: number
+  canvasWidth: number,
+  params?: TransitionParams
 ): TransitionTransform {
   switch (type) {
     case "zoom_punch":
       return isOutgoing
-        ? { scale: 1 + progress * 0.25, offsetX: 0, offsetY: 0 }
-        : { scale: 1 + (1 - progress) * 0.18, offsetX: 0, offsetY: 0 };
+        ? { scale: 1 + progress * (params?.zoomOutScale ?? 0.25), offsetX: 0, offsetY: 0 }
+        : { scale: 1 + (1 - progress) * (params?.zoomInScale ?? 0.18), offsetX: 0, offsetY: 0 };
 
     case "whip": {
       const easeIn = progress * progress;
@@ -99,14 +109,16 @@ export function getTransitionTransform(
     }
 
     case "glitch": {
-      const jitter = Math.sin(progress * 47) * 12;
+      const jitter = Math.sin(progress * 47) * (params?.glitchJitter ?? 12);
       return { scale: 1, offsetX: jitter, offsetY: 0 };
     }
 
-    case "soft_zoom":
+    case "soft_zoom": {
+      const szScale = params?.softZoomScale ?? 0.04;
       return isOutgoing
-        ? { scale: 1 + progress * 0.04, offsetX: 0, offsetY: 0 }
-        : { scale: 1 + (1 - progress) * 0.04, offsetX: 0, offsetY: 0 };
+        ? { scale: 1 + progress * szScale, offsetX: 0, offsetY: 0 }
+        : { scale: 1 + (1 - progress) * szScale, offsetX: 0, offsetY: 0 };
+    }
 
     default:
       return { scale: 1, offsetX: 0, offsetY: 0 };
@@ -150,6 +162,8 @@ export interface TransitionRenderOptions {
   lightLeakColor?: string;
   /** Glitch channel colors [primary hex, secondary hex] */
   glitchColors?: [string, string];
+  /** Whip motion blur overlay alpha (default 0.25) */
+  motionBlurAlpha?: number;
 }
 
 export function drawTransitionOverlay(
@@ -190,7 +204,7 @@ export function drawTransitionOverlay(
     case "whip": {
       const intensity = Math.sin(progress * Math.PI);
       // Horizontal motion-blur lines
-      ctx.globalAlpha = intensity * 0.25 * ti;
+      ctx.globalAlpha = intensity * (renderOptions?.motionBlurAlpha ?? 0.25) * ti;
       ctx.fillStyle = "white";
       const lineCount = 8;
       for (let i = 0; i < lineCount; i++) {
