@@ -242,7 +242,8 @@ export default function ExportStep() {
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
   const totalDuration = sortedClips.reduce((sum, c, i) => {
-    let dur = sum + (c.trimEnd - c.trimStart);
+    const sourceDur = c.trimEnd - c.trimStart;
+    let dur = sum + getEffectiveDuration(sourceDur, c.velocityPreset, c.customVelocityKeyframes);
     if (i < sortedClips.length - 1) {
       dur -= sortedClips[i + 1]?.transitionDuration ?? defaultTransDurPreview;
     }
@@ -1077,25 +1078,28 @@ async function renderHighlightTape(
 
     console.log(`Export: rendering clip ${i + 1}/${clips.length} id="${instruction.clip.id}" type=${instruction.mediaType} dur=${clipDuration.toFixed(2)}s hasFile=${!!instruction.mediaFile} url=${instruction.mediaUrl?.slice(0, 60)}`);
 
+    // Capture first frame callback for seamless loop
+    const captureFirstFrame = (i === 0 && viralOptions.seamlessLoop)
+      ? (sourceCanvas: HTMLCanvasElement) => {
+          firstFrameCanvas = document.createElement("canvas");
+          firstFrameCanvas.width = sourceCanvas.width;
+          firstFrameCanvas.height = sourceCanvas.height;
+          firstFrameCanvas.getContext("2d")!.drawImage(sourceCanvas, 0, 0);
+        }
+      : undefined;
+
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
       }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs, aiRenderOpts, elapsedTotal);
+      // For photos, capture after first render (photo is static so any frame = first frame)
+      if (captureFirstFrame) captureFirstFrame(canvas);
     } else {
       await renderVideoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts, elapsedTotal);
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts, elapsedTotal, captureFirstFrame);
     }
     console.log(`Export: clip ${i + 1}/${clips.length} done`);
-
-    // Save first frame for seamless loop
-    if (i === 0 && viralOptions.seamlessLoop) {
-      firstFrameCanvas = document.createElement("canvas");
-      firstFrameCanvas.width = canvas.width;
-      firstFrameCanvas.height = canvas.height;
-      // We'll capture it after the first render frame (already drawn on canvas)
-      firstFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
-    }
 
     if (i < clips.length - 1) {
       if (!crossfadeCanvas) {
@@ -1131,6 +1135,18 @@ async function renderHighlightTape(
       resolve(new Blob(chunks, { type: blobType }));
     };
   });
+}
+
+/**
+ * Schedule the next export frame draw without using requestAnimationFrame.
+ * RAF is throttled/suspended in background tabs, which stalls exports when the
+ * user switches away. MessageChannel.postMessage fires immediately regardless
+ * of tab visibility, keeping the render loop alive.
+ */
+function scheduleExportFrame(callback: () => void) {
+  const ch = new MessageChannel();
+  ch.port1.onmessage = callback;
+  ch.port2.postMessage(undefined);
 }
 
 /**
@@ -1177,10 +1193,10 @@ function renderLoopCrossfade(
       ctx.restore();
 
       frame++;
-      requestAnimationFrame(drawFrame);
+      scheduleExportFrame(drawFrame);
     };
 
-    requestAnimationFrame(drawFrame);
+    scheduleExportFrame(drawFrame);
   });
 }
 
@@ -1221,7 +1237,8 @@ function renderVideoClip(
   neonColorHexes?: string[],
   beatTolerance: number = 50,
   aiRenderOpts?: ExportAiRenderOptions,
-  globalTimelineOffset: number = 0
+  globalTimelineOffset: number = 0,
+  onFirstFrame?: (canvas: HTMLCanvasElement) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!instruction.mediaUrl) {
@@ -1262,6 +1279,7 @@ function renderVideoClip(
 
         const renderStartTime = performance.now();
         const canvasDurationMs = canvasDuration * 1000;
+        let firstFrameCaptured = false;
 
         const drawFrame = () => {
           const canvasElapsedMs = performance.now() - renderStartTime;
@@ -1288,7 +1306,7 @@ function renderVideoClip(
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               ctx.filter = "none";
               drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
-              requestAnimationFrame(drawFrame);
+              scheduleExportFrame(drawFrame);
               return;
             }
             video.pause();
@@ -1373,10 +1391,17 @@ function renderVideoClip(
           }
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
-          requestAnimationFrame(drawFrame);
+
+          // Capture first frame for seamless loop crossfade
+          if (!firstFrameCaptured && onFirstFrame) {
+            firstFrameCaptured = true;
+            onFirstFrame(canvas);
+          }
+
+          scheduleExportFrame(drawFrame);
         };
 
-        requestAnimationFrame(drawFrame);
+        scheduleExportFrame(drawFrame);
       };
     };
 
@@ -1530,10 +1555,10 @@ async function renderPhotoClip(
       }
 
       drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
-      requestAnimationFrame(drawFrame);
+      scheduleExportFrame(drawFrame);
     };
 
-    requestAnimationFrame(drawFrame);
+    scheduleExportFrame(drawFrame);
   });
 }
 

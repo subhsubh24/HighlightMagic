@@ -111,12 +111,13 @@ interface DecodedAudio {
 }
 
 async function decodeVideoAudio(videoUrl: string): Promise<DecodedAudio | null> {
+  let audioCtx: AudioContext | null = null;
   try {
     const response = await fetch(videoUrl);
     const arrayBuffer = await response.arrayBuffer();
 
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const audioCtx = new AudioCtx();
+    audioCtx = new AudioCtx();
     if (audioCtx.state === "suspended") await audioCtx.resume().catch((e) => console.warn("[FrameExtractor] AudioContext resume failed:", e));
 
     let audioBuffer: AudioBuffer;
@@ -143,6 +144,7 @@ async function decodeVideoAudio(videoUrl: string): Promise<DecodedAudio | null> 
     return { mixedData, sampleRate, length };
   } catch (e) {
     console.error("[FrameExtractor] Audio decoding pipeline failed:", e);
+    if (audioCtx) audioCtx.close();
     return null;
   }
 }
