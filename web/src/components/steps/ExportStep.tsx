@@ -454,6 +454,28 @@ export default function ExportStep() {
       }
 
       // Pre-validate: remove clips with missing media URLs (expired blobs, missing sources)
+      // Also refresh any expired blob URLs from the original File objects.
+      for (const rc of renderClips) {
+        if (rc.mediaUrl && rc.mediaUrl.startsWith("blob:") && rc.clip.sourceFileId !== "__intro__" && rc.clip.sourceFileId !== "__outro__") {
+          // Verify the blob URL is still valid — blob URLs can expire if the browser
+          // garbage-collected the underlying Blob (rare) or if the URL was revoked.
+          const media = getMediaFile(state, rc.clip.sourceFileId);
+          if (media?.file) {
+            try {
+              const testResp = await fetch(rc.mediaUrl);
+              if (!testResp.ok) throw new Error("blob fetch failed");
+              testResp.body?.cancel();
+            } catch {
+              // Blob URL expired — recreate from the original File object
+              const freshUrl = URL.createObjectURL(media.file);
+              blobUrlsToRevoke.push(freshUrl);
+              console.warn(`Export: refreshed expired blob URL for clip "${rc.clip.id}"`);
+              rc.mediaUrl = freshUrl;
+            }
+          }
+        }
+      }
+
       const validRenderClips = renderClips.filter((rc) => {
         if (!rc.mediaUrl) {
           console.warn(`Export: dropping clip "${rc.clip.id}" — empty media URL (source may have been removed)`);
@@ -1519,9 +1541,10 @@ function renderPhotoClip(
 
     img.onerror = (e) => {
       const clipId = instruction.clip.id;
-      console.error(`Export: image load failed for clip "${clipId}"`, e);
+      const src = instruction.mediaUrl?.slice(0, 80);
+      console.error(`Export: image load failed for clip "${clipId}", src="${src}"`, e);
       img.src = "";
-      reject(new Error(`Failed to load image for clip "${clipId}" — the media URL may have expired`));
+      reject(new Error(`Failed to load image for clip "${clipId}" — the media URL may have expired. src: ${src}`));
     };
     img.src = instruction.mediaUrl;
   });
