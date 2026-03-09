@@ -267,9 +267,11 @@ actor AtlasCloudService {
     }
 
     /// Text-to-video generation (Wan 2.6). Used for AI intro/outro cards.
+    /// Matches web `submitTextToVideo` — passes aspect ratio (default 9:16 portrait).
     func generateTextToVideo(
         prompt: String,
-        duration: Int = 5
+        duration: Int = 5,
+        aspectRatio: String = "9:16"
     ) async throws -> URL {
         let clampedDuration = max(2, min(10, duration))
 
@@ -277,7 +279,8 @@ actor AtlasCloudService {
             model: .wanT2V,
             payload: [
                 "prompt": prompt,
-                "duration": clampedDuration
+                "duration": clampedDuration,
+                "aspect_ratio": aspectRatio
             ]
         )
 

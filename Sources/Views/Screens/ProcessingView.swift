@@ -169,32 +169,42 @@ struct ProcessingView: View {
 
     /// Generate AI music, voiceover, and SFX for clips when enabled.
     /// Runs after detection completes, before navigating to results.
+    /// Updates app-level status fields to match web's aiMusicStatus/sfxStatus/voiceoverStatus.
     private func generateAIAudio(for clips: [EditedClip]) async {
         // AI Music — generate one track for the whole tape
         if appState.aiMusicEnabled {
+            await MainActor.run { appState.aiMusicStatus = .generating }
             let totalDuration = clips.reduce(0.0) { $0 + $1.duration }
-            let musicPrompt = appState.userPrompt.isEmpty
-                ? "upbeat energetic highlight reel background music"
-                : "background music for: \(appState.userPrompt)"
+            let musicPrompt = appState.aiProductionPlan?.musicPrompt
+                ?? (appState.userPrompt.isEmpty
+                    ? "upbeat energetic highlight reel background music"
+                    : "background music for: \(appState.userPrompt)")
+            await MainActor.run { appState.aiMusicPrompt = musicPrompt }
             let result = await ElevenLabsService.shared.generateMusic(
                 prompt: musicPrompt,
-                durationMs: Int(totalDuration * 1000)
+                durationMs: appState.aiProductionPlan?.musicDurationMs ?? Int(totalDuration * 1000)
             )
             if case .completed = result.status, let data = result.audioData {
                 await MainActor.run {
+                    appState.aiMusicStatus = .done
+                    appState.aiMusicData = data
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].aiMusicData = data
                     }
                 }
+            } else {
+                await MainActor.run { appState.aiMusicStatus = .failed }
             }
         }
 
         // AI Voiceover — generate per-clip narration
         if appState.voiceoverEnabled {
+            await MainActor.run { appState.voiceoverStatus = .generating }
             let segments = clips.enumerated().map { (i, clip) in
                 (text: clip.captionText.isEmpty ? clip.segment.label : clip.captionText, clipIndex: i)
             }
             let results = await ElevenLabsService.shared.generateVoiceovers(segments: segments)
+            let anyFailed = results.contains { _, result in result.status != .completed }
             await MainActor.run {
                 for (clipIndex, result) in results {
                     if case .completed = result.status, let data = result.audioData,
@@ -202,40 +212,58 @@ struct ProcessingView: View {
                         appState.generatedClips[clipIndex].voiceoverData = data
                     }
                 }
+                appState.voiceoverStatus = anyFailed ? .failed : .done
             }
         }
 
         // AI SFX — generate transition sound for each clip
         if appState.sfxEnabled {
+            await MainActor.run { appState.sfxStatus = .generating }
             let requests = clips.map { _ in (prompt: "cinematic whoosh transition", durationMs: 1500) }
             let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
+            let anyFailed = results.contains { _, result in result.status != .completed }
             await MainActor.run {
                 for (i, result) in results.enumerated() where i < appState.generatedClips.count {
                     if case .completed = result.status, let data = result.audioData {
                         appState.generatedClips[i].sfxData = data
                     }
                 }
+                appState.sfxStatus = anyFailed ? .failed : .done
             }
         }
     }
 
     /// Generate AI production assets: intro/outro cards and style transfer.
     /// Uses AtlasCloudService (Kling i2v, Wan 2.6 T2V, Wan v2v).
+    /// Matches web platform's intro/outro pipeline: content-aware prompts, 9:16 aspect ratio,
+    /// and AI-decided durations from the production plan.
     private func generateAIProduction(for clips: [EditedClip]) async {
-        // Intro card — generate a text-to-video intro
+        // Derive duration from AI production plan (3-5s range, matching web), fallback to 4s
+        let introDuration = appState.aiProductionPlan?.intro?.duration ?? 4
+        let outroDuration = appState.aiProductionPlan?.outro?.duration ?? 4
+
+        // Intro card — generate a 9:16 portrait text-to-video intro (matches web)
         if appState.introCardEnabled {
-            let introPrompt = appState.userPrompt.isEmpty
-                ? "cinematic highlight reel intro with glowing text"
-                : "intro card for: \(appState.userPrompt)"
+            // Use AI production plan text/style when available, matching web's Claude-generated prompts
+            let introText = appState.aiProductionPlan?.intro?.text
+                ?? (appState.creativeDirection.isEmpty ? "Highlights" : String(appState.creativeDirection.prefix(30)))
+            let introStylePrompt = appState.aiProductionPlan?.intro?.stylePrompt
+                ?? (appState.userPrompt.isEmpty
+                    ? "cinematic highlight reel intro, bold glowing text on dark background, portrait 9:16"
+                    : "cinematic intro card for: \(appState.userPrompt), bold text, dark background, portrait 9:16")
+            let clampedIntroDur = max(3, min(5, Int(introDuration)))
+
             await MainActor.run {
                 appState.introCard = GeneratedCard(
-                    text: introPrompt, stylePrompt: introPrompt, duration: 3, status: .generating
+                    text: introText, stylePrompt: introStylePrompt,
+                    duration: Double(clampedIntroDur), status: .generating
                 )
             }
             do {
                 let introURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: introPrompt,
-                    duration: 3
+                    prompt: introStylePrompt,
+                    duration: clampedIntroDur,
+                    aspectRatio: "9:16"
                 )
                 await MainActor.run {
                     appState.introCard?.videoUrl = introURL
@@ -251,20 +279,27 @@ struct ProcessingView: View {
             }
         }
 
-        // Outro card — generate a text-to-video outro
+        // Outro card — generate a 9:16 portrait text-to-video outro (matches web)
         if appState.outroCardEnabled {
-            let outroPrompt = appState.userPrompt.isEmpty
-                ? "cinematic outro card with subscribe and follow call to action"
-                : "outro card for: \(appState.userPrompt)"
+            let outroText = appState.aiProductionPlan?.outro?.text
+                ?? "Follow for more"
+            let outroStylePrompt = appState.aiProductionPlan?.outro?.stylePrompt
+                ?? (appState.userPrompt.isEmpty
+                    ? "cinematic outro card, subscribe and follow call to action, bold text, dark background, portrait 9:16"
+                    : "cinematic outro card for: \(appState.userPrompt), call to action text, dark background, portrait 9:16")
+            let clampedOutroDur = max(3, min(5, Int(outroDuration)))
+
             await MainActor.run {
                 appState.outroCard = GeneratedCard(
-                    text: outroPrompt, stylePrompt: outroPrompt, duration: 3, status: .generating
+                    text: outroText, stylePrompt: outroStylePrompt,
+                    duration: Double(clampedOutroDur), status: .generating
                 )
             }
             do {
                 let outroURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: outroPrompt,
-                    duration: 3
+                    prompt: outroStylePrompt,
+                    duration: clampedOutroDur,
+                    aspectRatio: "9:16"
                 )
                 await MainActor.run {
                     appState.outroCard?.videoUrl = outroURL
