@@ -193,6 +193,8 @@ export interface AiProductionPlan {
   grainOpacity?: number;
   /** Vignette edge darkening intensity (0 = none, 0.15 = subtle, 0.3 = dramatic). */
   vignetteIntensity?: number;
+  /** Vignette inner radius as fraction of outer (0.2 = tight spotlight, 0.45 = default, 0.7 = wide). */
+  vignetteTightness?: number;
   /** Caption appear delay after cut in seconds (0 = instant, 0.12 = natural, 0.3 = dramatic). */
   captionAppearDelay?: number;
   /** Exit deceleration speed multiplier (0.92 = heavy, 0.97 = subtle, 1.0 = none). */
@@ -205,8 +207,8 @@ export interface AiProductionPlan {
   settleDuration?: number;
   /** Default clip audio volume when music is present (0-1). Per-clip overrides this. */
   clipAudioVolume?: number;
-  /** Whether to apply warmth shift on the final clip (true/false). */
-  finalClipWarmth?: boolean;
+  /** Warmth shift on the final clip. true = default warmth, false = none, object = custom. */
+  finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
 
   /** Film stock — tape-level base post-processing applied uniformly under per-clip grades. */
   filmStock?: {
@@ -320,6 +322,16 @@ export interface EditedClip {
   clipAudioVolume?: number;
   /** Per-clip transition intensity (0-1). Scales the effect magnitude. */
   transitionIntensity?: number;
+  /** Per-clip beat pulse scale intensity (0-0.1). Overrides plan-level beatPulseIntensity. */
+  beatPulseIntensity?: number;
+  /** Per-clip beat flash overlay opacity (0-0.5). Overrides plan-level beatFlashOpacity. */
+  beatFlashOpacity?: number;
+  /** Per-clip audio bleed fade-in duration in seconds (0.01-0.3). Controls how clip audio starts. */
+  audioFadeIn?: number;
+  /** Per-clip audio bleed fade-out duration in seconds (0.01-0.3). Controls how clip audio ends. */
+  audioFadeOut?: number;
+  /** Per-clip caption animation intensity (0-1). Scales entrance animation magnitude. */
+  captionAnimationIntensity?: number;
 }
 
 export interface ViralExportOptions {

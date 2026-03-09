@@ -640,7 +640,7 @@ export default function TapePreviewPlayer() {
       const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid, state.aiProductionPlan?.beatSyncToleranceMs ?? 50) : 0;
 
       const nowActive = new Set<string>();
-      let activeTransInfo: { type: TransitionType; progress: number; seed: number } | null = null;
+      let activeTransInfo: { type: TransitionType; progress: number; seed: number; intensity: number } | null = null;
 
       for (let i = 0; i < timeline.length; i++) {
         const e = timeline[i];
@@ -666,7 +666,7 @@ export default function TapePreviewPlayer() {
           const progress = lt / clipTransDuration;
           alpha = getClipAlpha(transType, progress, false);
           transform = getTransitionTransform(transType, progress, false, c.width);
-          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1 };
+          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1, intensity: e.clip.transitionIntensity ?? 1.0 };
         }
 
         // Outgoing clip during transition
@@ -678,7 +678,7 @@ export default function TapePreviewPlayer() {
             const progress = 1 - timeToEnd / nextTransDuration;
             alpha = getClipAlpha(transType, progress, true);
             transform = getTransitionTransform(transType, progress, true, c.width);
-            if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i };
+            if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i, intensity: nextClip?.clip.transitionIntensity ?? 1.0 };
           }
         }
 
@@ -699,7 +699,7 @@ export default function TapePreviewPlayer() {
           strobeFlashAlpha: state.aiProductionPlan?.strobeFlashAlpha,
           lightLeakColor: state.aiProductionPlan?.lightLeakColor,
           glitchColors: state.aiProductionPlan?.glitchColors,
-        });
+        }, activeTransInfo.intensity);
       }
 
       // Beat flash overlay — AI controls opacity

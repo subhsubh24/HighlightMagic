@@ -43,7 +43,7 @@ export interface AudioPipeline {
   /** The combined MediaStream (video + mixed audio) for the MediaRecorder. */
   stream: MediaStream;
   /** Connect a video element's audio to the mix. Returns a disconnect function. */
-  connectVideo(video: HTMLVideoElement, perClipVolume?: number): () => void;
+  connectVideo(video: HTMLVideoElement, perClipVolume?: number, audioFadeIn?: number, audioFadeOut?: number): () => void;
   /** Clean up all resources. */
   cleanup(): void;
 }
@@ -256,7 +256,7 @@ export async function createAudioPipeline(
   return {
     stream: combinedStream,
 
-    connectVideo(video: HTMLVideoElement, perClipVolume?: number): () => void {
+    connectVideo(video: HTMLVideoElement, perClipVolume?: number, audioFadeIn?: number, audioFadeOut?: number): () => void {
       try {
         // Route the video element's audio through Web Audio API
         const source = audioCtx.createMediaElementSource(video);
@@ -266,9 +266,10 @@ export async function createAudioPipeline(
         const defaultClipVol = musicGainNode ? (defaultClipAudioVolume ?? 0.45) : 1.0;
         const clipVolume = perClipVolume ?? defaultClipVol;
 
-        // Audio bleed: fade-in over 50ms to avoid hard audio starts at cuts
+        // Audio bleed: AI-controlled fade-in to shape how clip audio starts
+        const fadeInDur = audioFadeIn ?? 0.05;
         gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(clipVolume, audioCtx.currentTime + 0.05);
+        gain.gain.linearRampToValueAtTime(clipVolume, audioCtx.currentTime + fadeInDur);
 
         source.connect(gain);
         gain.connect(dest);
@@ -281,10 +282,11 @@ export async function createAudioPipeline(
 
         return () => {
           try {
-            // Audio bleed: fade-out over 80ms for smooth tail across cuts
+            // Audio bleed: AI-controlled fade-out to shape how clip audio ends
+            const fadeOutDur = audioFadeOut ?? 0.08;
             const now = audioCtx.currentTime;
             gain.gain.setValueAtTime(gain.gain.value, now);
-            gain.gain.linearRampToValueAtTime(0, now + 0.08);
+            gain.gain.linearRampToValueAtTime(0, now + fadeOutDur);
             // Disconnect after fade completes
             setTimeout(() => {
               try {

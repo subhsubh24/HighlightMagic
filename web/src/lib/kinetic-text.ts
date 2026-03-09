@@ -52,6 +52,7 @@ const DEFAULT_EXIT_DURATION = 0.3; // seconds
  * @param custom - Custom caption parameters from AI
  * @param entranceDuration - AI-decided entrance animation duration (defaults to 0.5s)
  * @param exitDuration - AI-decided exit animation duration (defaults to 0.3s)
+ * @param animationIntensity - Per-clip animation intensity (0-1). Scales entrance effect magnitude.
  */
 export function getKineticTransform(
   style: CaptionStyle,
@@ -60,7 +61,8 @@ export function getKineticTransform(
   canvasHeight: number,
   custom?: CustomCaptionParams,
   entranceDuration: number = DEFAULT_ENTRANCE_DURATION,
-  exitDuration: number = DEFAULT_EXIT_DURATION
+  exitDuration: number = DEFAULT_EXIT_DURATION,
+  animationIntensity: number = 1.0
 ): KineticTransform {
   const base: KineticTransform = {
     scale: 1,
@@ -75,10 +77,23 @@ export function getKineticTransform(
   // Resolve animation type: custom overrides named style
   const animation = custom?.animation ?? styleToAnimation(style);
 
-  // Entrance animation
+  // Entrance animation — intensity scales the effect magnitude
   if (localTime < entranceDuration) {
     const t = localTime / entranceDuration;
-    return getEntranceAnimationByType(animation, t, canvasHeight, custom);
+    const raw = getEntranceAnimationByType(animation, t, canvasHeight, custom);
+    if (animationIntensity < 1.0) {
+      const ai = Math.max(0, Math.min(1, animationIntensity));
+      return {
+        scale: 1 + (raw.scale - 1) * ai,
+        offsetY: raw.offsetY * ai,
+        alpha: 1 - (1 - raw.alpha) * ai,
+        rotation: raw.rotation * ai,
+        letterSpacing: 1 + (raw.letterSpacing - 1) * ai,
+        glowRadius: raw.glowRadius * ai,
+        glowAlpha: raw.glowAlpha * ai,
+      };
+    }
+    return raw;
   }
 
   // Exit animation — gentle fade

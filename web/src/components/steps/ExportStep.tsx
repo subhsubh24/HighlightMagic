@@ -620,6 +620,7 @@ export default function ExportStep() {
           defaultKenBurnsIntensity: cPlan.defaultKenBurnsIntensity,
           grainOpacity: cPlan.grainOpacity,
           vignetteIntensity: cPlan.vignetteIntensity,
+          vignetteTightness: cPlan.vignetteTightness,
           captionAppearDelay: cPlan.captionAppearDelay,
           exitDecelSpeed: cPlan.exitDecelSpeed,
           exitDecelDuration: cPlan.exitDecelDuration,
@@ -1037,18 +1038,21 @@ function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number, opac
  * Creates the "lens" quality that pro edits have.
  */
 let _vignetteCanvas: HTMLCanvasElement | null = null;
-function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number = 0.18) {
+let _vignetteTightness: number = 0.45;
+function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number = 0.18, tightness: number = 0.45) {
   if (intensity <= 0) return;
-  // Cache the vignette gradient on a canvas (doesn't change per frame)
-  if (!_vignetteCanvas || _vignetteCanvas.width !== w || _vignetteCanvas.height !== h) {
+  // Cache the vignette gradient on a canvas — invalidate when size or tightness changes
+  if (!_vignetteCanvas || _vignetteCanvas.width !== w || _vignetteCanvas.height !== h || _vignetteTightness !== tightness) {
     _vignetteCanvas = document.createElement("canvas");
     _vignetteCanvas.width = w;
     _vignetteCanvas.height = h;
+    _vignetteTightness = tightness;
     const vCtx = _vignetteCanvas.getContext("2d")!;
     const cx = w / 2;
     const cy = h / 2;
     const radius = Math.sqrt(cx * cx + cy * cy);
-    const grad = vCtx.createRadialGradient(cx, cy, radius * 0.45, cx, cy, radius);
+    const innerR = Math.max(0.1, Math.min(0.8, tightness));
+    const grad = vCtx.createRadialGradient(cx, cy, radius * innerR, cx, cy, radius);
     grad.addColorStop(0, "rgba(0,0,0,0)");
     grad.addColorStop(0.7, "rgba(0,0,0,0.15)");
     grad.addColorStop(1, "rgba(0,0,0,0.55)");
@@ -1106,14 +1110,16 @@ function applyFilmStock(ctx: CanvasRenderingContext2D, w: number, h: number, sto
   }
 }
 
-function getWarmthShiftCSS(elapsedSec: number, clipDuration: number, enabled: boolean = true): string | null {
-  if (!enabled) return null;
-  const WARMTH_FADE_IN = 2.0;
+function getWarmthShiftCSS(elapsedSec: number, clipDuration: number, warmth: boolean | { sepia: number; saturation: number; fadeIn: number } = true): string | null {
+  if (warmth === false) return null;
+  const sepiaMax = typeof warmth === "object" ? warmth.sepia : 0.06;
+  const satMax = typeof warmth === "object" ? warmth.saturation : 0.04;
+  const fadeIn = typeof warmth === "object" ? warmth.fadeIn : 2.0;
   const remaining = clipDuration - elapsedSec;
-  if (remaining >= WARMTH_FADE_IN) return null;
-  const t = Math.min(1, (WARMTH_FADE_IN - remaining) / WARMTH_FADE_IN);
-  const sepia = (0.06 * t).toFixed(3);
-  const sat = (1 + 0.04 * t).toFixed(3);
+  if (remaining >= fadeIn) return null;
+  const t = Math.min(1, (fadeIn - remaining) / fadeIn);
+  const sepia = (sepiaMax * t).toFixed(3);
+  const sat = (1 + satMax * t).toFixed(3);
   return `sepia(${sepia}) saturate(${sat})`;
 }
 
@@ -1399,13 +1405,14 @@ interface ExportAiRenderOptions {
   // AI-controlled post-processing
   grainOpacity?: number;
   vignetteIntensity?: number;
+  vignetteTightness?: number;
   captionAppearDelay?: number;
   exitDecelSpeed?: number;
   exitDecelDuration?: number;
   settleScale?: number;
   settleDuration?: number;
   clipAudioVolume?: number;
-  finalClipWarmth?: boolean;
+  finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
   filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
   audioBreaths?: Array<{ time: number; duration: number; depth: number }>;
 }
@@ -1447,7 +1454,7 @@ function renderVideoClip(
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
-    const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume);
+    const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume, instruction.clip.audioFadeIn, instruction.clip.audioFadeOut);
 
     video.onloadeddata = () => {
       const va = video.videoWidth / video.videoHeight;
@@ -1499,7 +1506,7 @@ function renderVideoClip(
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               ctx.filter = "none";
-              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
+              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0);
               scheduleExportFrame(drawFrame);
               return;
             }
@@ -1544,12 +1551,13 @@ function renderVideoClip(
           // Ken Burns — slow zoom over clip duration (AI controls intensity)
           const kenBurnsScale = 1 + (canvasElapsedMs / canvasDurationMs) * (style.kenBurnsIntensity ?? 0);
 
-          // Beat pulse — AI controls intensity (use global timeline time for beat sync)
+          // Beat pulse — per-clip override → plan-level → default
           let beatPulse = 1;
           let currentBeatIntensity = 0;
+          const clipBeatPulse = instruction.clip.beatPulseIntensity ?? aiRenderOpts?.beatPulseIntensity ?? 0.015;
           if (beatGrid) {
             currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
-            beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
+            beatPulse = 1 + currentBeatIntensity * clipBeatPulse;
           }
 
           // Micro-settle: subtle scale+position ease on clip entry
@@ -1568,7 +1576,7 @@ function renderVideoClip(
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, dx, dy, dw, dh);
               ctx.filter = "none";
-            }, neonColorHexes, aiRenderOpts);
+            }, neonColorHexes, aiRenderOpts, transIntensity);
           } else {
             const totalScale = entryScale * beatPulse * kenBurnsScale * settle.scale;
             const dw = baseW * totalScale;
@@ -1584,7 +1592,7 @@ function renderVideoClip(
 
           // Warmth shift on final clip — subtle warm grade in last 2s
           if (isLastClip) {
-            const warmCSS = getWarmthShiftCSS(canvasElapsedSec, canvasDuration, aiRenderOpts?.finalClipWarmth !== false);
+            const warmCSS = getWarmthShiftCSS(canvasElapsedSec, canvasDuration, aiRenderOpts?.finalClipWarmth ?? true);
             if (warmCSS) {
               ctx.filter = warmCSS;
               ctx.drawImage(canvas, 0, 0);
@@ -1592,13 +1600,13 @@ function renderVideoClip(
             }
           }
 
-          // Beat flash overlay — matches TapePreviewPlayer behavior
+          // Beat flash overlay — per-clip override → plan-level → default
           if (beatGrid) {
             const beatInt = currentBeatIntensity;
-            const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
-            if (beatInt > 0.5 && beatFlashMax > 0) {
+            const clipBeatFlash = instruction.clip.beatFlashOpacity ?? aiRenderOpts?.beatFlashOpacity ?? 0.12;
+            if (beatInt > 0.5 && clipBeatFlash > 0) {
               ctx.save();
-              ctx.globalAlpha = (beatInt - 0.5) * beatFlashMax;
+              ctx.globalAlpha = (beatInt - 0.5) * clipBeatFlash;
               ctx.fillStyle = "white";
               ctx.fillRect(0, 0, canvas.width, canvas.height);
               ctx.restore();
@@ -1607,7 +1615,7 @@ function renderVideoClip(
 
           // Film stock base + grain + vignette — pro post-processing overlays
           applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
-          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18);
+          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45);
           drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
@@ -1729,12 +1737,13 @@ async function renderPhotoClip(
       const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
       const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-      // Beat pulse — AI controls intensity (use global timeline time for beat sync)
+      // Beat pulse — per-clip override → plan-level → default
       let beatPulse = 1;
       let currentBeatIntensity = 0;
+      const clipBeatPulsePhoto = instruction.clip.beatPulseIntensity ?? aiRenderOpts?.beatPulseIntensity ?? 0.015;
       if (beatGrid) {
         currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
-        beatPulse = 1 + currentBeatIntensity * (aiRenderOpts?.beatPulseIntensity ?? 0.015);
+        beatPulse = 1 + currentBeatIntensity * clipBeatPulsePhoto;
       }
 
       // Micro-settle: subtle scale+position ease on clip entry
@@ -1753,7 +1762,7 @@ async function renderPhotoClip(
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
           ctx.drawImage(imgSource, dx, dy, dw, dh);
           ctx.filter = "none";
-        }, neonColorHexes, aiRenderOpts);
+        }, neonColorHexes, aiRenderOpts, transIntensity);
       } else {
         const totalScale = kenBurnsScale * entryScale * beatPulse * settle.scale;
         const dw = baseW * totalScale;
@@ -1769,7 +1778,7 @@ async function renderPhotoClip(
 
       // Warmth shift on final clip
       if (isLastClip) {
-        const warmCSS = getWarmthShiftCSS(elapsedSec, canvasDuration || photoDisplayDur, aiRenderOpts?.finalClipWarmth !== false);
+        const warmCSS = getWarmthShiftCSS(elapsedSec, canvasDuration || photoDisplayDur, aiRenderOpts?.finalClipWarmth ?? true);
         if (warmCSS) {
           ctx.filter = warmCSS;
           ctx.drawImage(canvas, 0, 0);
@@ -1777,12 +1786,12 @@ async function renderPhotoClip(
         }
       }
 
-      // Beat flash overlay — matches TapePreviewPlayer behavior
+      // Beat flash overlay — per-clip override → plan-level → default
       if (beatGrid) {
-        const beatFlashMax = aiRenderOpts?.beatFlashOpacity ?? 0.12;
-        if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
+        const clipBeatFlashPhoto = instruction.clip.beatFlashOpacity ?? aiRenderOpts?.beatFlashOpacity ?? 0.12;
+        if (currentBeatIntensity > 0.5 && clipBeatFlashPhoto > 0) {
           ctx.save();
-          ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
+          ctx.globalAlpha = (currentBeatIntensity - 0.5) * clipBeatFlashPhoto;
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.restore();
@@ -1791,10 +1800,10 @@ async function renderPhotoClip(
 
       // Film stock base + grain + vignette — pro post-processing overlays
       applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
-      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18);
+      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45);
       drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045);
 
-      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts);
+      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0);
       scheduleExportFrame(drawFrame);
     };
 
@@ -1814,11 +1823,13 @@ function renderTransitionFrame(
   seed: number,
   drawIncoming: () => void,
   neonColorHexes?: string[],
-  aiRenderOpts?: ExportAiRenderOptions
+  aiRenderOpts?: ExportAiRenderOptions,
+  transitionIntensity: number = 1.0
 ) {
   const outAlpha = getClipAlpha(transType, progress, true);
   const inAlpha = getClipAlpha(transType, progress, false);
-  const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
+  const rawOutTransform = getTransitionTransform(transType, progress, true, canvas.width);
+  const outTransform = scaleTransform(rawOutTransform, transitionIntensity);
 
   ctx.fillStyle = "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1845,7 +1856,7 @@ function renderTransitionFrame(
 
   // Overlay effect
   ctx.globalAlpha = 1;
-  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed, neonColorHexes, aiRenderOpts);
+  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed, neonColorHexes, aiRenderOpts, transitionIntensity);
 }
 
 function buildCaptionCustom(clip: EditedClip): CustomCaptionParams | undefined {
@@ -1875,7 +1886,8 @@ function drawOverlays(
   wmOpacity: number = 0.4,
   captionEntrance: number = 0.5,
   captionExit: number = 0.3,
-  aiRenderOpts?: ExportAiRenderOptions
+  aiRenderOpts?: ExportAiRenderOptions,
+  captionAnimationIntensity: number = 1.0
 ) {
   if (watermarkText) {
     ctx.save();
@@ -1893,7 +1905,7 @@ function drawOverlays(
   if (captionText && localTime >= captionDelay) {
     const adjustedTime = localTime - captionDelay;
     const adjustedDuration = clipDuration - captionDelay;
-    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit);
+    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity);
     const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
       ctx,

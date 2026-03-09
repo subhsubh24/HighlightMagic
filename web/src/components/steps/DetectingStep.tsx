@@ -76,6 +76,11 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     customCaptionGlowRadius: c.customCaptionGlowRadius,
     clipAudioVolume: c.clipAudioVolume,
     transitionIntensity: c.transitionIntensity,
+    beatPulseIntensity: c.beatPulseIntensity,
+    beatFlashOpacity: c.beatFlashOpacity,
+    audioFadeIn: c.audioFadeIn,
+    audioFadeOut: c.audioFadeOut,
+    captionAnimationIntensity: c.captionAnimationIntensity,
   }));
 }
 
@@ -831,6 +836,7 @@ export default function DetectingStep() {
             glitchColors: productionPlan.glitchColors,
             grainOpacity: productionPlan.grainOpacity,
             vignetteIntensity: productionPlan.vignetteIntensity,
+            vignetteTightness: productionPlan.vignetteTightness,
             captionAppearDelay: productionPlan.captionAppearDelay,
             exitDecelSpeed: productionPlan.exitDecelSpeed,
             exitDecelDuration: productionPlan.exitDecelDuration,
