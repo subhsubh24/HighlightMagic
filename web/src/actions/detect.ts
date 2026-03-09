@@ -1808,6 +1808,19 @@ SFX TIMING RULES:
 - Keep durationMs matched to the moment: 500ms for a snap/hit, 1500ms for a whoosh, 3000ms+ for ambient.
 - Music auto-ducks during SFX to keep the mix clean. Heavier ducking happens during VO.
 
+TRANSITION-SFX COHERENCE — Sound and visual transitions must AGREE:
+A real editor would NEVER use a mismatched transition + SFX combo. Follow these pairings:
+- "whip" transition → whoosh/swoosh SFX (timing "before", 800-1500ms). The sound leads the cut.
+- "zoom_punch" transition → bass impact/punch SFX (timing "on", 500-800ms). Sound and visual hit together.
+- "flash" / "hard_flash" → short snap/hit/camera flash SFX (timing "on", 300-600ms). Sharp visual = sharp sound.
+- "glitch" → digital glitch/static/error SFX (timing "on", 500-1000ms). Sound matches visual disruption.
+- "crossfade" / "light_leak" / "soft_zoom" → NO SFX or very subtle ambient. These are QUIET transitions.
+  Adding a whoosh to a crossfade sounds like a bug. Let the music carry these.
+- "color_flash" / "strobe" → rhythmic 808/hi-hat/beat SFX (timing "on", 300-500ms). Musical, beat-driven.
+- "dip_to_black" → deep sub bass or reverse cymbal (timing "before", 1500-3000ms). Builds anticipation.
+- "hard_cut" → NO SFX. The silence IS the transition. A hard cut with a whoosh defeats the purpose.
+When you pair SFX with a transition, the sound must REINFORCE the visual language, never contradict it.
+
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text, delaySec}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
 Global "delaySec" (0-1s): fallback delay before VO starts. But EACH SEGMENT can override this

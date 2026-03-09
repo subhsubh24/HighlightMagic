@@ -243,7 +243,15 @@ export async function createAudioPipeline(
         // Route the video element's audio through Web Audio API
         const source = audioCtx.createMediaElementSource(video);
         const gain = audioCtx.createGain();
-        gain.gain.value = 1.0;
+
+        // Clip audio ducking: lower original audio when music is playing
+        // This mimics real editors who balance clip audio against the soundtrack
+        const clipVolume = musicGainNode ? 0.45 : 1.0;
+
+        // Audio bleed: fade-in over 50ms to avoid hard audio starts at cuts
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(clipVolume, audioCtx.currentTime + 0.05);
+
         source.connect(gain);
         gain.connect(dest);
 
@@ -255,8 +263,17 @@ export async function createAudioPipeline(
 
         return () => {
           try {
-            source.disconnect();
-            gain.disconnect();
+            // Audio bleed: fade-out over 80ms for smooth tail across cuts
+            const now = audioCtx.currentTime;
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.08);
+            // Disconnect after fade completes
+            setTimeout(() => {
+              try {
+                source.disconnect();
+                gain.disconnect();
+              } catch { /* already disconnected */ }
+            }, 100);
           } catch {
             // Already disconnected
           }
