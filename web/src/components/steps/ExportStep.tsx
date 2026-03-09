@@ -356,6 +356,8 @@ export default function ExportStep() {
     setProgress(0);
     haptic();
 
+    // Fresh blob URLs created for this export — cleaned up when done
+    const exportBlobUrls: string[] = [];
     try {
       // Attempt server-side FFmpeg rendering first (Arch #1)
       // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
@@ -417,9 +419,20 @@ export default function ExportStep() {
         const hasAnimatedVideo = media?.type === "photo" &&
           media.animationStatus === "completed" &&
           media.animatedVideoUrl;
+        // For local files, create a fresh blob URL from the File object to guarantee
+        // validity — the original blob URL from upload may have been revoked or expired.
+        let mediaUrl: string;
+        if (hasAnimatedVideo) {
+          mediaUrl = media.animatedVideoUrl!;
+        } else if (media?.file) {
+          mediaUrl = URL.createObjectURL(media.file);
+          exportBlobUrls.push(mediaUrl);
+        } else {
+          mediaUrl = media?.url ?? "";
+        }
         renderClips.push({
           clip,
-          mediaUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+          mediaUrl,
           mediaType: hasAnimatedVideo ? "video" as const : (media?.type ?? "video"),
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
@@ -575,6 +588,9 @@ export default function ExportStep() {
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
+    } finally {
+      // Clean up fresh blob URLs created for this export
+      exportBlobUrls.forEach((u) => URL.revokeObjectURL(u));
     }
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
@@ -1365,7 +1381,7 @@ function renderPhotoClip(
       return;
     }
     const img = new window.Image();
-    // No crossOrigin needed — captureStream() + MediaRecorder works on tainted canvases.
+    img.crossOrigin = "anonymous";
 
     img.onload = () => {
       const ia = img.width / img.height;
