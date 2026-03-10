@@ -44,7 +44,7 @@ export async function generateMusic(
 ): Promise<MusicGenerateResult> {
   const apiKey = getApiKey();
   const safeDuration = Number.isFinite(durationMs) ? durationMs : DEFAULT_MUSIC_LENGTH_MS;
-  const clampedDuration = Math.max(3_000, Math.min(safeDuration, MAX_MUSIC_LENGTH_MS));
+  const clampedDuration = Math.round(Math.max(3_000, Math.min(safeDuration, MAX_MUSIC_LENGTH_MS)));
 
   console.log(`[elevenlabs-music] Generating: "${prompt.slice(0, 80)}..." (${clampedDuration}ms)`);
 
