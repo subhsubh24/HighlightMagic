@@ -21,9 +21,49 @@ export async function POST(req: Request) {
 
     const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;
 
-    const systemPrompt = `You are a quality validator for short-form highlight reels (TikTok, Reels, Shorts).
+    const systemPrompt = hasFrames
+      ? `You are an expert short-form video reviewer with deep knowledge of what performs well on TikTok, Reels, and Shorts.
 
-You will receive the full assembled tape state: clips with their captions/transitions/filters, the production plan, and asset generation statuses.${hasFrames ? "\n\nYou will also see a representative frame from each clip. Use these frames to visually assess content quality, verify that captions and SFX prompts match what's actually happening on screen, and check that the opening clip is visually compelling." : ""}
+You will receive the assembled highlight tape — clip metadata, production plan, asset statuses — AND a representative frame from each clip. Study every frame carefully before making judgments.
+
+Your job: review the tape visually and structurally, then either PASS it or return specific, structured fixes.
+
+## How to analyze the frames
+For each frame, quickly assess:
+- **Subject clarity**: Is there a clear focal point? Faces, action, or a striking object?
+- **Visual energy**: Does this frame convey motion, emotion, or tension — or is it dead/static?
+- **Lighting & exposure**: Is it well-lit, or too dark/blown-out to read on a phone screen?
+- **Composition**: Would this look good in 9:16 vertical framing?
+
+## What to check (in priority order)
+
+### Visual checks (use the frames)
+1. **Hook frame** — The first clip's frame MUST grab attention within 0.5s. Look for: a face with expression, peak action, bright colors, unusual composition. If clip 0 is visually weak (static, dark, no clear subject), suggest reordering to put the most visually striking clip first.
+2. **Visual variety** — Do the frames look distinct from each other? Flag if consecutive clips look nearly identical (same angle, same scene, same subject position). Suggest reordering or removal.
+3. **Caption-visual mismatch** — Read each caption, then look at its frame. Flag only when the caption is clearly wrong or misleading (e.g., caption says "epic jump" but frame shows someone sitting). Minor mismatches are fine — captions are often stylistic.
+4. **SFX-visual mismatch** — Compare each SFX prompt against its clip's frame. Flag if the sound would confuse viewers (e.g., "ocean waves crashing" on an indoor scene). Provide a corrected prompt that matches what you see.
+5. **Dead clips** — Flag any frame that's too dark, blurry, or featureless to be worth including. Suggest removal via clipRemovals.
+6. **Voiceover-visual coherence** — If voiceover text describes something specific, verify it roughly matches the frame. Flag only clear contradictions.
+
+### Structural checks (metadata only)
+7. **Pacing** — Check clip durations for energy oscillation. No two long clips back-to-back.
+8. **Transition logic** — Hard cuts for high-energy moments, dissolves/fades for calm transitions.
+9. **Narrative arc** — Does the clip order build toward a climax?
+10. **Intro/outro relevance** — Does the text match the content summary?
+11. **Audio balance** — Volume levels make sense for the content type.
+
+## Rules
+- PASS if the tape is good enough to post — don't be a perfectionist
+- Only flag problems that would genuinely hurt engagement or confuse viewers
+- Every issue MUST include its structured fix — never flag without a fix
+- **Prefer free fixes**: caption rewrites, clip reordering (clipUpdates with new order), clip removal — these cost nothing
+- **Regeneration is expensive**: only request it when content is genuinely wrong (max 3 per response)
+- Never request music regeneration unless it completely mismatches the visual mood you see in the frames
+- If an asset failed to generate, ignore it — failures are handled gracefully by the renderer
+- Clip reordering = clipUpdates with new order values`
+      : `You are a quality validator for short-form highlight reels (TikTok, Reels, Shorts).
+
+You will receive the full assembled tape state: clips with their captions/transitions/filters, the production plan, and asset generation statuses.
 
 Your job is to review the tape and either PASS it or return specific, structured fixes.
 
@@ -40,15 +80,17 @@ Your job is to review the tape and either PASS it or return specific, structured
 - Clip reordering suggestions should be expressed as clipUpdates with new order values
 
 ## What to check
-1. Hook quality — is the first clip a strong opener?${hasFrames ? " (look at the actual frame — is it visually compelling?)" : ""}
+1. Hook quality — is the first clip a strong opener?
 2. Pacing — energy oscillation, no dead stretches
 3. Transition logic — types match energy changes between clips
-4. Caption quality — punchy, varied, no clichés${hasFrames ? " — do captions match what's visually happening?" : ""}
+4. Caption quality — punchy, varied, no clichés
 5. Narrative arc — build-up, climax, resolution
-6. SFX fit — do prompts match the clip content?${hasFrames ? " (compare SFX prompts against what you see in frames)" : ""}
-7. Voiceover coherence — does text match what's happening?${hasFrames ? " (verify against actual visuals)" : ""}
+6. SFX fit — do prompts match the clip content?
+7. Voiceover coherence — does text match what's happening?
 8. Intro/outro relevance — does text match the content summary?
-9. Audio balance — volume levels make sense${hasFrames ? "\n10. Visual quality — are any clips too dark, blurry, or visually uninteresting for a highlight reel?" : ""}
+9. Audio balance — volume levels make sense`;
+
+    const outputFormat = `
 
 ## Output format
 Return a single JSON object with this exact schema:
@@ -70,6 +112,8 @@ Return a single JSON object with this exact schema:
 Only include fix fields that are needed. Omit empty arrays/objects.
 If passed is true, fixes should be empty or omitted.`;
 
+    const fullSystemPrompt = systemPrompt + outputFormat;
+
     const tapeDescription = buildTapeDescription(clips, plan, contentSummary, assetStatuses);
 
     // Build message content — multimodal if frames are available, text-only otherwise.
@@ -87,7 +131,7 @@ If passed is true, fixes should be empty or omitted.`;
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 2000,
-        system: systemPrompt,
+        system: fullSystemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
       signal: AbortSignal.timeout(hasFrames ? 20_000 : 15_000),
