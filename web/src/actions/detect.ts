@@ -1567,6 +1567,20 @@ For each clip, you make EVERY visual decision. Think about what makes NFL player
 top influencer reels look so polished — it's because every single cut, color grade, and
 effect is chosen intentionally for THAT specific moment.
 
+READ THE FOOTAGE FIRST — Before deciding ANY parameter for a clip, study the frames:
+What is the SUBJECT doing? Are they in motion or still? Is there a peak moment (a catch,
+a reaction, a turn)? Where does the action climax? What's the environment — indoor, outdoor,
+bright, dark, crowded, intimate? Is the camera moving or locked? Is there natural audio worth
+preserving (crowd noise, laughter, music) or is it ambient/silent?
+Your editing decisions should respond to what's VISUALLY HAPPENING:
+- Cut transitions on moments of visual change (subject turns, ball is caught, scene shifts)
+- Place slow-mo where the peak action is — not at a fixed percentage of the clip
+- Match color grade to the lighting and environment you SEE, not a preset palette
+- Use captions that react to the visual moment, not generic hype phrases
+- Set clipAudioVolume based on whether the clip's natural audio adds to the story
+The footage is your collaborator. Every parameter should feel like a response to what's in
+the frame, not a value picked from a menu.
+
 VELOCITY — Design a UNIQUE speed curve for each clip using "velocityKeyframes":
 Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects (minimum 2 keyframes).
 Position = where in the clip (0=start, 1=end). Speed = playback rate (0.25=slow-mo, 3.0=fast).
@@ -1864,26 +1878,22 @@ be intentional and reinforce the same emotional throughline. If two elements com
 other or feel redundant for THIS tape, choose the stronger one. If stacking everything creates
 the exact vibe the content needs, stack everything. Trust your eye.
 
-EMOTIONAL TEMPERATURE MAPPING — The secret to coherent clips:
-Before setting ANY parameter for a clip, decide its EMOTIONAL TEMPERATURE:
-  INTENSE → punchy transition (zoom_punch/flash), dramatic velocity ramp, saturated color grade,
-    bold caption, strong entry punch (1.05+), high beat flash, fast audioFadeIn (0.01-0.03),
-    high transitionIntensity (0.7+), high captionAnimationIntensity (0.8+), high clipAudioVolume
-  NEUTRAL → moderate transition (whip/color_flash), gentle velocity curve, balanced color,
-    subtle or no caption, moderate entry punch (1.02-1.04), moderate beat flash,
-    medium audioFadeIn (0.05-0.1), moderate everything
-  CALM → soft transition (crossfade/light_leak/soft_zoom), near-constant velocity, muted/warm color,
-    no caption or minimal whisper caption, no entry punch (1.0), low/no beat flash,
-    gentle audioFadeIn (0.1-0.2), low transitionIntensity (0.2-0.4), low clipAudioVolume for ambient
-  DRAMATIC → heavy transition (hard_flash/dip_to_black), extreme velocity contrast, high-contrast color,
-    deliberate caption with delayed entrance, strong entry punch, audioBreath placement,
-    high transitionIntensity, long captionAppearDelay
+EMOTIONAL COHERENCE — Every parameter for a clip should serve the same intent:
+Before setting ANY parameter for a clip, decide what that clip's JOB is in the tape. Is it the
+hook? The breather? The climax? The denouement? Once you know its role, every parameter should
+reinforce that role. Your transition choice, velocity curve, color grade, caption style, entry
+punch, audio volume, beat flash — they should all be telling the same story about the moment.
 
-ALL parameters for a clip must agree on the same temperature. A crossfade (calm) into a clip with
-a dramatic velocity ramp (intense) and a bold neon caption (intense) sends mixed signals — the
-transition promises serenity but the clip delivers chaos. That dissonance feels like a bug.
-The exception: intentional contrast (calm transition → intense content) is valid when it's a
-NARRATIVE CHOICE (the calm before the storm). But it should feel like a deliberate breath, not
+The test: if you swapped JUST the transition onto a different clip, would it feel wrong? If your
+crossfade would feel equally at home on the hero clip, you haven't committed to the moment's
+identity. Each clip's parameters should feel inseparable from its content.
+
+Watch for mixed signals: a soft crossfade into a clip with aggressive velocity ramping and a
+bold neon caption sends contradictory messages — the transition promises calm but the clip
+delivers chaos. That dissonance feels like a bug, not a choice. Either commit to the calm
+(soften the velocity and caption too) or commit to the intensity (use a harder transition).
+The exception: intentional contrast (calm transition → intense content) works when it's a
+NARRATIVE CHOICE — the calm before the storm. But it should feel like a deliberate breath, not
 an accident. Make the contrast serve the story.
 
 ═══════════════════════════════════════════════
@@ -1957,33 +1967,32 @@ not the editing. When in doubt, do less.
 RESTRAINT DISTRIBUTION — Not every clip should be "produced":
 A common AI editing mistake is making EVERY clip visually intense — every clip gets a caption,
 every transition is dramatic, every entry has a punch, every clip has a custom velocity curve.
-Real editors have "hero" moments AND "breathing" moments. Apply the 30-50% rule:
-- 30-50% of your clips should be CLEAN: no caption, subtle/no entry punch, simple transition
-  (hard_cut or crossfade), near-constant velocity, minimal effects. Let the footage breathe.
-- The remaining 50-70% get your creative treatment — captions, velocity ramps, punchy transitions.
-- The CONTRAST between "produced" and "clean" clips is what makes the produced moments HIT.
+Real editors have "hero" moments AND "breathing" moments. Look at the footage and decide:
+which clips ARE the heroes, and which clips exist to set up the heroes?
+- Hero clips earn the full treatment: dramatic velocity, bold caption, punchy transition, SFX.
+- Breathing clips earn restraint: simple transition, constant velocity, no caption, footage speaks.
+- The CONTRAST between produced and clean is what makes the produced moments HIT.
   If everything is at 11, nothing feels like 11. If most clips are at 6-7 and your hero is at 11,
   the hero EXPLODES off the screen.
-- Distribution should follow your energy arc: clean → building → HERO → clean → building → HERO → clean close.
+- How many clips should breathe vs. how many should be produced? That depends entirely on the
+  content. A memorial video might be 90% restraint with one devastating hero moment. A gaming
+  montage might be 80% produced chaos with brief recovery beats. Read the footage, not a formula.
 This applies to captions, SFX, transitions, entry punches, and velocity curves independently.
 A clip can have a dramatic velocity curve but no caption, or a caption but no entry punch.
-Mix and match — don't apply ALL effects to the same clips.
+Mix and match — don't stack ALL effects onto the same clips.
 
 ═══════════════════════════════════════════════
 AUDIENCE-AWARE EDITING RHYTHM
 ═══════════════════════════════════════════════
-Your editing RHYTHM should match the audience's consumption pattern — not just the caption voice.
-- Gym/sports/fitness content: faster cuts, harder transitions, bass-sync, aggressive velocity ramps.
-  This audience scrolls fast and expects high energy. Every beat should hit. Cuts on downbeats.
-- Travel/lifestyle/aesthetic content: longer holds, soft transitions, ambient breathing room.
-  This audience wants to FEEL the place. Hold shots long enough to create wanderlust.
-- Wedding/memorial/family content: emotional pacing, gentle crossfades, story arc.
-  This audience wants to CRY. Build slowly, peak gently, close warmly. Less is more.
-- Gaming/party/comedy content: chaotic energy, glitch/strobe transitions, rapid-fire cuts.
-  This audience wants dopamine. Overwhelm them. Then pull back for one breath. Then go again.
-- Vlog/talking-head content: clean cuts, minimal effects, let the personality carry.
-  This audience is here for the PERSON. Don't distract from them.
-The editing language itself should adapt to WHO will watch this, not just WHAT is in the footage.
+Your editing rhythm should serve the CONTENT, not a genre template. Watch the footage and
+let it tell you what it needs. High-energy footage with big moments wants fast cuts and hard
+transitions — not because it's "sports content" but because the moments demand that energy.
+Quiet, intimate footage wants longer holds and softer transitions — not because it's a "wedding"
+but because the emotional weight needs space to land. Some weddings are wild parties. Some
+sports tapes are reflective.
+Read the footage first. Then decide the rhythm that serves THIS content, not the category it
+belongs to. The editing language adapts to the emotional arc of the specific moments you're
+cutting, not a genre label.
 
 ═══════════════════════════════════════════════
 AUDIO-VISUAL FLOW — THE SITCOM PRINCIPLE
@@ -2085,18 +2094,18 @@ SFX TIMING RULES:
 - Keep durationMs matched to what the sound IS: a snap finishes fast, a whoosh needs travel time, ambient lingers.
 - Music auto-ducks during SFX to keep the mix clean. Heavier ducking happens during VO.
 
-TRANSITION-SFX COHERENCE — Sound and visual transitions must AGREE:
-A real editor would NEVER use a mismatched transition + SFX combo. Follow these pairings:
-- "whip" transition → whoosh/swoosh SFX (timing "before", 800-1500ms). The sound leads the cut.
-- "zoom_punch" transition → bass impact/punch SFX (timing "on", 500-800ms). Sound and visual hit together.
-- "flash" / "hard_flash" → short snap/hit/camera flash SFX (timing "on", 300-600ms). Sharp visual = sharp sound.
-- "glitch" → digital glitch/static/error SFX (timing "on", 500-1000ms). Sound matches visual disruption.
-- "crossfade" / "light_leak" / "soft_zoom" → NO SFX or very subtle ambient. These are QUIET transitions.
-  Adding a whoosh to a crossfade sounds like a bug. Let the music carry these.
-- "color_flash" / "strobe" → rhythmic 808/hi-hat/beat SFX (timing "on", 300-500ms). Musical, beat-driven.
-- "dip_to_black" → deep sub bass or reverse cymbal (timing "before", 1500-3000ms). Builds anticipation.
-- "hard_cut" → NO SFX. The silence IS the transition. A hard cut with a whoosh defeats the purpose.
-When you pair SFX with a transition, the sound must REINFORCE the visual language, never contradict it.
+TRANSITION-SFX COHERENCE — Sound and visual transitions should feel like one event:
+When pairing SFX with a transition, consider three valid relationships:
+  REINFORCE — the sound mirrors the visual energy. A fast, aggressive transition paired with
+    a punchy impact sound. This is the default instinct and usually the safest choice.
+  CONTRAST — the sound intentionally opposes the visual. A hard cut into dead silence.
+    A soft crossfade into a sudden bass hit. This creates surprise and works when it's deliberate.
+  INDEPENDENCE — no SFX on the transition at all. The music carries the moment.
+    Quiet transitions (crossfade, light_leak, soft_zoom) often work best with no SFX —
+    adding a whoosh to a crossfade sounds like a mistake, not a choice.
+The wrong choice is an ACCIDENTAL mismatch — where the SFX and transition feel like they were
+picked from different edits. If you can't articulate WHY the pairing works, it probably doesn't.
+Also consider: hard cuts are often strongest with silence. The absence of sound IS the effect.
 
 VOICEOVER — AI-generated narration on key moments.
 Set "voiceover": {enabled: true/false, segments: [{clipIndex, text, delaySec}], voiceCharacter: "male-broadcaster-hype"|"male-narrator-warm"|"male-young-energetic"|"female-narrator-warm"|"female-broadcaster-hype"|"female-young-energetic", delaySec: 0.3}.
