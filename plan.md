@@ -1,91 +1,177 @@
-# Implementation Plan
+# Validation Loop Plan
 
-## Feature: Photo Animation via Kling 3.0 (Atlas Cloud)
+## Overview
 
-Add per-photo animation controls in the upload step. When a user checks "Animate this photo", the photo gets sent to Kling 3.0 (via Atlas Cloud) to generate a short video clip. Users can optionally provide motion instructions; if left blank, Opus generates the prompt during the planning phase.
+Add a validation loop between the generation phase and the Results step. After all assets are generated, Haiku reviews the full assembled tape and can surgically fix issues — including regenerating specific expensive assets (a single SFX, intro card, voiceover segment, etc.) — before proceeding. Max 2 validation passes, then proceed regardless.
 
----
+## Architecture
 
-### Step 1: Update Types
-**File:** `web/src/lib/types.ts`
+```
+[All generators settle] → [Validation Pass 1] → passed? → [Results]
+                                                  ↓ failed
+                                          [Apply fixes + regenerate targeted assets]
+                                                  ↓
+                                          [Validation Pass 2] → [Results] (always)
+```
 
-Add to `MediaFile` interface:
-- `animatePhoto: boolean` (default `false`)
-- `animationInstructions: string` (default `""`)
-- `animatedVideoUrl: string | null` (populated after Kling returns)
-- `animationStatus: "idle" | "generating" | "completed" | "failed"` (track generation state)
+## Implementation Steps
 
----
+### 1. New types in `types.ts`
 
-### Step 2: Update Store
-**File:** `web/src/lib/store.ts`
+```ts
+export type ValidationStatus = "idle" | "validating" | "fixing" | "passed";
 
-- Add action: `UPDATE_MEDIA_ANIMATION` — updates `animatePhoto` and `animationInstructions` for a given file ID
-- Add action: `SET_ANIMATION_RESULT` — sets `animatedVideoUrl` and `animationStatus` for a given file ID
+export interface ValidationFixes {
+  clipUpdates?: Array<{ clipIndex: number; updates: Partial<EditedClip> }>;
+  clipRemovals?: number[];
+  regenerateMusic?: { prompt: string; durationMs: number };
+  regenerateSfx?: Array<{ clipIndex: number; prompt: string; durationMs: number }>;
+  regenerateVoiceover?: Array<{ clipIndex: number; text: string }>;
+  regenerateIntro?: { text: string; stylePrompt: string; duration: number };
+  regenerateOutro?: { text: string; stylePrompt: string; duration: number };
+  planUpdates?: Partial<AiProductionPlan>;
+}
 
----
+export interface ValidationResult {
+  passed: boolean;
+  issues: string[];
+  fixes: ValidationFixes;
+}
+```
 
-### Step 3: Upload Step UI — Per-Photo Animation Controls
-**File:** `web/src/components/steps/UploadStep.tsx`
+### 2. Store changes in `store.ts`
 
-For each file tile where `type === "photo"`, add below the thumbnail:
-- **Checkbox**: "Animate this photo" — toggles `animatePhoto`
-- **Text input** (shown when checkbox is checked): placeholder "Describe the motion... (optional — AI will decide if left blank)" — binds to `animationInstructions`, max 500 chars
-- Video files don't get these controls
+- Add `validationStatus: ValidationStatus` to `AppState` (default `"idle"`)
+- Add `SET_VALIDATION_STATUS` action
+- Reset `validationStatus` to `"idle"` in `SET_REGENERATE_FEEDBACK` (when user triggers regeneration)
 
----
+### 3. New API route: `web/src/app/api/validate/route.ts`
 
-### Step 4: Atlas Cloud Kling API Client
-**New file:** `web/src/lib/kling.ts`
+**POST endpoint** that calls Haiku with the full assembled tape state.
 
-- `generatePhotoAnimation(imageUrl: string, prompt: string, duration?: number)` — submits task
-  - `POST https://api.atlascloud.ai/api/v1/model/generateVideo`
-  - Body: `{ model: "kwaivgi/kling-v3.0-pro/image-to-video", image, prompt, duration: 5, cfg_scale: 0.5, sound: false }`
-  - Auth: `Bearer ${ATLASCLOUD_API_KEY}`
-  - Returns prediction ID
-- `pollAnimationResult(predictionId: string)` — polls every 5s, 3-min timeout, returns video URL
+**Input:** clips, production plan, media file metadata, asset statuses (what generated successfully, what failed), content summary.
 
----
+**Haiku system prompt** — upgraded version of the existing `validateTape` but returns structured fixes instead of just pass/fail:
 
-### Step 5: Server Action for Animation
-**New file:** `web/src/actions/animate.ts`
+Checks:
+- Hook quality (is clip 1 the strongest opener?)
+- Pacing (energy oscillation, no dead stretches)
+- Transition logic (types match energy changes between clips)
+- Source coverage (every uploaded file appears at least once)
+- Caption quality (punchy, varied, no cliché)
+- Narrative arc (build-up, climax, resolution)
+- SFX fit (do prompts match the clip content?)
+- Voiceover coherence (does the text match what's happening?)
+- Intro/outro relevance (does the text match the content summary?)
+- Failed assets (anything that failed to generate that matters)
+- Audio balance (volume levels make sense)
 
-- Server action `animatePhoto(imageUrl: string, prompt: string)` that:
-  1. Calls `generatePhotoAnimation` to submit the task
-  2. Calls `pollAnimationResult` to wait for the video
-  3. Returns the video URL
-- Keeps the API key server-side
+**Output JSON:**
+```json
+{
+  "passed": true/false,
+  "issues": ["Clip 3 SFX 'ocean waves' doesn't match a basketball clip"],
+  "fixes": {
+    "clipUpdates": [{ "clipIndex": 2, "updates": { "captionText": "GAME TIME" }}],
+    "regenerateSfx": [{ "clipIndex": 2, "prompt": "basketball dribble and crowd cheer", "durationMs": 2000 }],
+    "planUpdates": { "sfxVolume": 0.7 }
+  }
+}
+```
 
----
+**Prompt rules for Haiku:**
+- PASS if the tape is good enough to post — don't be a perfectionist
+- Only flag real problems that would hurt engagement
+- When flagging an issue, MUST provide the structured fix (not just the problem)
+- Prefer plan-layer tweaks (instant) over asset regeneration (expensive)
+- Only request regeneration when content is genuinely wrong (mismatched SFX, misleading intro text)
+- Max 3 regenerations per pass to keep cost bounded
+- Never regenerate music unless it completely mismatches the content mood
+- If an asset failed to generate, don't flag it — failures are already handled gracefully
 
-### Step 6: Wire Animation into the Detection Pipeline
-**File:** `web/src/actions/detect.ts`
+### 4. Fix applicator utility: `web/src/lib/validation-fixes.ts`
 
-After Opus planning completes, for any photo with `animatePhoto: true`:
-- If `animationInstructions` is empty → use Opus-generated `animationPrompt`
-- If `animationInstructions` is provided → use that directly
-- Fire off all Kling calls in parallel, report progress via SSE
+**New file** with a pure function:
 
-**Opus prompt update:** When Opus sees a photo clip with `animatePhoto: true` and no user instructions, generate an `animationPrompt` field describing the ideal motion.
+```ts
+export function applyClipFixes(clips: EditedClip[], fixes: ValidationFixes): EditedClip[]
+```
 
----
+- Merges `clipUpdates` into matching clips by index
+- Filters out clips at indices in `clipRemovals`, re-numbers `order` field
+- Returns new array (immutable)
 
-### Step 7: Update .env.example
-**File:** `web/.env.example`
+### 5. Regeneration helpers in `DetectingStep.tsx`
 
-Add `ATLASCLOUD_API_KEY=`
+Extract the existing inline fetch+dispatch patterns into reusable functions within the component. These already exist as inline code blocks — just wrap them so the validation loop can call them individually:
 
----
+- `regenerateSpecificSfx(clipIndex, prompt, durationMs)` → fetches `/api/sfx`, dispatches `UPDATE_SFX_TRACK`
+- `regenerateSpecificVoiceover(clipIndex, text, voiceCharacter)` → fetches `/api/voiceover`, dispatches `UPDATE_VOICEOVER_SEGMENT`
+- `regenerateIntroCard(text, stylePrompt, duration)` → fetches `/api/intro`, polls, dispatches `SET_INTRO_CARD`
+- `regenerateOutroCard(text, stylePrompt, duration)` → fetches `/api/outro`, polls, dispatches `SET_OUTRO_CARD`
+- `regenerateMusic(prompt, durationMs)` → fetches `/api/music/submit`, polls, dispatches `SET_AI_MUSIC_RESULT`
 
-### Step 8: Preview Support
-**File:** `web/src/components/TapePreviewPlayer.tsx`
+These are thin wrappers around the existing fetch + poll + dispatch logic already present in DetectingStep.
 
-When rendering a photo clip with `animatedVideoUrl`, use the video instead of static image. Falls back to static + Ken Burns if not yet completed.
+### 6. Validation loop in `DetectingStep.tsx`
 
----
+**Location:** After `Promise.allSettled` (line ~1370) and before `SET_STEP "results"` (line ~1382).
 
-### Out of Scope (for later)
-- Pro-tier gating
-- iOS native export with animated photos
-- Cost/usage tracking
-- Retry UI if animation fails
+```
+setProgress(95);
+dispatch SET_VALIDATION_STATUS "validating"
+set UI text: "Validating your highlight reel..."
+
+for pass = 0; pass < 2; pass++:
+  if aborted: break
+
+  call POST /api/validate with current state (15s timeout, fail-open)
+
+  if passed: break
+
+  dispatch SET_VALIDATION_STATUS "fixing"
+  set UI text: "Polishing — fixing N issue(s)..."
+
+  apply plan-layer fixes instantly (clipUpdates, clipRemovals, planUpdates)
+  dispatch updated clips + plan to store
+
+  fire targeted regeneration promises in parallel (only the specific assets Haiku flagged)
+  await Promise.allSettled(regeneration promises)
+
+dispatch SET_VALIDATION_STATUS "passed"
+setProgress(100)
+proceed to results
+```
+
+### 7. UI treatment (within existing DetectingStep progress area)
+
+No new step in the stepper nav. No new screen. It's a sub-phase of the existing "Analyze" step at progress 95-99%.
+
+- **Validating:** "Validating your highlight reel..." with a shield/sparkle icon
+- **Fixing:** "Polishing — adjusting [pacing/captions/transitions]..." showing the issue count, with a wrench/sparkle icon
+- **Regenerating:** If assets are being regenerated, show which ones: "Regenerating intro card..." / "Regenerating 1 sound effect..."
+- Progress bar sits at 95-99% during validation, hits 100% when done
+
+Total added time for most runs (where validation passes): ~1-2s (single Haiku call).
+Worst case (2 passes + targeted regenerations): ~15-30s depending on what's regenerated.
+
+### 8. Guardrails
+
+- **Max 2 passes** — hard cap via for loop, proceed to results regardless after pass 2
+- **15s timeout per Haiku call** — fail open on timeout (treat as passed)
+- **Max 3 regenerations per pass** — enforced in the API route prompt and validated server-side (truncate excess regeneration requests)
+- **Fail-open on any error** — network failure, JSON parse error, timeout → skip validation, proceed to results
+- **No infinite loops** — bounded for loop guarantees termination
+- **Abort-aware** — checks abort signal before each pass and before regenerations
+- **Cost bounded** — Haiku is cheap (~$0.001/call), regenerations are surgical (1-3 specific assets, not all)
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `web/src/lib/types.ts` | Add `ValidationStatus`, `ValidationFixes`, `ValidationResult` types |
+| `web/src/lib/store.ts` | Add `validationStatus` to state + `SET_VALIDATION_STATUS` action |
+| `web/src/app/api/validate/route.ts` | **New** — Haiku validation endpoint |
+| `web/src/lib/validation-fixes.ts` | **New** — `applyClipFixes` pure utility |
+| `web/src/components/steps/DetectingStep.tsx` | Validation loop + regeneration helpers + UI sub-phase |
+| `web/src/lib/store.test.ts` | Add test for new action |
