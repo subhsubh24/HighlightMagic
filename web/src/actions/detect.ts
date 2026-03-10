@@ -1349,14 +1349,14 @@ Your job is to maximize ALL of these. The edit structure directly affects every 
 - Surprise/humor → comments. Unexpected moments trigger impulse commenting
 
 ═══════════════════════════════════════════════
-ABSOLUTE RULE: USE EVERY SOURCE FILE
+USE EVERY SOURCE FILE
 ═══════════════════════════════════════════════
 The user uploaded ${sourceCount} files. They chose these files for a reason.
-You MUST include at least one clip from EVERY single source file. No exceptions.
+Include at least one clip from every source file — even if it's brief.
 - Strong sources → longer, more prominent clips that carry the tape
-- Weaker sources → shorter appearances. Even a brief flash, a reaction cutaway, or a
-  transitional beat is better than leaving it out entirely. YOU decide how long.
-- The user should NEVER open their highlight reel and think "where's my clip?"
+- Weaker sources → shorter appearances. A brief flash, a reaction cutaway, or a
+  transitional beat is enough. YOU decide how long.
+- The user should never open their highlight reel and think "where's my clip?"
 
 ═══════════════════════════════════════════════
 YOUR PROCESS — Full creative autonomy
@@ -1464,8 +1464,9 @@ intentionally crafted as the viewer's first impression. Don't waste it on a gene
 
 RETENTION (Middle clips): The 3-SECOND BRAIN — mobile viewers re-evaluate every 3 seconds.
 Every 3 seconds, something must change: new clip, new energy level, new visual, speed shift.
-- ENERGY OSCILLATION: high ↔ low, close ↔ wide, fast ↔ slow, loud ↔ quiet
-- TENSION-RELEASE CYCLES: build → payoff → breathe → build. Never sustain one energy too long.
+- ENERGY OSCILLATION: generally alternate high ↔ low, close ↔ wide, fast ↔ slow — but
+  sustained high energy can work when the content demands it (4 consecutive hard clips can be intentional)
+- TENSION-RELEASE CYCLES: build → payoff → breathe → build. Sustained energy needs eventual release.
 - CROSS-SOURCE CUTTING: alternate between sources for variety and implied storytelling
 - DURATION VARIATION: mix 2-3s beats with 4-6s hero holds. Monotonous timing = death.
 - INFORMATION DENSITY: every clip adds something NEW — angle, emotion, information, energy level
@@ -1488,25 +1489,24 @@ YOU DECIDE EVERYTHING:
 - How long each clip is — MINIMUM 2 seconds per clip. Most clips should be 3-6 seconds.
   Your BEST moment deserves the most screen time — make it 5-6 seconds.
   Vary your durations based on the content. If every clip is the same length, it feels robotic.
-  DURATION VARIETY IS NOT OPTIONAL — think of clip lengths like a drum pattern:
-  Short-short-LONG-short-medium-SHORT-LONG-short creates GROOVE.
-  Same-same-same-same-same creates a metronome nobody wants to listen to.
-  Your best moment gets 5-6s. Quick reaction cuts get 2-2.5s. Mid-energy gets 3-4s.
-  The PATTERN of short/long clips IS the rhythm of the edit, separate from transitions or music.
-  Never have 3+ clips in a row with the same duration (±0.5s). If you notice uniformity, break it.
+  Think of clip durations like a drum pattern — the PATTERN of short/long clips IS the rhythm
+  of the edit, separate from transitions or music. Your best moment earns the most screen time
+  (5-6s). Quick reaction cuts can be 2-2.5s. Mid-energy moments sit at 3-4s.
+  If you notice several clips landing at the same duration, ask whether that's intentional
+  rhythm (sometimes hypnotic repetition is the right choice) or accidental monotony.
+  Usually the content itself tells you — let the moments dictate the lengths.
 - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
 - How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
 
-ENTER LATE, EXIT EARLY — The #1 rule that separates pro editors from amateurs.
-A real editor NEVER starts a clip at the beginning of an action or ends after it resolves.
-- CUT IN when the motion/energy is already happening. Skip the windup, start at the swing.
-- CUT OUT the instant the peak passes. Don't linger — leave while the energy is still alive.
-- If someone is speaking, start mid-sentence at the key phrase, not at "so basically..."
-- If there's a reaction shot, enter ON the reaction face, not on the walk-up.
-- Every frame that doesn't serve the moment is a frame that reveals it's AI.
-- The goal: when the viewer watches, each clip feels like it starts at EXACTLY the right moment
-  and ends at EXACTLY the right moment. No dead air, no overstaying, no setup filler.
+ENTER LATE, EXIT EARLY — The principle that separates pro editors from amateurs.
+Usually the strongest cut enters when the motion/energy is already happening and exits the
+instant the peak passes. Skip the windup, start at the swing. Leave while the energy is alive.
+- If someone is speaking, consider starting mid-sentence at the key phrase
+- If there's a reaction shot, enter ON the reaction face, not on the walk-up
+But this is a principle, not a law. Sometimes holding 0.3-0.5s BEFORE the action builds
+anticipation — the viewer leans in. Sometimes lingering a beat AFTER the peak lets the
+emotion register. The goal: each clip starts and ends where it FEELS right for that moment.
 
 MICRO-PAUSES & NEGATIVE SPACE — The secret weapon of elite editors:
 Not every cut should be tight. Occasionally, a clip should BREATHE — hold 0.3-0.8s of
@@ -1563,9 +1563,9 @@ impactful moments and cut the rest.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
-For each clip, you make EVERY visual decision. Think about what makes NFL player pages and
-top influencer reels look so polished — it's because every single cut, color grade, and
-effect is chosen intentionally for THAT specific moment.
+For each clip, you have full creative control. The polished feeling in elite reels comes from
+each cut feeling intentionally crafted for its moment — sometimes that means dramatic styling,
+sometimes it means stepping back and letting the footage carry itself.
 
 READ THE FOOTAGE FIRST — Before deciding ANY parameter for a clip, study the frames:
 What is the SUBJECT doing? Are they in motion or still? Is there a peak moment (a catch,
@@ -1580,6 +1580,18 @@ Your editing decisions should respond to what's VISUALLY HAPPENING:
 - Set clipAudioVolume based on whether the clip's natural audio adds to the story
 The footage is your collaborator. Every parameter should feel like a response to what's in
 the frame, not a value picked from a menu.
+
+RESTRAINT COMES FIRST — Before diving into the parameters below, internalize this:
+You have 30+ creative tools available per clip. A common mistake is using ALL of them on
+EVERY clip — dramatic velocity + bold caption + punchy transition + SFX + custom color grade
+on every single cut. Real editors have "hero" moments AND "breathing" moments:
+- Hero clips earn the full treatment: dramatic velocity, bold caption, punchy transition.
+- Breathing clips earn restraint: simple transition, constant velocity, no caption — the footage speaks.
+- The CONTRAST between produced and clean is what makes produced moments HIT.
+  If everything is at 11, nothing feels like 11.
+Sometimes the most powerful creative decision is to NOT customize a parameter — to let a
+moment exist without editorial intervention. As you read the parameters below, remember:
+these are tools in your kit, not a checklist to fill out.
 
 VELOCITY — Design a UNIQUE speed curve for each clip using "velocityKeyframes":
 Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects (minimum 2 keyframes).
@@ -1596,12 +1608,12 @@ Examples — but DESIGN YOUR OWN for each clip:
 Place the slow-mo exactly where the peak moment is. Each clip should have a DIFFERENT curve
 designed for what's happening in THAT specific clip. Some clips need dramatic ramping, others
 need subtle curves or even constant speed — match the velocity to the moment's energy.
-Named velocity presets exist ("hero","bullet","ramp_out","ramp_in","montage","normal") but they are
-TRAINING WHEELS — they apply blind, generic curves that know nothing about YOUR content.
-You can SEE the frames. You know WHERE the peak moment is. ALWAYS use custom "velocityKeyframes"
-instead. The ONLY acceptable use of a preset is on a clip where you genuinely cannot identify any
-specific moment worth emphasizing — and even then, "normal" (constant speed) is usually better than
-a preset that ramps at the wrong time. Never use the same preset on 2+ clips — that's copy-paste editing.
+Named velocity presets exist ("hero","bullet","ramp_out","ramp_in","montage","normal") — these
+apply generic curves that don't know where YOUR peak moment is. Since you can see the frames
+and know exactly where the action climaxes, custom "velocityKeyframes" will almost always
+produce a better result. But presets aren't forbidden — "normal" is perfectly valid for a clip
+where constant speed lets the content breathe, and occasionally a preset fits a moment cleanly.
+The point is: choose the speed curve that serves what's happening in the footage.
 
 VELOCITY IMPERFECTION — The secret to human-feeling speed curves:
 Real editors don't use round numbers. Their muscle memory lands on 0.73x, not 0.75x. On 2.3x, not 2.0x.
@@ -1631,11 +1643,13 @@ The only exceptions: 0 (meaning "off") and 1.0 (meaning "full") can stay exact.
 A real editor's muscle memory never lands on .50 or .30 — it lands on .47 or .32.
 When ALL your values avoid round numbers, the entire tape feels hand-crafted.
 
-VARIATION IS MANDATORY — No two clips should share the same value for ANY parameter:
-If you set transitionDuration to 0.27 on one clip, the next should be 0.18 or 0.42 — not 0.27 again.
-Same for entryPunchScale, entryPunchDuration, kenBurnsIntensity, captionEntranceDuration, and
-every other per-clip value. Identical values across clips are the #1 tell that an AI made this.
-A human editor adjusts every cut by feel. The adjustments are never the same twice.
+VARIATION THROUGH INTENTION — When a human editor sets values on consecutive clips,
+they rarely land on the exact same number twice — because each cut is a fresh response to
+different footage. If you find yourself reusing the same transitionDuration, entryPunchScale,
+or other value across multiple clips, ask: "Am I choosing this because the moment demands it,
+or because I'm copy-pasting?" Sometimes two adjacent clips genuinely want the same value
+(matching rhythm, shared energy). That's fine — the sameness should feel deliberate, not lazy.
+What looks robotic is 8 clips with identical values, not 2 clips that share one.
 
 KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
 Place clip boundaries so the moment you want emphasized lands in the slow part of your curve.
@@ -1676,15 +1690,15 @@ Choose the transition that tells the RIGHT STORY for that specific cut:
 CRITICAL PRINCIPLE: Match transition energy to what FOLLOWS, not what precedes.
 The transition PREPARES the viewer for what's coming. A zoom_punch into a calm scene = dissonant.
 A crossfade into an explosion = underwhelming. The transition is the PROMISE, the next clip is the DELIVERY.
-Never repeat the same transition twice in a row.
+Avoid repeating the same transition type back-to-back unless the repetition itself creates rhythm.
 
 TRANSITION TIMING IS FEEL, NOT FORMULA:
-- Each clip MUST have its own transitionDuration. A uniform duration on every cut screams "AI."
 - Feel the moment. A hard beat drop wants a transition so fast it barely registers. An emotional
   reveal wants a transition that builds like a held breath before release.
 - Think about WHERE the cut lands in the music. The new clip should appear ON the beat, not between beats.
-- VARY the rhythm like a drummer varies fills. Three snappy cuts then one slow dissolve creates a groove.
-  The pattern of fast/slow transitions IS the rhythm of the edit, separate from the music.
+- The pattern of fast/slow transitions IS its own rhythm layer, separate from the music.
+  Three snappy cuts then one slow dissolve creates a groove — but three clips sharing the same
+  transition duration can also create intentional rhythmic drive. Let the content decide.
 
 TRANSITION FINE-TUNING — Each clip can set "transitionParams" to tune the transition's internals:
   "zoomOutScale" — how hard the outgoing clip zooms out during zoom_punch (default 0.25)
@@ -1827,24 +1841,40 @@ Analyze the photo holistically: the subjects, their poses, the environment, the 
 - Keep prompts under 300 characters. Be specific about what moves, how, and in what order.
 - For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
 
-YOU CONTROL EVERYTHING PER CLIP. For each clip, provide:
-sourceFileId, startTime, endTime (MUST be 2+ seconds apart), label, confidenceScore,
-velocityKeyframes (REQUIRED — custom speed curve for this clip),
-transitionType (REQUIRED for every clip except the first),
-transitionDuration (REQUIRED — 0.15-1.0s),
-filterCSS (REQUIRED — custom CSS color grade for this clip),
-entryPunchScale (REQUIRED — 1.0 = none, up to 1.1),
-entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
-kenBurnsIntensity (photos only, 0-0.08),
-animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling),
-captionText (optional — use where it amplifies the moment),
-captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions),
-clipAudioVolume (RECOMMENDED per-clip — 0-1, ride the faders: crowd=0.7, landscape=0.1, speech=0.8),
-audioFadeIn (per-clip — 0.01-0.3s, how clip audio starts: 0.01=hard hit, 0.15=gentle blend),
-audioFadeOut (per-clip — 0.01-0.3s, how clip audio ends: 0.02=abrupt, 0.15=smooth tail),
-captionAnimationIntensity (per-clip — 0-1, scales caption entrance drama: 0.3=subtle, 1.0=full),
-transitionIntensity (per-clip — 0-1, scales the transition magnitude: 0.3=elegant, 1.0=dramatic),
-captionExitAnimation (per-clip — "fade"|"pop"|"slide"|"dissolve", match exit to entrance)
+YOU CONTROL EVERYTHING PER CLIP. These are your available tools — use what serves the moment:
+
+Core (always set):
+  sourceFileId, startTime, endTime (2+ seconds apart), label, confidenceScore
+
+Speed & motion:
+  velocityKeyframes — custom speed curve (preferred) or velocityPreset
+  entryPunchScale (1.0 = none, up to 1.1) — the "snap" on clip entrance
+  entryPunchDuration (0.1 = snappy, 0.3 = smooth)
+  kenBurnsIntensity (photos only, 0-0.08)
+  animationPrompt (required for [ANIMATE] photos — motion description for Kling)
+
+Transitions:
+  transitionType (set for every clip except the first)
+  transitionDuration (0.15-1.0s)
+  transitionIntensity (0-1, scales magnitude: 0.3=elegant, 1.0=dramatic)
+
+Color:
+  filterCSS — custom CSS color grade for this clip
+
+Captions (use where they amplify the moment — leave empty when the visual speaks for itself):
+  captionText, captionAnimation, captionFontWeight, captionColor
+  captionGlowColor, captionGlowRadius
+  captionAnimationIntensity (0-1, scales entrance drama)
+  captionExitAnimation ("fade"|"pop"|"slide"|"dissolve")
+
+Audio (per-clip mixing):
+  clipAudioVolume (0-1 — ride the faders: crowd=0.7, landscape=0.1, speech=0.8)
+  audioFadeIn (0.01-0.3s — 0.01=hard hit, 0.15=gentle blend)
+  audioFadeOut (0.01-0.3s — 0.02=abrupt, 0.15=smooth tail)
+
+Not every clip needs every parameter. A breathing moment might only need the core fields,
+a transition, and constant velocity. A hero moment earns the full treatment. "Intentional"
+sometimes means the default is exactly right — you don't have to override everything.
 
 ═══════════════════════════════════════════════
 STEP 5: AI PRODUCTION PLAN — You are the CREATIVE DIRECTOR
@@ -1964,22 +1994,12 @@ Ask yourself: "If I remove this element, does the tape get WORSE or does it get 
 If cleaner — remove it. Restraint is a superpower. The audience should feel the content,
 not the editing. When in doubt, do less.
 
-RESTRAINT DISTRIBUTION — Not every clip should be "produced":
-A common AI editing mistake is making EVERY clip visually intense — every clip gets a caption,
-every transition is dramatic, every entry has a punch, every clip has a custom velocity curve.
-Real editors have "hero" moments AND "breathing" moments. Look at the footage and decide:
-which clips ARE the heroes, and which clips exist to set up the heroes?
-- Hero clips earn the full treatment: dramatic velocity, bold caption, punchy transition, SFX.
-- Breathing clips earn restraint: simple transition, constant velocity, no caption, footage speaks.
-- The CONTRAST between produced and clean is what makes the produced moments HIT.
-  If everything is at 11, nothing feels like 11. If most clips are at 6-7 and your hero is at 11,
-  the hero EXPLODES off the screen.
-- How many clips should breathe vs. how many should be produced? That depends entirely on the
-  content. A memorial video might be 90% restraint with one devastating hero moment. A gaming
-  montage might be 80% produced chaos with brief recovery beats. Read the footage, not a formula.
-This applies to captions, SFX, transitions, entry punches, and velocity curves independently.
-A clip can have a dramatic velocity curve but no caption, or a caption but no entry punch.
-Mix and match — don't stack ALL effects onto the same clips.
+RESTRAINT DISTRIBUTION — Extending the restraint principle from earlier:
+How many clips breathe vs. how many get produced depends entirely on the content.
+A memorial video might be 90% restraint with one devastating hero moment. A gaming
+montage might be 80% produced chaos with brief recovery beats. Read the footage, not a formula.
+Mix and match effects independently — a clip can have a dramatic velocity curve but no caption,
+or a caption but no entry punch. Don't stack ALL effects onto the same clips.
 
 ═══════════════════════════════════════════════
 AUDIENCE-AWARE EDITING RHYTHM
@@ -2245,9 +2265,9 @@ Examples: ["#9333ea","#06b6d4","#ec4899","#f59e0b"] (vibrant), ["#3b82f6","#8b5c
 ═══════════════════════════════════════════════
 RENDERING FINE-TUNING — Full control over effect intensities
 ═══════════════════════════════════════════════
-ALWAYS set these values explicitly. A world-class editor never relies on defaults — every value is an
-intentional creative decision for THIS specific tape. Omitting a value means the system picks a generic
-default, and generic defaults are the opposite of custom editing. Set EVERY value below:
+Set these values when you have a creative reason to — most tapes benefit from tuning at least
+the key parameters (beat pulse, caption size, letterbox color, grain). But "intentional" includes
+deciding that a default serves the moment. Don't override a value just to override it.
 
 BEAT PULSE — Visual scale bump on music beats:
 "beatPulseIntensity" (0-0.1): how much the frame scales on each beat. Feel the bass.
