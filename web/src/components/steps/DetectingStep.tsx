@@ -1095,7 +1095,9 @@ export default function DetectingStep() {
       // 4. Intro card generation (Atlas Cloud T2V)
       const introPromise = productionPlan?.intro
         ? (async () => {
-            const introDur = productionPlan.intro!.duration;
+            const rawIntroDur = productionPlan.intro!.duration;
+            const introDur = (typeof rawIntroDur === "number" && Number.isFinite(rawIntroDur) && rawIntroDur > 0) ? rawIntroDur : 4;
+            debugLog(`[Intro] Generating intro card (${introDur}s)...`);
             dispatch({
               type: "SET_INTRO_CARD",
               card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "generating" },
@@ -1109,14 +1111,17 @@ export default function DetectingStep() {
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
+                console.error("[Intro] Submit failed:", submitData.error ?? submitRes.status);
                 dispatch({
                   type: "SET_INTRO_CARD",
                   card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
                 });
                 return;
               }
+              debugLog(`[Intro] Submitted, polling prediction ${submitData.predictionId}...`);
               // Poll using the same animate/check endpoint (Atlas Cloud uses same prediction API)
               const videoUrl = await pollAtlasTask(submitData.predictionId);
+              debugLog(`[Intro] ${videoUrl ? "Completed" : "Failed"} — videoUrl=${videoUrl ? videoUrl.slice(0, 60) + "..." : "none"}`);
               dispatch({
                 type: "SET_INTRO_CARD",
                 card: {
@@ -1140,7 +1145,9 @@ export default function DetectingStep() {
       // 5. Outro card generation (Atlas Cloud T2V)
       const outroPromise = productionPlan?.outro
         ? (async () => {
-            const outroDur = productionPlan.outro!.duration;
+            const rawOutroDur = productionPlan.outro!.duration;
+            const outroDur = (typeof rawOutroDur === "number" && Number.isFinite(rawOutroDur) && rawOutroDur > 0) ? rawOutroDur : 4;
+            debugLog(`[Outro] Generating outro card (${outroDur}s)...`);
             dispatch({
               type: "SET_OUTRO_CARD",
               card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "generating" },
@@ -1154,13 +1161,16 @@ export default function DetectingStep() {
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
+                console.error("[Outro] Submit failed:", submitData.error ?? submitRes.status);
                 dispatch({
                   type: "SET_OUTRO_CARD",
                   card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
                 });
                 return;
               }
+              debugLog(`[Outro] Submitted, polling prediction ${submitData.predictionId}...`);
               const videoUrl = await pollAtlasTask(submitData.predictionId);
+              debugLog(`[Outro] ${videoUrl ? "Completed" : "Failed"} — videoUrl=${videoUrl ? videoUrl.slice(0, 60) + "..." : "none"}`);
               dispatch({
                 type: "SET_OUTRO_CARD",
                 card: {

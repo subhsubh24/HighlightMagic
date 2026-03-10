@@ -109,7 +109,8 @@ export default function TapePreviewPlayer() {
 
     // Prepend intro card if available — use AI-decided duration
     if (state.introCard?.status === "completed" && state.introCard.videoUrl) {
-      const introDur = state.introCard.duration;
+      const rawIntroDur = state.introCard.duration;
+      const introDur = (typeof rawIntroDur === "number" && Number.isFinite(rawIntroDur) && rawIntroDur > 0) ? rawIntroDur : 4;
       const introClip: EditedClip = {
         id: "__intro__",
         sourceFileId: "__intro__",
@@ -181,7 +182,8 @@ export default function TapePreviewPlayer() {
 
     // Append outro card if available — use AI-decided duration
     if (state.outroCard?.status === "completed" && state.outroCard.videoUrl) {
-      const outroDur = state.outroCard.duration;
+      const rawOutroDur = state.outroCard.duration;
+      const outroDur = (typeof rawOutroDur === "number" && Number.isFinite(rawOutroDur) && rawOutroDur > 0) ? rawOutroDur : 4;
       const outroClip: EditedClip = {
         id: "__outro__",
         sourceFileId: "__outro__",

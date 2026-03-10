@@ -3012,7 +3012,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
               return {
                 text,
                 stylePrompt: ensureCardPrompt(parsed.intro.stylePrompt, text, parsed.intro.text),
-                duration: typeof parsed.intro.duration === "number" ? Math.max(2, Math.min(8, parsed.intro.duration)) : 4,
+                duration: typeof parsed.intro.duration === "number" ? Math.max(2, Math.min(10, parsed.intro.duration)) : 4,
               };
             })()
           : null,
@@ -3022,7 +3022,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
               return {
                 text,
                 stylePrompt: ensureCardPrompt(parsed.outro.stylePrompt, text, parsed.outro.text),
-                duration: typeof parsed.outro.duration === "number" ? Math.max(2, Math.min(8, parsed.outro.duration)) : 4,
+                duration: typeof parsed.outro.duration === "number" ? Math.max(2, Math.min(10, parsed.outro.duration)) : 4,
               };
             })()
           : null,
@@ -3069,7 +3069,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
         musicDurationMs: (() => {
           // Compute total tape duration from clips, accounting for velocity effects
           // A slow-mo clip plays longer than its source duration; fast clips play shorter
-          const tapeDurationMs = spacedClips.reduce(
+          const clipsDurationMs = spacedClips.reduce(
             (sum, c) => {
               const sourceDuration = c.endTime - c.startTime;
               const effectiveDuration = getEffectiveDuration(
@@ -3080,6 +3080,10 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
               return sum + effectiveDuration * 1000;
             }, 0
           );
+          // Include intro/outro card durations so music covers the full tape
+          const introDurationMs = parsed.intro?.duration ? parsed.intro.duration * 1000 : 0;
+          const outroDurationMs = parsed.outro?.duration ? parsed.outro.duration * 1000 : 0;
+          const tapeDurationMs = clipsDurationMs + introDurationMs + outroDurationMs;
           const floor = Math.max(3000, tapeDurationMs);
           if (typeof parsed.musicDurationMs === "number") {
             // Use the AI value but never shorter than the tape itself

@@ -393,35 +393,38 @@ export default function ExportStep() {
       // Pre-fetch remote intro/outro videos through a same-origin proxy to avoid
       // canvas tainting. Cross-origin videos drawn to canvas taint it, causing
       // captureStream() to produce blank frames.
+      // Pre-fetch with retry (up to 3 attempts with exponential backoff)
+      async function fetchVideoBlob(videoUrl: string, label: string): Promise<string> {
+        const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(videoUrl)}`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
+            const blob = await res.blob();
+            console.log(`Export: pre-fetched ${label} video as blob (${blob.size} bytes, type=${blob.type})`);
+            const blobUrl = URL.createObjectURL(blob);
+            exportBlobUrls.push(blobUrl);
+            return blobUrl;
+          } catch (e) {
+            if (attempt < 2) {
+              console.warn(`Export: ${label} pre-fetch attempt ${attempt + 1} failed, retrying...`, e);
+            } else {
+              console.warn(`Export: failed to pre-fetch ${label} video after 3 attempts, using remote URL`, e);
+              return videoUrl;
+            }
+          }
+        }
+        return videoUrl;
+      }
+
       let introBlobUrl: string | null = null;
       let outroBlobUrl: string | null = null;
       if (hasIntroC) {
-        try {
-          const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(state.introCard!.videoUrl!)}`;
-          const res = await fetch(proxyUrl);
-          if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
-          const blob = await res.blob();
-          console.log(`Export: pre-fetched intro video as blob (${blob.size} bytes, type=${blob.type})`);
-          introBlobUrl = URL.createObjectURL(blob);
-          exportBlobUrls.push(introBlobUrl);
-        } catch (e) {
-          console.warn("Export: failed to pre-fetch intro card video, using remote URL", e);
-          introBlobUrl = state.introCard!.videoUrl!;
-        }
+        introBlobUrl = await fetchVideoBlob(state.introCard!.videoUrl!, "intro");
       }
       if (hasOutroC) {
-        try {
-          const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(state.outroCard!.videoUrl!)}`;
-          const res = await fetch(proxyUrl);
-          if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
-          const blob = await res.blob();
-          console.log(`Export: pre-fetched outro video as blob (${blob.size} bytes, type=${blob.type})`);
-          outroBlobUrl = URL.createObjectURL(blob);
-          exportBlobUrls.push(outroBlobUrl);
-        } catch (e) {
-          console.warn("Export: failed to pre-fetch outro card video, using remote URL", e);
-          outroBlobUrl = state.outroCard!.videoUrl!;
-        }
+        outroBlobUrl = await fetchVideoBlob(state.outroCard!.videoUrl!, "outro");
       }
 
       if (hasIntroC) {
