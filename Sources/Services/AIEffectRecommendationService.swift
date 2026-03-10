@@ -25,6 +25,8 @@ actor AIEffectRecommendationService {
     struct TapePlanResult: Sendable {
         let segments: [HighlightSegment]
         let configs: [CustomEffectConfig]
+        /// AI production plan extracted from Opus response — drives SFX, voiceover, music, intro/outro, post-processing
+        let productionPlan: AiProductionPlan?
     }
 
     /// API key — delegates to the same resolution chain as ClaudeVisionService.
@@ -109,7 +111,7 @@ actor AIEffectRecommendationService {
         transcript: String? = nil,
         progressHandler: (@Sendable (Double) -> Void)? = nil
     ) async -> TapePlanResult {
-        let emptyResult = TapePlanResult(segments: [], configs: [])
+        let emptyResult = TapePlanResult(segments: [], configs: [], productionPlan: nil)
 
         guard let apiKey else {
             logger.info("No API key — falling back to empty plan (caller builds segments)")
@@ -572,7 +574,7 @@ actor AIEffectRecommendationService {
               let wrapper = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
               let clips = wrapper["clips"] as? [[String: Any]] else {
             logger.warning("Opus planner: failed to parse response")
-            return TapePlanResult(segments: [], configs: [])
+            return TapePlanResult(segments: [], configs: [], productionPlan: nil)
         }
 
         var segments: [HighlightSegment] = []
@@ -672,14 +674,17 @@ actor AIEffectRecommendationService {
             segments: segments, configs: configs
         )
 
+        // Parse production plan fields from the wrapper JSON (matches web)
+        let plan = parseProductionPlan(from: wrapper)
+
         logger.info("Opus planner: \(clips.count) AI clips → \(validSegments.count) after dedup/validation")
-        return TapePlanResult(segments: validSegments, configs: validConfigs)
+        return TapePlanResult(segments: validSegments, configs: validConfigs, productionPlan: plan)
     }
 
     // MARK: - Clip Deduplication & Spacing (Gap 2 — matches web)
 
-    /// Validates Opus-returned clips: drops overlapping clips (>50%), enforces 5s min gap,
-    /// and caps at 6 clips per source. Matches the web platform's post-planner validation.
+    /// Validates Opus-returned clips: drops overlapping clips (>50%), enforces 2s min gap,
+    /// and caps at 8 clips per source. Matches the web platform's post-planner validation.
     private nonisolated func deduplicateAndValidateClips(
         segments: [HighlightSegment],
         configs: [CustomEffectConfig]
@@ -691,11 +696,11 @@ actor AIEffectRecommendationService {
             .sorted { $0.element.0.startSeconds < $1.element.0.startSeconds }
 
         var accepted: [(HighlightSegment, CustomEffectConfig)] = []
-        let maxClipsPerSource = 6
-        let minGapSeconds = 5.0
+        let maxClipsPerSource = 8
+        let minGapSeconds = 2.0  // Lowered from 5s — allows action-reaction pairs and rapid montage
 
         for (_, (segment, config)) in indexed {
-            // Cap at 6 clips per source (we have 1 source, so this caps total clips)
+            // Cap at 8 clips per source (we have 1 source, so this caps total clips)
             guard accepted.count < maxClipsPerSource else { break }
 
             let candidateDuration = segment.duration
@@ -709,7 +714,7 @@ actor AIEffectRecommendationService {
             }
             guard !overlapsExisting else { continue }
 
-            // Enforce 5s minimum gap between clips from the same source
+            // Enforce 2s minimum gap between clips from the same source
             let tooClose = accepted.contains { (existing, _) in
                 let gapAfter = segment.startSeconds - existing.endSeconds
                 let gapBefore = existing.startSeconds - segment.endSeconds
@@ -725,6 +730,119 @@ actor AIEffectRecommendationService {
         accepted.sort { $0.0.startSeconds < $1.0.startSeconds }
 
         return (accepted.map(\.0), accepted.map(\.1))
+    }
+
+    // MARK: - Production Plan Parsing (matches web)
+
+    /// Parse tape-level production plan fields from the Opus planner response.
+    /// Extracts SFX, voiceover, music, intro/outro, and post-processing settings.
+    private nonisolated func parseProductionPlan(from wrapper: [String: Any]) -> AiProductionPlan {
+        // SFX
+        var sfx: [AiProductionPlan.SfxPlan] = []
+        if let sfxArray = wrapper["sfx"] as? [[String: Any]] {
+            sfx = sfxArray.compactMap { dict in
+                guard let clipIndex = dict["clipIndex"] as? Int,
+                      let prompt = dict["prompt"] as? String else { return nil }
+                let timingStr = dict["timing"] as? String ?? "on"
+                let timing = AiProductionPlan.SfxPlan.SfxTiming(rawValue: timingStr) ?? .on
+                let durationMs = dict["durationMs"] as? Int ?? 1500
+                return AiProductionPlan.SfxPlan(clipIndex: clipIndex, timing: timing, prompt: prompt, durationMs: durationMs)
+            }
+        }
+
+        // Voiceover
+        var voiceover: AiProductionPlan.VoiceoverPlan?
+        if let voDict = wrapper["voiceover"] as? [String: Any] {
+            let enabled = voDict["enabled"] as? Bool ?? false
+            let voiceCharacter = voDict["voiceCharacter"] as? String ?? "male-narrator-warm"
+            let delaySec = Self.jsonDouble(voDict, "delaySec", default: 0.3)
+            var segments: [AiProductionPlan.VoiceoverPlan.Segment] = []
+            if let segArray = voDict["segments"] as? [[String: Any]] {
+                segments = segArray.compactMap { s in
+                    guard let idx = s["clipIndex"] as? Int, let text = s["text"] as? String else { return nil }
+                    return AiProductionPlan.VoiceoverPlan.Segment(clipIndex: idx, text: text)
+                }
+            }
+            voiceover = AiProductionPlan.VoiceoverPlan(enabled: enabled, segments: segments, voiceCharacter: voiceCharacter, delaySec: delaySec)
+        }
+
+        // Intro/outro
+        var intro: AiProductionPlan.CardPlan?
+        if let introDict = wrapper["intro"] as? [String: Any] {
+            intro = AiProductionPlan.CardPlan(
+                text: introDict["text"] as? String ?? "",
+                stylePrompt: introDict["stylePrompt"] as? String ?? "",
+                duration: Self.jsonDouble(introDict, "duration", default: 4)
+            )
+        }
+        var outro: AiProductionPlan.CardPlan?
+        if let outroDict = wrapper["outro"] as? [String: Any] {
+            outro = AiProductionPlan.CardPlan(
+                text: outroDict["text"] as? String ?? "",
+                stylePrompt: outroDict["stylePrompt"] as? String ?? "",
+                duration: Self.jsonDouble(outroDict, "duration", default: 4)
+            )
+        }
+
+        // Film stock
+        var filmStock: AiProductionPlan.FilmStockPlan?
+        if let fsDict = wrapper["filmStock"] as? [String: Any] {
+            filmStock = AiProductionPlan.FilmStockPlan(
+                grain: Self.jsonDouble(fsDict, "grain", default: 0),
+                warmth: Self.jsonDouble(fsDict, "warmth", default: 0),
+                contrast: Self.jsonDouble(fsDict, "contrast", default: 1.0),
+                fadedBlacks: Self.jsonDouble(fsDict, "fadedBlacks", default: 0)
+            )
+        }
+
+        // Thumbnail
+        var thumbnail: AiProductionPlan.ThumbnailPlan?
+        if let thDict = wrapper["thumbnail"] as? [String: Any] {
+            thumbnail = AiProductionPlan.ThumbnailPlan(
+                sourceClipIndex: thDict["sourceClipIndex"] as? Int ?? 0,
+                frameTime: Self.jsonDouble(thDict, "frameTime", default: 0),
+                stylePrompt: thDict["stylePrompt"] as? String ?? ""
+            )
+        }
+
+        return AiProductionPlan(
+            intro: intro,
+            outro: outro,
+            sfx: sfx,
+            voiceover: voiceover,
+            musicPrompt: wrapper["musicPrompt"] as? String ?? "",
+            musicDurationMs: wrapper["musicDurationMs"] as? Int ?? 0,
+            musicVolume: Self.jsonDouble(wrapper, "musicVolume", default: 0.8),
+            sfxVolume: Self.jsonDouble(wrapper, "sfxVolume", default: 0.7),
+            voiceoverVolume: Self.jsonDouble(wrapper, "voiceoverVolume", default: 0.85),
+            defaultTransitionDuration: Self.jsonDouble(wrapper, "defaultTransitionDuration", default: 0.3),
+            photoDisplayDuration: Self.jsonDouble(wrapper, "photoDisplayDuration", default: 3),
+            loopCrossfadeDuration: Self.jsonDouble(wrapper, "loopCrossfadeDuration", default: 0.5),
+            captionEntranceDuration: Self.jsonDouble(wrapper, "captionEntranceDuration", default: 0.3),
+            captionExitDuration: Self.jsonDouble(wrapper, "captionExitDuration", default: 0.2),
+            captionAppearDelay: Self.jsonDouble(wrapper, "captionAppearDelay", default: 0.12),
+            beatPulseIntensity: Self.optionalDouble(wrapper, "beatPulseIntensity"),
+            beatFlashOpacity: Self.optionalDouble(wrapper, "beatFlashOpacity"),
+            beatFlashThreshold: Self.optionalDouble(wrapper, "beatFlashThreshold"),
+            beatFlashColor: wrapper["beatFlashColor"] as? String,
+            grainOpacity: Self.optionalDouble(wrapper, "grainOpacity"),
+            vignetteIntensity: Self.optionalDouble(wrapper, "vignetteIntensity"),
+            vignetteTightness: Self.optionalDouble(wrapper, "vignetteTightness"),
+            captionFontSize: Self.optionalDouble(wrapper, "captionFontSize"),
+            captionVerticalPosition: Self.optionalDouble(wrapper, "captionVerticalPosition"),
+            watermarkOpacity: Self.optionalDouble(wrapper, "watermarkOpacity"),
+            filmStock: filmStock,
+            letterboxColor: wrapper["letterboxColor"] as? String,
+            thumbnail: thumbnail
+        )
+    }
+
+    /// Extracts an optional Double from a JSON dictionary — returns nil if the key is absent.
+    private static func optionalDouble(_ dict: [String: Any], _ key: String) -> Double? {
+        guard dict[key] != nil else { return nil }
+        if let d = dict[key] as? Double { return d }
+        if let i = dict[key] as? Int { return Double(i) }
+        return nil
     }
 
     /// Convert a CSS filter string (web format) to a CustomColorGrade (iOS format).
@@ -771,8 +889,9 @@ actor AIEffectRecommendationService {
         you understand Instagram's algorithm AND human psychology at a deep level.
 
         You are being shown the ACTUAL FRAMES from the user's footage. Study every single one deeply.
-        You have full creative control. No limits on clip count, total reel length, or how you structure
-        the tape. Each clip must be at least 2 seconds (let moments breathe). YOU are the editor. Make something incredible.
+        You have full creative control over how you structure the tape. Each clip must be at least 2 seconds
+        (let moments breathe). Aim for up to 8 clips — choose the strongest moments rather than trying to
+        cover everything. Quality over quantity. YOU are the editor. Make something incredible.
 
         SOURCE FILES (1 total):
         - "video" (video, ~\(Int(totalDuration))s duration)
@@ -878,27 +997,72 @@ actor AIEffectRecommendationService {
         VELOCITY — Design a UNIQUE speed curve for each clip using "velocityKeyframes":
         Set "velocityKeyframes" to an array of {position: 0-1, speed: 0.1-5.0} objects (minimum 2 keyframes).
         Position = where in the clip (0=start, 1=end). Speed = playback rate (0.25=slow-mo, 3.0=fast).
+        A good editor never uses the same curve twice. The content dictates the rhythm.
 
-        TRANSITIONS ARE NOT DECORATION — THEY CREATE MEANING.
+        TRANSITIONS — Each one is a creative choice that shapes how the viewer experiences the cut:
         "zoom_punch" → IMPACT. "flash" → PUNCTUATION. "hard_flash" → EXPLOSION.
         "whip" → MOMENTUM. "glitch" → DISRUPTION. "crossfade" → CONNECTION.
         "light_leak" → MEMORY. "soft_zoom" → DRIFT. "dip_to_black" → CHAPTER BREAK.
         "color_flash" → SYNESTHESIA. "strobe" → RAPID-FIRE. "hard_cut" → CONFIDENCE.
-        Match transition energy to what FOLLOWS. Never repeat the same transition twice in a row.
+        Match transition energy to what FOLLOWS. Don't repeat the same transition back-to-back.
 
         COLOR GRADING — Design a UNIQUE color grade for each clip using "customGrade":
         {temperature: 2000-10000, tint: -1 to 1, saturation: 0-2, contrast: 0.5-2,
          brightness: -0.5 to 0.5, vibrance: -1 to 1, exposure: -2 to 2, hueShift: -0.5 to 0.5,
          fadeAmount: 0-1, sharpen: 0-1}
+        The grades should have a cohesive look (consistent palette/mood) while each clip has its own character.
+        Think of it like color scenes in a film — unified but not uniform.
 
         ENTRY PUNCH — the zoom "pop" when each clip appears (1.0 = none, 1.01-1.05 = subtle to dramatic)
 
         CAPTIONS — text that AMPLIFIES, never NARRATES. 2-5 words max. Use on 30-50% of clips.
+        Write like a human posts, not like a brand. Lowercase is fine. Abbreviations are fine. Be real.
         captionAnimation: "pop"|"slide"|"flicker"|"typewriter"|"fade"|"none"
         captionFontWeight: 100-900, captionColor: hex, captionGlowColor: hex, captionGlowRadius: 0-30
 
+        THE IMPERFECTION PRINCIPLE — What separates human editors from AI slop:
+        Real editors aren't perfectly precise. They don't always use round numbers. A saturation of 1.27 is
+        more natural than 1.3. A transition at 0.22s feels more intentional than 0.2s. Trust your instinct —
+        use whatever value feels right for the moment. Small asymmetries are what make an edit feel hand-crafted.
+        If two clips have similar energy, they should still look different — a human editor would never grade
+        two clips identically even in the same scene.
+
+        ═══════════════════════════════════════════════
+        PRODUCTION PLAN — You control the ENTIRE tape, not just clips
+        ═══════════════════════════════════════════════
+
+        Beyond clips, you design the full production. Include these fields in your JSON response:
+
+        MUSIC — Set the vibe for the entire reel:
+        - "musicPrompt": describe the exact sound you hear for this content (e.g., "dark trap beat with 808 bass, 140bpm, moody atmosphere")
+        - "musicDurationMs": total tape length in ms (sum of all clip durations + intro/outro)
+        - "musicVolume": 0.0-1.0 (how loud relative to original audio — quieter when speech matters)
+
+        SFX — Punctuate key moments with sound:
+        - "sfx": [{"clipIndex": number, "timing": "before"|"on"|"after", "prompt": "describe the sound", "durationMs": number}]
+        - Design SFX that match what's ACTUALLY happening in the frame. A slam dunk needs a different sound than a sunset.
+        - Not every clip needs SFX. Use them where they amplify impact.
+
+        VOICEOVER — Optional narration layer:
+        - "voiceover": {"enabled": bool, "voiceCharacter": "male-narrator-warm"|"female-narrator-energetic"|etc, "delaySec": number, "segments": [{"clipIndex": number, "text": "what to say"}]}
+        - Only enable if the content benefits from narration. Most fast-paced action reels don't need it.
+
+        INTRO/OUTRO CARDS — Bookend the reel:
+        - "intro": {"text": "short hook text (3-6 words)", "stylePrompt": "visual description for generation", "duration": 3-5}
+        - "outro": {"text": "call to action", "stylePrompt": "visual description", "duration": 3-5}
+
+        POST-PROCESSING — Tape-wide visual treatment:
+        - "filmStock": {"grain": 0-0.5, "warmth": 0-1, "contrast": 0.8-1.4, "fadedBlacks": 0-0.3} — optional, use when the content calls for a film look
+        - "beatPulseIntensity": 0-0.5 — subtle zoom pulse on beat hits (0 = off)
+        - "beatFlashOpacity": 0-0.3 — flash on beat drops
+        - "grainOpacity": 0-0.3 — film grain overlay
+        - "vignetteIntensity": 0-0.5 — edge darkening
+        - "captionFontSize": 24-72, "captionVerticalPosition": 0.1-0.9 (0=top, 1=bottom)
+        - "loopCrossfadeDuration": 0.2-1.0 — how the end blends back to the start for loop rewatchability
+        - "thumbnail": {"sourceClipIndex": number, "frameTime": seconds, "stylePrompt": "description"} — best frame for cover image
+
         Respond with ONLY a JSON object:
-        {"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "single", "startTime": 0, "endTime": 5, "label": "description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "customGrade": {"temperature": 6800, "saturation": 1.3, "contrast": 1.2, "brightness": -0.02}, "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15}]}
+        {"contentSummary": "vivid description", "theme": "label", "musicPrompt": "specific music description", "musicDurationMs": 25000, "musicVolume": 0.72, "sfxVolume": 0.65, "voiceoverVolume": 0.85, "sfx": [...], "voiceover": {...}, "intro": {...}, "outro": {...}, "filmStock": {...}, "clips": [{"sourceFileId": "single", "startTime": 0, "endTime": 5, "label": "description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "customGrade": {"temperature": 6800, "saturation": 1.3, "contrast": 1.2, "brightness": -0.02}, "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15}]}
         """
     }
 
@@ -1617,6 +1781,7 @@ actor AIEffectRecommendationService {
     /// Fills any remaining nil recommendation fields using the mood/energy already set.
     /// This is the final safety net — after keyword matching and template seeding,
     /// any field that's still nil gets a mood-appropriate value.
+    /// Values use slight randomization within ranges to avoid mechanical uniformity.
     private nonisolated func applyMoodBasedDefaults(to config: inout CustomEffectConfig) {
         let mood = config.mood ?? "energetic"
         let energy = config.energy ?? "moderate"
@@ -1636,45 +1801,46 @@ actor AIEffectRecommendationService {
             config.seamlessLoopEnabled = energy != "calm"
         }
 
-        // Audio mix: favor original audio for calm/dramatic, favor music for energetic
+        // Audio mix: favor original audio for calm/dramatic, favor music for energetic.
+        // Use ranges with slight variation so each clip doesn't have identical volumes.
         if config.musicVolume == nil {
             switch energy {
-            case "calm": config.musicVolume = 0.6
-            case "moderate": config.musicVolume = 0.75
-            case "high": config.musicVolume = 0.85
-            case "explosive": config.musicVolume = 0.9
-            default: config.musicVolume = 0.8
+            case "calm": config.musicVolume = jitter(0.55, range: 0.1)
+            case "moderate": config.musicVolume = jitter(0.72, range: 0.08)
+            case "high": config.musicVolume = jitter(0.83, range: 0.06)
+            case "explosive": config.musicVolume = jitter(0.88, range: 0.05)
+            default: config.musicVolume = jitter(0.78, range: 0.08)
             }
         }
         if config.originalAudioVolume == nil {
             switch energy {
-            case "calm": config.originalAudioVolume = 0.5
-            case "moderate": config.originalAudioVolume = 0.25
-            case "high": config.originalAudioVolume = 0.15
-            case "explosive": config.originalAudioVolume = 0.1
-            default: config.originalAudioVolume = 0.2
+            case "calm": config.originalAudioVolume = jitter(0.45, range: 0.1)
+            case "moderate": config.originalAudioVolume = jitter(0.22, range: 0.08)
+            case "high": config.originalAudioVolume = jitter(0.13, range: 0.06)
+            case "explosive": config.originalAudioVolume = jitter(0.08, range: 0.04)
+            default: config.originalAudioVolume = jitter(0.18, range: 0.06)
             }
         }
 
         // Fade duration: faster energy → shorter fades
         if config.fadeDuration == nil {
             switch energy {
-            case "calm": config.fadeDuration = 0.6
-            case "moderate": config.fadeDuration = 0.4
-            case "high": config.fadeDuration = 0.3
-            case "explosive": config.fadeDuration = 0.2
-            default: config.fadeDuration = 0.35
+            case "calm": config.fadeDuration = jitter(0.55, range: 0.1)
+            case "moderate": config.fadeDuration = jitter(0.38, range: 0.06)
+            case "high": config.fadeDuration = jitter(0.28, range: 0.05)
+            case "explosive": config.fadeDuration = jitter(0.18, range: 0.04)
+            default: config.fadeDuration = jitter(0.33, range: 0.06)
             }
         }
 
         // Velocity intensity: how dramatic the speed ramps are
         if config.velocityIntensity == nil {
             switch energy {
-            case "calm": config.velocityIntensity = 0.3
-            case "moderate": config.velocityIntensity = 0.6
-            case "high": config.velocityIntensity = 0.8
-            case "explosive": config.velocityIntensity = 1.0
-            default: config.velocityIntensity = 0.7
+            case "calm": config.velocityIntensity = jitter(0.28, range: 0.08)
+            case "moderate": config.velocityIntensity = jitter(0.57, range: 0.1)
+            case "high": config.velocityIntensity = jitter(0.78, range: 0.08)
+            case "explosive": config.velocityIntensity = jitter(0.93, range: 0.07)
+            default: config.velocityIntensity = jitter(0.65, range: 0.1)
             }
         }
 
@@ -1733,6 +1899,14 @@ actor AIEffectRecommendationService {
             default: config.recommendedMusicMood = "Upbeat"
             }
         }
+    }
+}
+
+    /// Add slight randomization to a base value within ±range, clamped to [0, 1].
+    /// Makes fallback defaults feel less mechanical — each clip gets slightly different values.
+    private nonisolated func jitter(_ base: Double, range: Double) -> Double {
+        let offset = Double.random(in: -range...range)
+        return min(1.0, max(0.0, base + offset))
     }
 }
 

@@ -19,6 +19,8 @@ actor HighlightDetectionService {
         /// Per-clip AI creative configs from the Opus planner (1:1 with segments).
         /// When present, downstream clip generation skips re-planning.
         var perClipConfigs: [CustomEffectConfig]?
+        /// AI production plan from Opus — drives SFX, voiceover, music, intro/outro, post-processing.
+        var productionPlan: AiProductionPlan?
         /// Audio transcript from ElevenLabs Scribe (when available).
         /// Provides word-level timing for caption generation and content understanding.
         var transcript: ElevenLabsService.ScribeResult?
@@ -156,6 +158,7 @@ actor HighlightDetectionService {
             segments: finalSegments,
             overallConfidence: avgConfidence,
             perClipConfigs: finalConfigs,
+            productionPlan: planResult.productionPlan,
             transcript: transcript
         )
     }
