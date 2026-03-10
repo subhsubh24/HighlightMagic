@@ -290,6 +290,9 @@ function buildTapeDescription(
     if (c.clipAudioVolume != null) line += ` clipAudio=${c.clipAudioVolume}`;
     if (c.beatPulseIntensity != null) line += ` beatPulse=${c.beatPulseIntensity}`;
     if (c.beatFlashOpacity != null) line += ` beatFlash=${c.beatFlashOpacity}`;
+    if (c.audioFadeIn != null) line += ` audioFadeIn=${c.audioFadeIn}`;
+    if (c.audioFadeOut != null) line += ` audioFadeOut=${c.audioFadeOut}`;
+    if (c.kenBurnsIntensity != null) line += ` kenBurns=${c.kenBurnsIntensity}`;
 
     // Caption styling details
     if (c.customCaptionAnimation) line += ` captionAnim=${c.customCaptionAnimation}`;
@@ -368,6 +371,30 @@ function buildTapeDescription(
       const breaths = (p.audioBreaths as Array<Record<string, unknown>>).map((b) => `t=${b.time}s dur=${b.duration}s depth=${b.depth}`);
       parts.push(`Audio breaths: ${breaths.join(", ")}`);
     }
+
+    // Entry/exit motion defaults
+    if (p.defaultEntryPunchScale != null) parts.push(`Default entry punch: scale=${p.defaultEntryPunchScale} dur=${p.defaultEntryPunchDuration ?? "default"}`);
+    if (p.defaultKenBurnsIntensity != null) parts.push(`Default Ken Burns: ${p.defaultKenBurnsIntensity}`);
+
+    // Audio envelope
+    if (p.musicDuckAttack != null || p.musicDuckRelease != null) {
+      parts.push(`Music duck envelope: attack=${p.musicDuckAttack ?? "default"} release=${p.musicDuckRelease ?? "default"}`);
+    }
+    if (p.musicFadeInDuration != null || p.musicFadeOutDuration != null) {
+      parts.push(`Music fades: in=${p.musicFadeInDuration ?? 0}s out=${p.musicFadeOutDuration ?? 0}s`);
+    }
+    if (p.clipAudioVolume != null) parts.push(`Default clip audio volume: ${p.clipAudioVolume}`);
+
+    // Neon colors (transition effect palette)
+    if (p.neonColors && Array.isArray(p.neonColors)) parts.push(`Neon palette: ${(p.neonColors as string[]).join(", ")}`);
+
+    // Caption fine-tuning
+    if (p.captionShadowColor || p.captionShadowBlur != null) {
+      parts.push(`Caption shadow: color=${p.captionShadowColor ?? "default"} blur=${p.captionShadowBlur ?? "default"}`);
+    }
+
+    // Grain block size
+    if (p.grainBlockSize != null) parts.push(`Grain block size: ${p.grainBlockSize}`);
 
     // Transition overlay tuning
     const overlayTuning: string[] = [];

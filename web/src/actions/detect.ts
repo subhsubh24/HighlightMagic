@@ -703,6 +703,12 @@ export async function validateTape(
     if (c.customCaptionAnimation) line += ` captionAnim=${c.customCaptionAnimation}`;
     if (c.customCaptionColor) line += ` captionColor=${c.customCaptionColor}`;
     if (c.beatPulseIntensity != null) line += ` beatPulse=${c.beatPulseIntensity}`;
+    if (c.entryPunchScale != null && c.entryPunchScale > 1.0) line += ` punch=${c.entryPunchScale}`;
+    if (c.audioFadeIn != null) line += ` audioFadeIn=${c.audioFadeIn}`;
+    if (c.audioFadeOut != null) line += ` audioFadeOut=${c.audioFadeOut}`;
+    if (c.customCaptionGlowColor) line += ` glow=${c.customCaptionGlowColor}`;
+    if (c.captionExitAnimation) line += ` captionExit=${c.captionExitAnimation}`;
+    if (c.kenBurnsIntensity != null) line += ` kenBurns=${c.kenBurnsIntensity}`;
     if (c.animationPrompt) line += ` animationPrompt: "${c.animationPrompt.slice(0, 80)}..."`;
     return line;
   }).join("\n");
@@ -1839,8 +1845,8 @@ Examples of custom caption looks:
 
 DESIGN UNIQUE CAPTION STYLES FOR EACH CLIP. Match the look to the moment's energy and emotion.
 
-KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.08):
-0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. Match energy to the edit's pacing.
+KEN BURNS — for PHOTO clips only, set zoom intensity (0.0-0.15):
+0.02 = subtle drift. 0.05 = noticeable. 0.08 = dramatic. 0.12+ = extreme (use sparingly). Match energy to the edit's pacing.
 
 PHOTO ANIMATION — some photos are marked [ANIMATE] in the source list above.
 For these photos, you MUST include an "animationPrompt" field in the clip JSON.
@@ -1874,7 +1880,7 @@ Speed & motion:
 
 Transitions:
   transitionType (set for every clip except the first)
-  transitionDuration (0.15-1.0s)
+  transitionDuration (0.1-2.0s)
   transitionIntensity (0-1, scales magnitude: 0.3=elegant, 1.0=dramatic)
 
 Color:
@@ -2477,7 +2483,7 @@ CUSTOM VELOCITY KEYFRAMES — Per-clip (STRONGLY PREFERRED over velocity presets
 ALWAYS use "velocityKeyframes" instead of generic presets for any clip that has a clear moment of impact.
   Named presets ("hero", "bullet", "montage") are training wheels — they apply generic curves blind to content.
   You can SEE the frames. You know WHERE the peak moment is. Author the speed curve to HIT that exact moment.
-  Format: [{position: 0-1, speed: 0.1-4.0}]. position = normalized clip position. speed = playback rate.
+  Format: [{position: 0-1, speed: 0.1-5.0}]. position = normalized clip position. speed = playback rate.
 
   The secret: vary the CONTRAST between speeds. A dunk at constant 0.3x is boring.
   Fast → SLAM to 0.15x at impact → fast out is electrifying. The bigger the speed contrast, the more dramatic.
@@ -3101,9 +3107,9 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
                 : "male-broadcaster-hype",
               delaySec: typeof parsed.voiceover.delaySec === "number"
                 ? Math.max(0, Math.min(1, parsed.voiceover.delaySec))
-                : 0.3,
+                : 0.28,
             }
-          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype", delaySec: 0.3 },
+          : { enabled: false, segments: [], voiceCharacter: "male-broadcaster-hype", delaySec: 0.28 },
         musicPrompt: typeof parsed.musicPrompt === "string" ? parsed.musicPrompt.slice(0, 500) : "",
         musicDurationMs: (() => {
           // Compute total tape duration from clips, accounting for velocity effects
@@ -3130,25 +3136,25 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY 
           }
           return Math.min(300000, Math.max(floor, 60000));
         })(),
-        musicVolume: typeof parsed.musicVolume === "number" ? Math.max(0, Math.min(1, parsed.musicVolume)) : 0.5,
-        sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.8,
-        voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 1.0,
-        defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.defaultTransitionDuration)) : 0.3,
+        musicVolume: typeof parsed.musicVolume === "number" ? Math.max(0, Math.min(1, parsed.musicVolume)) : 0.47,
+        sfxVolume: typeof parsed.sfxVolume === "number" ? Math.max(0, Math.min(1, parsed.sfxVolume)) : 0.78,
+        voiceoverVolume: typeof parsed.voiceoverVolume === "number" ? Math.max(0, Math.min(1, parsed.voiceoverVolume)) : 0.95,
+        defaultTransitionDuration: typeof parsed.defaultTransitionDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.defaultTransitionDuration)) : 0.28,
         defaultEntryPunchScale: typeof parsed.defaultEntryPunchScale === "number" ? Math.max(1.0, Math.min(1.15, parsed.defaultEntryPunchScale)) : undefined,
         defaultEntryPunchDuration: typeof parsed.defaultEntryPunchDuration === "number" ? Math.max(0, Math.min(0.5, parsed.defaultEntryPunchDuration)) : undefined,
         defaultKenBurnsIntensity: typeof parsed.defaultKenBurnsIntensity === "number" ? Math.max(0, Math.min(0.15, parsed.defaultKenBurnsIntensity)) : undefined,
-        photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(1, Math.min(15, parsed.photoDisplayDuration)) : 3,
-        loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.1, Math.min(3.0, parsed.loopCrossfadeDuration)) : 0.5,
-        captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.captionEntranceDuration)) : 0.5,
-        captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.05, Math.min(1.0, parsed.captionExitDuration)) : 0.3,
-        musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0, Math.min(1.0, parsed.musicDuckRatio)) : 0.3,
+        photoDisplayDuration: typeof parsed.photoDisplayDuration === "number" ? Math.max(1, Math.min(15, parsed.photoDisplayDuration)) : 3.2,
+        loopCrossfadeDuration: typeof parsed.loopCrossfadeDuration === "number" ? Math.max(0.1, Math.min(3.0, parsed.loopCrossfadeDuration)) : 0.47,
+        captionEntranceDuration: typeof parsed.captionEntranceDuration === "number" ? Math.max(0.05, Math.min(2.0, parsed.captionEntranceDuration)) : 0.45,
+        captionExitDuration: typeof parsed.captionExitDuration === "number" ? Math.max(0.05, Math.min(1.0, parsed.captionExitDuration)) : 0.28,
+        musicDuckRatio: typeof parsed.musicDuckRatio === "number" ? Math.max(0, Math.min(1.0, parsed.musicDuckRatio)) : 0.28,
         musicDuckAttack: typeof parsed.musicDuckAttack === "number" ? Math.max(0.05, Math.min(1.0, parsed.musicDuckAttack)) : undefined,
         musicDuckRelease: typeof parsed.musicDuckRelease === "number" ? Math.max(0.1, Math.min(2.0, parsed.musicDuckRelease)) : undefined,
         musicFadeInDuration: typeof parsed.musicFadeInDuration === "number" ? Math.max(0, Math.min(3, parsed.musicFadeInDuration)) : undefined,
         musicFadeOutDuration: typeof parsed.musicFadeOutDuration === "number" ? Math.max(0, Math.min(3, parsed.musicFadeOutDuration)) : undefined,
-        beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 50,
+        beatSyncToleranceMs: typeof parsed.beatSyncToleranceMs === "number" ? Math.max(5, Math.min(500, Math.round(parsed.beatSyncToleranceMs))) : 47,
         exportBitrate: typeof parsed.exportBitrate === "number" ? Math.max(4_000_000, Math.min(30_000_000, Math.round(parsed.exportBitrate))) : 12_000_000,
-        watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.4,
+        watermarkOpacity: typeof parsed.watermarkOpacity === "number" ? Math.max(0.05, Math.min(0.8, parsed.watermarkOpacity)) : 0.38,
         neonColors: (() => {
           if (Array.isArray(parsed.neonColors)) {
             const valid = parsed.neonColors

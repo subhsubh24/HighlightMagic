@@ -322,6 +322,8 @@ export interface AiProductionPlan {
     paceProfile?: string;
     /** How transitions should evolve across the tape */
     transitionArc?: string;
+    /** The foundational color grade the AI is building on */
+    baseGrade?: string;
   };
 
   /** Audio breath moments — planned silence dips at emotional peaks. */

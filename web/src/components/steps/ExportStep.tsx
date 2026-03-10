@@ -61,11 +61,11 @@ async function tryServerRender(
     const introDur = state.introCard?.duration ?? 4;
     const outroDur = state.outroCard?.duration ?? 4;
     const introOffset = hasIntro ? introDur : 0;
-    const defaultTransDur = plan?.defaultTransitionDuration ?? 0.3;
-    const voDelay = plan?.voiceover?.delaySec ?? 0.3;
-    const musicVol = plan?.musicVolume ?? 0.5;
-    const sfxVol = plan?.sfxVolume ?? 0.8;
-    const voVol = plan?.voiceoverVolume ?? 1.0;
+    const defaultTransDur = plan?.defaultTransitionDuration ?? 0.28;
+    const voDelay = plan?.voiceover?.delaySec ?? 0.28;
+    const musicVol = plan?.musicVolume ?? 0.47;
+    const sfxVol = plan?.sfxVolume ?? 0.78;
+    const voVol = plan?.voiceoverVolume ?? 0.95;
 
     if (hasIntro) {
       renderClips.push({
@@ -385,10 +385,10 @@ export default function ExportStep() {
       const introDurC = state.introCard?.duration ?? 4;
       const outroDurC = state.outroCard?.duration ?? 4;
       const introOffsetC = hasIntroC ? introDurC : 0;
-      const defaultTransDurC = cPlan?.defaultTransitionDuration ?? 0.3;
-      const voDelayC = cPlan?.voiceover?.delaySec ?? 0.3;
-      const sfxVolC = cPlan?.sfxVolume ?? 0.8;
-      const voVolC = cPlan?.voiceoverVolume ?? 1.0;
+      const defaultTransDurC = cPlan?.defaultTransitionDuration ?? 0.28;
+      const voDelayC = cPlan?.voiceover?.delaySec ?? 0.28;
+      const sfxVolC = cPlan?.sfxVolume ?? 0.78;
+      const voVolC = cPlan?.voiceoverVolume ?? 0.95;
 
       // Pre-fetch remote intro/outro videos through a same-origin proxy to avoid
       // canvas tainting. Cross-origin videos drawn to canvas taint it, causing
@@ -1184,21 +1184,21 @@ async function renderHighlightTape(
   onProgress: (pct: number) => void,
   aiMusicUrl?: string | null,
   scheduledLayers?: ScheduledAudioLayer[],
-  defaultTransitionDuration: number = 0.3,
-  musicVolume: number = 0.5,
-  musicDuckRatio: number = 0.3,
-  musicDuckAttack: number = 0.2,
-  musicDuckRelease: number = 0.3,
+  defaultTransitionDuration: number = 0.28,
+  musicVolume: number = 0.47,
+  musicDuckRatio: number = 0.28,
+  musicDuckAttack: number = 0.18,
+  musicDuckRelease: number = 0.32,
   musicFadeInDuration: number = 0,
   musicFadeOutDuration: number = 0,
-  loopCrossfadeDuration: number = 0.5,
+  loopCrossfadeDuration: number = 0.47,
   exportBitrate: number = 12_000_000,
-  watermarkOpacity: number = 0.4,
-  captionEntranceDuration: number = 0.5,
-  captionExitDuration: number = 0.3,
+  watermarkOpacity: number = 0.38,
+  captionEntranceDuration: number = 0.45,
+  captionExitDuration: number = 0.28,
   neonColors?: string[],
-  photoDisplayDuration: number = 3,
-  beatSyncToleranceMs: number = 50,
+  photoDisplayDuration: number = 3.2,
+  beatSyncToleranceMs: number = 47,
   aiRenderOpts?: ExportAiRenderOptions,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
@@ -1606,7 +1606,7 @@ function renderVideoClip(
 
           // Apply velocity — custom keyframes take priority over presets
           // End-of-clip micro-deceleration stacks on top for natural exit feel
-          const exitDecel = getExitDeceleration(canvasElapsedSec, canvasDuration, aiRenderOpts?.exitDecelSpeed ?? 0.96, aiRenderOpts?.exitDecelDuration ?? 0.15, aiRenderOpts?.exitDecelEasing ?? "quad");
+          const exitDecel = getExitDeceleration(canvasElapsedSec, canvasDuration, aiRenderOpts?.exitDecelSpeed ?? 0.96, aiRenderOpts?.exitDecelDuration ?? 0.14, aiRenderOpts?.exitDecelEasing ?? "quad");
           const customKf = instruction.clip.customVelocityKeyframes;
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
@@ -1699,7 +1699,7 @@ function renderVideoClip(
 
           // Film stock base + grain + vignette — pro post-processing overlays
           applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
-          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
+          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.48);
           drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
 
           drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
@@ -1885,7 +1885,7 @@ async function renderPhotoClip(
 
       // Film stock base + grain + vignette — pro post-processing overlays
       applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
-      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.5);
+      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.48);
       drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
 
       drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
