@@ -102,6 +102,47 @@ describe("reducer", () => {
     const state = reducer(initialState, { type: "SET_CREATIVE_DIRECTION", direction: "moody" });
     expect(state.creativeDirection).toBe("moody");
   });
+
+  it("SET_VALIDATION_STATUS updates validation status", () => {
+    let state = reducer(initialState, { type: "SET_VALIDATION_STATUS", status: "validating" });
+    expect(state.validationStatus).toBe("validating");
+    state = reducer(state, { type: "SET_VALIDATION_STATUS", status: "fixing" });
+    expect(state.validationStatus).toBe("fixing");
+    state = reducer(state, { type: "SET_VALIDATION_STATUS", status: "passed" });
+    expect(state.validationStatus).toBe("passed");
+  });
+
+  it("SET_REGENERATE_FEEDBACK resets validation status and pipeline state", () => {
+    let state: AppState = {
+      ...initialState,
+      validationStatus: "passed",
+      sfxStatus: "completed",
+      voiceoverStatus: "completed",
+      aiMusicStatus: "completed",
+      aiMusicUrl: "some-url",
+    };
+    state = reducer(state, { type: "SET_REGENERATE_FEEDBACK", feedback: "make it more energetic" });
+    expect(state.regenerateFeedback).toBe("make it more energetic");
+    expect(state.validationStatus).toBe("idle");
+    expect(state.sfxStatus).toBe("idle");
+    expect(state.voiceoverStatus).toBe("idle");
+    expect(state.aiMusicStatus).toBe("idle");
+    expect(state.aiMusicUrl).toBeNull();
+    expect(state.introCard).toBeNull();
+    expect(state.outroCard).toBeNull();
+  });
+
+  it("SET_REGENERATE_FEEDBACK with null does not reset pipeline state", () => {
+    let state: AppState = {
+      ...initialState,
+      validationStatus: "passed",
+      sfxStatus: "completed",
+    };
+    state = reducer(state, { type: "SET_REGENERATE_FEEDBACK", feedback: null });
+    expect(state.regenerateFeedback).toBeNull();
+    expect(state.validationStatus).toBe("passed");
+    expect(state.sfxStatus).toBe("completed");
+  });
 });
 
 describe("canExportFree", () => {
