@@ -508,7 +508,7 @@ export interface ProductionPlan {
   captionMinimalSizeMultiplier?: number;
   captionPopOvershoot?: number;
   // Editing philosophy
-  editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string };
+  editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string; baseGrade?: string };
   // AI-controlled post-processing
   grainOpacity?: number;
   vignetteIntensity?: number;
@@ -1864,6 +1864,28 @@ be intentional and reinforce the same emotional throughline. If two elements com
 other or feel redundant for THIS tape, choose the stronger one. If stacking everything creates
 the exact vibe the content needs, stack everything. Trust your eye.
 
+EMOTIONAL TEMPERATURE MAPPING — The secret to coherent clips:
+Before setting ANY parameter for a clip, decide its EMOTIONAL TEMPERATURE:
+  INTENSE → punchy transition (zoom_punch/flash), dramatic velocity ramp, saturated color grade,
+    bold caption, strong entry punch (1.05+), high beat flash, fast audioFadeIn (0.01-0.03),
+    high transitionIntensity (0.7+), high captionAnimationIntensity (0.8+), high clipAudioVolume
+  NEUTRAL → moderate transition (whip/color_flash), gentle velocity curve, balanced color,
+    subtle or no caption, moderate entry punch (1.02-1.04), moderate beat flash,
+    medium audioFadeIn (0.05-0.1), moderate everything
+  CALM → soft transition (crossfade/light_leak/soft_zoom), near-constant velocity, muted/warm color,
+    no caption or minimal whisper caption, no entry punch (1.0), low/no beat flash,
+    gentle audioFadeIn (0.1-0.2), low transitionIntensity (0.2-0.4), low clipAudioVolume for ambient
+  DRAMATIC → heavy transition (hard_flash/dip_to_black), extreme velocity contrast, high-contrast color,
+    deliberate caption with delayed entrance, strong entry punch, audioBreath placement,
+    high transitionIntensity, long captionAppearDelay
+
+ALL parameters for a clip must agree on the same temperature. A crossfade (calm) into a clip with
+a dramatic velocity ramp (intense) and a bold neon caption (intense) sends mixed signals — the
+transition promises serenity but the clip delivers chaos. That dissonance feels like a bug.
+The exception: intentional contrast (calm transition → intense content) is valid when it's a
+NARRATIVE CHOICE (the calm before the storm). But it should feel like a deliberate breath, not
+an accident. Make the contrast serve the story.
+
 ═══════════════════════════════════════════════
 EDITING PHILOSOPHY — ARTICULATE YOUR VISION FIRST
 ═══════════════════════════════════════════════
@@ -1885,6 +1907,13 @@ Before choosing ANY values, articulate your vision in "editingPhilosophy":
     "minimal throughout — letting cuts do the talking" for documentary
     "escalating intensity — each transition more dramatic than the last"
     "mixed grammar — whips for action, dissolves for emotion, cuts for pace"
+  "baseGrade" — your base CSS color grade that all clips start from. Examples:
+    "saturate(1.15) contrast(1.12) brightness(1.0)" (punchy sports base)
+    "saturate(0.9) contrast(1.05) brightness(1.08) sepia(0.03)" (soft wedding base)
+    "saturate(1.3) contrast(1.25) brightness(0.92)" (dark cinematic base)
+    State this explicitly so you anchor your per-clip filterCSS grades around it.
+    Each clip's filterCSS should be a TWEAK from this base — not a totally different look.
+    The baseGrade is your film stock choice; per-clip grades are the colorist's shot-by-shot adjustments.
 This philosophy guides EVERY subsequent choice. Your values aren't random — they serve this vision.
 
 TRANSITION GRAMMAR — Your transitions tell a story too:
@@ -2029,9 +2058,17 @@ SFX VARIETY IS CRITICAL — Never use the same type of sound twice in a row:
 - Comedic: sad trombone, cartoon boing, slide whistle, sitcom audience laugh
 - Textural: glitch static, digital corruption, glass shatter, deep sub bass rumble
 
-Match each SFX prompt to the SPECIFIC visual moment. Don't write generic "whoosh" — write
-"quick metallic swoosh with bass undertone" or "dramatic bass drop impact hit with reverb tail."
-The more specific the prompt, the more unique and professional the result.
+Match each SFX prompt to the SPECIFIC visual moment. A human sound designer watches the clip and
+describes what they HEAR in the scene, not generic library sounds. Don't write "whoosh" — write
+what's HAPPENING: "basketball slamming off backboard rim with indoor gym echo" or
+"crowd erupting after touchdown with stadium reverb and air horns" or "skateboard wheels grinding
+concrete ledge with metallic scrape." The SFX should sound like it BELONGS in the visual world.
+- Reference the ENVIRONMENT: indoor vs outdoor, small room vs stadium, concrete vs grass
+- Reference the OBJECT: what's making the sound? Ball, body, vehicle, crowd, nature?
+- Reference the ACOUSTIC SPACE: echo, reverb, dampened, open air, enclosed
+- Add texture: "with reverb tail" / "sharp attack, quick decay" / "rumbling low end"
+The more the SFX prompt connects to what's visually happening, the more the sound feels like it
+was recorded on location rather than dropped from a generic sound library.
 
 USE SFX SPARINGLY — strategic silence is powerful:
 - NOT every clip needs SFX. Use on 30-60% of cuts maximum.
@@ -2261,6 +2298,31 @@ Kodak Tri-X (heavy grain, high contrast). Per-clip filterCSS stacks ON TOP of th
 Choose a film stock that matches the content's era/mood. Sports → punchy contrast, no faded blacks.
 Wedding → warm, soft grain, slightly lifted blacks. Vintage → heavy grain, warm, faded.
 
+THE RENDERING STACK — Effects compound, plan accordingly:
+Your visual effects apply in layers that MULTIPLY and STACK. If you set each layer without
+considering the others, you'll over-apply effects. Here's how the stack works:
+
+GRAIN: filmStock.grain + grainOpacity = total grain.
+  filmStock.grain 0.03 + grainOpacity 0.04 = effective 0.07 (heavy analog).
+  If you want subtle grain, either use filmStock.grain OR grainOpacity, not both at similar values.
+  Typical: filmStock.grain for the base texture (0.02-0.03), grainOpacity for extra grit (0-0.02).
+
+CONTRAST: filmStock.contrast × filterCSS contrast() = combined contrast.
+  filmStock.contrast 1.15 × filterCSS contrast(1.2) ≈ effective 1.38 (extremely punchy, crushed shadows).
+  Keep the combined product in 1.0-1.3 for most content. If filmStock.contrast is 1.1, keep
+  per-clip filterCSS contrast() under 1.15.
+
+WARMTH: filmStock.warmth + filterCSS sepia() = combined warmth.
+  filmStock.warmth 0.05 + filterCSS sepia(0.1) = very warm/yellow. Usually pick ONE warmth source.
+  Use filmStock.warmth for the base temperature, use per-clip sepia() only for 1-2 narrative shifts.
+
+SATURATION: filmStock has no saturation control, so filterCSS saturate() is the sole control.
+  But filmStock.contrast indirectly boosts perceived saturation. A high-contrast base makes
+  saturate(1.3) look like saturate(1.5). Account for this.
+
+Think of filmStock as the "lab processing" (applied uniformly) and filterCSS as the "colorist's
+per-shot adjustments" (varies per clip). The two should complement, not compete.
+
 GRAIN & VIGNETTE — Frame-level texture:
 "grainOpacity" (0-0.1): noise overlay intensity. 0 = none, 0.03 = subtle film, 0.06 = pronounced, 0.08 = heavy analog.
   This stacks with filmStock.grain — together they create the full texture look.
@@ -2400,8 +2462,8 @@ A sharp attack + slow release creates "the world goes quiet, then gradually retu
 sharp release creates "tension building... then SNAP back to reality." Shape each breath individually.
 These are incredibly powerful when used sparingly. Overuse kills the effect.
 
-Respond with ONLY a JSON object (NOTE: all numeric values in this example use IRREGULAR numbers — never round. Follow this pattern):
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.87, "velocityKeyframes": [{"position": 0, "speed": 2.13}, {"position": 0.33, "speed": 0.27}, {"position": 0.62, "speed": 0.28}, {"position": 1, "speed": 1.47}], "transitionType": "zoom_punch", "transitionDuration": 0.27, "filterCSS": "saturate(1.32) contrast(1.18) brightness(0.97)", "entryPunchScale": 1.037, "entryPunchDuration": 0.13, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 14, "kenBurnsIntensity": 0, "clipAudioVolume": 0.42, "transitionIntensity": 0.72, "beatPulseIntensity": 0.023, "beatFlashOpacity": 0.17, "beatFlashThreshold": 0.43, "captionIdlePulse": 0.47, "captionGlowSpread": 1.4, "audioFadeIn": 0.02, "audioFadeOut": 0.07, "captionAnimationIntensity": 0.82, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.28, "zoomInScale": 0.22}, "beatFlashColor": "#ffd700"}], "intro": {"text": "GAME DAY", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "THE END", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "deep cinematic bass impact with reverb tail", "durationMs": 1400}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this.", "delaySec": 0.25}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.47, "sfxVolume": 0.82, "voiceoverVolume": 0.93, "defaultTransitionDuration": 0.27, "defaultEntryPunchScale": 1.037, "defaultEntryPunchDuration": 0.13, "defaultKenBurnsIntensity": 0.037, "photoDisplayDuration": 3.5, "loopCrossfadeDuration": 0.47, "captionEntranceDuration": 0.42, "captionExitDuration": 0.27, "musicDuckRatio": 0.28, "musicDuckAttack": 0.18, "musicDuckRelease": 0.32, "musicFadeInDuration": 0.47, "musicFadeOutDuration": 1.2, "beatSyncToleranceMs": 45, "exportBitrate": 12000000, "watermarkOpacity": 0.38, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.47, "grainOpacity": 0.037, "vignetteIntensity": 0.17, "vignetteTightness": 0.42, "vignetteHardness": 0.47, "watermarkFontSize": 0.014, "watermarkYOffset": 0.032, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.965, "exitDecelDuration": 0.13, "settleScale": 1.007, "settleDuration": 0.17, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.38, "finalClipWarmth": {"sepia": 0.055, "saturation": 0.037, "fadeIn": 2.2}, "filmStock": {"grain": 0.028, "warmth": 0.022, "contrast": 1.07, "fadedBlacks": 0.032}, "audioBreaths": [{"time": 12.5, "duration": 0.47, "depth": 0.12, "attack": 0.07, "release": 0.42}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop", "watermarkColor": "#e0e0e0", "grainBlockSize": 4, "lightLeakOpacity": 0.32, "glitchScanlineCount": 6, "whipBlurLineCount": 8, "captionPopStartScale": 0.28, "captionPopOvershoot": 1.65, "captionFlickerSpeed": 8, "captionBoldSizeMultiplier": 1.18, "editingPhilosophy": {"vibe": "polished cinematic — every frame composed", "paceProfile": "escalation", "transitionArc": "soft openers → aggressive peaks → gentle close"}}`;
+Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE — notice how EVERY value differs between clips (different transition types, different durations, different intensity levels, different velocity curves, some with captions and some without). This variation pattern is MANDATORY:
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "src1", "startTime": 1.2, "endTime": 4.8, "label": "opening hook — crowd erupts", "confidenceScore": 0.92, "velocityKeyframes": [{"position": 0, "speed": 1.85}, {"position": 0.35, "speed": 2.4}, {"position": 0.42, "speed": 0.22}, {"position": 0.58, "speed": 0.22}, {"position": 0.72, "speed": 1.65}, {"position": 1, "speed": 1.15}], "transitionDuration": 0.22, "filterCSS": "saturate(1.32) contrast(1.18) brightness(0.97)", "entryPunchScale": 1.052, "entryPunchDuration": 0.11, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 14, "clipAudioVolume": 0.72, "transitionIntensity": 0.78, "beatPulseIntensity": 0.032, "beatFlashOpacity": 0.22, "beatFlashThreshold": 0.38, "captionIdlePulse": 0.35, "captionGlowSpread": 1.3, "audioFadeIn": 0.01, "audioFadeOut": 0.06, "captionAnimationIntensity": 0.85, "captionExitAnimation": "pop", "beatFlashColor": "#ffd700"}, {"sourceFileId": "src2", "startTime": 8.5, "endTime": 12.1, "label": "quiet buildup — walking to field", "confidenceScore": 0.73, "velocityKeyframes": [{"position": 0, "speed": 1.03}, {"position": 1, "speed": 0.97}], "transitionType": "crossfade", "transitionDuration": 0.52, "filterCSS": "saturate(1.08) contrast(1.07) brightness(1.03) sepia(0.04)", "entryPunchScale": 1.0, "entryPunchDuration": 0, "clipAudioVolume": 0.15, "transitionIntensity": 0.35, "beatPulseIntensity": 0.008, "beatFlashOpacity": 0.05, "beatFlashThreshold": 0.82, "audioFadeIn": 0.12, "audioFadeOut": 0.15}, {"sourceFileId": "src1", "startTime": 22.3, "endTime": 28.7, "label": "hero moment — the winning play", "confidenceScore": 0.97, "velocityKeyframes": [{"position": 0, "speed": 2.35}, {"position": 0.28, "speed": 2.7}, {"position": 0.35, "speed": 0.17}, {"position": 0.52, "speed": 0.17}, {"position": 0.65, "speed": 1.45}, {"position": 1, "speed": 0.88}], "transitionType": "zoom_punch", "transitionDuration": 0.18, "filterCSS": "saturate(1.42) contrast(1.22) brightness(0.95)", "entryPunchScale": 1.065, "entryPunchDuration": 0.09, "captionText": "LETS GOOO", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffd700", "captionGlowColor": "#ff6b35", "captionGlowRadius": 18, "clipAudioVolume": 0.85, "transitionIntensity": 0.92, "beatPulseIntensity": 0.045, "beatFlashOpacity": 0.28, "beatFlashThreshold": 0.27, "captionIdlePulse": 0.12, "captionGlowSpread": 1.7, "audioFadeIn": 0.01, "audioFadeOut": 0.03, "captionAnimationIntensity": 0.95, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.35, "zoomInScale": 0.28}, "beatFlashColor": "#ff6b35"}], "intro": {"text": "GAME DAY", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": null, "sfx": [{"clipIndex": 0, "timing": "on", "prompt": "stadium crowd roar erupting with bass thump of ball hitting court", "durationMs": 1200}, {"clipIndex": 2, "timing": "before", "prompt": "cinematic rising tension whoosh building to impact", "durationMs": 1600}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 2, "text": "And that's the play.", "delaySec": 0.45}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.47, "sfxVolume": 0.82, "voiceoverVolume": 0.93, "defaultTransitionDuration": 0.27, "defaultEntryPunchScale": 1.037, "defaultEntryPunchDuration": 0.13, "defaultKenBurnsIntensity": 0.037, "photoDisplayDuration": 3.5, "loopCrossfadeDuration": 0.47, "captionEntranceDuration": 0.42, "captionExitDuration": 0.27, "musicDuckRatio": 0.28, "musicDuckAttack": 0.18, "musicDuckRelease": 0.32, "musicFadeInDuration": 0.47, "musicFadeOutDuration": 1.2, "beatSyncToleranceMs": 45, "exportBitrate": 12000000, "watermarkOpacity": 0.38, "neonColors": ["#ff6b35", "#ffd700", "#9333ea"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 24.8, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.47, "grainOpacity": 0.037, "vignetteIntensity": 0.17, "vignetteTightness": 0.42, "vignetteHardness": 0.47, "watermarkFontSize": 0.014, "watermarkYOffset": 0.032, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.965, "exitDecelDuration": 0.13, "settleScale": 1.007, "settleDuration": 0.17, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.38, "finalClipWarmth": {"sepia": 0.055, "saturation": 0.037, "fadeIn": 2.2}, "filmStock": {"grain": 0.028, "warmth": 0.022, "contrast": 1.07, "fadedBlacks": 0.032}, "audioBreaths": [{"time": 12.5, "duration": 0.47, "depth": 0.12, "attack": 0.07, "release": 0.42}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop", "watermarkColor": "#e0e0e0", "grainBlockSize": 4, "lightLeakOpacity": 0.32, "glitchScanlineCount": 6, "whipBlurLineCount": 8, "captionPopStartScale": 0.28, "captionPopOvershoot": 1.65, "captionFlickerSpeed": 8, "captionBoldSizeMultiplier": 1.18, "editingPhilosophy": {"vibe": "polished cinematic — every frame composed", "paceProfile": "escalation", "transitionArc": "soft openers → aggressive peaks → gentle close", "baseGrade": "saturate(1.15) contrast(1.12) brightness(1.0)"}}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
@@ -2633,7 +2695,7 @@ Respond with ONLY a JSON object (NOTE: all numeric values in this example use IR
         captionBoldSizeMultiplier?: number;
         captionMinimalSizeMultiplier?: number;
         captionPopOvershoot?: number;
-        editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string };
+        editingPhilosophy?: { vibe?: string; paceProfile?: string; transitionArc?: string; baseGrade?: string };
         // AI-controlled post-processing
         grainOpacity?: number;
         vignetteIntensity?: number;
@@ -3091,6 +3153,7 @@ Respond with ONLY a JSON object (NOTE: all numeric values in this example use IR
           vibe: typeof parsed.editingPhilosophy.vibe === "string" ? parsed.editingPhilosophy.vibe.slice(0, 200) : undefined,
           paceProfile: typeof parsed.editingPhilosophy.paceProfile === "string" ? parsed.editingPhilosophy.paceProfile.slice(0, 100) : undefined,
           transitionArc: typeof parsed.editingPhilosophy.transitionArc === "string" ? parsed.editingPhilosophy.transitionArc.slice(0, 200) : undefined,
+          baseGrade: typeof parsed.editingPhilosophy.baseGrade === "string" ? parsed.editingPhilosophy.baseGrade.slice(0, 200) : undefined,
         } : undefined,
 
         // ── AI-controlled post-processing ──
