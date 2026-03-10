@@ -44,6 +44,28 @@ export type AiMusicStatus = "idle" | "generating" | "completed" | "failed";
 /** Generic async generation status — used for SFX, voiceover, intro, outro, thumbnail */
 export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
 
+/** Validation loop status — sub-phase of the detecting step */
+export type ValidationStatus = "idle" | "validating" | "fixing" | "passed";
+
+/** Structured fixes that Haiku can request during validation */
+export interface ValidationFixes {
+  clipUpdates?: Array<{ clipIndex: number; updates: Partial<EditedClip> }>;
+  clipRemovals?: number[];
+  regenerateMusic?: { prompt: string; durationMs: number };
+  regenerateSfx?: Array<{ clipIndex: number; prompt: string; durationMs: number }>;
+  regenerateVoiceover?: Array<{ clipIndex: number; text: string }>;
+  regenerateIntro?: { text: string; stylePrompt: string; duration: number };
+  regenerateOutro?: { text: string; stylePrompt: string; duration: number };
+  planUpdates?: Partial<AiProductionPlan>;
+}
+
+/** Result of a single Haiku validation pass */
+export interface ValidationResult {
+  passed: boolean;
+  issues: string[];
+  fixes: ValidationFixes;
+}
+
 // ── AI Production types (auto-pilot pipeline) ──
 
 /** Sound effect mapped to a specific clip transition or accent moment */
@@ -539,6 +561,9 @@ export interface AppState {
   // ── Style transfer (Pro) — visual post-processing ──
   /** AI-chosen style prompt for the final tape look */
   styleTransferPrompt: string | null;
+
+  // ── Validation loop ──
+  validationStatus: ValidationStatus;
 
   // ── Talking head intro (Pro) — lip-sync video from photo + voice ──
   talkingHead: {

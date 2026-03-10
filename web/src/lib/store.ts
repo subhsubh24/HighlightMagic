@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
+import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, ValidationStatus, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -46,6 +46,8 @@ export const initialState: AppState = {
   stemSeparationStatus: "idle",
   // Style transfer
   styleTransferPrompt: null,
+  // Validation loop
+  validationStatus: "idle",
   // Talking head
   talkingHead: null,
 };
@@ -111,6 +113,8 @@ export type Action =
   | { type: "SET_INSTRUMENTAL_MUSIC"; url: string | null; status: GenerationStatus }
   // Style transfer
   | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null }
+  // Validation loop
+  | { type: "SET_VALIDATION_STATUS"; status: ValidationStatus }
   // Talking head
   | { type: "SET_TALKING_HEAD"; talkingHead: AppState["talkingHead"] }
   | { type: "RESET" };
@@ -223,6 +227,7 @@ export function reducer(state: AppState, action: Action): AppState {
           stemSeparationStatus: "idle" as const,
           thumbnail: null,
           talkingHead: null,
+          validationStatus: "idle" as const,
         } : {}),
       };
     case "SET_CREATIVE_DIRECTION":
@@ -301,6 +306,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, instrumentalMusicUrl: action.url, stemSeparationStatus: action.status };
     case "SET_STYLE_TRANSFER_PROMPT":
       return { ...state, styleTransferPrompt: action.prompt };
+    case "SET_VALIDATION_STATUS":
+      return { ...state, validationStatus: action.status };
     case "SET_TALKING_HEAD":
       return { ...state, talkingHead: action.talkingHead };
     case "RESET": {

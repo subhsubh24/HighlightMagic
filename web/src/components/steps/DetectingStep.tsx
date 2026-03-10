@@ -19,6 +19,8 @@ import { uuid } from "@/lib/utils";
 import { cacheDetectionData, getCachedDetectionData } from "@/lib/detection-cache";
 import { pollBatched, cancelAllPolls } from "@/lib/poll-manager";
 import { cacheKey, getCachedAsset, setCachedAsset } from "@/lib/asset-cache";
+import { applyClipFixes } from "@/lib/validation-fixes";
+import type { AiProductionPlan, ValidationResult, ValidationFixes } from "@/lib/types";
 
 const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
 function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
@@ -237,6 +239,7 @@ export default function DetectingStep() {
   const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
+  const [validationPhase, setValidationPhase] = useState<string | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
@@ -1369,8 +1372,215 @@ export default function DetectingStep() {
          voiceClonePromise, stemPromise, talkingHeadPromise].filter(Boolean)
       );
 
+      // ── Validation loop ──
+      // After all generators settle, Haiku reviews the tape and can request surgical fixes.
+      // Max 2 passes, fail-open on any error, abort-aware.
+      let finalClips = clips;
       const finalHighlights = highlights;
-      const finalClips = clips;
+
+      setProgress(95);
+      dispatch({ type: "SET_VALIDATION_STATUS", status: "validating" });
+      setValidationPhase("Validating your highlight reel...");
+
+      for (let pass = 0; pass < 2; pass++) {
+        if (abort.signal.aborted) break;
+
+        try {
+          const assetStatuses = {
+            music: state.aiMusicStatus,
+            sfx: state.sfxStatus,
+            voiceover: state.voiceoverStatus,
+            intro: state.introCard?.status ?? "idle",
+            outro: state.outroCard?.status ?? "idle",
+          };
+
+          const validateRes = await fetch("/api/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clips: finalClips,
+              plan: productionPlan,
+              contentSummary: result.contentSummary ?? "",
+              assetStatuses,
+            }),
+            signal: AbortSignal.timeout(15_000),
+          });
+
+          if (!validateRes.ok) {
+            debugLog(`[Validation] Pass ${pass + 1}: HTTP ${validateRes.status} — treating as passed`);
+            break;
+          }
+
+          const validation: ValidationResult = await validateRes.json();
+          debugLog(`[Validation] Pass ${pass + 1}:`, validation.passed ? "PASSED" : `FAILED — ${validation.issues.length} issue(s)`);
+
+          if (validation.passed) break;
+
+          // Apply fixes
+          dispatch({ type: "SET_VALIDATION_STATUS", status: "fixing" });
+          const issueCount = validation.issues.length;
+          setValidationPhase(`Polishing — fixing ${issueCount} issue${issueCount !== 1 ? "s" : ""}...`);
+          setProgress(96 + pass);
+
+          const fixes = validation.fixes;
+
+          // 1. Apply instant plan-layer fixes (clip updates, removals)
+          if (fixes.clipUpdates || fixes.clipRemovals) {
+            finalClips = applyClipFixes(finalClips, fixes) as typeof finalClips;
+          }
+
+          // 2. Apply plan updates
+          if (fixes.planUpdates && productionPlan) {
+            dispatch({ type: "SET_AI_PRODUCTION_PLAN", plan: { ...productionPlan, ...fixes.planUpdates } as AiProductionPlan });
+          }
+
+          // 3. Fire targeted regeneration promises in parallel
+          const regenPromises: Promise<void>[] = [];
+
+          if (fixes.regenerateSfx) {
+            for (const sfx of fixes.regenerateSfx) {
+              regenPromises.push(regenerateSpecificSfx(sfx.clipIndex, sfx.prompt, sfx.durationMs));
+              setValidationPhase(`Regenerating sound effect for clip ${sfx.clipIndex + 1}...`);
+            }
+          }
+
+          if (fixes.regenerateVoiceover) {
+            const vo = productionPlan?.voiceover;
+            for (const seg of fixes.regenerateVoiceover) {
+              regenPromises.push(regenerateSpecificVoiceover(seg.clipIndex, seg.text, vo?.voiceCharacter ?? "alloy"));
+              setValidationPhase(`Regenerating voiceover for clip ${seg.clipIndex + 1}...`);
+            }
+          }
+
+          if (fixes.regenerateIntro) {
+            regenPromises.push(regenerateIntroCard(fixes.regenerateIntro.stylePrompt, fixes.regenerateIntro.duration, fixes.regenerateIntro.text));
+            setValidationPhase("Regenerating intro card...");
+          }
+
+          if (fixes.regenerateOutro) {
+            regenPromises.push(regenerateOutroCard(fixes.regenerateOutro.stylePrompt, fixes.regenerateOutro.duration, fixes.regenerateOutro.text));
+            setValidationPhase("Regenerating outro card...");
+          }
+
+          if (fixes.regenerateMusic) {
+            regenPromises.push(regenerateMusicTrack(fixes.regenerateMusic.prompt, fixes.regenerateMusic.durationMs));
+            setValidationPhase("Regenerating music...");
+          }
+
+          if (regenPromises.length > 0) {
+            await Promise.allSettled(regenPromises);
+          }
+        } catch (e) {
+          // Fail-open: network errors, JSON parse errors, timeouts → skip validation
+          debugLog("[Validation] Error (fail-open):", e);
+          break;
+        }
+      }
+
+      dispatch({ type: "SET_VALIDATION_STATUS", status: "passed" });
+      setValidationPhase(null);
+
+      // ── Regeneration helpers for validation loop ──
+      // These are thin wrappers around the existing fetch+dispatch patterns.
+
+      async function regenerateSpecificSfx(clipIndex: number, prompt: string, durationMs: number): Promise<void> {
+        try {
+          const res = await fetch("/api/sfx", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "UPDATE_SFX_TRACK", clipIndex, audioUrl: data.audioUrl, status: "completed" });
+          }
+        } catch (e) {
+          debugLog(`[Validation] SFX regen failed for clip ${clipIndex}:`, e);
+        }
+      }
+
+      async function regenerateSpecificVoiceover(clipIndex: number, text: string, voiceCharacter: string): Promise<void> {
+        try {
+          const res = await fetch("/api/voiceover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, voiceCharacter }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "UPDATE_VOICEOVER_SEGMENT", clipIndex, audioUrl: data.audioUrl, duration: data.duration ?? 2, status: "completed" });
+          }
+        } catch (e) {
+          debugLog(`[Validation] Voiceover regen failed for clip ${clipIndex}:`, e);
+        }
+      }
+
+      async function regenerateIntroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
+        try {
+          const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
+          dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, status: "generating" } });
+          const submitRes = await fetch("/api/intro", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: stylePrompt, duration: dur }),
+            signal: abort.signal,
+          });
+          const submitData = await submitRes.json();
+          if (!submitRes.ok || !submitData.predictionId) {
+            dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, status: "failed" } });
+            return;
+          }
+          const videoUrl = await pollAtlasTask(submitData.predictionId);
+          dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+        } catch (e) {
+          debugLog("[Validation] Intro regen failed:", e);
+        }
+      }
+
+      async function regenerateOutroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
+        try {
+          const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
+          dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, status: "generating" } });
+          const submitRes = await fetch("/api/outro", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: stylePrompt, duration: dur }),
+            signal: abort.signal,
+          });
+          const submitData = await submitRes.json();
+          if (!submitRes.ok || !submitData.predictionId) {
+            dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, status: "failed" } });
+            return;
+          }
+          const videoUrl = await pollAtlasTask(submitData.predictionId);
+          dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+        } catch (e) {
+          debugLog("[Validation] Outro regen failed:", e);
+        }
+      }
+
+      async function regenerateMusicTrack(prompt: string, durationMs: number): Promise<void> {
+        try {
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
+          const res = await fetch("/api/music/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+          } else {
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+          }
+        } catch (e) {
+          debugLog("[Validation] Music regen failed:", e);
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+        }
+      }
 
       setProgress(100);
 
@@ -1624,7 +1834,9 @@ export default function DetectingStep() {
       {/* Phase label */}
       <div className="text-center space-y-1.5">
         <p className="text-sm font-medium text-white">
-          {animatingPhotos
+          {validationPhase
+                ? validationPhase
+                : animatingPhotos
                 ? animationProgress.total > 1
                   ? `Animating photos (${animationProgress.completed}/${animationProgress.total})`
                   : "Animating your photo"
