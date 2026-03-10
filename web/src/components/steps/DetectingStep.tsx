@@ -252,10 +252,20 @@ export default function DetectingStep() {
   const earlySfxStartedRef = useRef(false);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Keep a ref to the latest mediaFiles so long-running async code
+  // Keep refs to the latest state so long-running async code
   // (animations, validation) reads current state, not the stale closure.
   const mediaFilesRef = useRef(state.mediaFiles);
   mediaFilesRef.current = state.mediaFiles;
+  const musicStatusRef = useRef(state.aiMusicStatus);
+  musicStatusRef.current = state.aiMusicStatus;
+  const sfxStatusRef = useRef(state.sfxStatus);
+  sfxStatusRef.current = state.sfxStatus;
+  const voiceoverStatusRef = useRef(state.voiceoverStatus);
+  voiceoverStatusRef.current = state.voiceoverStatus;
+  const introCardRef = useRef(state.introCard);
+  introCardRef.current = state.introCard;
+  const outroCardRef = useRef(state.outroCard);
+  outroCardRef.current = state.outroCard;
 
   const fileCount = state.mediaFiles.length;
   const isReplan = !!state.regenerateFeedback;
@@ -1382,29 +1392,42 @@ export default function DetectingStep() {
       dispatch({ type: "SET_VALIDATION_STATUS", status: "validating" });
       setValidationPhase("Validating your highlight reel...");
 
+      let validationPassed = false;
+
       for (let pass = 0; pass < 2; pass++) {
         if (abort.signal.aborted) break;
 
         try {
           const assetStatuses = {
-            music: state.aiMusicStatus,
-            sfx: state.sfxStatus,
-            voiceover: state.voiceoverStatus,
-            intro: state.introCard?.status ?? "idle",
-            outro: state.outroCard?.status ?? "idle",
+            music: musicStatusRef.current,
+            sfx: sfxStatusRef.current,
+            voiceover: voiceoverStatusRef.current,
+            intro: introCardRef.current?.status ?? "idle",
+            outro: outroCardRef.current?.status ?? "idle",
           };
 
-          const validateRes = await fetch("/api/validate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              clips: finalClips,
-              plan: productionPlan,
-              contentSummary: result.contentSummary ?? "",
-              assetStatuses,
-            }),
-            signal: AbortSignal.timeout(15_000),
-          });
+          // Use a per-request controller that aborts on either unmount or 15s timeout.
+          const valAbort = new AbortController();
+          const timeoutId = setTimeout(() => valAbort.abort("Validation timeout"), 15_000);
+          const onParentAbort = () => valAbort.abort("Parent aborted");
+          abort.signal.addEventListener("abort", onParentAbort, { once: true });
+          let validateRes: Response;
+          try {
+            validateRes = await fetch("/api/validate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clips: finalClips,
+                plan: productionPlan,
+                contentSummary: result.contentSummary ?? "",
+                assetStatuses,
+              }),
+              signal: valAbort.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+            abort.signal.removeEventListener("abort", onParentAbort);
+          }
 
           if (!validateRes.ok) {
             debugLog(`[Validation] Pass ${pass + 1}: HTTP ${validateRes.status} — treating as passed`);
@@ -1414,7 +1437,10 @@ export default function DetectingStep() {
           const validation: ValidationResult = await validateRes.json();
           debugLog(`[Validation] Pass ${pass + 1}:`, validation.passed ? "PASSED" : `FAILED — ${validation.issues.length} issue(s)`);
 
-          if (validation.passed) break;
+          if (validation.passed) {
+            validationPassed = true;
+            break;
+          }
 
           // Apply fixes
           dispatch({ type: "SET_VALIDATION_STATUS", status: "fixing" });
@@ -1477,6 +1503,9 @@ export default function DetectingStep() {
         }
       }
 
+      if (!validationPassed) {
+        debugLog("[Validation] Completed 2 passes without passing — proceeding with best-effort fixes");
+      }
       dispatch({ type: "SET_VALIDATION_STATUS", status: "passed" });
       setValidationPhase(null);
 
