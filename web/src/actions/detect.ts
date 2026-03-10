@@ -425,6 +425,7 @@ export interface DetectedClip {
   customCaptionAnimation?: string;
   customCaptionGlowColor?: string;
   customCaptionGlowRadius?: number;
+  captionExitAnimation?: string;
   // Per-clip audio & transition
   clipAudioVolume?: number;
   transitionIntensity?: number;
