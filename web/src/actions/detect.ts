@@ -741,7 +741,10 @@ CHECK THESE (answer each yes/no, flag issues):
 5. ANIMATION FIT: For animated photos — do their animation prompts match the narrative arc? Would the motion feel natural in context?
 6. NARRATIVE ARC: Does the tape tell a coherent story? Is there build-up, climax, and resolution?
 7. CAPTION QUALITY: Are captions punchy, varied, and well-placed? No cliché or redundant captions?
-8. HUMAN FEEL: Does this feel like a machine made it? Look for: identical transition durations across clips, perfectly round parameter values (0.5, 0.3, 1.0 everywhere), uniform velocity curves, identical caption styling, SFX on every cut, or robotic uniformity. A human editor varies things — some clips breathe with no effects, others get the full treatment.
+8. HUMAN FEEL: Does this feel like a machine made it? Look for uniformity — the #1 AI tell:
+   ROBOTIC: every clip has transDur=0.3, every velocity=hero preset, every caption uses pop animation, SFX on every cut, identical clipAudioVolume across all clips.
+   HUMAN: clip 1 has transDur=0.22 with slide caption, clip 2 has transDur=0.45 with no caption at all, clip 3 is a hard cut with flicker and no SFX — variation is INTENTIONAL, not random.
+   Also check: does at least one clip have zero embellishment (no custom filter, no beat pulse, no glow)? If every clip has every knob turned, that's a machine pattern. Human editors leave some clips clean.
 9. CREATIVE COHERENCE: Do the per-clip choices (transitions, velocity, color grades, captions) work together as a cohesive vision? Or do they feel randomly assigned?
 
 Respond with ONLY a JSON object:
@@ -1640,33 +1643,30 @@ produce a better result. But presets aren't forbidden — "normal" is perfectly 
 where constant speed lets the content breathe, and occasionally a preset fits a moment cleanly.
 The point is: choose the speed curve that serves what's happening in the footage.
 
-VELOCITY IMPERFECTION — The secret to human-feeling speed curves:
-Real editors don't use round numbers. Their muscle memory lands on 0.73x, not 0.75x. On 2.3x, not 2.0x.
-- NEVER use exact values like 0.25, 0.5, 1.0, 2.0, 3.0 for speed — use nearby irregular values
-  like 0.27, 0.48, 1.03, 2.15, 2.8. The irregularity reads as human intuition, not a preset.
-- Position values should also be slightly irregular: 0.33 not 0.3, 0.67 not 0.7, 0.82 not 0.8.
+VELOCITY CRAFT — The secret to human-feeling speed curves:
 - Speed transitions should have slightly different acceleration in vs out — real editors ease INTO
   slow-mo gradually but snap OUT of it harder (or vice versa). The asymmetry feels organic.
-- Occasionally leave a clip at near-constant speed (e.g. 0.97-1.03) — not everything needs ramping.
+- Occasionally leave a clip at near-constant speed — not everything needs ramping.
   Some of the most powerful moments play at real-time. The contrast makes the speed changes meaningful.
 
-THE IMPERFECTION PRINCIPLE — Applies to ALL numeric values, not just velocity:
-The velocity imperfection rule above is a specific case of a UNIVERSAL principle:
-Round numbers scream "algorithm." Irregular numbers feel like human intuition.
-Apply this to EVERY numeric parameter you set:
-- transitionDuration: 0.27 not 0.3, 0.18 not 0.2, 0.42 not 0.4
-- entryPunchScale: 1.037 not 1.04, 1.062 not 1.06
-- entryPunchDuration: 0.13 not 0.1, 0.22 not 0.2
-- kenBurnsIntensity: 0.032 not 0.03, 0.057 not 0.06
-- captionEntranceDuration: 0.47 not 0.5, 0.28 not 0.3
-- musicVolume: 0.47 not 0.5, 0.63 not 0.6
-- beatPulseIntensity: 0.023 not 0.02, 0.037 not 0.04
-- grainOpacity: 0.037 not 0.04, 0.052 not 0.05
-- vignetteIntensity: 0.17 not 0.2, 0.23 not 0.25
-- All other numeric values: offset by ±2-8% from round numbers
-The only exceptions: 0 (meaning "off") and 1.0 (meaning "full") can stay exact.
-A real editor's muscle memory never lands on .50 or .30 — it lands on .47 or .32.
-When ALL your values avoid round numbers, the entire tape feels hand-crafted.
+INTENTIONAL VARIATION — The real difference between human and algorithmic editing:
+A machine picks the same value for every clip because it has no reason to vary. A human editor
+makes each choice as a fresh response to what's happening in THAT specific moment. The result
+is natural variation — not randomness, but values that reflect different creative intentions.
+
+The tell isn't round numbers vs irregular numbers. The tell is UNIFORMITY.
+If every clip has transitionDuration=0.3, that's robotic. But if one clip genuinely needs 0.3
+because that's the right feel, use 0.3 — don't offset it to 0.28 just to look human.
+What makes it feel human is that DIFFERENT clips get DIFFERENT values because each moment
+asks for something different. A slow emotional beat gets 0.6s transition. A hard cut gets 0.15s.
+A medium-energy cut gets 0.35s. The variation comes from responding to content, not from an
+algorithm that offsets every number by 2-8%.
+
+Apply this principle to ALL parameters: speed keyframes, transition durations, entry punch scales,
+grain opacity, caption timing, audio volumes — everything. Ask yourself for each clip:
+"What does THIS specific moment need?" If the answer happens to be a round number, that's fine.
+If two adjacent clips genuinely need the same value, that's fine too — but it should be deliberate.
+The goal is intentionality, not artificial irregularity.
 
 VARIATION THROUGH INTENTION — When a human editor sets values on consecutive clips,
 they rarely land on the exact same number twice — because each cut is a fresh response to
@@ -1718,8 +1718,13 @@ A crossfade into an explosion = underwhelming. The transition is the PROMISE, th
 Avoid repeating the same transition type back-to-back unless the repetition itself creates rhythm.
 
 TRANSITION TIMING IS FEEL, NOT FORMULA:
-- Feel the moment. A hard beat drop wants a transition so fast it barely registers. An emotional
-  reveal wants a transition that builds like a held breath before release.
+- The DURATION of a transition is as important as its TYPE. Duration should reflect the
+  energy change between the two clips it connects:
+  HIGH → HIGH energy: fast transition (0.1-0.2s). Maintain momentum, don't slow down.
+  HIGH → LOW energy: medium transition (0.3-0.5s). Let the energy step down gracefully.
+  LOW → HIGH energy: very fast or instant. The snap from calm to intense IS the effect.
+  LOW → LOW energy: slow transition (0.5-1.0s+). The lingering transition IS the mood.
+  A whip between two high-energy clips should be shorter than a whip bridging an energy shift.
 - Think about WHERE the cut lands in the music. The new clip should appear ON the beat, not between beats.
 - The pattern of fast/slow transitions IS its own rhythm layer, separate from the music.
   Three snappy cuts then one slow dissolve creates a groove — but three clips sharing the same
@@ -1972,12 +1977,11 @@ Before choosing ANY values, articulate your vision in "editingPhilosophy":
     "minimal throughout — letting cuts do the talking" for documentary
     "escalating intensity — each transition more dramatic than the last"
     "mixed grammar — whips for action, dissolves for emotion, cuts for pace"
-  "baseGrade" — your base CSS color grade that all clips start from. Examples:
-    "saturate(1.15) contrast(1.12) brightness(1.0)" (punchy sports base)
-    "saturate(0.9) contrast(1.05) brightness(1.08) sepia(0.03)" (soft wedding base)
-    "saturate(1.3) contrast(1.25) brightness(0.92)" (dark cinematic base)
-    State this explicitly so you anchor your per-clip filterCSS grades around it.
-    Each clip's filterCSS should be a TWEAK from this base — not a totally different look.
+  "baseGrade" — your base CSS color grade that all clips start from.
+    Craft this from scratch based on what you see in the footage and the mood you're building.
+    Use CSS filter functions (saturate, contrast, brightness, sepia, hue-rotate) to define
+    the foundational look. State this explicitly so you anchor your per-clip filterCSS grades
+    around it. Each clip's filterCSS should be a TWEAK from this base — not a totally different look.
     The baseGrade is your film stock choice; per-clip grades are the colorist's shot-by-shot adjustments.
 This philosophy guides EVERY subsequent choice. Your values aren't random — they serve this vision.
 
@@ -2066,7 +2070,7 @@ THE FLOW CHECKLIST (run through this mentally before finalizing):
 
 INTRO CARD — An AI-generated video title card prepended to the tape.
 Set "intro" to {"text": "TITLE", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
-"duration" is in seconds (3-5). MATCH DURATION TO THE VIEWER'S PATIENCE:
+"duration" is in seconds. MATCH DURATION TO THE VIEWER'S PATIENCE:
 Hold the intro until the viewer's curiosity peaks — cutting too early wastes the hook, too late
 and they scroll. Hype content viewers have zero patience — get to the action. Cinematic viewers
 savor anticipation — the intro IS part of the experience. Comedy viewers want the punchline —
@@ -2090,10 +2094,10 @@ The video renders at 9:16 PORTRAIT (1080×1920, very tall and narrow).
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
 Same text fitting rules as intro — 1-3 words, same stylePrompt structure.
-"duration" 3-5 seconds. MATCH TO CONTENT:
-- Hype/fast content: 3s or null (skip). The last clip IS the ending. An outro can kill momentum.
-- Story/emotional content: 4-5s. The outro is the denouement — a place to exhale.
-- Content with a CTA: 3-4s. Quick "follow for more" then done — don't linger.
+Choose the duration that fits the content's energy. MATCH TO CONTENT:
+- Hype/fast content: short (2-3s) or null (skip). The last clip IS the ending. An outro can kill momentum.
+- Story/emotional content: longer (4-5s). The outro is the denouement — a place to exhale.
+- Content with a CTA: brief (3-4s). Quick "follow for more" then done — don't linger.
 Consider whether the tape needs a closing beat or if the last clip is the natural ending point.
 When in doubt, SKIP the outro. A strong last clip > a generic outro card.
 
@@ -2125,8 +2129,9 @@ The more the SFX prompt connects to what's visually happening, the more the soun
 was recorded on location rather than dropped from a generic sound library.
 
 USE SFX SPARINGLY — strategic silence is powerful:
-- NOT every clip needs SFX. Use on 30-60% of cuts maximum.
-- Let some cuts be CLEAN (music + visuals only). The contrast makes the SFX cuts hit harder.
+- NOT every clip needs SFX. Let some cuts be CLEAN (music + visuals only).
+  The contrast makes the SFX cuts hit harder. Decide how many based on the content —
+  a hype gaming montage might use SFX on most cuts, a wedding reel might use them rarely.
 - Think about the SFX arc: sparse at the start, denser during the climax, pull back for the close.
 
 SFX TIMING RULES:
