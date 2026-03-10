@@ -13,7 +13,12 @@ export async function POST(req: Request) {
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
-    const { clips, plan, contentSummary, assetStatuses, clipFrames } = await req.json();
+    const {
+      clips, plan, contentSummary, assetStatuses, clipFrames,
+      // Extended context for richer validation
+      sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
+      viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
+    } = await req.json();
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
@@ -64,6 +69,15 @@ For each frame, quickly assess:
    Also check: does at least one clip have zero embellishment (no custom filter, no beat pulse, no glow)? If every clip has every knob turned, that's a machine pattern. Human editors leave some clips clean — the contrast is what makes the styled clips pop. Flag anything that feels robotic or uniform.
 18. **Creative coherence** — If the editing philosophy states a vibe (e.g., "raw documentary energy"), verify the actual per-clip choices serve that vision. A stated "elegant restraint" philosophy with aggressive zoom punches on every clip is contradictory. The philosophy, transitions, velocity curves, color grades, and caption styling should all tell the same story. Check that the film stock + per-clip filterCSS don't over-stack (combined contrast above ~1.35 crushes shadows, combined grain above 0.07 looks like a glitch, not a look).
 
+### Context-aware checks (use the extended context fields when present)
+19. **User creative direction** — If the user provided creative direction, verify the tape serves that vision. The editing choices, mood, and style should align with what the user asked for. Flag clear contradictions.
+20. **Regeneration feedback** — If this is a regeneration with user feedback, verify the specific complaints were addressed. The user explicitly asked for changes — make sure they happened.
+21. **Audio transcript alignment** — If a transcript of the source footage is available, check that captions and voiceover don't contradict what was actually said. The transcript is ground truth.
+22. **Source file coverage** — If source file metadata is available, verify all source files are represented. Missing sources mean lost content the user uploaded.
+23. **Intro/outro card coherence** — If intro/outro card details are present, verify the text and style match the overall tape mood, content summary, and editing philosophy. An epic cinematic intro on a funny pet compilation is jarring.
+24. **SFX-clip timing** — If SFX track details are present, verify each SFX prompt makes sense for its assigned clip and timing position. Cross-reference with the visual frames when available.
+25. **Voiceover narrative arc** — If voiceover segment details are present, read ALL segments in clip order. Do they form a coherent narrative? Do delays and durations feel natural for the clip content?
+
 ## Rules
 - PASS if the tape is good enough to post — don't be a perfectionist
 - Only flag problems that would genuinely hurt engagement or confuse viewers
@@ -106,7 +120,14 @@ Your job is to review the tape and either PASS it or return specific, structured
 12. Filter consistency — are filter choices intentional or do random mismatches look accidental?
 13. Overall coherence — do captions, music mood, SFX prompts, and voiceover all feel like they belong to the same reel?
 14. Human feel test — the #1 AI tell is UNIFORMITY. Compare values across clips: if every clip has the same transition duration, same velocity preset, same caption animation, SFX on every cut, or identical audio volumes — that's robotic. Human editing looks like: clip 1 transDur=0.22 with slide caption, clip 2 transDur=0.45 with no caption, clip 3 hard cut with flicker. Also: if every clip has custom filters, beat pulse, and glow, that's over-designed — human editors leave some clips clean.
-15. Creative coherence — if an editing philosophy is stated, do the actual choices serve that vision? Check that film stock + per-clip filterCSS don't over-stack (combined contrast > ~1.35 crushes shadows, combined grain > 0.07 looks broken).`;
+15. Creative coherence — if an editing philosophy is stated, do the actual choices serve that vision? Check that film stock + per-clip filterCSS don't over-stack (combined contrast > ~1.35 crushes shadows, combined grain > 0.07 looks broken).
+16. User creative direction — if the user provided creative direction, verify the tape serves that vision. Flag clear contradictions between user intent and editing choices.
+17. Regeneration feedback — if this is a regeneration with user feedback, verify the specific complaints were addressed.
+18. Audio transcript alignment — if a transcript is available, check that captions and voiceover don't contradict what was actually said in the source footage.
+19. Source file coverage — if source file metadata is available, verify all source files are represented.
+20. Intro/outro card coherence — if intro/outro card details are present, verify text and style match the overall tape mood and content summary.
+21. SFX-clip timing — if SFX details are present, verify each prompt makes sense for its clip.
+22. Voiceover narrative arc — if voiceover segment details are present, read them in clip order for coherent narrative flow.`;
 
     const outputFormat = `
 
@@ -132,7 +153,10 @@ If passed is true, fixes should be empty or omitted.`;
 
     const fullSystemPrompt = systemPrompt + outputFormat;
 
-    const tapeDescription = buildTapeDescription(clips, plan, contentSummary, assetStatuses);
+    const tapeDescription = buildTapeDescription(clips, plan, contentSummary, assetStatuses, {
+      sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
+      viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
+    });
 
     // Build message content — multimodal if frames are available, text-only otherwise.
     const userContent = hasFrames
@@ -255,6 +279,20 @@ function buildVisionContent(
   return content;
 }
 
+/** Extra context fields passed from the client for richer validation. */
+interface ExtendedContext {
+  sourceFiles?: Array<{ name: string; type: string; duration: number }>;
+  audioTranscript?: string;
+  creativeDirection?: string;
+  regenerateFeedback?: string;
+  viralOptions?: { beatSync?: boolean; seamlessLoop?: boolean };
+  detectedTheme?: string;
+  introCard?: { text: string; stylePrompt: string; duration: number; status: string };
+  outroCard?: { text: string; stylePrompt: string; duration: number; status: string };
+  sfxTracks?: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number; status: string }>;
+  voiceoverSegments?: Array<{ clipIndex: number; text: string; duration: number; delaySec?: number; status: string }>;
+}
+
 /** Build a rich text description of the tape for Haiku to review.
  * Includes full creative context so Haiku can validate coherence across
  * the AI's editing philosophy, per-clip styling, and production plan. */
@@ -262,11 +300,46 @@ function buildTapeDescription(
   clips: Array<Record<string, unknown>>,
   plan: Record<string, unknown> | null,
   contentSummary: string,
-  assetStatuses: Record<string, unknown> | null
+  assetStatuses: Record<string, unknown> | null,
+  ext: ExtendedContext = {},
 ): string {
   const parts: string[] = [];
 
   parts.push(`## Content Summary\n${contentSummary || "No summary available"}`);
+
+  // Source files — helps the validator understand what raw material went in
+  if (ext.sourceFiles && ext.sourceFiles.length > 0) {
+    parts.push(`\n## Source Files (${ext.sourceFiles.length} total)`);
+    for (const sf of ext.sourceFiles) {
+      parts.push(`- "${sf.name}" (${sf.type}, ${sf.duration > 0 ? sf.duration.toFixed(1) + "s" : "photo"})`);
+    }
+  }
+
+  // Audio transcript — the actual spoken/sung words in the source footage
+  if (ext.audioTranscript) {
+    parts.push(`\n## Audio Transcript (from source footage)\n${ext.audioTranscript}`);
+  }
+
+  // User's creative direction — explicit style instructions from the user
+  if (ext.creativeDirection) {
+    parts.push(`\n## User Creative Direction\n"${ext.creativeDirection}"`);
+  }
+
+  // Regeneration feedback — what the user disliked about a previous version
+  if (ext.regenerateFeedback) {
+    parts.push(`\n## Regeneration Feedback (user requested changes)\n"${ext.regenerateFeedback}"`);
+  }
+
+  // Detected theme and viral options
+  if (ext.detectedTheme) {
+    parts.push(`\n## Detected Theme: ${ext.detectedTheme}`);
+  }
+  if (ext.viralOptions) {
+    const opts: string[] = [];
+    if (ext.viralOptions.beatSync) opts.push("beat-sync enabled");
+    if (ext.viralOptions.seamlessLoop) opts.push("seamless loop enabled");
+    if (opts.length > 0) parts.push(`Viral options: ${opts.join(", ")}`);
+  }
 
   parts.push(`\n## Clips (${clips.length} total)`);
   for (let i = 0; i < clips.length; i++) {
@@ -407,6 +480,36 @@ function buildTapeDescription(
     if (p.letterboxColor) overlayTuning.push(`letterboxColor=${p.letterboxColor}`);
     if (p.watermarkColor) overlayTuning.push(`watermarkColor=${p.watermarkColor}`);
     if (overlayTuning.length > 0) parts.push(`Overlay tuning: ${overlayTuning.join(", ")}`);
+  }
+
+  // Intro/outro card details — so the validator can check text/style coherence
+  if (ext.introCard) {
+    parts.push(`\n## Intro Card`);
+    parts.push(`Text: "${ext.introCard.text}"`);
+    parts.push(`Style: "${ext.introCard.stylePrompt}"`);
+    parts.push(`Duration: ${ext.introCard.duration}s | Status: ${ext.introCard.status}`);
+  }
+  if (ext.outroCard) {
+    parts.push(`\n## Outro Card`);
+    parts.push(`Text: "${ext.outroCard.text}"`);
+    parts.push(`Style: "${ext.outroCard.stylePrompt}"`);
+    parts.push(`Duration: ${ext.outroCard.duration}s | Status: ${ext.outroCard.status}`);
+  }
+
+  // SFX track details — so the validator can check prompt-clip coherence
+  if (ext.sfxTracks && ext.sfxTracks.length > 0) {
+    parts.push(`\n## Sound Effects (${ext.sfxTracks.length} total)`);
+    for (const sfx of ext.sfxTracks) {
+      parts.push(`- clip${sfx.clipIndex} timing=${sfx.timing} "${sfx.prompt}" ${sfx.durationMs}ms [${sfx.status}]`);
+    }
+  }
+
+  // Voiceover segment details — so the validator can check text-clip alignment
+  if (ext.voiceoverSegments && ext.voiceoverSegments.length > 0) {
+    parts.push(`\n## Voiceover Segments (${ext.voiceoverSegments.length} total)`);
+    for (const seg of ext.voiceoverSegments) {
+      parts.push(`- clip${seg.clipIndex} delay=${seg.delaySec ?? "default"} dur=${seg.duration > 0 ? seg.duration.toFixed(1) + "s" : "pending"} "${seg.text}" [${seg.status}]`);
+    }
   }
 
   if (assetStatuses) {

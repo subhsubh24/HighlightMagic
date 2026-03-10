@@ -1450,6 +1450,17 @@ export default function DetectingStep() {
                 contentSummary: result.contentSummary ?? "",
                 assetStatuses,
                 clipFrames: clipFrames.length > 0 ? clipFrames : undefined,
+                // Extra context so the validator can make better-informed decisions
+                sourceFiles: mediaFilesRef.current.map((f) => ({ name: f.name, type: f.type, duration: f.duration })),
+                audioTranscript: state.audioTranscript || undefined,
+                creativeDirection: state.creativeDirection || undefined,
+                regenerateFeedback: state.regenerateFeedback || undefined,
+                viralOptions: state.viralOptions,
+                detectedTheme: state.detectedTheme,
+                introCard: introCardRef.current ? { text: introCardRef.current.text, stylePrompt: introCardRef.current.stylePrompt, duration: introCardRef.current.duration, status: introCardRef.current.status } : undefined,
+                outroCard: outroCardRef.current ? { text: outroCardRef.current.text, stylePrompt: outroCardRef.current.stylePrompt, duration: outroCardRef.current.duration, status: outroCardRef.current.status } : undefined,
+                sfxTracks: state.sfxTracks.length > 0 ? state.sfxTracks.map((t) => ({ clipIndex: t.clipIndex, timing: t.timing, prompt: t.prompt, durationMs: t.durationMs, status: t.status })) : undefined,
+                voiceoverSegments: state.voiceoverSegments.length > 0 ? state.voiceoverSegments.map((s) => ({ clipIndex: s.clipIndex, text: s.text, duration: s.duration, delaySec: s.delaySec, status: s.status })) : undefined,
               }),
               signal: valAbort.signal,
             });
