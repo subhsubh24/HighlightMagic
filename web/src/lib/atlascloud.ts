@@ -42,7 +42,8 @@ const POLL_TIMEOUT_MS = 300_000; // 5 minutes
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 2_000;
-const FETCH_TIMEOUT_MS = 30_000; // 30s timeout for API calls
+const SUBMIT_TIMEOUT_MS = 120_000; // 120s for submissions (large base64 uploads)
+const POLL_TIMEOUT_FETCH_MS = 30_000; // 30s for poll checks (lightweight)
 
 // ── Response types ──
 
@@ -117,7 +118,7 @@ export async function submitTask(
         Authorization: `Bearer ${apiKey}`,
       },
       body: requestBody,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -172,7 +173,7 @@ export async function checkTaskResult(
       `${ATLAS_API_BASE}/prediction/${predictionId}`,
       {
         headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(POLL_TIMEOUT_FETCH_MS),
       }
     );
 
