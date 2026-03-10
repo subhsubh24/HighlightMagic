@@ -529,7 +529,7 @@ export default function DetectingStep() {
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
 
-        await processResult(result);
+        await processResult(result, cached.frames as Array<{ sourceFileId: string; timestamp: number; base64: string }>);
       } catch (err) {
         clearInterval(plannerTimer);
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
@@ -720,14 +720,14 @@ export default function DetectingStep() {
         debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
-        await processResult(result);
+        await processResult(result, frames);
       } catch (err) {
         clearInterval(plannerTimer);
         handleError(err);
       }
     }
 
-    async function processResult(result: DetectionResult) {
+    async function processResult(result: DetectionResult, allFrames?: Array<{ sourceFileId: string; timestamp: number; base64: string }>) {
       setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
       setProgress(95);
 
@@ -1388,6 +1388,32 @@ export default function DetectingStep() {
       let finalClips = clips;
       const finalHighlights = highlights;
 
+      // Pick one representative frame per clip (closest to the midpoint) for visual validation.
+      // Limit to 8 frames max to keep payload size and latency reasonable.
+      const clipFrames: Array<{ clipIndex: number; base64: string }> = [];
+      if (allFrames && allFrames.length > 0) {
+        const maxVisualClips = Math.min(finalClips.length, 8);
+        for (let i = 0; i < maxVisualClips; i++) {
+          const c = finalClips[i];
+          const mid = ((c.trimStart ?? 0) + (c.trimEnd ?? 0)) / 2;
+          // Find the frame from the same source file closest to clip midpoint
+          let bestFrame: (typeof allFrames)[0] | null = null;
+          let bestDist = Infinity;
+          for (const f of allFrames) {
+            if (f.sourceFileId !== c.sourceFileId) continue;
+            const dist = Math.abs(f.timestamp - mid);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestFrame = f;
+            }
+          }
+          if (bestFrame) {
+            clipFrames.push({ clipIndex: i, base64: bestFrame.base64 });
+          }
+        }
+        debugLog(`[Validation] Selected ${clipFrames.length} representative frames for visual validation`);
+      }
+
       setProgress(95);
       dispatch({ type: "SET_VALIDATION_STATUS", status: "validating" });
       setValidationPhase("Validating your highlight reel...");
@@ -1407,8 +1433,10 @@ export default function DetectingStep() {
           };
 
           // Use a per-request controller that aborts on either unmount or 15s timeout.
+          // Increase timeout to 25s when sending frames (vision requests take longer).
+          const valTimeout = clipFrames.length > 0 ? 25_000 : 15_000;
           const valAbort = new AbortController();
-          const timeoutId = setTimeout(() => valAbort.abort("Validation timeout"), 15_000);
+          const timeoutId = setTimeout(() => valAbort.abort("Validation timeout"), valTimeout);
           const onParentAbort = () => valAbort.abort("Parent aborted");
           abort.signal.addEventListener("abort", onParentAbort, { once: true });
           let validateRes: Response;
@@ -1421,6 +1449,7 @@ export default function DetectingStep() {
                 plan: productionPlan,
                 contentSummary: result.contentSummary ?? "",
                 assetStatuses,
+                clipFrames: clipFrames.length > 0 ? clipFrames : undefined,
               }),
               signal: valAbort.signal,
             });

@@ -3,6 +3,7 @@ export const maxDuration = 30;
 
 /**
  * Validation endpoint — calls Haiku to review the assembled tape and return structured fixes.
+ * When clip frames are provided, Haiku can visually inspect each clip for quality issues.
  * Fail-open: any error returns { passed: true } so the pipeline always proceeds.
  */
 export async function POST(req: Request) {
@@ -12,15 +13,17 @@ export async function POST(req: Request) {
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
-    const { clips, plan, contentSummary, assetStatuses } = await req.json();
+    const { clips, plan, contentSummary, assetStatuses, clipFrames } = await req.json();
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
+    const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;
+
     const systemPrompt = `You are a quality validator for short-form highlight reels (TikTok, Reels, Shorts).
 
-You will receive the full assembled tape state: clips with their captions/transitions/filters, the production plan, and asset generation statuses.
+You will receive the full assembled tape state: clips with their captions/transitions/filters, the production plan, and asset generation statuses.${hasFrames ? "\n\nYou will also see a representative frame from each clip. Use these frames to visually assess content quality, verify that captions and SFX prompts match what's actually happening on screen, and check that the opening clip is visually compelling." : ""}
 
 Your job is to review the tape and either PASS it or return specific, structured fixes.
 
@@ -37,15 +40,15 @@ Your job is to review the tape and either PASS it or return specific, structured
 - Clip reordering suggestions should be expressed as clipUpdates with new order values
 
 ## What to check
-1. Hook quality — is the first clip a strong opener?
+1. Hook quality — is the first clip a strong opener?${hasFrames ? " (look at the actual frame — is it visually compelling?)" : ""}
 2. Pacing — energy oscillation, no dead stretches
 3. Transition logic — types match energy changes between clips
-4. Caption quality — punchy, varied, no clichés
+4. Caption quality — punchy, varied, no clichés${hasFrames ? " — do captions match what's visually happening?" : ""}
 5. Narrative arc — build-up, climax, resolution
-6. SFX fit — do prompts match the clip content?
-7. Voiceover coherence — does text match what's happening?
+6. SFX fit — do prompts match the clip content?${hasFrames ? " (compare SFX prompts against what you see in frames)" : ""}
+7. Voiceover coherence — does text match what's happening?${hasFrames ? " (verify against actual visuals)" : ""}
 8. Intro/outro relevance — does text match the content summary?
-9. Audio balance — volume levels make sense
+9. Audio balance — volume levels make sense${hasFrames ? "\n10. Visual quality — are any clips too dark, blurry, or visually uninteresting for a highlight reel?" : ""}
 
 ## Output format
 Return a single JSON object with this exact schema:
@@ -69,6 +72,11 @@ If passed is true, fixes should be empty or omitted.`;
 
     const tapeDescription = buildTapeDescription(clips, plan, contentSummary, assetStatuses);
 
+    // Build message content — multimodal if frames are available, text-only otherwise.
+    const userContent = hasFrames
+      ? buildVisionContent(tapeDescription, clips, clipFrames as Array<{ clipIndex: number; base64: string }>)
+      : tapeDescription;
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -80,9 +88,9 @@ If passed is true, fixes should be empty or omitted.`;
         model: "claude-haiku-4-5-20251001",
         max_tokens: 2000,
         system: systemPrompt,
-        messages: [{ role: "user", content: tapeDescription }],
+        messages: [{ role: "user", content: userContent }],
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(hasFrames ? 20_000 : 15_000),
     });
 
     if (!response.ok) {
@@ -137,6 +145,52 @@ If passed is true, fixes should be empty or omitted.`;
     console.error("[validate] Error (fail-open):", err);
     return Response.json({ passed: true, issues: [], fixes: {} });
   }
+}
+
+/**
+ * Build multimodal content blocks: interleave text descriptions with clip frame images.
+ * Each clip gets a text label followed by its frame image, then the full tape description at the end.
+ */
+function buildVisionContent(
+  tapeDescription: string,
+  clips: Array<Record<string, unknown>>,
+  clipFrames: Array<{ clipIndex: number; base64: string }>
+): Array<{ type: string; text?: string; source?: { type: string; media_type: string; data: string } }> {
+  const content: Array<{ type: string; text?: string; source?: { type: string; media_type: string; data: string } }> = [];
+  const frameMap = new Map(clipFrames.map((f) => [f.clipIndex, f.base64]));
+
+  // First: tape description text
+  content.push({ type: "text", text: tapeDescription });
+
+  // Then: labeled frames for visual inspection
+  content.push({ type: "text", text: "\n## Visual Frames (one per clip — use these to verify captions, SFX, and visual quality)" });
+
+  for (const [clipIndex, base64] of frameMap) {
+    const clip = clips[clipIndex];
+    const caption = (clip?.captionText as string) || "(no caption)";
+    content.push({
+      type: "text",
+      text: `\nClip ${clipIndex}: "${caption}"`,
+    });
+
+    // Strip data URI prefix if present to get raw base64
+    const raw = base64.includes(",") ? base64.split(",")[1] : base64;
+    // Detect media type from data URI or default to JPEG
+    let mediaType = "image/jpeg";
+    if (base64.startsWith("data:image/png")) mediaType = "image/png";
+    else if (base64.startsWith("data:image/webp")) mediaType = "image/webp";
+
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: mediaType,
+        data: raw,
+      },
+    });
+  }
+
+  return content;
 }
 
 /** Build a concise text description of the tape for Haiku to review. */
