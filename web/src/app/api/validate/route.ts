@@ -52,6 +52,13 @@ For each frame, quickly assess:
 10. **Intro/outro relevance** — Does the text match the content summary?
 11. **Audio balance** — Volume levels make sense for the content type.
 
+### Holistic coherence (step back and consider the whole reel)
+12. **Music-visual mood match** — Look at the overall visual energy across all frames, then read the music prompt. Does the music mood fit what you see? A high-energy montage with a "chill lo-fi" prompt, or calm scenic clips with "aggressive trap beats" — these break the viewer's experience. Suggest a corrected music prompt if mismatched.
+13. **Caption narrative flow** — Read all captions in clip order as a sequence. Do they tell a coherent mini-story or at least feel like they belong together? Flag if the tone jumps randomly (e.g., funny → serious → funny) without the visuals justifying it. Suggest caption rewrites to smooth the arc.
+14. **Voiceover-clip alignment** — If voiceover segments exist, read them in order alongside the clip sequence. Does the voiceover narrative progress logically with the visual progression? Flag if a voiceover segment references something that happens in a different clip.
+15. **Filter consistency** — Check the filter assignments across clips. Mixed filters can work for stylistic contrast, but flag if it looks accidental (e.g., one random clip has "Vintage" while everything else is "None"). Suggest harmonizing via clipUpdates.
+16. **Overall vibe check** — Imagine scrolling past this reel on TikTok. Do the visuals, captions, music mood, and SFX prompts all feel like they belong to the same piece of content? If something feels "off" even if no single rule is broken, flag it and explain what breaks the cohesion.
+
 ## Rules
 - PASS if the tape is good enough to post — don't be a perfectionist
 - Only flag problems that would genuinely hurt engagement or confuse viewers
@@ -88,7 +95,11 @@ Your job is to review the tape and either PASS it or return specific, structured
 6. SFX fit — do prompts match the clip content?
 7. Voiceover coherence — does text match what's happening?
 8. Intro/outro relevance — does text match the content summary?
-9. Audio balance — volume levels make sense`;
+9. Audio balance — volume levels make sense
+10. Caption narrative flow — read all captions in order; do they tell a coherent mini-story or at least feel like they belong together?
+11. Music-content mood match — does the music prompt fit the content summary and caption tone?
+12. Filter consistency — are filter choices intentional or do random mismatches look accidental?
+13. Overall coherence — do captions, music mood, SFX prompts, and voiceover all feel like they belong to the same reel?`;
 
     const outputFormat = `
 
