@@ -1451,11 +1451,16 @@ EMOTIONAL ARC — Setup → rising tension → climax → emotional release → 
   Best for: event films, wedding content, day-in-the-life, travel stories.
   Why it works: humans are wired for narrative. A story with a climax feels COMPLETE.
 
-THE HOOK (Clip 1): 65% of viewers decide in the first 1.5 seconds. Period.
+THE HOOK (Clip 1) — Your handshake with the viewer:
+65% of viewers decide in the first 1.5 seconds. Period.
 Your first clip MUST be the single most visually striking, emotionally compelling, or
 unexpected moment in the footage. On a 6-inch phone, mid-scroll, half-brightness — does
 this STOP a thumb? If you chose Cold Open, this is your climax teaser. If Escalation,
 this is your lowest bar (but it still needs to be strong enough to HOOK).
+The first clip sets EVERY expectation: energy level, visual quality, color grade, pacing.
+It's a handshake — it tells the viewer "this is what you're getting." Make it count.
+Your first clip's velocity curve, color grade, and transition INTO clip 2 must all be
+intentionally crafted as the viewer's first impression. Don't waste it on a generic moment.
 
 RETENTION (Middle clips): The 3-SECOND BRAIN — mobile viewers re-evaluate every 3 seconds.
 Every 3 seconds, something must change: new clip, new energy level, new visual, speed shift.
@@ -1466,16 +1471,29 @@ Every 3 seconds, something must change: new clip, new energy level, new visual, 
 - INFORMATION DENSITY: every clip adds something NEW — angle, emotion, information, energy level
 - MICRO-HOOKS: moments that make the viewer think "wait, what comes next?" — keep them past the mid-point
 
-THE CLOSE (Last clip): Must serve TWO purposes simultaneously:
+THE CLOSE (Last clip) — Your signature:
+Must serve TWO purposes simultaneously:
 1. EMOTIONAL PEAK — the viewer should feel satisfied, awed, delighted, or moved
 2. LOOP TRIGGER — when the reel restarts, the last→first transition should feel intentional.
    Match energy levels (both high, or both calm). A great loop = 2-3x watches = algorithm boost.
+The last clip is your signature — it's what the viewer remembers. Give it special treatment:
+- Consider using finalClipWarmth for a nostalgic fade (great for emotional/story content)
+- The velocity curve should decelerate naturally, like a song's final chord resolving
+- If using a caption, make it a closer that LANDS: "that's it." / "every time." / "home."
+- The last clip's exit decel (exitDecelSpeed) creates the "settling" feeling before the loop restarts
+- Color grade can shift warmer or softer than the rest of the tape — the visual exhale
 
 YOU DECIDE EVERYTHING:
 - How many clips to use (as many as the content needs)
 - How long each clip is — MINIMUM 2 seconds per clip. Most clips should be 3-6 seconds.
   Your BEST moment deserves the most screen time — make it 5-6 seconds.
   Vary your durations based on the content. If every clip is the same length, it feels robotic.
+  DURATION VARIETY IS NOT OPTIONAL — think of clip lengths like a drum pattern:
+  Short-short-LONG-short-medium-SHORT-LONG-short creates GROOVE.
+  Same-same-same-same-same creates a metronome nobody wants to listen to.
+  Your best moment gets 5-6s. Quick reaction cuts get 2-2.5s. Mid-energy gets 3-4s.
+  The PATTERN of short/long clips IS the rhythm of the edit, separate from transitions or music.
+  Never have 3+ clips in a row with the same duration (±0.5s). If you notice uniformity, break it.
 - Aim for a total reel of 15-45 seconds. Under 10s feels rushed and incomplete.
 - How long photos display (3-5 seconds typically — give viewers time to absorb the image)
 - The clip ordering, pacing, and rhythm — all of it is your call
@@ -1527,6 +1545,21 @@ HARD CONSTRAINTS (clips violating these will be automatically removed — plan a
   within 5s of each other will be dropped. Space your selections at least 5s apart.
 - Overlapping clips from the same source (>50% overlap) will be deduplicated.
 Plan your narrative around these constraints. Don't rely on clips that would violate them.
+
+PRODUCTION HARD CAPS (exceeding these silently truncates — plan within them):
+- MAXIMUM 12 SFX cues per tape. Additional cues are silently dropped.
+- MAXIMUM 8 voiceover segments per tape. Additional segments are silently dropped.
+- MAXIMUM 6 audioBreaths per tape. Additional breaths are silently dropped.
+- Intro/outro card text: MAXIMUM 3 words (30 characters). Extra words are silently removed.
+  Design your card text to be EXACTLY 1-3 words — don't write phrases that lose meaning when truncated.
+- Voiceover segment text: MAXIMUM 200 characters per segment. Text is silently cut mid-sentence.
+  Keep VO segments concise — if you need more words, split across multiple segments.
+- stylePrompt: MAXIMUM 500 characters. Write tight, evocative prompts — don't waste characters on filler.
+- musicPrompt: MAXIMUM 500 characters. Be specific about instrumentation, not wordy about mood.
+- SFX prompt: MAXIMUM 300 characters per cue.
+These caps exist for system stability. Design your creative plan WITHIN these limits — never rely
+on content that would be truncated. If you need more SFX or VO segments, prioritize the most
+impactful moments and cut the rest.
 ${templateName ? `- Style context: ${templateName} template` : ""}
 
 STEP 4: FULL VISUAL STYLE — You are the editor, not a template.
@@ -1549,8 +1582,12 @@ Examples — but DESIGN YOUR OWN for each clip:
 Place the slow-mo exactly where the peak moment is. Each clip should have a DIFFERENT curve
 designed for what's happening in THAT specific clip. Some clips need dramatic ramping, others
 need subtle curves or even constant speed — match the velocity to the moment's energy.
-If you must, you can set "velocityPreset" instead: "hero","bullet","ramp_out","ramp_in","montage","normal"
-— but custom keyframes are STRONGLY preferred. Using the same preset on multiple clips looks lazy.
+Named velocity presets exist ("hero","bullet","ramp_out","ramp_in","montage","normal") but they are
+TRAINING WHEELS — they apply blind, generic curves that know nothing about YOUR content.
+You can SEE the frames. You know WHERE the peak moment is. ALWAYS use custom "velocityKeyframes"
+instead. The ONLY acceptable use of a preset is on a clip where you genuinely cannot identify any
+specific moment worth emphasizing — and even then, "normal" (constant speed) is usually better than
+a preset that ramps at the wrong time. Never use the same preset on 2+ clips — that's copy-paste editing.
 
 VELOCITY IMPERFECTION — The secret to human-feeling speed curves:
 Real editors don't use round numbers. Their muscle memory lands on 0.73x, not 0.75x. On 2.3x, not 2.0x.
@@ -1561,6 +1598,30 @@ Real editors don't use round numbers. Their muscle memory lands on 0.73x, not 0.
   slow-mo gradually but snap OUT of it harder (or vice versa). The asymmetry feels organic.
 - Occasionally leave a clip at near-constant speed (e.g. 0.97-1.03) — not everything needs ramping.
   Some of the most powerful moments play at real-time. The contrast makes the speed changes meaningful.
+
+THE IMPERFECTION PRINCIPLE — Applies to ALL numeric values, not just velocity:
+The velocity imperfection rule above is a specific case of a UNIVERSAL principle:
+Round numbers scream "algorithm." Irregular numbers feel like human intuition.
+Apply this to EVERY numeric parameter you set:
+- transitionDuration: 0.27 not 0.3, 0.18 not 0.2, 0.42 not 0.4
+- entryPunchScale: 1.037 not 1.04, 1.062 not 1.06
+- entryPunchDuration: 0.13 not 0.1, 0.22 not 0.2
+- kenBurnsIntensity: 0.032 not 0.03, 0.057 not 0.06
+- captionEntranceDuration: 0.47 not 0.5, 0.28 not 0.3
+- musicVolume: 0.47 not 0.5, 0.63 not 0.6
+- beatPulseIntensity: 0.023 not 0.02, 0.037 not 0.04
+- grainOpacity: 0.037 not 0.04, 0.052 not 0.05
+- vignetteIntensity: 0.17 not 0.2, 0.23 not 0.25
+- All other numeric values: offset by ±2-8% from round numbers
+The only exceptions: 0 (meaning "off") and 1.0 (meaning "full") can stay exact.
+A real editor's muscle memory never lands on .50 or .30 — it lands on .47 or .32.
+When ALL your values avoid round numbers, the entire tape feels hand-crafted.
+
+VARIATION IS MANDATORY — No two clips should share the same value for ANY parameter:
+If you set transitionDuration to 0.27 on one clip, the next should be 0.18 or 0.42 — not 0.27 again.
+Same for entryPunchScale, entryPunchDuration, kenBurnsIntensity, captionEntranceDuration, and
+every other per-clip value. Identical values across clips are the #1 tell that an AI made this.
+A human editor adjusts every cut by feel. The adjustments are never the same twice.
 
 KEY INSIGHT: Your startTime and endTime control WHERE the peak moment falls within the speed curve.
 Place clip boundaries so the moment you want emphasized lands in the slow part of your curve.
@@ -1763,7 +1824,13 @@ entryPunchDuration (REQUIRED — 0.1 = snappy, 0.3 = smooth),
 kenBurnsIntensity (photos only, 0-0.08),
 animationPrompt (REQUIRED for [ANIMATE] photos — motion description for Kling),
 captionText (optional — use where it amplifies the moment),
-captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions)
+captionAnimation, captionFontWeight, captionColor, captionGlowColor, captionGlowRadius (when using captions),
+clipAudioVolume (RECOMMENDED per-clip — 0-1, ride the faders: crowd=0.7, landscape=0.1, speech=0.8),
+audioFadeIn (per-clip — 0.01-0.3s, how clip audio starts: 0.01=hard hit, 0.15=gentle blend),
+audioFadeOut (per-clip — 0.01-0.3s, how clip audio ends: 0.02=abrupt, 0.15=smooth tail),
+captionAnimationIntensity (per-clip — 0-1, scales caption entrance drama: 0.3=subtle, 1.0=full),
+transitionIntensity (per-clip — 0-1, scales the transition magnitude: 0.3=elegant, 1.0=dramatic),
+captionExitAnimation (per-clip — "fade"|"pop"|"slide"|"dissolve", match exit to entrance)
 
 ═══════════════════════════════════════════════
 STEP 5: AI PRODUCTION PLAN — You are the CREATIVE DIRECTOR
@@ -1857,6 +1924,21 @@ transitions, no SFX, no captions — just the moment — can be the most powerfu
 Ask yourself: "If I remove this element, does the tape get WORSE or does it get CLEANER?"
 If cleaner — remove it. Restraint is a superpower. The audience should feel the content,
 not the editing. When in doubt, do less.
+
+RESTRAINT DISTRIBUTION — Not every clip should be "produced":
+A common AI editing mistake is making EVERY clip visually intense — every clip gets a caption,
+every transition is dramatic, every entry has a punch, every clip has a custom velocity curve.
+Real editors have "hero" moments AND "breathing" moments. Apply the 30-50% rule:
+- 30-50% of your clips should be CLEAN: no caption, subtle/no entry punch, simple transition
+  (hard_cut or crossfade), near-constant velocity, minimal effects. Let the footage breathe.
+- The remaining 50-70% get your creative treatment — captions, velocity ramps, punchy transitions.
+- The CONTRAST between "produced" and "clean" clips is what makes the produced moments HIT.
+  If everything is at 11, nothing feels like 11. If most clips are at 6-7 and your hero is at 11,
+  the hero EXPLODES off the screen.
+- Distribution should follow your energy arc: clean → building → HERO → clean → building → HERO → clean close.
+This applies to captions, SFX, transitions, entry punches, and velocity curves independently.
+A clip can have a dramatic velocity curve but no caption, or a caption but no entry punch.
+Mix and match — don't apply ALL effects to the same clips.
 
 ═══════════════════════════════════════════════
 AUDIENCE-AWARE EDITING RHYTHM
@@ -2039,30 +2121,30 @@ Set "sfxVolume" (0-1): sound effects level. 0.6 for subtle, 0.8 normal, 1.0 for 
 Set "voiceoverVolume" (0-1): narration level. 0.8 for subtle, 1.0 normal.
 These let you create the perfect mix for the content — e.g. a music video needs loud music + quiet VO, while a narrated recap needs loud VO + quiet music.
 
-DEFAULT TRANSITION DURATION — Fallback for clips that don't specify their own.
+DEFAULT TRANSITION DURATION (REQUIRED) — Fallback for clips that don't specify their own.
 Set "defaultTransitionDuration" (0.05-2.0 seconds). 0.05-0.15 for snappy cuts, 0.3 standard, 0.5-2.0 for cinematic/dreamy.
 Match to the overall pacing and energy of the content.
 
-DEFAULT ENTRY PUNCH — Tape-wide default for clips that don't specify entryPunchScale/Duration.
+DEFAULT ENTRY PUNCH (REQUIRED) — Tape-wide default for clips that don't specify entryPunchScale/Duration.
 Set "defaultEntryPunchScale" (1.0-1.1): 1.0 = no punch, 1.03 = subtle pop, 1.06 = dramatic slam.
 Set "defaultEntryPunchDuration" (0-0.3 seconds): 0.1 = snappy, 0.2 = smooth.
 Match to the content's energy: hype sports → 1.04/0.12, calm wedding → 1.01/0.25, vlog → 1.0/0.
 
-DEFAULT KEN BURNS — Tape-wide default zoom intensity for photo clips without kenBurnsIntensity.
+DEFAULT KEN BURNS (REQUIRED) — Tape-wide default zoom intensity for photo clips without kenBurnsIntensity.
 Set "defaultKenBurnsIntensity" (0-0.08): 0 = static, 0.03 = gentle drift, 0.06 = noticeable, 0.08 = dramatic.
 IMPORTANT: Set per-clip kenBurnsIntensity when you have multiple photos — vary the drift speed
 for visual interest. Some photos should be nearly static (0.01), others should drift noticeably (0.06).
 A mix of static and moving photos creates rhythm. All the same intensity = robotic.
 
-PHOTO DISPLAY DURATION — How long static photos show in the final edit.
+PHOTO DISPLAY DURATION (REQUIRED) — How long static photos show in the final edit.
 Set "photoDisplayDuration" (1-15 seconds). Feel the photo's weight — a powerful image needs time
 to land, a montage beat just needs a flash. Match to the tape's rhythm, not a formula.
 
-LOOP CROSSFADE DURATION — Cross-fade length for the seamless loop (last→first frame blend).
+LOOP CROSSFADE DURATION (REQUIRED) — Cross-fade length for the seamless loop (last→first frame blend).
 Set "loopCrossfadeDuration" (0.1-3.0 seconds). Beat-driven content wants invisible loops.
 Dreamy content wants long dissolves where one moment melts into the next.
 
-CAPTION TIMING — Make captions feel SYNCED, not slapped on:
+CAPTION TIMING (REQUIRED) — Make captions feel SYNCED, not slapped on:
 Set "captionEntranceDuration": how long the entrance animation plays.
 Set "captionExitDuration": how long the exit animation plays.
 CRITICAL: Caption timing should match the MOMENT's energy, NOT be uniform:
@@ -2079,7 +2161,7 @@ Set "captionExitAnimation" at plan level or per-clip: "fade" (default gentle dri
 Match exit to entrance: a "pop" entrance pairs with a "pop" exit. A "slide" in pairs with a "slide" out.
 NOT every clip needs the same exit. A hype moment can "pop" out. A quiet moment can "dissolve" away.
 
-MUSIC DUCKING — How much to lower music volume during voiceover and SFX.
+MUSIC DUCKING (REQUIRED) — How much to lower music volume during voiceover and SFX.
 Set "musicDuckRatio" (0-1.0): ratio of normal volume during VO. Lower = deeper duck.
 Music also ducks lightly during SFX to keep the mix clean.
 Set "musicDuckAttack": how fast the music fades DOWN. Set "musicDuckRelease": how fast it fades BACK UP.
@@ -2088,7 +2170,7 @@ the music gently gives way, then slowly returns like a tide. Hype content wants 
 release — the music snaps out of the way and snaps right back. Feel the rhythm of the ducking.
 Think holistically about the audio stack: if a clip has VO + SFX + music all playing, the mix must breathe.
 
-MUSIC FADE IN/OUT — Professional tapes NEVER start or end with a hard music edge.
+MUSIC FADE IN/OUT (REQUIRED) — Professional tapes NEVER start or end with a hard music edge.
 Set "musicFadeInDuration" (0-3 seconds): how long the music fades up from silence at the start.
   A hard start (0) only works when the music IS the hook — the first beat should slam.
   Otherwise, let the music emerge naturally. The silence before the music IS anticipation.
@@ -2105,14 +2187,21 @@ Set "exportBitrate" (4000000-30000000 bps): 4M for lightweight, 12M standard, 20
 WATERMARK OPACITY — How visible the watermark text is.
 Set "watermarkOpacity" (0.05-0.8): 0.1 for barely visible, 0.4 standard, 0.6-0.8 for prominent.
 
-NEON TRANSITION COLORS — Custom palette for color_flash transitions (hex colors).
-Set "neonColors" to an array of 2-8 hex colors. Match the content mood and color story.
-Examples: ["#9333ea","#06b6d4","#ec4899","#f59e0b"] (vibrant), ["#3b82f6","#8b5cf6","#06b6d4"] (cool).
+NEON TRANSITION COLORS (REQUIRED) — Custom palette for color_flash transitions (hex colors).
+Set "neonColors" to an array of 2-8 hex colors. ALWAYS set this explicitly — the default palette
+(purple/teal/pink/amber) is generic and may clash with your tape's color story.
+Pull colors FROM the content: if the footage has warm golden light, use golds and oranges.
+If it's a cool nighttime scene, use blues and teals. If it's sports, use the team's colors.
+The neonColors should feel like they BELONG in the tape's visual universe.
+Examples: ["#9333ea","#06b6d4","#ec4899","#f59e0b"] (vibrant), ["#3b82f6","#8b5cf6","#06b6d4"] (cool),
+["#ff6b35","#ffd700","#ff3366"] (warm hype), ["#00ff87","#00d4ff"] (fresh/clean).
 
 ═══════════════════════════════════════════════
 RENDERING FINE-TUNING — Full control over effect intensities
 ═══════════════════════════════════════════════
-All optional. When omitted, sensible defaults are used. Set these to fine-tune the visual feel:
+ALWAYS set these values explicitly. A world-class editor never relies on defaults — every value is an
+intentional creative decision for THIS specific tape. Omitting a value means the system picks a generic
+default, and generic defaults are the opposite of custom editing. Set EVERY value below:
 
 BEAT PULSE — Visual scale bump on music beats:
 "beatPulseIntensity" (0-0.1): how much the frame scales on each beat. Feel the bass.
@@ -2157,7 +2246,9 @@ null if no voice sample was provided or a talking head intro doesn't fit the con
 ═══════════════════════════════════════════════
 POST-PROCESSING & FILM LOOK — You are the colorist and finishing artist
 ═══════════════════════════════════════════════
-You control the final look of the tape. Every value below should be chosen for THIS specific content.
+You control the final look of the tape. Set EVERY value below explicitly for THIS specific content.
+Do NOT skip any — each one is a creative decision. Omitting values means generic defaults get used,
+and generic defaults are what makes an edit feel like AI instead of a human editor.
 
 FILM STOCK — The base visual foundation applied uniformly to every frame:
 Set "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03} or omit for clean digital.
@@ -2309,8 +2400,8 @@ A sharp attack + slow release creates "the world goes quiet, then gradually retu
 sharp release creates "tension building... then SNAP back to reality." Shape each breath individually.
 These are incredibly powerful when used sparingly. Overuse kills the effect.
 
-Respond with ONLY a JSON object:
-{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.9, "velocityKeyframes": [{"position": 0, "speed": 2.0}, {"position": 0.35, "speed": 0.3}, {"position": 0.6, "speed": 0.3}, {"position": 1, "speed": 1.5}], "transitionType": "zoom_punch", "transitionDuration": 0.3, "filterCSS": "saturate(1.3) contrast(1.2) brightness(0.98)", "entryPunchScale": 1.04, "entryPunchDuration": 0.15, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 15, "kenBurnsIntensity": 0, "clipAudioVolume": 0.4, "transitionIntensity": 0.7, "beatPulseIntensity": 0.02, "beatFlashOpacity": 0.15, "beatFlashThreshold": 0.4, "captionIdlePulse": 0.5, "captionGlowSpread": 1.5, "audioFadeIn": 0.02, "audioFadeOut": 0.08, "captionAnimationIntensity": 0.8, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.3, "zoomInScale": 0.2}, "beatFlashColor": "#ffd700"}], "intro": {"text": "TITLE TEXT", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "CLOSING TEXT", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "sound description", "durationMs": 1500}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this."}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.5, "sfxVolume": 0.8, "voiceoverVolume": 1.0, "defaultTransitionDuration": 0.3, "defaultEntryPunchScale": 1.04, "defaultEntryPunchDuration": 0.15, "defaultKenBurnsIntensity": 0.04, "photoDisplayDuration": 3, "loopCrossfadeDuration": 0.5, "captionEntranceDuration": 0.5, "captionExitDuration": 0.3, "musicDuckRatio": 0.3, "musicDuckAttack": 0.2, "musicDuckRelease": 0.3, "musicFadeInDuration": 0.5, "musicFadeOutDuration": 1.0, "beatSyncToleranceMs": 50, "exportBitrate": 12000000, "watermarkOpacity": 0.4, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.5, "grainOpacity": 0.04, "vignetteIntensity": 0.18, "vignetteTightness": 0.4, "vignetteHardness": 0.5, "watermarkFontSize": 0.015, "watermarkYOffset": 0.03, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.96, "exitDecelDuration": 0.15, "settleScale": 1.006, "settleDuration": 0.18, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.4, "finalClipWarmth": {"sepia": 0.06, "saturation": 0.04, "fadeIn": 2.0}, "filmStock": {"grain": 0.03, "warmth": 0.02, "contrast": 1.08, "fadedBlacks": 0.03}, "audioBreaths": [{"time": 12.5, "duration": 0.5, "depth": 0.1, "attack": 0.08, "release": 0.4}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop", "watermarkColor": "#e0e0e0", "grainBlockSize": 4, "lightLeakOpacity": 0.3, "glitchScanlineCount": 6, "whipBlurLineCount": 8, "captionPopStartScale": 0.3, "captionPopOvershoot": 1.7, "captionFlickerSpeed": 8, "captionBoldSizeMultiplier": 1.2, "editingPhilosophy": {"vibe": "polished cinematic — every frame composed", "paceProfile": "escalation", "transitionArc": "soft openers → aggressive peaks → gentle close"}}`;
+Respond with ONLY a JSON object (NOTE: all numeric values in this example use IRREGULAR numbers — never round. Follow this pattern):
+{"contentSummary": "vivid description", "theme": "label", "clips": [{"sourceFileId": "...", "startTime": 0, "endTime": 5, "label": "brief description", "confidenceScore": 0.87, "velocityKeyframes": [{"position": 0, "speed": 2.13}, {"position": 0.33, "speed": 0.27}, {"position": 0.62, "speed": 0.28}, {"position": 1, "speed": 1.47}], "transitionType": "zoom_punch", "transitionDuration": 0.27, "filterCSS": "saturate(1.32) contrast(1.18) brightness(0.97)", "entryPunchScale": 1.037, "entryPunchDuration": 0.13, "captionText": "no way.", "captionAnimation": "pop", "captionFontWeight": 900, "captionColor": "#ffffff", "captionGlowColor": "#7c3aed", "captionGlowRadius": 14, "kenBurnsIntensity": 0, "clipAudioVolume": 0.42, "transitionIntensity": 0.72, "beatPulseIntensity": 0.023, "beatFlashOpacity": 0.17, "beatFlashThreshold": 0.43, "captionIdlePulse": 0.47, "captionGlowSpread": 1.4, "audioFadeIn": 0.02, "audioFadeOut": 0.07, "captionAnimationIntensity": 0.82, "captionExitAnimation": "pop", "transitionParams": {"zoomOutScale": 0.28, "zoomInScale": 0.22}, "beatFlashColor": "#ffd700"}], "intro": {"text": "GAME DAY", "stylePrompt": "cinematic reveal description", "duration": 4}, "outro": {"text": "THE END", "stylePrompt": "matching outro description", "duration": 3}, "sfx": [{"clipIndex": 0, "timing": "before", "prompt": "deep cinematic bass impact with reverb tail", "durationMs": 1400}], "voiceover": {"enabled": true, "segments": [{"clipIndex": 0, "text": "Watch this.", "delaySec": 0.25}], "voiceCharacter": "male-broadcaster-hype", "delaySec": 0.3}, "musicPrompt": "genre and mood description for instrumental", "musicDurationMs": 30000, "musicVolume": 0.47, "sfxVolume": 0.82, "voiceoverVolume": 0.93, "defaultTransitionDuration": 0.27, "defaultEntryPunchScale": 1.037, "defaultEntryPunchDuration": 0.13, "defaultKenBurnsIntensity": 0.037, "photoDisplayDuration": 3.5, "loopCrossfadeDuration": 0.47, "captionEntranceDuration": 0.42, "captionExitDuration": 0.27, "musicDuckRatio": 0.28, "musicDuckAttack": 0.18, "musicDuckRelease": 0.32, "musicFadeInDuration": 0.47, "musicFadeOutDuration": 1.2, "beatSyncToleranceMs": 45, "exportBitrate": 12000000, "watermarkOpacity": 0.38, "neonColors": ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"], "thumbnail": {"sourceClipIndex": 2, "frameTime": 3.5, "stylePrompt": "thumbnail style description"}, "styleTransfer": null, "talkingHeadSpeech": null, "beatFlashThreshold": 0.47, "grainOpacity": 0.037, "vignetteIntensity": 0.17, "vignetteTightness": 0.42, "vignetteHardness": 0.47, "watermarkFontSize": 0.014, "watermarkYOffset": 0.032, "captionAppearDelay": 0.12, "exitDecelSpeed": 0.965, "exitDecelDuration": 0.13, "settleScale": 1.007, "settleDuration": 0.17, "settleEasing": "cubic", "exitDecelEasing": "quad", "clipAudioVolume": 0.38, "finalClipWarmth": {"sepia": 0.055, "saturation": 0.037, "fadeIn": 2.2}, "filmStock": {"grain": 0.028, "warmth": 0.022, "contrast": 1.07, "fadedBlacks": 0.032}, "audioBreaths": [{"time": 12.5, "duration": 0.47, "depth": 0.12, "attack": 0.07, "release": 0.42}], "beatFlashColor": "#ffd700", "letterboxColor": "#1a1a1a", "captionExitAnimation": "pop", "watermarkColor": "#e0e0e0", "grainBlockSize": 4, "lightLeakOpacity": 0.32, "glitchScanlineCount": 6, "whipBlurLineCount": 8, "captionPopStartScale": 0.28, "captionPopOvershoot": 1.65, "captionFlickerSpeed": 8, "captionBoldSizeMultiplier": 1.18, "editingPhilosophy": {"vibe": "polished cinematic — every frame composed", "paceProfile": "escalation", "transitionArc": "soft openers → aggressive peaks → gentle close"}}`;
 
   // Build a multimodal message: show the planner the actual frames
   const userContent: Array<{ type: string; source?: { type: string; media_type: string; data: string }; text?: string }> = [];
