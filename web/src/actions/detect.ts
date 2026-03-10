@@ -687,7 +687,24 @@ export async function validateTape(
   const clipSummaries = clips.map((c, i) => {
     const src = sourceFiles.find((s) => s.id === c.sourceFileId);
     const isAnimated = animatedFileIds.includes(c.sourceFileId);
-    return `  ${i + 1}. [${src?.type ?? "?"}${isAnimated ? " ANIMATED" : ""}] "${c.label}" from "${src?.name}" (${c.startTime.toFixed(1)}-${c.endTime.toFixed(1)}s, confidence: ${c.confidenceScore}) transition: ${c.transitionType ?? "none"}, velocity: ${c.velocityPreset}${c.captionText ? `, caption: "${c.captionText}"` : ""}${c.animationPrompt ? `, animationPrompt: "${c.animationPrompt.slice(0, 80)}..."` : ""}`;
+    let line = `  ${i + 1}. [${src?.type ?? "?"}${isAnimated ? " ANIMATED" : ""}] "${c.label}" from "${src?.name}" (${c.startTime.toFixed(1)}-${c.endTime.toFixed(1)}s, confidence: ${c.confidenceScore}) transition: ${c.transitionType ?? "none"}`;
+    // Include per-clip creative details for validation coherence checks
+    if (c.customFilterCSS) line += ` filterCSS="${c.customFilterCSS}"`;
+    if (c.transitionDuration != null) line += ` transDur=${c.transitionDuration}`;
+    if (c.transitionIntensity != null) line += ` transInt=${c.transitionIntensity}`;
+    if (c.customVelocityKeyframes && c.customVelocityKeyframes.length > 0) {
+      const speeds = c.customVelocityKeyframes.map((k) => k.speed.toFixed(2)).join("→");
+      line += ` velocity=[${speeds}]`;
+    } else {
+      line += ` velocity: ${c.velocityPreset}`;
+    }
+    if (c.clipAudioVolume != null) line += ` clipAudio=${c.clipAudioVolume}`;
+    if (c.captionText) line += ` caption: "${c.captionText}"`;
+    if (c.customCaptionAnimation) line += ` captionAnim=${c.customCaptionAnimation}`;
+    if (c.customCaptionColor) line += ` captionColor=${c.customCaptionColor}`;
+    if (c.beatPulseIntensity != null) line += ` beatPulse=${c.beatPulseIntensity}`;
+    if (c.animationPrompt) line += ` animationPrompt: "${c.animationPrompt.slice(0, 80)}..."`;
+    return line;
   }).join("\n");
 
   const coveredSourceIds = new Set(clips.map((c) => c.sourceFileId));
@@ -718,6 +735,8 @@ CHECK THESE (answer each yes/no, flag issues):
 5. ANIMATION FIT: For animated photos — do their animation prompts match the narrative arc? Would the motion feel natural in context?
 6. NARRATIVE ARC: Does the tape tell a coherent story? Is there build-up, climax, and resolution?
 7. CAPTION QUALITY: Are captions punchy, varied, and well-placed? No cliché or redundant captions?
+8. HUMAN FEEL: Does this feel like a machine made it? Look for: identical transition durations across clips, perfectly round parameter values (0.5, 0.3, 1.0 everywhere), uniform velocity curves, identical caption styling, SFX on every cut, or robotic uniformity. A human editor varies things — some clips breathe with no effects, others get the full treatment.
+9. CREATIVE COHERENCE: Do the per-clip choices (transitions, velocity, color grades, captions) work together as a cohesive vision? Or do they feel randomly assigned?
 
 Respond with ONLY a JSON object:
 {

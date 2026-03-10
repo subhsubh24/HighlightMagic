@@ -57,8 +57,9 @@ export interface ScheduledAudioLayer {
   layerType?: "voiceover" | "sfx";
 }
 
-/** Default ducking ratio — when voiceover plays, music drops to this fraction of its normal volume. */
-const DEFAULT_MUSIC_DUCK_RATIO = 0.3;
+/** Default ducking ratio — when voiceover plays, music drops to this fraction of its normal volume.
+ * Slightly off-round so the fallback path doesn't produce "algorithm feel." */
+const DEFAULT_MUSIC_DUCK_RATIO = 0.28;
 
 /**
  * Create a persistent audio pipeline for the render session.

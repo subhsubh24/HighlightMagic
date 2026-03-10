@@ -241,7 +241,7 @@ export default function ExportStep() {
   }, [blobUrl]);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
-  const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.28;
   const totalDuration = sortedClips.reduce((sum, c, i) => {
     const sourceDur = c.trimEnd - c.trimStart;
     let dur = sum + getEffectiveDuration(sourceDur, c.velocityPreset, c.customVelocityKeyframes);
@@ -590,20 +590,20 @@ export default function ExportStep() {
         state.aiMusicUrl,
         scheduled,
         defaultTransDurC,
-        cPlan?.musicVolume ?? 0.5,
-        cPlan?.musicDuckRatio ?? 0.3,
-        cPlan?.musicDuckAttack ?? 0.2,
-        cPlan?.musicDuckRelease ?? 0.3,
+        cPlan?.musicVolume ?? 0.47,
+        cPlan?.musicDuckRatio ?? 0.28,
+        cPlan?.musicDuckAttack ?? 0.18,
+        cPlan?.musicDuckRelease ?? 0.32,
         cPlan?.musicFadeInDuration ?? 0,
         cPlan?.musicFadeOutDuration ?? 0,
-        cPlan?.loopCrossfadeDuration ?? 0.5,
+        cPlan?.loopCrossfadeDuration ?? 0.47,
         cPlan?.exportBitrate ?? 12_000_000,
-        cPlan?.watermarkOpacity ?? 0.4,
-        cPlan?.captionEntranceDuration ?? 0.5,
-        cPlan?.captionExitDuration ?? 0.3,
+        cPlan?.watermarkOpacity ?? 0.38,
+        cPlan?.captionEntranceDuration ?? 0.45,
+        cPlan?.captionExitDuration ?? 0.28,
         cPlan?.neonColors,
-        cPlan?.photoDisplayDuration ?? 3,
-        cPlan?.beatSyncToleranceMs ?? 50,
+        cPlan?.photoDisplayDuration ?? 3.2,
+        cPlan?.beatSyncToleranceMs ?? 47,
         cPlan ? {
           beatPulseIntensity: cPlan.beatPulseIntensity,
           beatFlashOpacity: cPlan.beatFlashOpacity,
@@ -1030,7 +1030,7 @@ function getMicroSettle(elapsedSec: number, settleScale: number = 1.006, settleD
  * End-of-clip micro-deceleration — subtle slowdown in the last 0.15s.
  * Returns a speed multiplier (0.96-1.0) that creates a "weight" before the cut.
  */
-function getExitDeceleration(elapsedSec: number, clipDuration: number, minSpeed: number = 0.96, decelDuration: number = 0.15, easing: string = "quad"): number {
+function getExitDeceleration(elapsedSec: number, clipDuration: number, minSpeed: number = 0.96, decelDuration: number = 0.14, easing: string = "quad"): number {
   if (minSpeed >= 1.0 || decelDuration <= 0) return 1.0;
   const remaining = clipDuration - elapsedSec;
   if (remaining >= decelDuration || remaining <= 0) return 1.0;
@@ -1084,8 +1084,8 @@ function drawFilmGrain(ctx: CanvasRenderingContext2D, w: number, h: number, opac
  */
 let _vignetteCanvas: HTMLCanvasElement | null = null;
 let _vignetteTightness: number = 0.45;
-let _vignetteHardness: number = 0.5;
-function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number = 0.18, tightness: number = 0.45, hardness: number = 0.5) {
+let _vignetteHardness: number = 0.48;
+function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number = 0.18, tightness: number = 0.45, hardness: number = 0.48) {
   if (intensity <= 0) return;
   // Cache the vignette gradient on a canvas — invalidate when params change
   if (!_vignetteCanvas || _vignetteCanvas.width !== w || _vignetteCanvas.height !== h || _vignetteTightness !== tightness || _vignetteHardness !== hardness) {

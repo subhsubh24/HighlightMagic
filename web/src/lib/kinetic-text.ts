@@ -63,8 +63,8 @@ export interface KineticTransform {
   glowAlpha: number;
 }
 
-const DEFAULT_ENTRANCE_DURATION = 0.5; // seconds
-const DEFAULT_EXIT_DURATION = 0.3; // seconds
+const DEFAULT_ENTRANCE_DURATION = 0.45; // seconds — slightly off-round for human feel
+const DEFAULT_EXIT_DURATION = 0.28; // seconds
 
 /**
  * Get the kinetic transform for a caption at a given time within the clip.

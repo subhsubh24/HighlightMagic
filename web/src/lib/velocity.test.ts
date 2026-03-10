@@ -18,10 +18,10 @@ describe("getSpeedAtPosition", () => {
   });
 
   it("returns exact keyframe values at keyframe positions", () => {
-    // hero preset starts at speed 2.0 at position 0
-    expect(getSpeedAtPosition(0, "hero")).toBe(2.0);
-    // hero ends at 1.5 at position 1.0
-    expect(getSpeedAtPosition(1, "hero")).toBe(1.5);
+    // hero preset starts at speed 1.95 at position 0
+    expect(getSpeedAtPosition(0, "hero")).toBe(1.95);
+    // hero ends at 1.45 at position 1.0
+    expect(getSpeedAtPosition(1, "hero")).toBe(1.45);
   });
 
   it("clamps position to 0-1", () => {

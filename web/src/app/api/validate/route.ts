@@ -58,6 +58,8 @@ For each frame, quickly assess:
 14. **Voiceover-clip alignment** — If voiceover segments exist, read them in order alongside the clip sequence. Does the voiceover narrative progress logically with the visual progression? Flag if a voiceover segment references something that happens in a different clip.
 15. **Filter consistency** — Check the filter assignments across clips. Mixed filters can work for stylistic contrast, but flag if it looks accidental (e.g., one random clip has "Vintage" while everything else is "None"). Suggest harmonizing via clipUpdates.
 16. **Overall vibe check** — Imagine scrolling past this reel on TikTok. Do the visuals, captions, music mood, and SFX prompts all feel like they belong to the same piece of content? If something feels "off" even if no single rule is broken, flag it and explain what breaks the cohesion.
+17. **Human feel test** — Step back and ask: "Does this feel like a machine made it, or like a human editor with taste?" Look for signs of algorithmic editing: every clip with the same transition duration, perfectly round parameter values (0.5, 0.3, 1.0 everywhere), identical velocity curves, uniform caption styling across all clips, SFX on every single cut, or voiceover that sounds like a press release. A human editor varies things — some clips breathe with no effects, others get the full treatment. The contrast is what makes it feel crafted. Flag anything that feels robotic or uniform.
+18. **Creative coherence** — If the editing philosophy states a vibe (e.g., "raw documentary energy"), verify the actual per-clip choices serve that vision. A stated "elegant restraint" philosophy with aggressive zoom punches on every clip is contradictory. The philosophy, transitions, velocity curves, color grades, and caption styling should all tell the same story. Check that the film stock + per-clip filterCSS don't over-stack (combined contrast above ~1.35 crushes shadows, combined grain above 0.07 looks like a glitch, not a look).
 
 ## Rules
 - PASS if the tape is good enough to post — don't be a perfectionist
@@ -99,7 +101,9 @@ Your job is to review the tape and either PASS it or return specific, structured
 10. Caption narrative flow — read all captions in order; do they tell a coherent mini-story or at least feel like they belong together?
 11. Music-content mood match — does the music prompt fit the content summary and caption tone?
 12. Filter consistency — are filter choices intentional or do random mismatches look accidental?
-13. Overall coherence — do captions, music mood, SFX prompts, and voiceover all feel like they belong to the same reel?`;
+13. Overall coherence — do captions, music mood, SFX prompts, and voiceover all feel like they belong to the same reel?
+14. Human feel test — does this feel like a machine made it? Look for: identical transition durations across clips, perfectly round parameter values everywhere (0.5, 0.3, 1.0), uniform caption styling, SFX on every cut, or robotic uniformity. A human editor varies things — some clips breathe, others get full treatment.
+15. Creative coherence — if an editing philosophy is stated, do the actual choices serve that vision? Check that film stock + per-clip filterCSS don't over-stack (combined contrast > ~1.35 crushes shadows, combined grain > 0.07 looks broken).`;
 
     const outputFormat = `
 
@@ -248,7 +252,9 @@ function buildVisionContent(
   return content;
 }
 
-/** Build a concise text description of the tape for Haiku to review. */
+/** Build a rich text description of the tape for Haiku to review.
+ * Includes full creative context so Haiku can validate coherence across
+ * the AI's editing philosophy, per-clip styling, and production plan. */
 function buildTapeDescription(
   clips: Array<Record<string, unknown>>,
   plan: Record<string, unknown> | null,
@@ -265,29 +271,112 @@ function buildTapeDescription(
     const dur = typeof c.trimEnd === "number" && typeof c.trimStart === "number"
       ? ((c.trimEnd as number) - (c.trimStart as number)).toFixed(1) + "s"
       : "?s";
-    parts.push(
-      `${i}. "${c.captionText || "(no caption)"}" [${dur}] filter=${c.selectedFilter} transition=${c.transitionType || "default"} velocity=${c.velocityPreset}`
-    );
+
+    // Core metadata
+    let line = `${i}. "${c.captionText || "(no caption)"}" [${dur}] filter=${c.selectedFilter} transition=${c.transitionType || "default"}`;
+
+    // Per-clip creative details (so Haiku can validate coherence)
+    if (c.customFilterCSS) line += ` filterCSS="${c.customFilterCSS}"`;
+    if (c.transitionDuration != null) line += ` transDur=${c.transitionDuration}`;
+    if (c.transitionIntensity != null) line += ` transInt=${c.transitionIntensity}`;
+    if (c.entryPunchScale != null && (c.entryPunchScale as number) > 1.0) line += ` punch=${c.entryPunchScale}`;
+    if (c.customVelocityKeyframes && Array.isArray(c.customVelocityKeyframes) && (c.customVelocityKeyframes as unknown[]).length > 0) {
+      const kf = c.customVelocityKeyframes as Array<{ position: number; speed: number }>;
+      const speeds = kf.map((k) => k.speed.toFixed(2)).join("→");
+      line += ` velocity=[${speeds}]`;
+    } else {
+      line += ` velocity=${c.velocityPreset}`;
+    }
+    if (c.clipAudioVolume != null) line += ` clipAudio=${c.clipAudioVolume}`;
+    if (c.beatPulseIntensity != null) line += ` beatPulse=${c.beatPulseIntensity}`;
+    if (c.beatFlashOpacity != null) line += ` beatFlash=${c.beatFlashOpacity}`;
+
+    // Caption styling details
+    if (c.customCaptionAnimation) line += ` captionAnim=${c.customCaptionAnimation}`;
+    if (c.customCaptionColor) line += ` captionColor=${c.customCaptionColor}`;
+    if (c.customCaptionGlowColor) line += ` glow=${c.customCaptionGlowColor}`;
+    if (c.captionExitAnimation) line += ` captionExit=${c.captionExitAnimation}`;
+
+    // Transition params
+    if (c.transitionParams && typeof c.transitionParams === "object") {
+      const tp = c.transitionParams as Record<string, unknown>;
+      const tpParts = Object.entries(tp).filter(([, v]) => v != null).map(([k, v]) => `${k}=${v}`);
+      if (tpParts.length > 0) line += ` transParams={${tpParts.join(",")}}`;
+    }
+
+    parts.push(line);
   }
 
   if (plan) {
-    parts.push(`\n## Production Plan (key fields)`);
     const p = plan as Record<string, unknown>;
+
+    // Editing philosophy — the AI's stated creative vision
+    if (p.editingPhilosophy && typeof p.editingPhilosophy === "object") {
+      const phil = p.editingPhilosophy as Record<string, unknown>;
+      parts.push(`\n## Editing Philosophy`);
+      if (phil.vibe) parts.push(`Vibe: "${phil.vibe}"`);
+      if (phil.paceProfile) parts.push(`Pace profile: ${phil.paceProfile}`);
+      if (phil.transitionArc) parts.push(`Transition arc: "${phil.transitionArc}"`);
+      if (phil.baseGrade) parts.push(`Base grade: "${phil.baseGrade}"`);
+    }
+
+    parts.push(`\n## Production Plan`);
     if (p.musicPrompt) parts.push(`Music prompt: "${p.musicPrompt}"`);
-    if (p.musicVolume) parts.push(`Music volume: ${p.musicVolume}`);
-    if (p.sfxVolume) parts.push(`SFX volume: ${p.sfxVolume}`);
-    if (p.voiceoverVolume) parts.push(`Voiceover volume: ${p.voiceoverVolume}`);
+    if (p.musicVolume != null) parts.push(`Music volume: ${p.musicVolume}`);
+    if (p.sfxVolume != null) parts.push(`SFX volume: ${p.sfxVolume}`);
+    if (p.voiceoverVolume != null) parts.push(`Voiceover volume: ${p.voiceoverVolume}`);
+    if (p.musicDuckRatio != null) parts.push(`Music duck ratio: ${p.musicDuckRatio}`);
     if (p.intro) parts.push(`Intro: ${JSON.stringify(p.intro)}`);
     if (p.outro) parts.push(`Outro: ${JSON.stringify(p.outro)}`);
     if (p.sfx && Array.isArray(p.sfx)) {
-      parts.push(`SFX cues: ${(p.sfx as Array<Record<string, unknown>>).map((s, i) => `${i}. clip${s.clipIndex} "${s.prompt}"`).join(", ")}`);
+      parts.push(`SFX cues: ${(p.sfx as Array<Record<string, unknown>>).map((s, i) => `${i}. clip${s.clipIndex} timing="${s.timing}" "${s.prompt}" ${s.durationMs}ms`).join(", ")}`);
     }
     if (p.voiceover && typeof p.voiceover === "object") {
       const vo = p.voiceover as Record<string, unknown>;
       if (vo.segments && Array.isArray(vo.segments)) {
-        parts.push(`Voiceover segments: ${(vo.segments as Array<Record<string, unknown>>).map((s, i) => `${i}. clip${s.clipIndex} "${s.text}"`).join(", ")}`);
+        parts.push(`Voiceover segments: ${(vo.segments as Array<Record<string, unknown>>).map((s, i) => `${i}. clip${s.clipIndex} delay=${s.delaySec ?? "default"} "${s.text}"`).join(", ")}`);
       }
+      if (vo.voiceCharacter) parts.push(`Voice character: ${vo.voiceCharacter}`);
     }
+
+    // Film stock & post-processing — so Haiku can catch stacking issues
+    if (p.filmStock && typeof p.filmStock === "object") {
+      const fs = p.filmStock as Record<string, unknown>;
+      parts.push(`Film stock: grain=${fs.grain} warmth=${fs.warmth} contrast=${fs.contrast} fadedBlacks=${fs.fadedBlacks}`);
+    }
+    if (p.grainOpacity != null) parts.push(`Grain opacity: ${p.grainOpacity}`);
+    if (p.vignetteIntensity != null) parts.push(`Vignette: intensity=${p.vignetteIntensity} tightness=${p.vignetteTightness ?? "default"} hardness=${p.vignetteHardness ?? "default"}`);
+
+    // Beat response settings
+    if (p.beatPulseIntensity != null || p.beatFlashOpacity != null) {
+      parts.push(`Beat response: pulse=${p.beatPulseIntensity ?? "off"} flash=${p.beatFlashOpacity ?? "off"} threshold=${p.beatFlashThreshold ?? "default"} flashColor=${p.beatFlashColor ?? "white"}`);
+    }
+
+    // Caption defaults
+    if (p.captionFontSize != null || p.captionVerticalPosition != null) {
+      parts.push(`Caption defaults: fontSize=${p.captionFontSize ?? "default"} vertPos=${p.captionVerticalPosition ?? "default"} appearDelay=${p.captionAppearDelay ?? "default"} exitAnim=${p.captionExitAnimation ?? "fade"}`);
+    }
+
+    // Timing & feel
+    if (p.defaultTransitionDuration != null) parts.push(`Default transition duration: ${p.defaultTransitionDuration}s`);
+    if (p.settleScale != null) parts.push(`Entry settle: scale=${p.settleScale} dur=${p.settleDuration ?? "default"} easing=${p.settleEasing ?? "cubic"}`);
+    if (p.exitDecelSpeed != null) parts.push(`Exit decel: speed=${p.exitDecelSpeed} dur=${p.exitDecelDuration ?? "default"} easing=${p.exitDecelEasing ?? "quad"}`);
+    if (p.finalClipWarmth != null) parts.push(`Final clip warmth: ${JSON.stringify(p.finalClipWarmth)}`);
+
+    // Audio breaths
+    if (p.audioBreaths && Array.isArray(p.audioBreaths) && (p.audioBreaths as unknown[]).length > 0) {
+      const breaths = (p.audioBreaths as Array<Record<string, unknown>>).map((b) => `t=${b.time}s dur=${b.duration}s depth=${b.depth}`);
+      parts.push(`Audio breaths: ${breaths.join(", ")}`);
+    }
+
+    // Transition overlay tuning
+    const overlayTuning: string[] = [];
+    if (p.lightLeakColor) overlayTuning.push(`lightLeakColor=${p.lightLeakColor}`);
+    if (p.lightLeakOpacity != null) overlayTuning.push(`lightLeakOpacity=${p.lightLeakOpacity}`);
+    if (p.glitchColors) overlayTuning.push(`glitchColors=${JSON.stringify(p.glitchColors)}`);
+    if (p.letterboxColor) overlayTuning.push(`letterboxColor=${p.letterboxColor}`);
+    if (p.watermarkColor) overlayTuning.push(`watermarkColor=${p.watermarkColor}`);
+    if (overlayTuning.length > 0) parts.push(`Overlay tuning: ${overlayTuning.join(", ")}`);
   }
 
   if (assetStatuses) {

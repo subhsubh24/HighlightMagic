@@ -40,10 +40,10 @@ describe("constants", () => {
   });
 
   it("has valid timing constants", () => {
-    expect(PHOTO_DISPLAY_DURATION).toBe(3);
-    expect(TRANSITION_DURATION).toBe(0.3);
-    expect(LOOP_CROSSFADE_DURATION).toBe(0.5);
-    expect(BEAT_SYNC_TOLERANCE_MS).toBe(50);
+    expect(PHOTO_DISPLAY_DURATION).toBe(3.2);
+    expect(TRANSITION_DURATION).toBe(0.28);
+    expect(LOOP_CROSSFADE_DURATION).toBe(0.47);
+    expect(BEAT_SYNC_TOLERANCE_MS).toBe(47);
   });
 
   it("has valid frame extraction settings", () => {
@@ -53,7 +53,7 @@ describe("constants", () => {
 
   it("has valid watermark settings", () => {
     expect(WATERMARK_TEXT).toBe("Highlight Magic");
-    expect(WATERMARK_OPACITY).toBe(0.4);
+    expect(WATERMARK_OPACITY).toBe(0.38);
   });
 
   it("has valid free tier limit", () => {
