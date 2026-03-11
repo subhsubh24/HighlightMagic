@@ -177,7 +177,7 @@ If passed is true, fixes should be empty or omitted.`;
         system: fullSystemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
-      signal: AbortSignal.timeout(hasFrames ? 20_000 : 15_000),
+      signal: AbortSignal.timeout(hasFrames ? 27_000 : 20_000),
     });
 
     if (!response.ok) {
