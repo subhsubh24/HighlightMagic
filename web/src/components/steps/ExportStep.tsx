@@ -1380,6 +1380,40 @@ async function renderHighlightTape(
 }
 
 /**
+ * Render a solid-color placeholder for a clip's full duration so the tape
+ * timeline stays intact even when a clip's media fails to load. Skipping a
+ * clip entirely would shorten the tape and desync audio/transitions.
+ */
+function renderPlaceholderClip(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  durationSec: number,
+  onProgress: (pct: number) => void,
+  color: string = "black"
+): Promise<void> {
+  return new Promise((resolve) => {
+    const durationMs = durationSec * 1000;
+    const startTime = performance.now();
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const drawFrame = () => {
+      const elapsed = performance.now() - startTime;
+      if (elapsed >= durationMs) {
+        onProgress(100);
+        resolve();
+        return;
+      }
+      onProgress(Math.min(99, (elapsed / durationMs) * 100));
+      // Redraw each frame so the MediaRecorder captures the placeholder
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      scheduleExportFrame(drawFrame);
+    };
+    scheduleExportFrame(drawFrame);
+  });
+}
+
+/**
  * Schedule the next export frame draw without using requestAnimationFrame.
  * RAF is throttled/suspended in background tabs, which stalls exports when the
  * user switches away. MessageChannel.postMessage fires immediately regardless
@@ -1530,12 +1564,11 @@ function renderVideoClip(
   onFirstFrame?: (canvas: HTMLCanvasElement) => void,
   isLastClip: boolean = false
 ): Promise<void> {
+  if (!instruction.mediaUrl) {
+    console.warn(`Export: clip "${instruction.clip.id}" has no media URL — rendering placeholder to preserve tape timeline`);
+    return renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black");
+  }
   return new Promise((resolve, reject) => {
-    if (!instruction.mediaUrl) {
-      console.warn(`Export: skipping clip "${instruction.clip.id}" — no media URL`);
-      resolve();
-      return;
-    }
     const video = document.createElement("video");
     // Remote URLs (intro/outro cards) are pre-fetched as local blobs before reaching
     // here, so no crossOrigin attribute is needed. Cross-origin videos would taint the
@@ -1546,13 +1579,13 @@ function renderVideoClip(
     const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume, instruction.clip.audioFadeIn, instruction.clip.audioFadeOut);
 
     // Safety timeout: if video never loads (bad codec, corrupt blob, etc.),
-    // skip the clip instead of hanging the entire export forever.
+    // render a placeholder for the clip's duration to preserve tape timeline.
     const loadTimeout = setTimeout(() => {
-      console.warn(`Export: video load timed out for clip "${instruction.clip.id}" after 15s — skipping`);
+      console.warn(`Export: video load timed out for clip "${instruction.clip.id}" after 15s — rendering placeholder to preserve tape timeline`);
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
-      resolve();
+      renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black").then(resolve);
     }, 15_000);
 
     video.onloadeddata = () => {
@@ -1808,8 +1841,8 @@ async function renderPhotoClip(
   try {
     imgSource = await loadImage();
   } catch (err) {
-    console.warn(`Export: skipping photo clip "${instruction.clip.id}" — load failed`, err);
-    return;
+    console.warn(`Export: photo clip "${instruction.clip.id}" load failed — rendering placeholder to preserve tape timeline`, err);
+    return renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black");
   }
 
   return new Promise((resolve) => {
