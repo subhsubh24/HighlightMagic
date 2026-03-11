@@ -1360,7 +1360,7 @@ async function renderHighlightTape(
 
   recorder.stop();
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     recorder.onstop = () => {
       audioPipeline.cleanup();
       // Clean up temporary canvases
@@ -1369,6 +1369,12 @@ async function renderHighlightTape(
       onProgress(100);
       const blobType = mimeType.includes("mp4") ? "video/mp4" : "video/webm";
       resolve(new Blob(chunks, { type: blobType }));
+    };
+    recorder.onerror = (e) => {
+      audioPipeline.cleanup();
+      crossfadeCanvas = null;
+      firstFrameCanvas = null;
+      reject(new Error(`MediaRecorder error: ${(e as ErrorEvent).message || "unknown"}`));
     };
   });
 }
