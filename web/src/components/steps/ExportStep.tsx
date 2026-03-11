@@ -427,6 +427,28 @@ export default function ExportStep() {
         outroBlobUrl = await fetchVideoBlob(state.outroCard!.videoUrl!, "outro");
       }
 
+      // Pre-fetch animated photo videos through same-origin proxy to avoid canvas tainting.
+      // These are remote URLs from Atlas Cloud / Kling — drawing cross-origin videos to
+      // canvas taints it, causing captureStream() to produce blank frames for the entire export.
+      const animatedBlobUrls = new Map<string, string>();
+      const animatedMedia = sortedClips
+        .map((clip) => {
+          const media = getMediaFile(state, clip.sourceFileId);
+          if (media?.type === "photo" && media.animationStatus === "completed" && media.animatedVideoUrl) {
+            return { fileId: media.id, url: media.animatedVideoUrl };
+          }
+          return null;
+        })
+        .filter((x): x is { fileId: string; url: string } => x !== null);
+
+      // Fetch animated videos in parallel for speed
+      await Promise.all(
+        animatedMedia.map(async ({ fileId, url }) => {
+          const blobUrl = await fetchVideoBlob(url, `animated-photo-${fileId}`);
+          animatedBlobUrls.set(fileId, blobUrl);
+        })
+      );
+
       if (hasIntroC) {
         const introClip: EditedClip = {
           id: "__intro__",
@@ -461,7 +483,8 @@ export default function ExportStep() {
         // validity — the original blob URL from upload may have been revoked or expired.
         let mediaUrl: string;
         if (hasAnimatedVideo) {
-          mediaUrl = media.animatedVideoUrl!;
+          // Use pre-fetched blob URL to avoid canvas tainting from cross-origin video
+          mediaUrl = animatedBlobUrls.get(media.id) ?? media.animatedVideoUrl!;
         } else if (media?.file) {
           mediaUrl = URL.createObjectURL(media.file);
           exportBlobUrls.push(mediaUrl);
