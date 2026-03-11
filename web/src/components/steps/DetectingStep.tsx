@@ -1586,23 +1586,49 @@ export default function DetectingStep() {
         }
       }
 
+      // Helper: enforce text fitting constraints on card prompts from the validator
+      function enforceCardPrompt(prompt: string, text: string): string {
+        let p = prompt;
+        if (!p.toLowerCase().includes("9:16") && !p.toLowerCase().includes("portrait")) {
+          p = "9:16 vertical portrait video (1080x1920), " + p;
+        }
+        if (!p.toLowerCase().includes("small") && !p.toLowerCase().includes("compact")) {
+          p += `, text '${text}' displayed as SMALL centered text in the middle third of the frame, text must be fully visible and not cropped, text occupies no more than 30% of frame width, generous padding on all sides`;
+        }
+        return p.slice(0, 600);
+      }
+
+      // Truncate card text (same rules as detect.ts)
+      function truncateCardTextForRegen(text: string): string {
+        const words = text.trim().split(/\s+/).slice(0, 2);
+        let result = words.join(" ");
+        if (result.length > 14) {
+          result = result.slice(0, 14);
+          const lastSpace = result.lastIndexOf(" ");
+          if (lastSpace > 0) result = result.slice(0, lastSpace);
+        }
+        return result.toUpperCase();
+      }
+
       async function regenerateIntroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
         try {
           const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
-          dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, status: "generating" } });
+          const safeText = truncateCardTextForRegen(text);
+          const safePrompt = enforceCardPrompt(stylePrompt, safeText);
+          dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "generating" } });
           const submitRes = await fetch("/api/intro", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: stylePrompt, duration: dur }),
+            body: JSON.stringify({ prompt: safePrompt, duration: dur }),
             signal: abort.signal,
           });
           const submitData = await submitRes.json();
           if (!submitRes.ok || !submitData.predictionId) {
-            dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, status: "failed" } });
+            dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "failed" } });
             return;
           }
           const videoUrl = await pollAtlasTask(submitData.predictionId);
-          dispatch({ type: "SET_INTRO_CARD", card: { text, stylePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+          dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
         } catch (e) {
           debugLog("[Validation] Intro regen failed:", e);
         }
@@ -1611,20 +1637,22 @@ export default function DetectingStep() {
       async function regenerateOutroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
         try {
           const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
-          dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, status: "generating" } });
+          const safeText = truncateCardTextForRegen(text);
+          const safePrompt = enforceCardPrompt(stylePrompt, safeText);
+          dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "generating" } });
           const submitRes = await fetch("/api/outro", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: stylePrompt, duration: dur }),
+            body: JSON.stringify({ prompt: safePrompt, duration: dur }),
             signal: abort.signal,
           });
           const submitData = await submitRes.json();
           if (!submitRes.ok || !submitData.predictionId) {
-            dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, status: "failed" } });
+            dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "failed" } });
             return;
           }
           const videoUrl = await pollAtlasTask(submitData.predictionId);
-          dispatch({ type: "SET_OUTRO_CARD", card: { text, stylePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+          dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
         } catch (e) {
           debugLog("[Validation] Outro regen failed:", e);
         }

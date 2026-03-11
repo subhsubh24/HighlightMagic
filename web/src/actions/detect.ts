@@ -1579,8 +1579,9 @@ PRODUCTION HARD CAPS (exceeding these silently truncates — plan within them):
 - MAXIMUM 12 SFX cues per tape. Additional cues are silently dropped.
 - MAXIMUM 8 voiceover segments per tape. Additional segments are silently dropped.
 - MAXIMUM 6 audioBreaths per tape. Additional breaths are silently dropped.
-- Intro/outro card text: MAXIMUM 3 words (30 characters). Extra words are silently removed.
-  Design your card text to be EXACTLY 1-3 words — don't write phrases that lose meaning when truncated.
+- Intro/outro card text: MAXIMUM 2 words (14 characters). Extra words are silently removed.
+  Design your card text to be EXACTLY 1-2 SHORT words — the T2V model renders text very large,
+  so fewer characters = better fit. Prefer single words. "STUCK" > "GETTING STUCK". "EPIC" > "EPIC MOMENTS".
 - Voiceover segment text: MAXIMUM 200 characters per segment. Text is silently cut mid-sentence.
   Keep VO segments concise — if you need more words, split across multiple segments.
 - stylePrompt: MAXIMUM 500 characters. Write tight, evocative prompts — don't waste characters on filler.
@@ -2080,21 +2081,24 @@ The intro-to-first-clip transition matters MORE than the intro itself. Energy mu
 If the intro is slow and moody, the first clip should ease in gently, not slam cut.
 If the intro is hype, the first clip should HIT immediately after.
 
-TEXT FITTING (technical constraint, not creative — the T2V model renders in a narrow frame):
+TEXT FITTING (CRITICAL technical constraint — text overflow is the #1 card rendering bug):
 The video renders at 9:16 PORTRAIT (1080×1920, very tall and narrow).
-- Keep "text" to 1-3 words so it fits the narrow frame. Distill the theme to its essence.
-- The "stylePrompt" is sent to a text-to-video AI model. Structure it like:
-  "9:16 vertical portrait video, [BACKGROUND], the word(s) '[YOUR TEXT]' displayed as small
-   centered text in the middle of the frame, compact font, text occupies less than 40% of
-   frame width, [MOTION/EFFECTS]"
+T2V models render text MUCH LARGER than you expect — even a single word can overflow the frame.
+- Keep "text" to 1-2 SHORT words. One word is ideal. "STUCK" not "GETTING STUCK". "VIBES" not "GOOD VIBES ONLY".
+- Maximum 14 characters total. Shorter = more likely to fit.
+- The "stylePrompt" is sent to a text-to-video AI model. Structure it EXACTLY like:
+  "9:16 vertical portrait video (1080x1920), [BACKGROUND], the word '[YOUR TEXT]' displayed as
+   SMALL centered text in the middle third of the frame, text must be fully visible and not cropped,
+   text occupies no more than 30% of frame width, generous padding on all sides, [MOTION/EFFECTS]"
 - ALWAYS include the actual text in the stylePrompt so the T2V model renders it
-- ALWAYS specify "small centered text" and "9:16 vertical portrait" — this is a rendering
-  constraint, not a style choice. The text physically must fit the narrow frame.
+- ALWAYS specify "SMALL centered text", "fully visible", "not cropped", and "9:16 vertical portrait"
+- These are rendering constraints, not style choices. Without them, text WILL overflow the frame.
 - Abstract motion backgrounds (particles, gradients, light leaks) render most reliably.
+- NEVER use long words (8+ letters) — they overflow even as single words. Prefer punchy short words.
 
 OUTRO CARD — A matching closing card appended after the last clip.
 Set "outro" to {"text": "CLOSING", "stylePrompt": "T2V prompt", "duration": 4} or null to skip.
-Same text fitting rules as intro — 1-3 words, same stylePrompt structure.
+Same text fitting rules as intro — 1-2 SHORT words max, same stylePrompt structure.
 Choose the duration that fits the content's energy. MATCH TO CONTENT:
 - Hype/fast content: short (2-3s) or null (skip). The last clip IS the ending. An outro can kill momentum.
 - Story/emotional content: longer (4-5s). The outro is the denouement — a place to exhale.
@@ -3021,40 +3025,41 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
         "female-narrator-warm", "female-broadcaster-hype", "female-young-energetic",
       ];
 
-      // Helper: truncate card text to 3 words max for frame fitting
+      // Helper: truncate card text to 2 words max for frame fitting.
+      // T2V models render text very large by default — fewer, shorter words
+      // are the only reliable way to keep text within the narrow 9:16 frame.
       const truncateCardText = (text: string): string => {
-        const words = text.trim().split(/\s+/).slice(0, 3);
+        const words = text.trim().split(/\s+/).slice(0, 2);
         let result = words.join(" ");
-        // Trim to 30 chars but avoid cutting mid-word
-        if (result.length > 30) {
-          result = result.slice(0, 30);
+        // Trim to 14 chars but avoid cutting mid-word
+        if (result.length > 14) {
+          result = result.slice(0, 14);
           const lastSpace = result.lastIndexOf(" ");
           if (lastSpace > 0) result = result.slice(0, lastSpace);
         }
-        return result;
+        return result.toUpperCase();
       };
 
-      // Helper: ensure stylePrompt references the truncated text and enforces portrait framing
+      // Helper: ensure stylePrompt enforces tiny centered text in a narrow portrait frame.
+      // T2V models tend to render text at huge sizes — we aggressively constrain this.
       const ensureCardPrompt = (stylePrompt: string, truncatedText: string, originalText: string): string => {
-        let prompt = stylePrompt.slice(0, 500);
-        // Prepend portrait aspect ratio if not mentioned
-        if (!prompt.toLowerCase().includes("9:16") && !prompt.toLowerCase().includes("portrait")) {
-          prompt = "9:16 vertical portrait video, " + prompt;
-        }
+        let prompt = stylePrompt.slice(0, 400);
         // If the prompt references the original (pre-truncation) text, replace it with the truncated version
-        // to ensure T2V renders the text that actually fits in the frame
         if (originalText !== truncatedText && prompt.includes(originalText)) {
           prompt = prompt.replaceAll(originalText, truncatedText);
         }
         // Ensure the truncated text content is referenced in the prompt
         if (!prompt.includes(truncatedText)) {
-          prompt = prompt.replace(/,\s*$/, "") + `, the text '${truncatedText}' displayed as small centered text`;
+          prompt = prompt.replace(/,\s*$/, "") + `, the word '${truncatedText}'`;
         }
-        // Enforce small text if not mentioned
-        if (!prompt.toLowerCase().includes("small") && !prompt.toLowerCase().includes("compact")) {
-          prompt += ", compact text, fits within narrow frame";
+        // Always prepend strong framing and text size constraints
+        const prefix = "9:16 vertical portrait video (1080x1920), ";
+        const suffix = `, text '${truncatedText}' displayed as SMALL centered text in the middle third of the frame, text must be fully visible and not cropped, text occupies no more than 30% of the frame width, generous padding on all sides`;
+        if (!prompt.toLowerCase().startsWith("9:16")) {
+          prompt = prefix + prompt;
         }
-        return prompt.slice(0, 500);
+        prompt += suffix;
+        return prompt.slice(0, 600);
       };
 
       const productionPlan: ProductionPlan = {
