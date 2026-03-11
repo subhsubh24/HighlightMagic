@@ -1616,10 +1616,13 @@ function renderVideoClip(
       const va = video.videoWidth / video.videoHeight;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
-      // Cover-fit for all clips (including intro/outro cards): fill canvas, crop if needed.
-      // AI-generated cards are requested at 9:16 but may arrive at a different ratio —
-      // cover-fit avoids distracting black bars and looks better than letterboxing.
-      if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
+      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full video without cropping,
+        // matching preview behavior so text isn't cut off at export time.
+        if (va > ca) { baseW = canvas.width; baseH = baseW / va; }
+        else { baseH = canvas.height; baseW = baseH * va; }
+      } else if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
       else { baseW = canvas.width; baseH = baseW / va; }
 
       const { trimStart, trimEnd } = instruction.clip;
