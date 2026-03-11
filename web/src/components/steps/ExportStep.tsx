@@ -1556,10 +1556,11 @@ function renderVideoClip(
 
       const { trimStart, trimEnd } = instruction.clip;
       const velocityPreset = instruction.clip.velocityPreset ?? "normal";
-      video.currentTime = trimStart;
 
-      video.onseeked = () => {
-        video.play();
+      const startPlayback = () => {
+        video.play().catch((e) => {
+          console.warn(`Export: video.play() rejected for clip "${instruction.clip.id}", will hold first frame:`, e);
+        });
 
         const renderStartTime = performance.now();
         const canvasDurationMs = canvasDuration * 1000;
@@ -1570,7 +1571,8 @@ function renderVideoClip(
           const canvasElapsedSec = canvasElapsedMs / 1000;
           const globalTime = globalTimelineOffset + canvasElapsedSec;
 
-          if (canvasElapsedMs >= canvasDurationMs || video.paused) {
+          // Only terminate when canvas duration has fully elapsed
+          if (canvasElapsedMs >= canvasDurationMs) {
             video.pause();
             disconnectAudio();
             video.src = "";
@@ -1580,25 +1582,21 @@ function renderVideoClip(
             return;
           }
 
-          // Stop if video reached trim end
-          if (video.currentTime >= trimEnd) {
-            // Hold last frame for remaining canvas time — redraw video frame + overlays
-            if (canvasElapsedMs < canvasDurationMs) {
-              onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
-              // Redraw the held video frame to clear previous overlay compositing
-              ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              ctx.filter = "none";
-              drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
-              scheduleExportFrame(drawFrame);
-              return;
-            }
-            video.pause();
-            disconnectAudio();
-            video.src = "";
-            video.removeAttribute("src");
-            video.load();
-            resolve();
+          // Hold last frame if video ended naturally, play was blocked, or reached trim end
+          if (video.ended || video.paused || video.currentTime >= trimEnd) {
+            onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
+            // Redraw the held video frame with correct layout + overlays
+            ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+            const dw = baseW;
+            const dh = baseH;
+            const dx = (canvas.width - dw) / 2;
+            const dy = (canvas.height - dh) / 2;
+            ctx.drawImage(video, dx, dy, dw, dh);
+            ctx.filter = "none";
+            drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
+            scheduleExportFrame(drawFrame);
             return;
           }
 
@@ -1715,6 +1713,17 @@ function renderVideoClip(
 
         scheduleExportFrame(drawFrame);
       };
+
+      // Seek to trimStart, then begin playback.
+      // When trimStart is 0 (e.g. intro/outro cards), the video may already be
+      // at position 0, so the 'seeked' event might not fire. Handle both cases.
+      if (trimStart === 0) {
+        // Already at position 0 — start immediately
+        startPlayback();
+      } else {
+        video.onseeked = () => startPlayback();
+        video.currentTime = trimStart;
+      }
     };
 
     video.onerror = (e) => {
