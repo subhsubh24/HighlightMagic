@@ -193,7 +193,7 @@ If passed is true, fixes should be empty or omitted.`;
     // Extract JSON from response
     const jsonStr = extractJSON(text);
     if (!jsonStr) {
-      console.warn("[validate] No JSON in Haiku response — treating as passed");
+      console.warn("[validate] No JSON in Haiku response — treating as passed. Raw response:", text.slice(0, 2000));
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
