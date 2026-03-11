@@ -1539,20 +1539,26 @@ function renderVideoClip(
     // Route original audio through the audio pipeline (not muted)
     const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume, instruction.clip.audioFadeIn, instruction.clip.audioFadeOut);
 
+    // Safety timeout: if video never loads (bad codec, corrupt blob, etc.),
+    // skip the clip instead of hanging the entire export forever.
+    const loadTimeout = setTimeout(() => {
+      console.warn(`Export: video load timed out for clip "${instruction.clip.id}" after 15s — skipping`);
+      disconnectAudio();
+      video.src = "";
+      video.removeAttribute("src");
+      resolve();
+    }, 15_000);
+
     video.onloadeddata = () => {
+      clearTimeout(loadTimeout);
       const va = video.videoWidth / video.videoHeight;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
-      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
-      if (isCardClip) {
-        // Contain-fit for intro/outro cards: show full video without cropping
-        if (va > ca) { baseW = canvas.width; baseH = baseW / va; }
-        else { baseH = canvas.height; baseW = baseH * va; }
-      } else {
-        // Cover-fit for regular clips: fill canvas, crop if needed
-        if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
-        else { baseW = canvas.width; baseH = baseW / va; }
-      }
+      // Cover-fit for all clips (including intro/outro cards): fill canvas, crop if needed.
+      // AI-generated cards are requested at 9:16 but may arrive at a different ratio —
+      // cover-fit avoids distracting black bars and looks better than letterboxing.
+      if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
+      else { baseW = canvas.width; baseH = baseW / va; }
 
       const { trimStart, trimEnd } = instruction.clip;
       const velocityPreset = instruction.clip.velocityPreset ?? "normal";
@@ -1727,6 +1733,7 @@ function renderVideoClip(
     };
 
     video.onerror = (e) => {
+      clearTimeout(loadTimeout);
       const clipId = instruction.clip.id;
       const src = instruction.mediaUrl?.slice(0, 80);
       const mediaErr = video.error;
