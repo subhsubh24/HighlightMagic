@@ -175,7 +175,7 @@ If passed is true, fixes should be empty or omitted.`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 2000,
+        max_tokens: 4096,
         stream: true,
         system: fullSystemPrompt,
         messages: [{ role: "user", content: userContent }],
@@ -193,6 +193,13 @@ If passed is true, fixes should be empty or omitted.`;
     // Extract JSON from response
     const jsonStr = extractJSON(text);
     if (!jsonStr) {
+      // JSON was truncated or absent — try to salvage partial data.
+      // If the raw text contains "passed": false, treat as failed and extract what we can.
+      const salvaged = salvageTruncatedJSON(text);
+      if (salvaged) {
+        console.warn("[validate] Salvaged truncated Haiku response — applying partial fixes");
+        return Response.json(salvaged);
+      }
       console.warn("[validate] No JSON in Haiku response — treating as passed. Raw response:", text.slice(0, 2000));
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
@@ -563,6 +570,56 @@ async function collectStreamedText(response: Response): Promise<string> {
   }
 
   return text;
+}
+
+/**
+ * Attempt to recover useful data from a truncated Haiku response.
+ * If the response clearly indicates passed=false, we extract whatever
+ * issues and fixes are parseable rather than silently swallowing the failure.
+ */
+function salvageTruncatedJSON(text: string): { passed: boolean; issues: string[]; fixes: Record<string, unknown> } | null {
+  // Must at least contain the "passed" field to be useful
+  const passedMatch = text.match(/"passed"\s*:\s*(true|false)/);
+  if (!passedMatch) return null;
+
+  const passed = passedMatch[1] === "true";
+
+  // If it passed, no need to salvage — just return passed
+  if (passed) return { passed: true, issues: [], fixes: {} };
+
+  // Extract individual issue strings from the truncated issues array
+  const issues: string[] = [];
+  const issueRegex = /"issues"\s*:\s*\[/;
+  const issueStart = text.match(issueRegex);
+  if (issueStart && issueStart.index != null) {
+    // Find complete quoted strings after the issues array opening
+    const afterIssues = text.slice(issueStart.index + issueStart[0].length);
+    const stringRegex = /"((?:[^"\\]|\\.)*)"/g;
+    let match;
+    while ((match = stringRegex.exec(afterIssues)) !== null) {
+      const str = match[1];
+      // Issue strings are typically long descriptions; skip short JSON keys
+      if (str.length > 20) {
+        issues.push(str.replace(/\\"/g, '"').replace(/\\n/g, "\n"));
+      }
+      // Stop if we hit the fixes section
+      if (afterIssues.slice(match.index).includes('"fixes"')) break;
+    }
+  }
+
+  // Try to extract fixes — parse any complete clipUpdates entries
+  let fixes: Record<string, unknown> = {};
+  const fixesMatch = text.match(/"fixes"\s*:\s*\{/);
+  if (fixesMatch && fixesMatch.index != null) {
+    const fixesText = text.slice(fixesMatch.index + fixesMatch[0].length - 1);
+    // Try progressively smaller substrings to find a parseable chunk
+    const extracted = extractJSON(fixesText);
+    if (extracted) {
+      try { fixes = JSON.parse(extracted); } catch { /* leave empty */ }
+    }
+  }
+
+  return { passed: false, issues, fixes };
 }
 
 /** Extract the first valid JSON object from text. */
