@@ -1,5 +1,5 @@
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /**
  * Validation endpoint — calls Haiku to review the assembled tape and return structured fixes.
@@ -164,6 +164,8 @@ If passed is true, fixes should be empty or omitted.`;
       ? buildVisionContent(tapeDescription, clips, clipFrames as Array<{ clipIndex: number; base64: string }>)
       : tapeDescription;
 
+    // Use streaming API so the connection stays alive during processing.
+    // Non-streaming requests can time out when Haiku is slow (especially with vision).
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -174,10 +176,10 @@ If passed is true, fixes should be empty or omitted.`;
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 2000,
+        stream: true,
         system: fullSystemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
-      signal: AbortSignal.timeout(hasFrames ? 27_000 : 20_000),
     });
 
     if (!response.ok) {
@@ -185,8 +187,8 @@ If passed is true, fixes should be empty or omitted.`;
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
-    const body = await response.json();
-    const text = body.content?.[0]?.text ?? "";
+    // Collect streamed text from SSE events
+    const text = await collectStreamedText(response);
 
     // Extract JSON from response
     const jsonStr = extractJSON(text);
@@ -519,6 +521,48 @@ function buildTapeDescription(
   }
 
   return parts.join("\n");
+}
+
+/**
+ * Collect all text from an Anthropic streaming response.
+ * Reads SSE events and concatenates content_block_delta text deltas.
+ */
+async function collectStreamedText(response: Response): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete SSE lines
+    const lines = buffer.split("\n");
+    // Keep the last potentially incomplete line in the buffer
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") continue;
+
+      try {
+        const event = JSON.parse(data);
+        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          text += event.delta.text;
+        }
+      } catch {
+        // Skip malformed JSON lines
+      }
+    }
+  }
+
+  return text;
 }
 
 /** Extract the first valid JSON object from text. */
