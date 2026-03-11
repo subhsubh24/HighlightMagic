@@ -678,7 +678,7 @@ export default function TapePreviewPlayer() {
 
         // Per-clip style: AI per-clip → AI plan-level default → theme default
         const plan = state.aiProductionPlan;
-        const clipTransDuration = e.clip.transitionDuration ?? style.transitionDuration;
+        const clipTransDuration = e.clip.transitionDuration ?? plan?.defaultTransitionDuration ?? style.transitionDuration;
         const clipEntryPunch = e.clip.entryPunchScale ?? plan?.defaultEntryPunchScale ?? style.entryPunchScale;
         const clipEntryPunchDur = e.clip.entryPunchDuration ?? plan?.defaultEntryPunchDuration ?? style.entryPunchDuration;
         const clipKenBurns = e.clip.kenBurnsIntensity ?? plan?.defaultKenBurnsIntensity ?? (style.kenBurnsIntensity ?? 0);
