@@ -1806,7 +1806,11 @@ function renderVideoClip(
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
-      reject(new Error(`Failed to load video for clip "${clipId}" — code=${mediaErr?.code} "${mediaErr?.message}". src: ${src}`));
+      // Fall back to a placeholder instead of crashing the entire export.
+      // This keeps the tape timeline intact (audio/transitions stay in sync)
+      // and matches the graceful degradation that renderPhotoClip uses.
+      console.warn(`Export: rendering placeholder for clip "${clipId}" to preserve tape timeline`);
+      renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black").then(resolve);
     };
   });
 }
