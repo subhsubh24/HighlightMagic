@@ -1414,7 +1414,8 @@ export default function DetectingStep() {
         debugLog(`[Validation] Selected ${clipFrames.length} representative frames for visual validation`);
       }
 
-      setProgress(95);
+      // Never decrease progress — animations may have pushed it to ~99%
+      setProgress((prev) => Math.max(prev, 95));
       dispatch({ type: "SET_VALIDATION_STATUS", status: "validating" });
       setValidationPhase("Validating your highlight reel...");
 
@@ -1486,7 +1487,7 @@ export default function DetectingStep() {
           dispatch({ type: "SET_VALIDATION_STATUS", status: "fixing" });
           const issueCount = validation.issues.length;
           setValidationPhase(`Polishing — fixing ${issueCount} issue${issueCount !== 1 ? "s" : ""}...`);
-          setProgress(96 + pass);
+          setProgress((prev) => Math.max(prev, 96 + pass));
 
           const fixes = validation.fixes;
 
