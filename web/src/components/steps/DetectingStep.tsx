@@ -498,8 +498,15 @@ export default function DetectingStep() {
           });
         }, 500);
 
+        // Yield a microtask so React Strict Mode cleanup (which aborts the
+        // signal synchronously after the effect returns) fires BEFORE we check.
+        // Without this, the check below runs while the signal is still live,
+        // then callPlannerSSE gets an immediate AbortError after cleanup fires.
+        await Promise.resolve();
+
         // Fix Strict Mode abort — same logic as runDetection
         if (abort.signal.aborted) {
+          console.warn("[Replan] Abort signal was already aborted (React Strict Mode) — creating fresh controller");
           const fresh = new AbortController();
           abortRef.current = fresh;
           abort = fresh;
