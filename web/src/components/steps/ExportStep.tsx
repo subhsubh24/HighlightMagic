@@ -1596,6 +1596,13 @@ function renderVideoClip(
     // Remote URLs (intro/outro cards) are pre-fetched as local blobs before reaching
     // here, so no crossOrigin attribute is needed. Cross-origin videos would taint the
     // canvas and cause captureStream() to produce blank frames.
+    // However, if proxy pre-fetch failed and we fell back to the remote URL, set
+    // crossOrigin so the browser attempts CORS — if CORS fails, onerror fires and
+    // our placeholder fallback handles it instead of silently tainting the canvas.
+    const isRemoteUrl = instruction.mediaUrl.startsWith("http");
+    if (isRemoteUrl) {
+      video.crossOrigin = "anonymous";
+    }
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
