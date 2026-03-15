@@ -149,6 +149,11 @@ export default function TapePreviewPlayer() {
       // Account for velocity/speed ramping — effective duration may differ from source
       let dur = getEffectiveDuration(sourceDur, clip.velocityPreset, clip.customVelocityKeyframes);
 
+      // Photo clips may have 0 source duration — use AI photo display duration as floor
+      if (media.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+        dur = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
+      }
+
       // Beat-sync: snap duration to nearest beat boundary
       if (beatGrid && beatGrid.beatInterval > 0) {
         const beats = Math.max(2, Math.round(dur / beatGrid.beatInterval));

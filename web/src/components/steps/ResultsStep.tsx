@@ -22,8 +22,14 @@ export default function ResultsStep() {
 
   const sortedClips = useMemo(() => [...state.clips].sort((a, b) => a.order - b.order), [state.clips]);
   const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const photoDurResults = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
   const totalDuration = sortedClips.reduce((sum, c, i) => {
-    const dur = c.trimEnd - c.trimStart;
+    let dur = c.trimEnd - c.trimStart;
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    const media = getMediaFile(state, c.sourceFileId);
+    if (media?.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+      dur = photoDurResults;
+    }
     const overlap = (i < sortedClips.length - 1) ? (sortedClips[i + 1]?.transitionDuration ?? defaultTransDur) : 0;
     return sum + dur - overlap;
   }, 0);

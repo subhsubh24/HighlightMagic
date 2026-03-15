@@ -243,9 +243,16 @@ export default function ExportStep() {
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
   const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.28;
+  const photoDurPreview = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
   const totalDuration = sortedClips.reduce((sum, c, i) => {
     const sourceDur = c.trimEnd - c.trimStart;
-    let dur = sum + getEffectiveDuration(sourceDur, c.velocityPreset, c.customVelocityKeyframes);
+    let effDur = getEffectiveDuration(sourceDur, c.velocityPreset, c.customVelocityKeyframes);
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    const media = getMediaFile(state, c.sourceFileId);
+    if (media?.type === "photo" && (!Number.isFinite(effDur) || effDur <= 0)) {
+      effDur = photoDurPreview;
+    }
+    let dur = sum + effDur;
     if (i < sortedClips.length - 1) {
       dur -= sortedClips[i + 1]?.transitionDuration ?? defaultTransDurPreview;
     }
@@ -557,10 +564,16 @@ export default function ExportStep() {
         const cStarts: number[] = [];
         const cEnds: number[] = [];
         let st = introOffsetC; // Start after intro card duration
+        const photoDurC = cPlan?.photoDisplayDuration ?? 3.2;
         for (let i = 0; i < sortedClips.length; i++) {
           const rawDur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
           // Account for velocity curves — effective duration may differ from source
           let dur = getEffectiveDuration(rawDur, sortedClips[i].velocityPreset, sortedClips[i].customVelocityKeyframes);
+          // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+          const clipMedia = getMediaFile(state, sortedClips[i].sourceFileId);
+          if (clipMedia?.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+            dur = photoDurC;
+          }
           // Apply beat-sync snapping to match actual render durations
           if (audioBeatGrid && audioBeatGrid.beatInterval > 0) {
             const beats = Math.max(2, Math.round(dur / audioBeatGrid.beatInterval));
@@ -1102,6 +1115,10 @@ async function renderHighlightTape(
   for (let i = 0; i < clips.length; i++) {
     const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
     let clipDur = getEffectiveDuration(sourceDur, clips[i].clip.velocityPreset, clips[i].clip.customVelocityKeyframes);
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    if (clips[i].mediaType === "photo" && (!Number.isFinite(clipDur) || clipDur <= 0)) {
+      clipDur = photoDisplayDuration;
+    }
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDur / beatGrid.beatInterval));
       clipDur = beats * beatGrid.beatInterval;
@@ -1115,6 +1132,10 @@ async function renderHighlightTape(
     if (i < clips.length - 1) {
       totalDuration -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
     }
+  }
+  // Guard against 0/negative totalDuration (e.g. all photo clips with 0 source duration)
+  if (!Number.isFinite(totalDuration) || totalDuration <= 0) {
+    totalDuration = clips.length * photoDisplayDuration;
   }
 
   // Audio pipeline: captures original clip audio + optional background music
@@ -1143,6 +1164,11 @@ async function renderHighlightTape(
     const instruction = clips[i];
     const sourceDur = instruction.clip.trimEnd - instruction.clip.trimStart;
     let clipDuration = getEffectiveDuration(sourceDur, instruction.clip.velocityPreset, instruction.clip.customVelocityKeyframes);
+
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    if (instruction.mediaType === "photo" && (!Number.isFinite(clipDuration) || clipDuration <= 0)) {
+      clipDuration = photoDisplayDuration;
+    }
 
     // Beat-sync: snap clip duration to beat grid
     if (beatGrid && beatGrid.beatInterval > 0) {
