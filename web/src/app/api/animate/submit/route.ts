@@ -1,6 +1,7 @@
 import { submitPhotoAnimation } from "@/lib/kling";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /** Max request body size: 20 MB (base64-encoded photos). */
 const MAX_BODY_SIZE = 20 * 1024 * 1024;

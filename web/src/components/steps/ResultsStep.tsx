@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Play, Scissors, Award, Film, Image, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { ArrowLeft, Play, Scissors, Award, Film, Image as ImageIcon, ArrowRight, GripVertical, VideoOff, RefreshCw, Send, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { useApp, getMediaFile } from "@/lib/store";
 import { formatTime, haptic } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { getCachedDetectionData } from "@/lib/detection-cache";
 
 const QUICK_PRESETS = [
@@ -20,8 +20,19 @@ export default function ResultsStep() {
   const [showRegenerate, setShowRegenerate] = useState(false);
   const [customFeedback, setCustomFeedback] = useState("");
 
-  const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
-  const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const sortedClips = useMemo(() => [...state.clips].sort((a, b) => a.order - b.order), [state.clips]);
+  const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const photoDurResults = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
+  const totalDuration = sortedClips.reduce((sum, c, i) => {
+    let dur = c.trimEnd - c.trimStart;
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    const media = getMediaFile(state, c.sourceFileId);
+    if (media?.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+      dur = photoDurResults;
+    }
+    const overlap = (i < sortedClips.length - 1) ? (sortedClips[i + 1]?.transitionDuration ?? defaultTransDur) : 0;
+    return sum + dur - overlap;
+  }, 0);
 
   // Check if regeneration is possible (cached data available)
   const canRegenerate = getCachedDetectionData().frames !== null;
@@ -300,7 +311,7 @@ export default function ResultsStep() {
                     <AlertTriangle className="h-2.5 w-2.5 text-red-400" />
                   ) : hasAnimatedVideo ? (
                     <Sparkles className="h-2.5 w-2.5 text-[var(--accent)]" />
-                  ) : isPhoto ? <Image className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
+                  ) : isPhoto ? <ImageIcon className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                 </div>
               </div>
 

@@ -55,7 +55,8 @@ export function getCachedAsset(key: string): { data: string; meta?: Record<strin
       return null;
     }
     return { data: entry.data, meta: entry.meta };
-  } catch {
+  } catch (e) {
+    console.warn("[Cache] getCachedAsset failed for key:", key, e);
     return null;
   }
 }
@@ -70,8 +71,8 @@ export function setCachedAsset(key: string, data: string, meta?: Record<string, 
 
     const entry: CacheEntry = { data, ts: Date.now(), meta };
     localStorage.setItem(key, JSON.stringify(entry));
-  } catch {
-    // localStorage full or unavailable — silently skip
+  } catch (e) {
+    console.warn("[Cache] setCachedAsset failed (storage full?):", key, e);
   }
 }
 
@@ -95,7 +96,8 @@ function evictIfNeeded(): void {
         } else {
           valid.push({ key: k, ts: entry.ts });
         }
-      } catch {
+      } catch (e) {
+        console.warn("[Cache] Failed to parse cache entry:", k, e);
         expired.push(k);
       }
     }
@@ -111,8 +113,8 @@ function evictIfNeeded(): void {
         localStorage.removeItem(valid[i].key);
       }
     }
-  } catch {
-    // Best-effort
+  } catch (e) {
+    console.warn("[Cache] evictIfNeeded failed:", e);
   }
 }
 
@@ -127,7 +129,7 @@ export function clearAssetCache(): void {
       if (k?.startsWith(CACHE_PREFIX)) toRemove.push(k);
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
-  } catch {
-    // Best-effort
+  } catch (e) {
+    console.warn("[Cache] clearAssetCache failed:", e);
   }
 }

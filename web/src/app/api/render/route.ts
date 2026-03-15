@@ -103,38 +103,21 @@ export async function POST(req: Request) {
 
     console.log(`[render] Received EDL: ${body.clips.length} clips, ${body.audioLayers?.length ?? 0} audio layers, ${body.width}x${body.height}@${body.fps}fps`);
 
-    // ── Build FFmpeg filter graph ──
-    // This is the core rendering logic. Each clip becomes an input stream,
-    // transitions are implemented as xfade filters, captions as drawtext,
-    // and audio layers are mixed with amix.
+    // ── Render worker not yet deployed ──
+    // EDL validation above is production-ready. When the FFmpeg render worker
+    // is deployed, replace this 501 with job creation + queue submission.
+    // The client handles 501 by falling back to client-side Canvas rendering.
     //
-    // For now, return a job structure that can be extended with actual FFmpeg
-    // execution when the rendering infrastructure is deployed.
-
-    const jobId = `render_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    // Server-side rendering pipeline:
-    // Assets are downloaded by the render worker on first poll.
-    // FFmpeg filter graph is built from the EDL (clips → xfade, drawtext, amix).
-    // Render executes in a background process / Lambda.
-    // Output is uploaded to storage (S3/R2) and status updated in KV/DB.
-    // Client polls via /api/animate/check using the returned jobId.
-    //
-    // Full FFmpeg integration requires deployment infrastructure
-    // (ffmpeg binary, temp storage, job queue). EDL validation and job
-    // creation below is production-ready — only the worker needs deployment.
-    return NextResponse.json({
-      jobId,
-      status: "queued",
-      message: "Server-side render job created. Poll for status.",
-      edlSummary: {
-        clips: body.clips.length,
-        audioLayers: body.audioLayers?.length ?? 0,
-        resolution: `${body.width}x${body.height}`,
-        fps: body.fps,
-        estimatedDuration: body.clips.reduce((sum, c) => sum + (c.endTime - c.startTime), 0),
+    // IMPORTANT: Do NOT return a fake jobId here — the client would poll
+    // /api/animate/check with a bogus prediction ID for 5 minutes before
+    // timing out and falling back to client-side rendering.
+    return NextResponse.json(
+      {
+        error: "Server-side render worker is not deployed yet.",
+        fallback: "client",
       },
-    });
+      { status: 501 }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[render] Error:", message);

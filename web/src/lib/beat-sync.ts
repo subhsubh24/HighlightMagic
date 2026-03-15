@@ -10,6 +10,7 @@
  */
 
 import type { EditedClip, MusicTrack } from "./types";
+import { getEffectiveDuration } from "./velocity";
 
 export interface BeatGrid {
   bpm: number;
@@ -97,33 +98,42 @@ export function buildBeatSyncedTimeline(
   const clipStarts: number[] = [];
   const transitionBeats: number[][] = [];
 
-  let currentTime = 0;
+  // Track cumulative beat count to avoid double-snapping drift.
+  // Only snap the first clip's start; subsequent starts are computed from
+  // cumulative beat-aligned durations minus transition overlaps.
+  let cumulativeBeats = 0;
 
   for (let i = 0; i < clips.length; i++) {
     const clip = clips[i];
-    const rawDuration = clip.trimEnd - clip.trimStart;
+    const sourceDuration = clip.trimEnd - clip.trimStart;
+    // Account for velocity/speed ramping — effective duration may differ from source duration
+    const rawDuration = getEffectiveDuration(sourceDuration, clip.velocityPreset, clip.customVelocityKeyframes);
     const beats = beatsPerClip(rawDuration, grid.beatInterval);
     const syncedDuration = beats * grid.beatInterval;
 
-    // Snap start to nearest beat
-    const snappedStart = snapToBeat(currentTime, grid);
-    clipStarts.push(snappedStart);
+    // Compute start from cumulative beats to avoid rounding drift
+    const clipStart = cumulativeBeats * grid.beatInterval;
+    clipStarts.push(clipStart);
     clipDurations.push(syncedDuration);
 
-    // Find beats that fall during the transition zone at the end of this clip
-    // Use per-clip transition duration (AI-specified), with 0.3s neutral default
-    const clipTransDuration = clip.transitionDuration ?? 0.3;
+    // Find beats that fall during the transition zone at the end of this clip.
+    // transitionDuration on a clip describes the transition INTO that clip,
+    // so the overlap between clip i and clip i+1 uses clips[i+1]'s duration.
+    const nextTransDuration = clips[i + 1]?.transitionDuration ?? 0.3;
     if (i < clips.length - 1) {
-      const transStart = snappedStart + syncedDuration - clipTransDuration;
-      const transEnd = snappedStart + syncedDuration;
+      const transStart = clipStart + syncedDuration - nextTransDuration;
+      const transEnd = clipStart + syncedDuration;
       const tBeats = grid.beats.filter((b) => b >= transStart && b <= transEnd);
       transitionBeats.push(tBeats);
     }
 
-    // Next clip starts at (this clip end) minus transition overlap
-    currentTime = snappedStart + syncedDuration;
+    // Next clip starts at (this clip end) minus transition overlap, expressed in beats
+    cumulativeBeats += beats;
     if (i < clips.length - 1) {
-      currentTime -= clipTransDuration;
+      // Subtract transition overlap in beat units (round to nearest beat, min 1 if overlap > 0)
+      const rawOverlapBeats = nextTransDuration / grid.beatInterval;
+      const overlapBeats = nextTransDuration > 0 ? Math.max(1, Math.round(rawOverlapBeats)) : 0;
+      cumulativeBeats -= overlapBeats;
     }
   }
 

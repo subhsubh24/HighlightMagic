@@ -6,12 +6,9 @@ import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
   WATERMARK_TEXT,
-  WATERMARK_OPACITY,
   FREE_EXPORT_LIMIT,
   IOS_APP_STORE_URL,
-  PHOTO_DISPLAY_DURATION,
   EXPORT_BITRATE,
-  LOOP_CROSSFADE_DURATION,
 } from "@/lib/constants";
 import { getEditingStyle } from "@/lib/editing-styles";
 import {
@@ -22,8 +19,9 @@ import {
   type TransitionType,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, validateTimeline, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
+import { getMicroSettle, getExitDeceleration, drawFilmGrain, drawVignette, getWarmthShiftCSS, applyFilmStock } from "@/lib/post-processing";
 import { createAudioPipeline, type AudioPipeline, type ScheduledAudioLayer } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
 import Confetti from "@/components/Confetti";
@@ -51,12 +49,39 @@ async function tryServerRender(
   // Skip entirely if we already know server rendering is unavailable
   if (serverRenderAvailable === false) return null;
   try {
-    const renderClips = clips.map((clip) => {
+    const renderClips: Array<{
+      sourceUrl: string; startTime: number; endTime: number;
+      filter?: string; transitionType?: string; transitionDuration?: number;
+      captionText?: string; captionStyle?: string;
+    }> = [];
+
+    // Use AI-driven durations and volumes from production plan
+    const plan = state.aiProductionPlan;
+    const hasIntro = state.introCard?.status === "completed" && state.introCard.videoUrl;
+    const hasOutro = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
+    const introDur = state.introCard?.duration ?? 4;
+    const outroDur = state.outroCard?.duration ?? 4;
+    const introOffset = hasIntro ? introDur : 0;
+    const defaultTransDur = plan?.defaultTransitionDuration ?? 0.28;
+    const voDelay = plan?.voiceover?.delaySec ?? 0.28;
+    const musicVol = plan?.musicVolume ?? 0.47;
+    const sfxVol = plan?.sfxVolume ?? 0.78;
+    const voVol = plan?.voiceoverVolume ?? 0.95;
+
+    if (hasIntro) {
+      renderClips.push({
+        sourceUrl: state.introCard!.videoUrl!,
+        startTime: 0,
+        endTime: introDur,
+      });
+    }
+
+    for (const clip of clips) {
       const media = state.mediaFiles.find((m) => m.id === clip.sourceFileId);
       const hasAnimatedVideo = media?.type === "photo" &&
         media.animationStatus === "completed" &&
         media.animatedVideoUrl;
-      return {
+      renderClips.push({
         sourceUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
         startTime: clip.trimStart,
         endTime: clip.trimEnd,
@@ -65,31 +90,42 @@ async function tryServerRender(
         transitionDuration: clip.transitionDuration,
         captionText: clip.captionText || undefined,
         captionStyle: clip.captionStyle || undefined,
-      };
-    });
+      });
+    }
+
+    if (hasOutro) {
+      renderClips.push({
+        sourceUrl: state.outroCard!.videoUrl!,
+        startTime: 0,
+        endTime: outroDur,
+      });
+    }
 
     const audioLayers: Array<{ url: string; startTime: number; volume: number }> = [];
     if (state.aiMusicUrl) {
-      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: 0.7 });
+      audioLayers.push({ url: state.aiMusicUrl, startTime: 0, volume: musicVol });
     }
 
     // Compute per-clip timeline offsets for voiceover / SFX placement
+    // Offset by intro card duration since clipIndex refers to user clips only
     const clipStarts: number[] = [];
     const clipEnds: number[] = [];
-    let t = 0;
+    let t = introOffset;
     for (let i = 0; i < clips.length; i++) {
-      const dur = clips[i].trimEnd - clips[i].trimStart;
+      const rawDur = clips[i].trimEnd - clips[i].trimStart;
+      const dur = getEffectiveDuration(rawDur, clips[i].velocityPreset, clips[i].customVelocityKeyframes);
       clipStarts.push(t);
       clipEnds.push(t + dur);
-      t += dur - (clips[i + 1]?.transitionDuration ?? 0.3);
+      t += dur - (clips[i + 1]?.transitionDuration ?? defaultTransDur);
     }
 
-    // Voiceover segments
+    // Voiceover segments — use per-segment delay when available for natural timing
     for (const vo of state.voiceoverSegments ?? []) {
       if (!vo.audioUrl || vo.status !== "completed") continue;
       const start = clipStarts[vo.clipIndex];
       if (start == null) continue;
-      audioLayers.push({ url: vo.audioUrl, startTime: start + 0.3, volume: 1.0 });
+      const segDelay = vo.delaySec ?? voDelay;
+      audioLayers.push({ url: vo.audioUrl, startTime: start + segDelay, volume: voVol });
     }
 
     // SFX tracks
@@ -99,9 +135,9 @@ async function tryServerRender(
       const clipEnd = clipEnds[sfx.clipIndex];
       if (clipStart == null) continue;
       let sfxStart = clipStart;
-      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - 0.5);
-      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - 0.3;
-      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: 0.8 });
+      if (sfx.timing === "before") sfxStart = Math.max(0, clipStart - sfx.durationMs / 1000);
+      else if (sfx.timing === "after") sfxStart = (clipEnd ?? clipStart) - defaultTransDur;
+      audioLayers.push({ url: sfx.audioUrl, startTime: sfxStart, volume: sfxVol });
     }
 
     const res = await fetch("/api/render", {
@@ -113,7 +149,7 @@ async function tryServerRender(
         width: EXPORT_WIDTH,
         height: EXPORT_HEIGHT,
         fps: EXPORT_FRAME_RATE,
-        bitrate: EXPORT_BITRATE,
+        bitrate: plan?.exportBitrate ?? EXPORT_BITRATE,
         seamlessLoop: state.viralOptions.seamlessLoop,
         watermark: isFree ? WATERMARK_TEXT : undefined,
       }),
@@ -158,8 +194,8 @@ async function tryServerRender(
     }
 
     return null;
-  } catch {
-    // Server rendering unavailable — silent fallback to client-side
+  } catch (e) {
+    console.error("[Export] Server rendering failed, falling back to client-side:", e);
     return null;
   }
 }
@@ -195,7 +231,6 @@ export default function ExportStep() {
   const [exportExt, setExportExt] = useState("webm");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailPhase, setThumbnailPhase] = useState<ThumbnailPhase>("idle");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbnailAbortRef = useRef<AbortController | null>(null);
 
   // Cleanup blob URL and abort thumbnail polling on unmount
@@ -207,7 +242,24 @@ export default function ExportStep() {
   }, [blobUrl]);
 
   const sortedClips = [...state.clips].sort((a, b) => a.order - b.order);
-  const totalDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const defaultTransDurPreview = state.aiProductionPlan?.defaultTransitionDuration ?? 0.28;
+  const photoDurPreview = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
+  const totalDuration = sortedClips.reduce((sum, c, i) => {
+    const sourceDur = c.trimEnd - c.trimStart;
+    let effDur = getEffectiveDuration(sourceDur, c.velocityPreset, c.customVelocityKeyframes);
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    const media = getMediaFile(state, c.sourceFileId);
+    if (media?.type === "photo" && (!Number.isFinite(effDur) || effDur <= 0)) {
+      effDur = photoDurPreview;
+    }
+    let dur = sum + effDur;
+    if (i < sortedClips.length - 1) {
+      dur -= sortedClips[i + 1]?.transitionDuration ?? defaultTransDurPreview;
+    }
+    return dur;
+  }, 0)
+    + (state.introCard?.status === "completed" && state.introCard.videoUrl ? (state.introCard.duration ?? 4) : 0)
+    + (state.outroCard?.status === "completed" && state.outroCard.videoUrl ? (state.outroCard.duration ?? 4) : 0);
   const style = getEditingStyle(state.detectedTheme);
   const hasMusic = sortedClips.some((c) => c.selectedMusicTrack);
 
@@ -256,7 +308,8 @@ export default function ExportStep() {
         }
         const c = document.createElement("canvas");
         c.width = 1080; c.height = 1920;
-        const ctx = c.getContext("2d")!;
+        const ctx = c.getContext("2d");
+        if (!ctx) { console.error("[Thumbnail] Failed to create canvas context"); setThumbnailPhase("failed"); return; }
         ctx.drawImage(video, 0, 0, c.width, c.height);
         // Clean up the video element to release memory
         video.src = "";
@@ -296,7 +349,8 @@ export default function ExportStep() {
         }
       }
       if (!abort.signal.aborted) setThumbnailPhase("failed");
-    } catch {
+    } catch (e) {
+      console.error("[Export] Thumbnail generation failed:", e);
       if (!abort.signal.aborted) setThumbnailPhase("failed");
     }
   }, [state, sortedClips]);
@@ -311,6 +365,8 @@ export default function ExportStep() {
     setProgress(0);
     haptic();
 
+    // Fresh blob URLs created for this export — cleaned up when done
+    const exportBlobUrls: string[] = [];
     try {
       // Attempt server-side FFmpeg rendering first (Arch #1)
       // Falls back to client-side Canvas+MediaRecorder if server rendering is unavailable
@@ -328,42 +384,211 @@ export default function ExportStep() {
         return;
       }
       // Server rendering not available — fall back to client-side
-      const renderClips: RenderClipInstruction[] = sortedClips.map((clip) => {
+      const renderClips: RenderClipInstruction[] = [];
+
+      // AI-driven durations and volumes from production plan
+      const cPlan = state.aiProductionPlan;
+      const hasIntroC = state.introCard?.status === "completed" && state.introCard.videoUrl;
+      const hasOutroC = state.outroCard?.status === "completed" && state.outroCard.videoUrl;
+      const introDurC = state.introCard?.duration ?? 4;
+      const outroDurC = state.outroCard?.duration ?? 4;
+      const introOffsetC = hasIntroC ? introDurC : 0;
+      const defaultTransDurC = cPlan?.defaultTransitionDuration ?? 0.28;
+      const voDelayC = cPlan?.voiceover?.delaySec ?? 0.28;
+      const sfxVolC = cPlan?.sfxVolume ?? 0.78;
+      const voVolC = cPlan?.voiceoverVolume ?? 0.95;
+
+      // Pre-fetch remote intro/outro videos through a same-origin proxy to avoid
+      // canvas tainting. Cross-origin videos drawn to canvas taint it, causing
+      // captureStream() to produce blank frames.
+      // Pre-fetch with retry (up to 3 attempts with exponential backoff)
+      async function fetchVideoBlob(videoUrl: string, label: string): Promise<string> {
+        const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(videoUrl)}`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
+            const blob = await res.blob();
+            console.log(`Export: pre-fetched ${label} video as blob (${blob.size} bytes, type=${blob.type})`);
+            const blobUrl = URL.createObjectURL(blob);
+            exportBlobUrls.push(blobUrl);
+            return blobUrl;
+          } catch (e) {
+            if (attempt < 2) {
+              console.warn(`Export: ${label} pre-fetch attempt ${attempt + 1} failed, retrying...`, e);
+            } else {
+              console.warn(`Export: failed to pre-fetch ${label} video after 3 attempts, using remote URL`, e);
+              return videoUrl;
+            }
+          }
+        }
+        return videoUrl;
+      }
+
+      let introBlobUrl: string | null = null;
+      let outroBlobUrl: string | null = null;
+      if (hasIntroC) {
+        introBlobUrl = await fetchVideoBlob(state.introCard!.videoUrl!, "intro");
+      }
+      if (hasOutroC) {
+        outroBlobUrl = await fetchVideoBlob(state.outroCard!.videoUrl!, "outro");
+      }
+
+      // Pre-fetch animated photo videos through same-origin proxy to avoid canvas tainting.
+      // These are remote URLs from Atlas Cloud / Kling — drawing cross-origin videos to
+      // canvas taints it, causing captureStream() to produce blank frames for the entire export.
+      const animatedBlobUrls = new Map<string, string>();
+      const animatedMedia = sortedClips
+        .map((clip) => {
+          const media = getMediaFile(state, clip.sourceFileId);
+          if (media?.type === "photo" && media.animationStatus === "completed" && media.animatedVideoUrl) {
+            return { fileId: media.id, url: media.animatedVideoUrl };
+          }
+          return null;
+        })
+        .filter((x): x is { fileId: string; url: string } => x !== null);
+
+      // Fetch animated videos in parallel for speed
+      await Promise.all(
+        animatedMedia.map(async ({ fileId, url }) => {
+          const blobUrl = await fetchVideoBlob(url, `animated-photo-${fileId}`);
+          animatedBlobUrls.set(fileId, blobUrl);
+        })
+      );
+
+      if (hasIntroC) {
+        const introClip: EditedClip = {
+          id: "__intro__",
+          sourceFileId: "__intro__",
+          segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: introDurC, confidenceScore: 1, label: "Intro", detectionSources: [] },
+          trimStart: 0,
+          trimEnd: introDurC,
+          order: -1,
+          selectedMusicTrack: null,
+          captionText: "",
+          captionStyle: "Bold",
+          selectedFilter: "None",
+          velocityPreset: "normal",
+        };
+        renderClips.push({
+          clip: introClip,
+          mediaUrl: introBlobUrl!,
+          mediaType: "video",
+          filterCSS: "",
+          captionText: "",
+          captionStyle: "Bold",
+        });
+      }
+
+      for (const clip of sortedClips) {
         const media = getMediaFile(state, clip.sourceFileId);
         // Use animated video if available (photo → video via Kling 3.0)
         const hasAnimatedVideo = media?.type === "photo" &&
           media.animationStatus === "completed" &&
           media.animatedVideoUrl;
-        return {
+        // For local files, create a fresh blob URL from the File object to guarantee
+        // validity — the original blob URL from upload may have been revoked or expired.
+        let mediaUrl: string;
+        if (hasAnimatedVideo) {
+          // Use pre-fetched blob URL to avoid canvas tainting from cross-origin video
+          mediaUrl = animatedBlobUrls.get(media.id) ?? media.animatedVideoUrl!;
+        } else if (media?.file) {
+          mediaUrl = URL.createObjectURL(media.file);
+          exportBlobUrls.push(mediaUrl);
+        } else {
+          mediaUrl = media?.url ?? "";
+        }
+        console.log(`Export: clip "${clip.id}" source="${clip.sourceFileId}" mediaType=${media?.type} animated=${!!hasAnimatedVideo} hasFile=${!!media?.file} fileSize=${media?.file?.size ?? 0} fileType=${media?.file?.type ?? "n/a"} url=${mediaUrl.slice(0, 60)}`);
+        renderClips.push({
           clip,
-          mediaUrl: hasAnimatedVideo ? media.animatedVideoUrl! : (media?.url ?? ""),
+          mediaUrl,
           mediaType: hasAnimatedVideo ? "video" as const : (media?.type ?? "video"),
           filterCSS: clip.customFilterCSS ?? VIDEO_FILTERS[clip.selectedFilter],
           captionText: clip.captionText,
           captionStyle: clip.captionStyle,
+          mediaFile: (!hasAnimatedVideo && media?.file) ? media.file : undefined,
+        });
+      }
+
+      // Append outro card if available
+      if (hasOutroC) {
+        const outroClip: EditedClip = {
+          id: "__outro__",
+          sourceFileId: "__outro__",
+          segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: outroDurC, confidenceScore: 1, label: "Outro", detectionSources: [] },
+          trimStart: 0,
+          trimEnd: outroDurC,
+          order: 9999,
+          selectedMusicTrack: null,
+          captionText: "",
+          captionStyle: "Bold",
+          selectedFilter: "None",
+          velocityPreset: "normal",
         };
+        renderClips.push({
+          clip: outroClip,
+          mediaUrl: outroBlobUrl!,
+          mediaType: "video",
+          filterCSS: "",
+          captionText: "",
+          captionStyle: "Bold",
+        });
+      }
+
+      // Pre-validate: remove clips with missing media URLs (expired blobs, missing sources)
+      const validRenderClips = renderClips.filter((rc) => {
+        if (!rc.mediaUrl) {
+          console.warn(`Export: dropping clip "${rc.clip.id}" — empty media URL (source may have been removed)`);
+          return false;
+        }
+        return true;
       });
+      if (validRenderClips.length === 0) {
+        throw new Error("No valid clips to render — all media URLs are missing. Try re-uploading your files.");
+      }
 
       const { mimeType, ext } = pickMimeType();
       setExportExt(ext);
 
       // Build scheduled audio layers for voiceover + SFX
+      // Audio timing must match the actual rendered durations (beat-snapped if beat-sync is active)
       const scheduled: ScheduledAudioLayer[] = [];
       {
+        // Build beat grid for audio scheduling — must match renderHighlightTape logic
+        let audioBeatGrid: ReturnType<typeof buildBeatGrid> | null = null;
+        if (state.viralOptions.beatSync) {
+          const track = sortedClips.find((c) => c.selectedMusicTrack)?.selectedMusicTrack;
+          if (track) audioBeatGrid = buildBeatGrid(track.bpm, 300);
+        }
         const cStarts: number[] = [];
         const cEnds: number[] = [];
-        let st = 0;
+        let st = introOffsetC; // Start after intro card duration
+        const photoDurC = cPlan?.photoDisplayDuration ?? 3.2;
         for (let i = 0; i < sortedClips.length; i++) {
-          const dur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          const rawDur = sortedClips[i].trimEnd - sortedClips[i].trimStart;
+          // Account for velocity curves — effective duration may differ from source
+          let dur = getEffectiveDuration(rawDur, sortedClips[i].velocityPreset, sortedClips[i].customVelocityKeyframes);
+          // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+          const clipMedia = getMediaFile(state, sortedClips[i].sourceFileId);
+          if (clipMedia?.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+            dur = photoDurC;
+          }
+          // Apply beat-sync snapping to match actual render durations
+          if (audioBeatGrid && audioBeatGrid.beatInterval > 0) {
+            const beats = Math.max(2, Math.round(dur / audioBeatGrid.beatInterval));
+            dur = beats * audioBeatGrid.beatInterval;
+          }
           cStarts.push(st);
           cEnds.push(st + dur);
-          st += dur - (sortedClips[i + 1]?.transitionDuration ?? 0.3);
+          st += dur - (sortedClips[i + 1]?.transitionDuration ?? defaultTransDurC);
         }
         for (const vo of state.voiceoverSegments ?? []) {
           if (!vo.audioUrl || vo.status !== "completed") continue;
           const s = cStarts[vo.clipIndex];
           if (s == null) continue;
-          scheduled.push({ url: vo.audioUrl, startTime: s + 0.3, volume: 1.0 });
+          const segDelay = vo.delaySec ?? voDelayC;
+          scheduled.push({ url: vo.audioUrl, startTime: s + segDelay, volume: voVolC, layerType: "voiceover" });
         }
         for (const sfx of state.sfxTracks ?? []) {
           if (!sfx.audioUrl || sfx.status !== "completed") continue;
@@ -371,14 +596,29 @@ export default function ExportStep() {
           const ce = cEnds[sfx.clipIndex];
           if (cs == null) continue;
           let sfxS = cs;
-          if (sfx.timing === "before") sfxS = Math.max(0, cs - 0.5);
-          else if (sfx.timing === "after") sfxS = (ce ?? cs) - 0.3;
-          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: 0.8 });
+          // Use AI-decided SFX duration for "before" lead-in instead of fixed offset
+          if (sfx.timing === "before") sfxS = Math.max(0, cs - sfx.durationMs / 1000);
+          else if (sfx.timing === "after") sfxS = (ce ?? cs) - defaultTransDurC;
+          scheduled.push({ url: sfx.audioUrl, startTime: sfxS, volume: sfxVolC, layerType: "sfx" });
         }
       }
 
+      // Voiceover-aware clip extension: ensure clips are long enough for their audio.
+      // If a voiceover segment is longer than its clip, extend the clip's canvas duration
+      // so the video holds its last frame while the VO finishes — no awkward cutoff.
+      const renderClipIntroOffset = hasIntroC ? 1 : 0;
+      for (const vo of state.voiceoverSegments ?? []) {
+        if (!vo.audioUrl || vo.status !== "completed" || vo.duration <= 0) continue;
+        const renderIdx = vo.clipIndex + renderClipIntroOffset;
+        const rc = validRenderClips[renderIdx];
+        if (!rc) continue;
+        const voEndInClip = (vo.delaySec ?? voDelayC) + vo.duration;
+        // Only extend if VO+delay exceeds the clip's natural duration
+        rc.minCanvasDuration = Math.max(rc.minCanvasDuration ?? 0, voEndInClip);
+      }
+
       const blob = await renderHighlightTape(
-        renderClips,
+        validRenderClips,
         isFree ? WATERMARK_TEXT : null,
         state.detectedTheme,
         state.viralOptions,
@@ -386,6 +626,80 @@ export default function ExportStep() {
         (pct) => setProgress(pct),
         state.aiMusicUrl,
         scheduled,
+        defaultTransDurC,
+        cPlan?.musicVolume ?? 0.47,
+        cPlan?.musicDuckRatio ?? 0.28,
+        cPlan?.musicDuckAttack ?? 0.18,
+        cPlan?.musicDuckRelease ?? 0.32,
+        cPlan?.musicFadeInDuration ?? 0,
+        cPlan?.musicFadeOutDuration ?? 0,
+        cPlan?.loopCrossfadeDuration ?? 0.47,
+        cPlan?.exportBitrate ?? 12_000_000,
+        cPlan?.watermarkOpacity ?? 0.38,
+        cPlan?.captionEntranceDuration ?? 0.45,
+        cPlan?.captionExitDuration ?? 0.28,
+        cPlan?.neonColors,
+        cPlan?.photoDisplayDuration ?? 3.2,
+        cPlan?.beatSyncToleranceMs ?? 47,
+        cPlan ? {
+          beatPulseIntensity: cPlan.beatPulseIntensity,
+          beatFlashOpacity: cPlan.beatFlashOpacity,
+          captionFontSize: cPlan.captionFontSize,
+          captionVerticalPosition: cPlan.captionVerticalPosition,
+          captionShadowColor: cPlan.captionShadowColor,
+          captionShadowBlur: cPlan.captionShadowBlur,
+          flashOverlayAlpha: cPlan.flashOverlayAlpha,
+          zoomPunchFlashAlpha: cPlan.zoomPunchFlashAlpha,
+          colorFlashAlpha: cPlan.colorFlashAlpha,
+          strobeFlashCount: cPlan.strobeFlashCount,
+          strobeFlashAlpha: cPlan.strobeFlashAlpha,
+          lightLeakColor: cPlan.lightLeakColor,
+          glitchColors: cPlan.glitchColors,
+          defaultEntryPunchScale: cPlan.defaultEntryPunchScale,
+          defaultEntryPunchDuration: cPlan.defaultEntryPunchDuration,
+          defaultKenBurnsIntensity: cPlan.defaultKenBurnsIntensity,
+          grainOpacity: cPlan.grainOpacity,
+          vignetteIntensity: cPlan.vignetteIntensity,
+          vignetteTightness: cPlan.vignetteTightness,
+          captionAppearDelay: cPlan.captionAppearDelay,
+          exitDecelSpeed: cPlan.exitDecelSpeed,
+          exitDecelDuration: cPlan.exitDecelDuration,
+          settleScale: cPlan.settleScale,
+          settleDuration: cPlan.settleDuration,
+          clipAudioVolume: cPlan.clipAudioVolume,
+          finalClipWarmth: cPlan.finalClipWarmth,
+          filmStock: cPlan.filmStock,
+          audioBreaths: cPlan.audioBreaths,
+          beatFlashThreshold: cPlan.beatFlashThreshold,
+          beatFlashColor: cPlan.beatFlashColor,
+          vignetteHardness: cPlan.vignetteHardness,
+          watermarkFontSize: cPlan.watermarkFontSize,
+          watermarkYOffset: cPlan.watermarkYOffset,
+          settleEasing: cPlan.settleEasing,
+          exitDecelEasing: cPlan.exitDecelEasing,
+          letterboxColor: cPlan.letterboxColor,
+          captionExitAnimation: cPlan.captionExitAnimation,
+          watermarkColor: cPlan.watermarkColor,
+          grainBlockSize: cPlan.grainBlockSize,
+          lightLeakOpacity: cPlan.lightLeakOpacity,
+          hardFlashDarkenPhase: cPlan.hardFlashDarkenPhase,
+          hardFlashBlastPhase: cPlan.hardFlashBlastPhase,
+          glitchScanlineCount: cPlan.glitchScanlineCount,
+          glitchBandWidth: cPlan.glitchBandWidth,
+          whipBlurLineCount: cPlan.whipBlurLineCount,
+          whipBrightnessAlpha: cPlan.whipBrightnessAlpha,
+          hardCutBumpAlpha: cPlan.hardCutBumpAlpha,
+          captionPopStartScale: cPlan.captionPopStartScale,
+          captionPopExitScale: cPlan.captionPopExitScale,
+          captionSlideExitDistance: cPlan.captionSlideExitDistance,
+          captionFadeExitOffset: cPlan.captionFadeExitOffset,
+          captionFlickerSpeed: cPlan.captionFlickerSpeed,
+          captionPopIdleFreq: cPlan.captionPopIdleFreq,
+          captionFlickerIdleFreq: cPlan.captionFlickerIdleFreq,
+          captionBoldSizeMultiplier: cPlan.captionBoldSizeMultiplier,
+          captionMinimalSizeMultiplier: cPlan.captionMinimalSizeMultiplier,
+          captionPopOvershoot: cPlan.captionPopOvershoot,
+        } : undefined,
       );
 
       const url = URL.createObjectURL(blob);
@@ -401,7 +715,11 @@ export default function ExportStep() {
     } catch (err) {
       console.error("Export failed:", err);
       setPhase("error");
+    } finally {
+      // Clean up fresh blob URLs created for this export
+      exportBlobUrls.forEach((u) => URL.revokeObjectURL(u));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- generateThumbnail is stable and called conditionally at end of export
   }, [canExport, sortedClips, state, isFree, dispatch]);
 
   const handleDownload = () => {
@@ -426,7 +744,8 @@ export default function ExportStep() {
       } else {
         handleDownload();
       }
-    } catch {
+    } catch (e) {
+      console.warn("[Export] Share failed, falling back to download:", e);
       handleDownload();
     }
   };
@@ -691,7 +1010,6 @@ export default function ExportStep() {
         </div>
       )}
 
-      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 }
@@ -714,6 +1032,20 @@ interface RenderClipInstruction {
   filterCSS: string;
   captionText: string;
   captionStyle: CaptionStyle;
+  /** Override canvas duration to hold clip longer (e.g. for voiceover that extends past the visual) */
+  minCanvasDuration?: number;
+  /** Original File/Blob for photos — used by createImageBitmap to avoid blob URL issues */
+  mediaFile?: File | Blob;
+}
+
+/** Scale a transition transform by intensity (0-1). 1.0 = full effect, 0 = no effect. */
+function scaleTransform(t: { scale: number; offsetX: number; offsetY: number }, intensity: number): { scale: number; offsetX: number; offsetY: number } {
+  if (intensity >= 1.0) return t;
+  return {
+    scale: 1 + (t.scale - 1) * intensity,
+    offsetX: t.offsetX * intensity,
+    offsetY: t.offsetY * intensity,
+  };
 }
 
 async function renderHighlightTape(
@@ -725,11 +1057,28 @@ async function renderHighlightTape(
   onProgress: (pct: number) => void,
   aiMusicUrl?: string | null,
   scheduledLayers?: ScheduledAudioLayer[],
+  defaultTransitionDuration: number = 0.28,
+  musicVolume: number = 0.47,
+  musicDuckRatio: number = 0.28,
+  musicDuckAttack: number = 0.18,
+  musicDuckRelease: number = 0.32,
+  musicFadeInDuration: number = 0,
+  musicFadeOutDuration: number = 0,
+  loopCrossfadeDuration: number = 0.47,
+  exportBitrate: number = 12_000_000,
+  watermarkOpacity: number = 0.38,
+  captionEntranceDuration: number = 0.45,
+  captionExitDuration: number = 0.28,
+  neonColors?: string[],
+  photoDisplayDuration: number = 3.2,
+  beatSyncToleranceMs: number = 47,
+  aiRenderOpts?: ExportAiRenderOptions,
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = 1080;
   canvas.height = 1920;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to create canvas 2D context — browser may have exhausted GPU resources");
 
   const style = getEditingStyle(theme);
   const fallbackTransition: TransitionType = "hard_cut";
@@ -749,7 +1098,7 @@ async function renderHighlightTape(
       trimEnd: c.clip.trimEnd,
       transitionDuration: c.clip.transitionDuration,
     })),
-    0.3,
+    defaultTransitionDuration,
     beatGrid
   );
   if (renderValidation.issues.length > 0) {
@@ -760,27 +1109,43 @@ async function renderHighlightTape(
     debugLog(`Export beat-sync: quality=${bs.quality.toFixed(2)} (${bs.label}), ${bs.tightCount}/${bs.totalTransitions} tight, avg=${bs.avgOffsetMs.toFixed(1)}ms, max=${bs.maxOffsetMs.toFixed(1)}ms`);
   }
 
-  // Audio pipeline: captures original clip audio + optional background music
-  const canvasStream = canvas.captureStream(30);
-  const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers);
-  // Calculate totalDuration accounting for beat-sync adjustments and per-clip transition overlaps
+  // Calculate totalDuration accounting for velocity, beat-sync, VO extension, and transition overlaps
+  // (computed before audio pipeline so we can pass it for music fade-out timing)
   let totalDuration = 0;
   for (let i = 0; i < clips.length; i++) {
-    let clipDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+    const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+    let clipDur = getEffectiveDuration(sourceDur, clips[i].clip.velocityPreset, clips[i].clip.customVelocityKeyframes);
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    if (clips[i].mediaType === "photo" && (!Number.isFinite(clipDur) || clipDur <= 0)) {
+      clipDur = photoDisplayDuration;
+    }
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDur / beatGrid.beatInterval));
       clipDur = beats * beatGrid.beatInterval;
     }
+    // Match VO-aware extension from the render loop
+    const minDur = clips[i].minCanvasDuration;
+    if (minDur != null && minDur > clipDur) {
+      clipDur = minDur;
+    }
     totalDuration += clipDur;
     if (i < clips.length - 1) {
-      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? 0.3;
+      totalDuration -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
     }
   }
+  // Guard against 0/negative totalDuration (e.g. all photo clips with 0 source duration)
+  if (!Number.isFinite(totalDuration) || totalDuration <= 0) {
+    totalDuration = clips.length * photoDisplayDuration;
+  }
+
+  // Audio pipeline: captures original clip audio + optional background music
+  const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
+  const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, aiRenderOpts?.audioBreaths);
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,
-    videoBitsPerSecond: EXPORT_BITRATE,
+    videoBitsPerSecond: exportBitrate,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
@@ -797,12 +1162,23 @@ async function renderHighlightTape(
 
   for (let i = 0; i < clips.length; i++) {
     const instruction = clips[i];
-    let clipDuration = instruction.clip.trimEnd - instruction.clip.trimStart;
+    const sourceDur = instruction.clip.trimEnd - instruction.clip.trimStart;
+    let clipDuration = getEffectiveDuration(sourceDur, instruction.clip.velocityPreset, instruction.clip.customVelocityKeyframes);
+
+    // Photo clips may have 0 source duration — use photoDisplayDuration as floor
+    if (instruction.mediaType === "photo" && (!Number.isFinite(clipDuration) || clipDuration <= 0)) {
+      clipDuration = photoDisplayDuration;
+    }
 
     // Beat-sync: snap clip duration to beat grid
     if (beatGrid && beatGrid.beatInterval > 0) {
       const beats = Math.max(2, Math.round(clipDuration / beatGrid.beatInterval));
       clipDuration = beats * beatGrid.beatInterval;
+    }
+
+    // Extend clip to accommodate voiceover/SFX that extends past the visual
+    if (instruction.minCanvasDuration && instruction.minCanvasDuration > clipDuration) {
+      clipDuration = instruction.minCanvasDuration;
     }
 
     // Per-clip transition: AI-decided takes priority, then theme fallback
@@ -811,33 +1187,41 @@ async function renderHighlightTape(
       : null;
     const crossfadeFrom = i > 0 ? crossfadeCanvas : null;
 
-    // Per-clip style values (AI-specified, neutral defaults as last resort)
+    // Per-clip style: AI per-clip → AI plan-level default → theme default
     const clipStyle = {
       ...style,
-      transitionDuration: instruction.clip.transitionDuration ?? 0.3,
-      entryPunchScale: instruction.clip.entryPunchScale ?? 1.0,
-      entryPunchDuration: instruction.clip.entryPunchDuration ?? 0.15,
-      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? 0,
+      transitionDuration: instruction.clip.transitionDuration ?? defaultTransitionDuration,
+      entryPunchScale: instruction.clip.entryPunchScale ?? aiRenderOpts?.defaultEntryPunchScale ?? style.entryPunchScale,
+      entryPunchDuration: instruction.clip.entryPunchDuration ?? aiRenderOpts?.defaultEntryPunchDuration ?? style.entryPunchDuration,
+      kenBurnsIntensity: instruction.clip.kenBurnsIntensity ?? aiRenderOpts?.defaultKenBurnsIntensity ?? style.kenBurnsIntensity,
     };
+
+    console.log(`Export: rendering clip ${i + 1}/${clips.length} id="${instruction.clip.id}" type=${instruction.mediaType} dur=${clipDuration.toFixed(2)}s hasFile=${!!instruction.mediaFile} url=${instruction.mediaUrl?.slice(0, 60)}`);
+
+    // Capture first frame callback for seamless loop
+    const captureFirstFrame = (i === 0 && viralOptions.seamlessLoop)
+      ? (sourceCanvas: HTMLCanvasElement) => {
+          firstFrameCanvas = document.createElement("canvas");
+          firstFrameCanvas.width = sourceCanvas.width;
+          firstFrameCanvas.height = sourceCanvas.height;
+          firstFrameCanvas.getContext("2d")!.drawImage(sourceCanvas, 0, 0);
+        }
+      : undefined;
+
+    const isLastClip = i === clips.length - 1;
 
     if (instruction.mediaType === "photo") {
       await renderPhotoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      });
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, photoDisplayDuration, beatSyncToleranceMs, aiRenderOpts, elapsedTotal, isLastClip);
+      // For photos, capture after first render (photo is static so any frame = first frame)
+      if (captureFirstFrame) captureFirstFrame(canvas);
     } else {
       await renderVideoClip(ctx, canvas, instruction, watermarkText, clipStyle, transType, crossfadeFrom, i - 1, beatGrid, clipDuration, audioPipeline, (pct) => {
         onProgress(Math.min(99, ((elapsedTotal + (pct / 100) * clipDuration) / totalDuration) * 100));
-      });
+      }, watermarkOpacity, captionEntranceDuration, captionExitDuration, neonColors, beatSyncToleranceMs, aiRenderOpts, elapsedTotal, captureFirstFrame, isLastClip);
     }
-
-    // Save first frame for seamless loop
-    if (i === 0 && viralOptions.seamlessLoop) {
-      firstFrameCanvas = document.createElement("canvas");
-      firstFrameCanvas.width = canvas.width;
-      firstFrameCanvas.height = canvas.height;
-      // We'll capture it after the first render frame (already drawn on canvas)
-      firstFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
-    }
+    console.log(`Export: clip ${i + 1}/${clips.length} done`);
 
     if (i < clips.length - 1) {
       if (!crossfadeCanvas) {
@@ -849,28 +1233,87 @@ async function renderHighlightTape(
     }
 
     elapsedTotal += clipDuration;
+    // Subtract transition overlap to keep elapsedTotal aligned with totalDuration
+    if (i < clips.length - 1) {
+      elapsedTotal -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
+    }
   }
 
   // Seamless loop: cross-fade last frame into first frame
   if (viralOptions.seamlessLoop && firstFrameCanvas) {
-    await renderLoopCrossfade(ctx, canvas, firstFrameCanvas, LOOP_CROSSFADE_DURATION);
+    await renderLoopCrossfade(ctx, canvas, firstFrameCanvas, loopCrossfadeDuration);
   }
 
   recorder.stop();
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     recorder.onstop = () => {
       audioPipeline.cleanup();
+      // Clean up temporary canvases
+      crossfadeCanvas = null;
+      firstFrameCanvas = null;
       onProgress(100);
       const blobType = mimeType.includes("mp4") ? "video/mp4" : "video/webm";
       resolve(new Blob(chunks, { type: blobType }));
+    };
+    recorder.onerror = (e) => {
+      audioPipeline.cleanup();
+      crossfadeCanvas = null;
+      firstFrameCanvas = null;
+      reject(new Error(`MediaRecorder error: ${(e as ErrorEvent).message || "unknown"}`));
     };
   });
 }
 
 /**
+ * Render a solid-color placeholder for a clip's full duration so the tape
+ * timeline stays intact even when a clip's media fails to load. Skipping a
+ * clip entirely would shorten the tape and desync audio/transitions.
+ */
+function renderPlaceholderClip(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  durationSec: number,
+  onProgress: (pct: number) => void,
+  color: string = "black"
+): Promise<void> {
+  return new Promise((resolve) => {
+    const durationMs = durationSec * 1000;
+    const startTime = performance.now();
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const drawFrame = () => {
+      const elapsed = performance.now() - startTime;
+      if (elapsed >= durationMs) {
+        onProgress(100);
+        resolve();
+        return;
+      }
+      onProgress(Math.min(99, (elapsed / durationMs) * 100));
+      // Redraw each frame so the MediaRecorder captures the placeholder
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      scheduleExportFrame(drawFrame);
+    };
+    scheduleExportFrame(drawFrame);
+  });
+}
+
+/**
+ * Schedule the next export frame draw without using requestAnimationFrame.
+ * RAF is throttled/suspended in background tabs, which stalls exports when the
+ * user switches away. MessageChannel.postMessage fires immediately regardless
+ * of tab visibility, keeping the render loop alive.
+ */
+function scheduleExportFrame(callback: () => void) {
+  const ch = new MessageChannel();
+  ch.port1.onmessage = callback;
+  ch.port2.postMessage(undefined);
+}
+
+/**
  * Render the seamless loop crossfade at the end of the tape.
- * Blends the current canvas (last frame) with the first frame over LOOP_CROSSFADE_DURATION.
+ * Blends the current canvas (last frame) with the first frame over the given duration.
  */
 function renderLoopCrossfade(
   ctx: CanvasRenderingContext2D,
@@ -885,17 +1328,16 @@ function renderLoopCrossfade(
     lastFrameCanvas.height = canvas.height;
     lastFrameCanvas.getContext("2d")!.drawImage(canvas, 0, 0);
 
-    const durationMs = durationSec * 1000;
-    const startTime = performance.now();
+    const totalFrames = Math.max(1, Math.round(durationSec * EXPORT_FRAME_RATE));
+    let frame = 0;
 
     const drawFrame = () => {
-      const elapsed = performance.now() - startTime;
-      if (elapsed >= durationMs) {
+      if (frame >= totalFrames) {
         resolve();
         return;
       }
 
-      const progress = elapsed / durationMs;
+      const progress = frame / totalFrames;
 
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -912,12 +1354,78 @@ function renderLoopCrossfade(
       ctx.drawImage(firstFrameCanvas, 0, 0);
       ctx.restore();
 
-      requestAnimationFrame(drawFrame);
+      frame++;
+      scheduleExportFrame(drawFrame);
     };
 
-    requestAnimationFrame(drawFrame);
+    scheduleExportFrame(drawFrame);
   });
 }
+
+/** AI rendering options passed through to export render functions */
+interface ExportAiRenderOptions {
+  beatPulseIntensity?: number;
+  beatFlashOpacity?: number;
+  beatFlashThreshold?: number;
+  beatFlashColor?: string;
+  captionFontSize?: number;
+  captionVerticalPosition?: number;
+  captionShadowColor?: string;
+  captionShadowBlur?: number;
+  flashOverlayAlpha?: number;
+  zoomPunchFlashAlpha?: number;
+  colorFlashAlpha?: number;
+  strobeFlashCount?: number;
+  strobeFlashAlpha?: number;
+  lightLeakColor?: string;
+  glitchColors?: [string, string];
+  letterboxColor?: string;
+  captionExitAnimation?: string;
+  defaultEntryPunchScale?: number;
+  defaultEntryPunchDuration?: number;
+  defaultKenBurnsIntensity?: number;
+  // AI-controlled post-processing
+  grainOpacity?: number;
+  vignetteIntensity?: number;
+  vignetteTightness?: number;
+  vignetteHardness?: number;
+  watermarkFontSize?: number;
+  watermarkYOffset?: number;
+  captionAppearDelay?: number;
+  exitDecelSpeed?: number;
+  exitDecelDuration?: number;
+  settleScale?: number;
+  settleDuration?: number;
+  settleEasing?: string;
+  exitDecelEasing?: string;
+  clipAudioVolume?: number;
+  finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
+  filmStock?: { grain: number; warmth: number; contrast: number; fadedBlacks: number };
+  audioBreaths?: Array<{ time: number; duration: number; depth: number; attack?: number; release?: number }>;
+  // New AI-controllable fields
+  watermarkColor?: string;
+  grainBlockSize?: number;
+  lightLeakOpacity?: number;
+  hardFlashDarkenPhase?: number;
+  hardFlashBlastPhase?: number;
+  glitchScanlineCount?: number;
+  glitchBandWidth?: number;
+  whipBlurLineCount?: number;
+  whipBrightnessAlpha?: number;
+  hardCutBumpAlpha?: number;
+  // Kinetic text params
+  captionPopStartScale?: number;
+  captionPopExitScale?: number;
+  captionSlideExitDistance?: number;
+  captionFadeExitOffset?: number;
+  captionFlickerSpeed?: number;
+  captionPopIdleFreq?: number;
+  captionFlickerIdleFreq?: number;
+  captionBoldSizeMultiplier?: number;
+  captionMinimalSizeMultiplier?: number;
+  captionPopOvershoot?: number;
+}
+
 
 function renderVideoClip(
   ctx: CanvasRenderingContext2D,
@@ -931,134 +1439,253 @@ function renderVideoClip(
   beatGrid: BeatGrid | null,
   canvasDuration: number,
   audioPipeline: AudioPipeline,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  wmOpacity: number = 0.4,
+  captionEntrance: number = 0.5,
+  captionExit: number = 0.3,
+  neonColorHexes?: string[],
+  beatTolerance: number = 50,
+  aiRenderOpts?: ExportAiRenderOptions,
+  globalTimelineOffset: number = 0,
+  onFirstFrame?: (canvas: HTMLCanvasElement) => void,
+  isLastClip: boolean = false
 ): Promise<void> {
+  if (!instruction.mediaUrl) {
+    console.warn(`Export: clip "${instruction.clip.id}" has no media URL — rendering placeholder to preserve tape timeline`);
+    return renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black");
+  }
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
-    video.crossOrigin = "anonymous";
+    // Remote URLs (intro/outro cards) are pre-fetched as local blobs before reaching
+    // here, so no crossOrigin attribute is needed. Cross-origin videos would taint the
+    // canvas and cause captureStream() to produce blank frames.
+    // However, if proxy pre-fetch failed and we fell back to the remote URL, set
+    // crossOrigin so the browser attempts CORS — if CORS fails, onerror fires and
+    // our placeholder fallback handles it instead of silently tainting the canvas.
+    const isRemoteUrl = instruction.mediaUrl.startsWith("http");
+    if (isRemoteUrl) {
+      video.crossOrigin = "anonymous";
+    }
     video.src = instruction.mediaUrl;
     video.preload = "auto";
     // Route original audio through the audio pipeline (not muted)
-    const disconnectAudio = audioPipeline.connectVideo(video);
+    const disconnectAudio = audioPipeline.connectVideo(video, instruction.clip.clipAudioVolume, instruction.clip.audioFadeIn, instruction.clip.audioFadeOut);
+
+    // Safety timeout: if video never loads (bad codec, corrupt blob, etc.),
+    // render a placeholder for the clip's duration to preserve tape timeline.
+    const loadTimeout = setTimeout(() => {
+      console.warn(`Export: video load timed out for clip "${instruction.clip.id}" after 15s — rendering placeholder to preserve tape timeline`);
+      disconnectAudio();
+      video.src = "";
+      video.removeAttribute("src");
+      renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black").then(resolve);
+    }, 15_000);
 
     video.onloadeddata = () => {
+      clearTimeout(loadTimeout);
       const va = video.videoWidth / video.videoHeight;
       const ca = canvas.width / canvas.height;
       let baseW: number, baseH: number;
-      if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
+      const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full video without cropping,
+        // matching preview behavior so text isn't cut off at export time.
+        if (va > ca) { baseW = canvas.width; baseH = baseW / va; }
+        else { baseH = canvas.height; baseW = baseH * va; }
+      } else if (va > ca) { baseH = canvas.height; baseW = baseH * va; }
       else { baseW = canvas.width; baseH = baseW / va; }
 
       const { trimStart, trimEnd } = instruction.clip;
       const velocityPreset = instruction.clip.velocityPreset ?? "normal";
-      video.currentTime = trimStart;
 
-      video.onseeked = () => {
-        video.play();
+      const startPlayback = () => {
+        video.play().catch((e) => {
+          console.warn(`Export: video.play() rejected for clip "${instruction.clip.id}", will hold first frame:`, e);
+        });
 
         const renderStartTime = performance.now();
         const canvasDurationMs = canvasDuration * 1000;
+        let firstFrameCaptured = false;
 
         const drawFrame = () => {
           const canvasElapsedMs = performance.now() - renderStartTime;
           const canvasElapsedSec = canvasElapsedMs / 1000;
+          const globalTime = globalTimelineOffset + canvasElapsedSec;
 
-          if (canvasElapsedMs >= canvasDurationMs || video.paused) {
+          // Only terminate when canvas duration has fully elapsed
+          if (canvasElapsedMs >= canvasDurationMs) {
             video.pause();
             disconnectAudio();
             video.src = "";
             video.removeAttribute("src");
+            video.load();
             resolve();
             return;
           }
 
-          // Stop if video reached trim end
-          if (video.currentTime >= trimEnd) {
-            // Hold last frame for remaining canvas time
-            if (canvasElapsedMs < canvasDurationMs) {
-              requestAnimationFrame(drawFrame);
-              return;
-            }
-            video.pause();
-            disconnectAudio();
-            video.src = "";
-            video.removeAttribute("src");
-            resolve();
+          // Hold last frame if video ended naturally, play was blocked, or reached trim end
+          if (video.ended || video.paused || video.currentTime >= trimEnd) {
+            onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
+            // Redraw the held video frame with correct layout + overlays
+            ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+            const dw = baseW;
+            const dh = baseH;
+            const dx = (canvas.width - dw) / 2;
+            const dy = (canvas.height - dh) / 2;
+            ctx.drawImage(video, dx, dy, dw, dh);
+            ctx.filter = "none";
+            drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
+            scheduleExportFrame(drawFrame);
             return;
           }
 
           onProgress(Math.min(99, (canvasElapsedMs / canvasDurationMs) * 100));
 
           // Apply velocity — custom keyframes take priority over presets
+          // End-of-clip micro-deceleration stacks on top for natural exit feel
+          const exitDecel = getExitDeceleration(canvasElapsedSec, canvasDuration, aiRenderOpts?.exitDecelSpeed ?? 0.96, aiRenderOpts?.exitDecelDuration ?? 0.14, aiRenderOpts?.exitDecelEasing ?? "quad");
           const customKf = instruction.clip.customVelocityKeyframes;
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
-            const speed = getSpeedFromKeyframes(posInClip, customKf);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const speed = getSpeedFromKeyframes(posInClip, customKf) * exitDecel;
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
               video.playbackRate = clampedSpeed;
             }
           } else if (velocityPreset !== "normal") {
             const posInClip = Math.min(1, canvasElapsedSec / canvasDuration);
-            const speed = getSpeedAtPosition(posInClip, velocityPreset);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const speed = getSpeedAtPosition(posInClip, velocityPreset) * exitDecel;
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(video.playbackRate - clampedSpeed) > 0.05) {
               video.playbackRate = clampedSpeed;
+            }
+          } else if (exitDecel < 1.0) {
+            // Even "normal" speed clips get exit deceleration
+            if (Math.abs(video.playbackRate - exitDecel) > 0.02) {
+              video.playbackRate = exitDecel;
             }
           }
 
           const entryScale = getClipEntryScale(canvasElapsedSec, style.entryPunchScale, style.entryPunchDuration);
 
-          // Beat pulse
+          // Ken Burns — slow zoom over clip duration (AI controls intensity)
+          const kenBurnsScale = 1 + (canvasElapsedMs / canvasDurationMs) * (style.kenBurnsIntensity ?? 0);
+
+          // Beat pulse — per-clip override → plan-level → default
           let beatPulse = 1;
+          let currentBeatIntensity = 0;
+          const clipBeatPulse = instruction.clip.beatPulseIntensity ?? aiRenderOpts?.beatPulseIntensity ?? 0.015;
           if (beatGrid) {
-            const intensity = getBeatIntensity(canvasElapsedSec, beatGrid);
-            beatPulse = 1 + intensity * 0.012;
+            currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
+            beatPulse = 1 + currentBeatIntensity * clipBeatPulse;
           }
+
+          // Micro-settle: subtle scale+position ease on clip entry
+          const settle = getMicroSettle(canvasElapsedSec, aiRenderOpts?.settleScale ?? 1.006, aiRenderOpts?.settleDuration ?? 0.18, aiRenderOpts?.settleEasing ?? "cubic");
 
           if (crossfadeFrom && transType && canvasElapsedSec < style.transitionDuration) {
             const progress = canvasElapsedSec / style.transitionDuration;
+            const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
             renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-              const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-              const totalScale = inTransform.scale * entryScale * beatPulse;
+              const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width, instruction.clip.transitionParams), transIntensity);
+              const totalScale = inTransform.scale * entryScale * beatPulse * kenBurnsScale * settle.scale;
               const dw = baseW * totalScale;
               const dh = baseH * totalScale;
               const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
-              const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
+              const dy = (canvas.height - dh) / 2 + inTransform.offsetY + settle.offsetY;
               ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
               ctx.drawImage(video, dx, dy, dw, dh);
               ctx.filter = "none";
-            });
+            }, neonColorHexes, aiRenderOpts, transIntensity);
           } else {
-            const totalScale = entryScale * beatPulse;
+            const totalScale = entryScale * beatPulse * kenBurnsScale * settle.scale;
             const dw = baseW * totalScale;
             const dh = baseH * totalScale;
             const dx = (canvas.width - dw) / 2;
-            const dy = (canvas.height - dh) / 2;
-            ctx.fillStyle = "black";
+            const dy = (canvas.height - dh) / 2 + settle.offsetY;
+            ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
             ctx.drawImage(video, dx, dy, dw, dh);
             ctx.filter = "none";
           }
 
-          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip));
-          requestAnimationFrame(drawFrame);
+          // Warmth shift on final clip — subtle warm grade in last 2s
+          if (isLastClip) {
+            const warmCSS = getWarmthShiftCSS(canvasElapsedSec, canvasDuration, aiRenderOpts?.finalClipWarmth ?? true);
+            if (warmCSS) {
+              ctx.filter = warmCSS;
+              ctx.drawImage(canvas, 0, 0);
+              ctx.filter = "none";
+            }
+          }
+
+          // Beat flash overlay — per-clip override → plan-level → default
+          if (beatGrid) {
+            const beatInt = currentBeatIntensity;
+            const clipBeatFlash = instruction.clip.beatFlashOpacity ?? aiRenderOpts?.beatFlashOpacity ?? 0.12;
+            const clipBeatThreshold = instruction.clip.beatFlashThreshold ?? aiRenderOpts?.beatFlashThreshold ?? 0.5;
+            if (beatInt > clipBeatThreshold && clipBeatFlash > 0) {
+              ctx.save();
+              ctx.globalAlpha = (beatInt - clipBeatThreshold) * clipBeatFlash;
+              ctx.fillStyle = instruction.clip.beatFlashColor ?? aiRenderOpts?.beatFlashColor ?? "white";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.restore();
+            }
+          }
+
+          // Film stock base + grain + vignette — pro post-processing overlays
+          applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
+          drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.48);
+          drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
+
+          drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, canvasElapsedSec, canvasDuration, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
+
+          // Capture first frame for seamless loop crossfade
+          if (!firstFrameCaptured && onFirstFrame) {
+            firstFrameCaptured = true;
+            onFirstFrame(canvas);
+          }
+
+          scheduleExportFrame(drawFrame);
         };
 
-        requestAnimationFrame(drawFrame);
+        scheduleExportFrame(drawFrame);
       };
+
+      // Seek to trimStart, then begin playback.
+      // When trimStart is 0 (e.g. intro/outro cards), the video may already be
+      // at position 0, so the 'seeked' event might not fire. Handle both cases.
+      if (trimStart === 0) {
+        // Already at position 0 — start immediately
+        startPlayback();
+      } else {
+        video.onseeked = () => startPlayback();
+        video.currentTime = trimStart;
+      }
     };
 
-    video.onerror = () => {
+    video.onerror = (e) => {
+      clearTimeout(loadTimeout);
+      const clipId = instruction.clip.id;
+      const src = instruction.mediaUrl?.slice(0, 80);
+      const mediaErr = video.error;
+      console.error(`Export: video load failed for clip "${clipId}", src="${src}", code=${mediaErr?.code}, message="${mediaErr?.message}"`, e);
       disconnectAudio();
       video.src = "";
       video.removeAttribute("src");
-      reject(new Error("Failed to load video for rendering"));
+      // Fall back to a placeholder instead of crashing the entire export.
+      // This keeps the tape timeline intact (audio/transitions stay in sync)
+      // and matches the graceful degradation that renderPhotoClip uses.
+      console.warn(`Export: rendering placeholder for clip "${clipId}" to preserve tape timeline`);
+      renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black").then(resolve);
     };
   });
 }
 
-function renderPhotoClip(
+async function renderPhotoClip(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   instruction: RenderClipInstruction,
@@ -1069,75 +1696,158 @@ function renderPhotoClip(
   transitionSeed: number,
   beatGrid: BeatGrid | null,
   canvasDuration: number,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  wmOpacity: number = 0.4,
+  captionEntrance: number = 0.5,
+  captionExit: number = 0.3,
+  neonColorHexes?: string[],
+  photoDisplayDur: number = 3,
+  beatTolerance: number = 50,
+  aiRenderOpts?: ExportAiRenderOptions,
+  globalTimelineOffset: number = 0,
+  isLastClip: boolean = false
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
+  // Use createImageBitmap with the original File/Blob when available — avoids
+  // blob URL loading issues entirely. Falls back to Image element + URL.
+  const loadImage = async (): Promise<ImageBitmap | HTMLImageElement> => {
+    if (instruction.mediaFile) {
+      console.log(`Export: loading photo clip "${instruction.clip.id}" via createImageBitmap (${instruction.mediaFile.size} bytes, type=${instruction.mediaFile.type})`);
+      try {
+        return await createImageBitmap(instruction.mediaFile);
+      } catch (bmpErr) {
+        console.warn(`Export: createImageBitmap failed for clip "${instruction.clip.id}", falling back to Image element`, bmpErr);
+      }
+    }
 
-    img.onload = () => {
-      const ia = img.width / img.height;
-      const ca = canvas.width / canvas.height;
-      let baseW: number, baseH: number;
-      if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
-      else { baseW = canvas.width; baseH = baseW / ia; }
+    // Fallback: load via Image element + URL
+    return new Promise<HTMLImageElement>((res, rej) => {
+      if (!instruction.mediaUrl) {
+        rej(new Error(`No media URL for clip "${instruction.clip.id}"`));
+        return;
+      }
+      const img = new window.Image();
+      img.onload = () => res(img);
+      img.onerror = (e) => {
+        const src = instruction.mediaUrl?.slice(0, 80);
+        console.error(`Export: image load failed for clip "${instruction.clip.id}", src="${src}"`, e);
+        img.src = "";
+        rej(new Error(`Failed to load image for clip "${instruction.clip.id}" — src: ${src}`));
+      };
+      img.src = instruction.mediaUrl;
+    });
+  };
 
-      const durationMs = (canvasDuration > 0 ? canvasDuration : PHOTO_DISPLAY_DURATION) * 1000;
-      const transitionMs = style.transitionDuration * 1000;
-      const startTime = performance.now();
+  let imgSource: ImageBitmap | HTMLImageElement;
+  try {
+    imgSource = await loadImage();
+  } catch (err) {
+    console.warn(`Export: photo clip "${instruction.clip.id}" load failed — rendering placeholder to preserve tape timeline`, err);
+    return renderPlaceholderClip(ctx, canvas, canvasDuration, onProgress, aiRenderOpts?.letterboxColor ?? "black");
+  }
 
-      const drawFrame = () => {
-        const elapsedMs = performance.now() - startTime;
-        if (elapsedMs >= durationMs) { onProgress(100); resolve(); return; }
+  return new Promise((resolve) => {
+    const ia = imgSource.width / imgSource.height;
+    const ca = canvas.width / canvas.height;
+    let baseW: number, baseH: number;
+    const isCardClip = instruction.clip.id === "__intro__" || instruction.clip.id === "__outro__";
+    if (isCardClip) {
+      if (ia > ca) { baseW = canvas.width; baseH = baseW / ia; }
+      else { baseH = canvas.height; baseW = baseH * ia; }
+    } else if (ia > ca) { baseH = canvas.height; baseW = baseH * ia; }
+    else { baseW = canvas.width; baseH = baseW / ia; }
 
-        const elapsedSec = elapsedMs / 1000;
-        onProgress((elapsedMs / durationMs) * 100);
+    const durationMs = (canvasDuration > 0 ? canvasDuration : photoDisplayDur) * 1000;
+    const transitionMs = style.transitionDuration * 1000;
+    const startTime = performance.now();
 
-        const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
-        const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
+    const drawFrame = () => {
+      const elapsedMs = performance.now() - startTime;
+      if (elapsedMs >= durationMs) {
+        onProgress(100);
+        if (imgSource instanceof ImageBitmap) imgSource.close();
+        resolve();
+        return;
+      }
 
-        // Beat pulse
-        let beatPulse = 1;
-        if (beatGrid) {
-          const intensity = getBeatIntensity(elapsedSec, beatGrid);
-          beatPulse = 1 + intensity * 0.012;
-        }
+      const elapsedSec = elapsedMs / 1000;
+      const globalTime = globalTimelineOffset + elapsedSec;
+      onProgress((elapsedMs / durationMs) * 100);
 
-        if (crossfadeFrom && transType && elapsedMs < transitionMs) {
-          const progress = elapsedMs / transitionMs;
-          renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
-            const inTransform = getTransitionTransform(transType, progress, false, canvas.width);
-            const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse;
-            const dw = baseW * totalScale;
-            const dh = baseH * totalScale;
-            const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
-            const dy = (canvas.height - dh) / 2 + inTransform.offsetY;
-            ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-            ctx.drawImage(img, dx, dy, dw, dh);
-            ctx.filter = "none";
-          });
-        } else {
-          const totalScale = kenBurnsScale * entryScale * beatPulse;
+      const kenBurnsScale = 1 + (elapsedMs / durationMs) * style.kenBurnsIntensity;
+      const entryScale = getClipEntryScale(elapsedSec, style.entryPunchScale, style.entryPunchDuration);
+
+      // Beat pulse — per-clip override → plan-level → default
+      let beatPulse = 1;
+      let currentBeatIntensity = 0;
+      const clipBeatPulsePhoto = instruction.clip.beatPulseIntensity ?? aiRenderOpts?.beatPulseIntensity ?? 0.015;
+      if (beatGrid) {
+        currentBeatIntensity = getBeatIntensity(globalTime, beatGrid, beatTolerance);
+        beatPulse = 1 + currentBeatIntensity * clipBeatPulsePhoto;
+      }
+
+      // Micro-settle: subtle scale+position ease on clip entry
+      const settle = getMicroSettle(elapsedSec, aiRenderOpts?.settleScale ?? 1.006, aiRenderOpts?.settleDuration ?? 0.18, aiRenderOpts?.settleEasing ?? "cubic");
+
+      if (crossfadeFrom && transType && elapsedMs < transitionMs) {
+        const progress = elapsedMs / transitionMs;
+        const transIntensity = instruction.clip.transitionIntensity ?? 1.0;
+        renderTransitionFrame(ctx, canvas, crossfadeFrom, transType, progress, transitionSeed, () => {
+          const inTransform = scaleTransform(getTransitionTransform(transType, progress, false, canvas.width, instruction.clip.transitionParams), transIntensity);
+          const totalScale = kenBurnsScale * entryScale * inTransform.scale * beatPulse * settle.scale;
           const dw = baseW * totalScale;
           const dh = baseH * totalScale;
-          const dx = (canvas.width - dw) / 2;
-          const dy = (canvas.height - dh) / 2;
-          ctx.fillStyle = "black";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const dx = (canvas.width - dw) / 2 + inTransform.offsetX;
+          const dy = (canvas.height - dh) / 2 + inTransform.offsetY + settle.offsetY;
           ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
-          ctx.drawImage(img, dx, dy, dw, dh);
+          ctx.drawImage(imgSource, dx, dy, dw, dh);
+          ctx.filter = "none";
+        }, neonColorHexes, aiRenderOpts, transIntensity);
+      } else {
+        const totalScale = kenBurnsScale * entryScale * beatPulse * settle.scale;
+        const dw = baseW * totalScale;
+        const dh = baseH * totalScale;
+        const dx = (canvas.width - dw) / 2;
+        const dy = (canvas.height - dh) / 2 + settle.offsetY;
+        ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.filter = instruction.filterCSS === "none" ? "none" : instruction.filterCSS;
+        ctx.drawImage(imgSource, dx, dy, dw, dh);
+        ctx.filter = "none";
+      }
+
+      // Warmth shift on final clip
+      if (isLastClip) {
+        const warmCSS = getWarmthShiftCSS(elapsedSec, canvasDuration || photoDisplayDur, aiRenderOpts?.finalClipWarmth ?? true);
+        if (warmCSS) {
+          ctx.filter = warmCSS;
+          ctx.drawImage(canvas, 0, 0);
           ctx.filter = "none";
         }
+      }
 
-        drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || PHOTO_DISPLAY_DURATION, buildCaptionCustom(instruction.clip));
-        requestAnimationFrame(drawFrame);
-      };
+      // Beat flash overlay — per-clip override → plan-level → default
+      if (beatGrid) {
+        const clipBeatFlashPhoto = instruction.clip.beatFlashOpacity ?? aiRenderOpts?.beatFlashOpacity ?? 0.12;
+        const clipBeatThresholdPhoto = instruction.clip.beatFlashThreshold ?? aiRenderOpts?.beatFlashThreshold ?? 0.5;
+        if (currentBeatIntensity > clipBeatThresholdPhoto && clipBeatFlashPhoto > 0) {
+          ctx.save();
+          ctx.globalAlpha = (currentBeatIntensity - clipBeatThresholdPhoto) * clipBeatFlashPhoto;
+          ctx.fillStyle = instruction.clip.beatFlashColor ?? aiRenderOpts?.beatFlashColor ?? "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
+      }
 
-      requestAnimationFrame(drawFrame);
+      // Film stock base + grain + vignette — pro post-processing overlays
+      applyFilmStock(ctx, canvas.width, canvas.height, aiRenderOpts?.filmStock);
+      drawVignette(ctx, canvas.width, canvas.height, aiRenderOpts?.vignetteIntensity ?? 0.18, aiRenderOpts?.vignetteTightness ?? 0.45, aiRenderOpts?.vignetteHardness ?? 0.48);
+      drawFilmGrain(ctx, canvas.width, canvas.height, aiRenderOpts?.grainOpacity ?? 0.045, aiRenderOpts?.grainBlockSize ?? 4);
+
+      drawOverlays(ctx, canvas, watermarkText, instruction.captionText, instruction.captionStyle, elapsedSec, canvasDuration || photoDisplayDur, buildCaptionCustom(instruction.clip), wmOpacity, captionEntrance, captionExit, aiRenderOpts, instruction.clip.captionAnimationIntensity ?? 1.0, instruction.clip.captionIdlePulse ?? 1.0, instruction.clip.customCaptionGlowSpread, instruction.clip.captionExitAnimation ?? aiRenderOpts?.captionExitAnimation ?? "fade");
+      scheduleExportFrame(drawFrame);
     };
 
-    img.onerror = () => reject(new Error("Failed to load image for rendering"));
-    img.src = instruction.mediaUrl;
+    scheduleExportFrame(drawFrame);
   });
 }
 
@@ -1151,13 +1861,17 @@ function renderTransitionFrame(
   transType: TransitionType,
   progress: number,
   seed: number,
-  drawIncoming: () => void
+  drawIncoming: () => void,
+  neonColorHexes?: string[],
+  aiRenderOpts?: ExportAiRenderOptions,
+  transitionIntensity: number = 1.0
 ) {
   const outAlpha = getClipAlpha(transType, progress, true);
   const inAlpha = getClipAlpha(transType, progress, false);
-  const outTransform = getTransitionTransform(transType, progress, true, canvas.width);
+  const rawOutTransform = getTransitionTransform(transType, progress, true, canvas.width, undefined);
+  const outTransform = scaleTransform(rawOutTransform, transitionIntensity);
 
-  ctx.fillStyle = "black";
+  ctx.fillStyle = aiRenderOpts?.letterboxColor ?? "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Draw outgoing frame
@@ -1182,7 +1896,7 @@ function renderTransitionFrame(
 
   // Overlay effect
   ctx.globalAlpha = 1;
-  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed);
+  drawTransitionOverlay(ctx, canvas.width, canvas.height, transType, progress, seed, neonColorHexes, aiRenderOpts, transitionIntensity);
 }
 
 function buildCaptionCustom(clip: EditedClip): CustomCaptionParams | undefined {
@@ -1208,21 +1922,48 @@ function drawOverlays(
   captionStyle: CaptionStyle,
   localTime: number,
   clipDuration: number,
-  captionCustom?: CustomCaptionParams
+  captionCustom?: CustomCaptionParams,
+  wmOpacity: number = 0.4,
+  captionEntrance: number = 0.5,
+  captionExit: number = 0.3,
+  aiRenderOpts?: ExportAiRenderOptions,
+  captionAnimationIntensity: number = 1.0,
+  captionIdlePulse: number = 1.0,
+  captionGlowSpread?: number,
+  captionExitAnimation: string = "fade"
 ) {
   if (watermarkText) {
     ctx.save();
-    ctx.globalAlpha = WATERMARK_OPACITY;
-    ctx.font = "bold 28px -apple-system, sans-serif";
-    ctx.fillStyle = "white";
+    ctx.globalAlpha = wmOpacity;
+    const wmFontPx = Math.round(canvas.height * (aiRenderOpts?.watermarkFontSize ?? 0.015));
+    const wmYOff = Math.round(canvas.height * (aiRenderOpts?.watermarkYOffset ?? 0.03));
+    ctx.font = `bold ${wmFontPx}px -apple-system, sans-serif`;
+    ctx.fillStyle = aiRenderOpts?.watermarkColor ?? "white";
     ctx.textAlign = "center";
-    ctx.fillText(watermarkText, canvas.width / 2, canvas.height - 60);
+    ctx.fillText(watermarkText, canvas.width / 2, canvas.height - wmYOff);
     ctx.restore();
   }
 
   // Kinetic text instead of static caption
-  if (captionText) {
-    const kTransform = getKineticTransform(captionStyle, localTime, clipDuration, canvas.height, captionCustom);
+  // Caption appear delay: AI-controlled, let the visual land first before showing text
+  const captionDelay = aiRenderOpts?.captionAppearDelay ?? 0.12;
+  if (captionText && localTime >= captionDelay) {
+    const adjustedTime = localTime - captionDelay;
+    const adjustedDuration = clipDuration - captionDelay;
+    const kineticParams = aiRenderOpts ? {
+      popStartScale: aiRenderOpts.captionPopStartScale,
+      popExitScale: aiRenderOpts.captionPopExitScale,
+      slideExitDistance: aiRenderOpts.captionSlideExitDistance,
+      fadeExitOffset: aiRenderOpts.captionFadeExitOffset,
+      flickerSpeed: aiRenderOpts.captionFlickerSpeed,
+      popIdleFreq: aiRenderOpts.captionPopIdleFreq,
+      flickerIdleFreq: aiRenderOpts.captionFlickerIdleFreq,
+      boldSizeMultiplier: aiRenderOpts.captionBoldSizeMultiplier,
+      minimalSizeMultiplier: aiRenderOpts.captionMinimalSizeMultiplier,
+      popOvershoot: aiRenderOpts.captionPopOvershoot,
+    } : undefined;
+    const kTransform = getKineticTransform(captionStyle, adjustedTime, adjustedDuration, canvas.height, captionCustom, captionEntrance, captionExit, captionAnimationIntensity, captionIdlePulse, captionExitAnimation, kineticParams);
+    const fontSize = Math.round(canvas.height * (aiRenderOpts?.captionFontSize ?? 0.025));
     drawKineticCaption(
       ctx,
       captionText,
@@ -1230,8 +1971,13 @@ function drawOverlays(
       kTransform,
       canvas.width,
       canvas.height,
-      48,
-      captionCustom
+      fontSize,
+      captionCustom,
+      aiRenderOpts?.captionVerticalPosition,
+      aiRenderOpts?.captionShadowColor,
+      aiRenderOpts?.captionShadowBlur,
+      captionGlowSpread,
+      kineticParams
     );
   }
 }

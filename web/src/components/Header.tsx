@@ -6,7 +6,6 @@ import { IOS_APP_STORE_URL } from "@/lib/constants";
 
 export default function Header() {
   const { state, dispatch } = useApp();
-  const canGoBack = state.step !== "upload";
 
   return (
     <header className="flex items-center justify-between border-b border-white/5 px-4 py-3">

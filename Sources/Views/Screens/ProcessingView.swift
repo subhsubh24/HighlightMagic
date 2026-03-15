@@ -124,6 +124,11 @@ struct ProcessingView: View {
 
             appState.detectedHighlights = result.segments
 
+            // Store AI production plan from Opus for downstream generation (SFX, music, intro/outro, post-processing)
+            if let plan = result.productionPlan {
+                appState.aiProductionPlan = plan
+            }
+
             // Generate clips with AI-powered effect recommendations.
             // Pass Opus-planned configs when available to skip legacy Sonnet re-planning.
             let clips = await ClipGenerationService.shared.generateClips(
@@ -150,6 +155,20 @@ struct ProcessingView: View {
                 await generateAdvancedAudio(for: clips)
             }
 
+            // AI validation pass — Haiku reviews the assembled tape for quality issues.
+            // Mirrors web platform's /api/validate endpoint. Fail-open: errors skip validation.
+            if await TapeValidationService.shared.isAvailable {
+                let validationResult = await TapeValidationService.shared.validateTape(
+                    clips: appState.generatedClips,
+                    plan: appState.aiProductionPlan,
+                    contentSummary: appState.creativeDirection.isEmpty ? appState.userPrompt : appState.creativeDirection,
+                    sourceURL: video.sourceURL
+                )
+                if !validationResult.passed {
+                    await applyValidationFixes(validationResult.fixes)
+                }
+            }
+
             let durationMs = Int(Date.now.timeIntervalSince(startTime) * 1000)
             let avgConf = result.segments.isEmpty ? 0 :
                 result.segments.map(\.confidenceScore).reduce(0, +) / Double(result.segments.count)
@@ -169,32 +188,40 @@ struct ProcessingView: View {
 
     /// Generate AI music, voiceover, and SFX for clips when enabled.
     /// Runs after detection completes, before navigating to results.
+    /// Updates app-level status fields to match web's aiMusicStatus/sfxStatus/voiceoverStatus.
     private func generateAIAudio(for clips: [EditedClip]) async {
         // AI Music — generate one track for the whole tape
         if appState.aiMusicEnabled {
+            await MainActor.run { appState.aiMusicStatus = .generating }
             let totalDuration = clips.reduce(0.0) { $0 + $1.duration }
-            let musicPrompt = appState.userPrompt.isEmpty
-                ? "upbeat energetic highlight reel background music"
-                : "background music for: \(appState.userPrompt)"
+            let musicPrompt = appState.aiProductionPlan?.musicPrompt
+                ?? deriveMusicPrompt(from: clips, userPrompt: appState.userPrompt)
+            await MainActor.run { appState.aiMusicPrompt = musicPrompt }
             let result = await ElevenLabsService.shared.generateMusic(
                 prompt: musicPrompt,
-                durationMs: Int(totalDuration * 1000)
+                durationMs: appState.aiProductionPlan?.musicDurationMs ?? Int(totalDuration * 1000)
             )
             if case .completed = result.status, let data = result.audioData {
                 await MainActor.run {
+                    appState.aiMusicStatus = .done
+                    appState.aiMusicData = data
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].aiMusicData = data
                     }
                 }
+            } else {
+                await MainActor.run { appState.aiMusicStatus = .failed }
             }
         }
 
         // AI Voiceover — generate per-clip narration
         if appState.voiceoverEnabled {
+            await MainActor.run { appState.voiceoverStatus = .generating }
             let segments = clips.enumerated().map { (i, clip) in
                 (text: clip.captionText.isEmpty ? clip.segment.label : clip.captionText, clipIndex: i)
             }
             let results = await ElevenLabsService.shared.generateVoiceovers(segments: segments)
+            let anyFailed = results.contains { _, result in result.status != .completed }
             await MainActor.run {
                 for (clipIndex, result) in results {
                     if case .completed = result.status, let data = result.audioData,
@@ -202,63 +229,132 @@ struct ProcessingView: View {
                         appState.generatedClips[clipIndex].voiceoverData = data
                     }
                 }
+                appState.voiceoverStatus = anyFailed ? .failed : .done
             }
         }
 
-        // AI SFX — generate transition sound for each clip
+        // AI SFX — use per-clip prompts from AI production plan when available
         if appState.sfxEnabled {
-            let requests = clips.map { _ in (prompt: "cinematic whoosh transition", durationMs: 1500) }
+            await MainActor.run { appState.sfxStatus = .generating }
+            let sfxPlan = appState.aiProductionPlan?.sfx ?? []
+            let requests: [(prompt: String, durationMs: Int)] = clips.enumerated().map { i, clip in
+                // Use AI-planned SFX for this clip if available, otherwise derive from clip context
+                if let planned = sfxPlan.first(where: { $0.clipIndex == i }) {
+                    return (prompt: planned.prompt, durationMs: planned.durationMs)
+                }
+                // Derive a contextual SFX prompt from the clip's mood/label rather than a generic one
+                let label = clip.segment.label.lowercased()
+                let mood = clip.aiEffectConfig?.mood ?? clip.aiEffectConfig?.energy ?? "moderate"
+                let sfxPrompt: String
+                switch mood {
+                case "calm", "romantic", "warm":
+                    sfxPrompt = "soft ambient transition swoosh"
+                case "explosive", "high":
+                    sfxPrompt = "punchy impact hit transition"
+                case "dramatic", "moody":
+                    sfxPrompt = "deep cinematic bass transition"
+                default:
+                    // Use the clip label to inform the SFX when possible
+                    if label.isEmpty || label == "ai clip" {
+                        sfxPrompt = "smooth cinematic transition swoosh"
+                    } else {
+                        sfxPrompt = "transition sound effect for \(label)"
+                    }
+                }
+                return (prompt: sfxPrompt, durationMs: 1500)
+            }
             let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
+            let anyFailed = results.contains { _, result in result.status != .completed }
             await MainActor.run {
                 for (i, result) in results.enumerated() where i < appState.generatedClips.count {
                     if case .completed = result.status, let data = result.audioData {
                         appState.generatedClips[i].sfxData = data
                     }
                 }
+                appState.sfxStatus = anyFailed ? .failed : .done
             }
         }
     }
 
     /// Generate AI production assets: intro/outro cards and style transfer.
     /// Uses AtlasCloudService (Kling i2v, Wan 2.6 T2V, Wan v2v).
+    /// Matches web platform's intro/outro pipeline: content-aware prompts, 9:16 aspect ratio,
+    /// and AI-decided durations from the production plan.
     private func generateAIProduction(for clips: [EditedClip]) async {
-        // Intro card — generate a text-to-video intro
+        // Derive duration from AI production plan (3-5s range, matching web), fallback to 4s
+        let introDuration = appState.aiProductionPlan?.intro?.duration ?? 4
+        let outroDuration = appState.aiProductionPlan?.outro?.duration ?? 4
+
+        // Intro card — generate a 9:16 portrait text-to-video intro (matches web)
         if appState.introCardEnabled {
-            let prompt = appState.userPrompt.isEmpty
-                ? "cinematic highlight reel intro with glowing text"
-                : "intro card for: \(appState.userPrompt)"
+            // Use AI production plan text/style when available, matching web's Claude-generated prompts
+            let introText = appState.aiProductionPlan?.intro?.text
+                ?? (appState.creativeDirection.isEmpty ? "Highlights" : truncateToWordBoundary(appState.creativeDirection, maxLength: 30))
+            let introStylePrompt = appState.aiProductionPlan?.intro?.stylePrompt
+                ?? (appState.userPrompt.isEmpty
+                    ? "cinematic highlight reel intro, bold glowing text on dark background, portrait 9:16"
+                    : "cinematic intro card for: \(appState.userPrompt), bold text, dark background, portrait 9:16")
+            let clampedIntroDur = max(3, min(5, Int(introDuration)))
+
+            await MainActor.run {
+                appState.introCard = GeneratedCard(
+                    text: introText, stylePrompt: introStylePrompt,
+                    duration: Double(clampedIntroDur), status: .generating
+                )
+            }
             do {
                 let introURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: prompt,
-                    duration: 3
+                    prompt: introStylePrompt,
+                    duration: clampedIntroDur,
+                    aspectRatio: "9:16"
                 )
                 await MainActor.run {
+                    appState.introCard?.videoUrl = introURL
+                    appState.introCard?.status = .done
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].introVideoURL = introURL
                     }
                 }
             } catch {
-                // Non-fatal — continue without intro
+                await MainActor.run {
+                    appState.introCard?.status = .failed
+                }
             }
         }
 
-        // Outro card — generate a text-to-video outro
+        // Outro card — generate a 9:16 portrait text-to-video outro (matches web)
         if appState.outroCardEnabled {
-            let prompt = appState.userPrompt.isEmpty
-                ? "cinematic outro card with subscribe and follow call to action"
-                : "outro card for: \(appState.userPrompt)"
+            let outroText = appState.aiProductionPlan?.outro?.text
+                ?? "Follow for more"
+            let outroStylePrompt = appState.aiProductionPlan?.outro?.stylePrompt
+                ?? (appState.userPrompt.isEmpty
+                    ? "cinematic outro card, subscribe and follow call to action, bold text, dark background, portrait 9:16"
+                    : "cinematic outro card for: \(appState.userPrompt), call to action text, dark background, portrait 9:16")
+            let clampedOutroDur = max(3, min(5, Int(outroDuration)))
+
+            await MainActor.run {
+                appState.outroCard = GeneratedCard(
+                    text: outroText, stylePrompt: outroStylePrompt,
+                    duration: Double(clampedOutroDur), status: .generating
+                )
+            }
             do {
                 let outroURL = try await AtlasCloudService.shared.generateTextToVideo(
-                    prompt: prompt,
-                    duration: 3
+                    prompt: outroStylePrompt,
+                    duration: clampedOutroDur,
+                    aspectRatio: "9:16"
                 )
                 await MainActor.run {
+                    appState.outroCard?.videoUrl = outroURL
+                    appState.outroCard?.status = .done
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].outroVideoURL = outroURL
                     }
                 }
             } catch {
-                // Non-fatal — continue without outro
+                await MainActor.run {
+                    appState.outroCard?.status = .failed
+                }
             }
         }
 
@@ -340,6 +436,91 @@ struct ProcessingView: View {
             } else {
                 await MainActor.run { appState.stemSeparationStatus = .failed }
             }
+        }
+    }
+
+    /// Apply validation fixes from the Haiku QA pass.
+    /// Mirrors web platform's validation-fixes.ts: caption rewrites, clip removals, SFX regeneration.
+    private func applyValidationFixes(_ fixes: TapeValidationService.ValidationFixes) async {
+        await MainActor.run {
+            // Caption rewrites — free fix, apply immediately
+            for update in fixes.clipUpdates {
+                guard update.clipIndex < appState.generatedClips.count else { continue }
+                if let newCaption = update.captionText {
+                    appState.generatedClips[update.clipIndex].captionText = newCaption
+                }
+            }
+
+            // Clip removals — remove from highest index first to preserve indices
+            let sortedRemovals = fixes.clipRemovals.sorted(by: >)
+            for idx in sortedRemovals {
+                guard idx < appState.generatedClips.count else { continue }
+                appState.generatedClips.remove(at: idx)
+            }
+        }
+
+        // SFX regeneration — re-generate specific clips with corrected prompts
+        if !fixes.regenerateSfx.isEmpty, await ElevenLabsService.shared.isAvailable {
+            let requests = fixes.regenerateSfx.map { fix in
+                (prompt: fix.prompt, durationMs: fix.durationMs)
+            }
+            let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
+            await MainActor.run {
+                for (i, result) in results.enumerated() {
+                    guard i < fixes.regenerateSfx.count else { break }
+                    let clipIndex = fixes.regenerateSfx[i].clipIndex
+                    if case .completed = result.status, let data = result.audioData,
+                       clipIndex < appState.generatedClips.count {
+                        appState.generatedClips[clipIndex].sfxData = data
+                    }
+                }
+            }
+        }
+    }
+
+    /// Truncate text at a word boundary so intro/outro cards don't cut mid-word.
+    private func truncateToWordBoundary(_ text: String, maxLength: Int) -> String {
+        guard text.count > maxLength else { return text }
+        let trimmed = text.prefix(maxLength)
+        // Find last space within the truncated range
+        if let lastSpace = trimmed.lastIndex(of: " ") {
+            return String(trimmed[trimmed.startIndex..<lastSpace])
+        }
+        // No spaces found — use the first word of the original text
+        return text.split(separator: " ").first.map(String.init) ?? String(trimmed)
+    }
+
+    /// Derive a mood-aware music prompt from clip configs and user intent.
+    /// Falls back to energy-based descriptions instead of a generic "upbeat energetic" prompt.
+    private func deriveMusicPrompt(from clips: [EditedClip], userPrompt: String) -> String {
+        // If user gave a prompt, use it as the base
+        if !userPrompt.isEmpty {
+            return "background music for: \(userPrompt)"
+        }
+
+        // Derive mood from the majority of clip configs
+        let moods = clips.compactMap { $0.aiEffectConfig?.mood }
+        let energies = clips.compactMap { $0.aiEffectConfig?.energy }
+        let dominantMood = moods.isEmpty ? nil : Dictionary(grouping: moods, by: { $0 }).max(by: { $0.value.count < $1.value.count })?.key
+        let dominantEnergy = energies.isEmpty ? nil : Dictionary(grouping: energies, by: { $0 }).max(by: { $0.value.count < $1.value.count })?.key
+
+        switch (dominantMood, dominantEnergy) {
+        case ("calm", _), ("romantic", _), ("warm", _):
+            return "smooth mellow background music, relaxed and warm vibes"
+        case ("dramatic", _), ("moody", _):
+            return "cinematic atmospheric background music, building tension"
+        case ("epic", _):
+            return "epic orchestral background music, soaring and triumphant"
+        case ("playful", _):
+            return "fun lighthearted background music, playful and catchy"
+        case (_, "explosive"):
+            return "high energy intense background music, driving beat"
+        case (_, "high"):
+            return "energetic upbeat background music, strong rhythm"
+        case (_, "calm"):
+            return "gentle ambient background music, soft and peaceful"
+        default:
+            return "highlight reel background music matching the content mood"
         }
     }
 }

@@ -18,7 +18,10 @@ export interface VelocityKeyframe {
   speed: number;
 }
 
-/** Preset velocity curves — modeled after CapCut's most viral presets. */
+/** Preset velocity curves — modeled after CapCut's most viral presets.
+ * Values use slightly irregular numbers to avoid the "algorithm feel" of
+ * perfectly round keyframes. When the AI falls back to a named preset
+ * instead of authoring custom keyframes, the result still feels hand-tuned. */
 export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
   /** No speed change. */
   normal: [
@@ -31,12 +34,12 @@ export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
    * Fast approach → dramatic slow-mo at the peak → fast recovery.
    */
   hero: [
-    { position: 0.0, speed: 2.0 },
-    { position: 0.2, speed: 2.5 },
-    { position: 0.35, speed: 0.3 },  // slow-mo hit
-    { position: 0.55, speed: 0.3 },  // hold slow-mo
-    { position: 0.7, speed: 2.0 },
-    { position: 1.0, speed: 1.5 },
+    { position: 0.0, speed: 1.95 },
+    { position: 0.22, speed: 2.45 },
+    { position: 0.36, speed: 0.28 },  // slow-mo hit
+    { position: 0.54, speed: 0.28 },  // hold slow-mo
+    { position: 0.72, speed: 2.05 },
+    { position: 1.0, speed: 1.45 },
   ],
 
   /**
@@ -44,32 +47,32 @@ export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
    * Fast → instant slow → hold → fast out.
    */
   bullet: [
-    { position: 0.0, speed: 3.0 },
-    { position: 0.15, speed: 3.0 },
-    { position: 0.25, speed: 0.25 },  // snap to slow
-    { position: 0.65, speed: 0.25 },  // hold
-    { position: 0.8, speed: 3.0 },
-    { position: 1.0, speed: 2.0 },
+    { position: 0.0, speed: 2.85 },
+    { position: 0.16, speed: 2.9 },
+    { position: 0.26, speed: 0.23 },  // snap to slow
+    { position: 0.64, speed: 0.23 },  // hold
+    { position: 0.82, speed: 2.85 },
+    { position: 1.0, speed: 1.95 },
   ],
 
   /**
    * Ramp In — build up speed (useful for approach/travel shots).
    */
   ramp_in: [
-    { position: 0.0, speed: 0.5 },
-    { position: 0.4, speed: 0.7 },
-    { position: 0.7, speed: 1.5 },
-    { position: 1.0, speed: 3.0 },
+    { position: 0.0, speed: 0.48 },
+    { position: 0.38, speed: 0.72 },
+    { position: 0.68, speed: 1.55 },
+    { position: 1.0, speed: 2.85 },
   ],
 
   /**
    * Ramp Out — dramatic slow-down (for impact moments).
    */
   ramp_out: [
-    { position: 0.0, speed: 2.5 },
-    { position: 0.3, speed: 2.0 },
-    { position: 0.6, speed: 1.0 },
-    { position: 1.0, speed: 0.3 },
+    { position: 0.0, speed: 2.45 },
+    { position: 0.32, speed: 1.95 },
+    { position: 0.62, speed: 0.97 },
+    { position: 1.0, speed: 0.28 },
   ],
 
   /**
@@ -77,14 +80,14 @@ export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
    * Each pulse hits ~0.5x on the "beat" positions.
    */
   montage: [
-    { position: 0.0, speed: 1.5 },
-    { position: 0.15, speed: 0.4 },  // beat 1
-    { position: 0.3, speed: 2.0 },
-    { position: 0.45, speed: 0.4 },  // beat 2
-    { position: 0.6, speed: 2.0 },
-    { position: 0.75, speed: 0.4 },  // beat 3
-    { position: 0.9, speed: 2.0 },
-    { position: 1.0, speed: 1.0 },
+    { position: 0.0, speed: 1.55 },
+    { position: 0.14, speed: 0.38 },  // beat 1
+    { position: 0.31, speed: 2.05 },
+    { position: 0.44, speed: 0.42 },  // beat 2
+    { position: 0.61, speed: 1.95 },
+    { position: 0.76, speed: 0.37 },  // beat 3
+    { position: 0.88, speed: 2.1 },
+    { position: 1.0, speed: 1.03 },
   ],
 };
 
@@ -139,9 +142,10 @@ export function getSourceTimeAtPosition(
   position: number,
   clipDuration: number,
   preset: VelocityPreset,
-  steps: number = 100
+  steps: number = 100,
+  customKeyframes?: VelocityKeyframe[]
 ): number {
-  if (preset === "normal") return position * clipDuration;
+  if (!customKeyframes && preset === "normal") return position * clipDuration;
 
   const p = Math.max(0, Math.min(1, position));
   const dt = p / steps;
@@ -149,7 +153,9 @@ export function getSourceTimeAtPosition(
 
   for (let i = 0; i < steps; i++) {
     const t = (i + 0.5) * dt;
-    const speed = getSpeedAtPosition(t, preset);
+    const speed = customKeyframes
+      ? getSpeedFromKeyframes(t, customKeyframes)
+      : getSpeedAtPosition(t, preset);
     sourceTime += speed * dt * clipDuration;
   }
 
@@ -172,13 +178,20 @@ export function getEffectiveDuration(
   if (!customKeyframes && preset === "normal") return sourceDuration;
   if (kf.every((k) => Math.abs(k.speed - 1.0) < 0.01)) return sourceDuration;
 
-  // Calculate average speed across the curve
+  // Calculate average speed across the curve using midpoint sampling
+  // to avoid systematic bias from missing the endpoint at position 1.0
   const steps = 100;
   let totalSpeed = 0;
   for (let i = 0; i < steps; i++) {
-    totalSpeed += getSpeedFromKeyframes(i / steps, kf);
+    totalSpeed += getSpeedFromKeyframes((i + 0.5) / steps, kf);
   }
   const avgSpeed = totalSpeed / steps;
+
+  // Guard against zero/near-zero average speed (e.g. all keyframes at speed 0)
+  if (avgSpeed < 0.01) {
+    console.warn("[Velocity] Average speed near zero — returning source duration to avoid Infinity");
+    return sourceDuration;
+  }
 
   return sourceDuration / avgSpeed;
 }

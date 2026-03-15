@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
+import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, ValidationStatus, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -23,7 +23,10 @@ export const initialState: AppState = {
   viralOptions: { beatSync: true, seamlessLoop: false },
   regenerateFeedback: null,
   creativeDirection: "",
-  aiMusicEnabled: true,
+  aiMusicEnabled: false,
+  sfxEnabled: false,
+  introOutroEnabled: false,
+  animatePhotosEnabled: false,
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
@@ -46,6 +49,8 @@ export const initialState: AppState = {
   stemSeparationStatus: "idle",
   // Style transfer
   styleTransferPrompt: null,
+  // Validation loop
+  validationStatus: "idle",
   // Talking head
   talkingHead: null,
 };
@@ -53,9 +58,14 @@ export const initialState: AppState = {
 // ── Helper: derive legacy single-video fields from mediaFiles ──
 
 function deriveLegacyVideo(mediaFiles: MediaFile[]): Pick<AppState, "videoFile" | "videoUrl" | "videoDuration"> {
+  // Prefer actual videos, then fall back to animated photos (photo→video via Kling)
   const firstVideo = mediaFiles.find((f) => f.type === "video");
   if (firstVideo) {
     return { videoFile: firstVideo.file, videoUrl: firstVideo.url, videoDuration: firstVideo.duration };
+  }
+  const animatedPhoto = mediaFiles.find((f) => f.type === "photo" && f.animationStatus === "completed" && f.animatedVideoUrl);
+  if (animatedPhoto) {
+    return { videoFile: animatedPhoto.file, videoUrl: animatedPhoto.animatedVideoUrl!, videoDuration: animatedPhoto.duration };
   }
   return { videoFile: null, videoUrl: null, videoDuration: 0 };
 }
@@ -76,7 +86,7 @@ export type Action =
   | { type: "SET_CLIPS"; clips: EditedClip[] }
   | { type: "SET_ACTIVE_CLIP"; clipId: string }
   | { type: "UPDATE_CLIP"; clipId: string; updates: Partial<EditedClip> }
-  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number; clipId?: string; targetClipId?: string }
+  | { type: "REORDER_CLIPS"; fromIndex: number; toIndex: number }
   | { type: "REMOVE_CLIP"; clipId: string }
   | { type: "INCREMENT_EXPORTS" }
   | { type: "SET_VIRAL_OPTIONS"; options: Partial<ViralExportOptions> }
@@ -85,19 +95,23 @@ export type Action =
   | { type: "UPDATE_MEDIA_ANIMATION"; fileId: string; animatePhoto: boolean; animationInstructions: string }
   | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
   | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
+  | { type: "SET_SFX_ENABLED"; enabled: boolean }
+  | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
+  | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
+  | { type: "TOGGLE_PHOTO_ANIMATE"; fileId: string }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
   // ── AI Production pipeline actions ──
   | { type: "SET_AI_PRODUCTION_PLAN"; plan: AiProductionPlan }
-  | { type: "SET_INTRO_CARD"; card: GeneratedCard }
-  | { type: "SET_OUTRO_CARD"; card: GeneratedCard }
+  | { type: "SET_INTRO_CARD"; card: GeneratedCard | null }
+  | { type: "SET_OUTRO_CARD"; card: GeneratedCard | null }
   | { type: "SET_SFX_TRACKS"; tracks: SfxTrack[] }
   | { type: "SET_SFX_STATUS"; status: GenerationStatus }
   | { type: "UPDATE_SFX_TRACK"; clipIndex: number; audioUrl: string; status: GenerationStatus }
   | { type: "SET_VOICEOVER_SEGMENTS"; segments: VoiceoverSegment[] }
   | { type: "SET_VOICEOVER_STATUS"; status: GenerationStatus }
   | { type: "UPDATE_VOICEOVER_SEGMENT"; clipIndex: number; audioUrl: string; duration: number; status: GenerationStatus }
-  | { type: "SET_THUMBNAIL"; thumbnail: GeneratedThumbnail }
+  | { type: "SET_THUMBNAIL"; thumbnail: GeneratedThumbnail | null }
   | { type: "SET_AUDIO_TRANSCRIPT"; transcript: string }
   // Voice cloning
   | { type: "SET_VOICE_SAMPLE"; url: string | null }
@@ -106,6 +120,8 @@ export type Action =
   | { type: "SET_INSTRUMENTAL_MUSIC"; url: string | null; status: GenerationStatus }
   // Style transfer
   | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null }
+  // Validation loop
+  | { type: "SET_VALIDATION_STATUS"; status: ValidationStatus }
   // Talking head
   | { type: "SET_TALKING_HEAD"; talkingHead: AppState["talkingHead"] }
   | { type: "RESET" };
@@ -114,27 +130,40 @@ export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "SET_STEP":
       return { ...state, step: action.step };
-    case "SET_VIDEO":
-      return { ...state, videoFile: action.file, videoUrl: action.url, videoDuration: action.duration };
+    case "SET_VIDEO": {
+      // Also add to mediaFiles if not already present, for legacy single-video flows
+      const alreadyExists = state.mediaFiles.some((f) => f.url === action.url);
+      const updatedMedia = alreadyExists ? state.mediaFiles : [
+        ...state.mediaFiles,
+        { id: action.file.name + "-" + Date.now(), file: action.file, url: action.url, type: "video" as const, name: action.file.name, duration: action.duration },
+      ];
+      return { ...state, videoFile: action.file, videoUrl: action.url, videoDuration: action.duration, mediaFiles: updatedMedia };
+    }
     case "ADD_MEDIA": {
       const updated = [...state.mediaFiles, ...action.files];
       return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
     }
     case "REMOVE_MEDIA": {
       const updated = state.mediaFiles.filter((f) => f.id !== action.fileId);
-      // Revoke the old URL
+      // Schedule URL revocation outside the reducer to avoid side effects during render
       const removed = state.mediaFiles.find((f) => f.id === action.fileId);
-      if (removed) URL.revokeObjectURL(removed.url);
+      if (removed) setTimeout(() => URL.revokeObjectURL(removed.url), 0);
       return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
     }
     case "REORDER_MEDIA": {
       const arr = [...state.mediaFiles];
+      if (action.fromIndex < 0 || action.fromIndex >= arr.length || action.toIndex < 0 || action.toIndex >= arr.length) {
+        console.warn(`[Store] REORDER_MEDIA out of bounds: from=${action.fromIndex} to=${action.toIndex} length=${arr.length}`);
+        return state;
+      }
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
       return { ...state, mediaFiles: arr, ...deriveLegacyVideo(arr) };
     }
     case "CLEAR_MEDIA": {
-      state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
+      const oldFiles = state.mediaFiles;
+      // Schedule URL revocation outside the reducer to avoid side effects during render
+      setTimeout(() => oldFiles.forEach((f) => URL.revokeObjectURL(f.url)), 0);
       return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0 };
     }
     case "SET_TEMPLATE":
@@ -145,8 +174,11 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, contentSummary: action.summary };
     case "SET_HIGHLIGHTS":
       return { ...state, highlights: action.highlights };
-    case "SET_CLIPS":
-      return { ...state, clips: action.clips, activeClipId: action.clips[0]?.id ?? null };
+    case "SET_CLIPS": {
+      // Preserve activeClipId if it still exists in the new clips; otherwise default to first
+      const activeStillExists = state.activeClipId && action.clips.some((c) => c.id === state.activeClipId);
+      return { ...state, clips: action.clips, activeClipId: activeStillExists ? state.activeClipId : (action.clips[0]?.id ?? null) };
+    }
     case "SET_ACTIVE_CLIP":
       return { ...state, activeClipId: action.clipId };
     case "UPDATE_CLIP":
@@ -159,6 +191,10 @@ export function reducer(state: AppState, action: Action): AppState {
     case "REORDER_CLIPS": {
       // Sort by order first so indices match the visual (sorted) order
       const arr = [...state.clips].sort((a, b) => a.order - b.order);
+      if (action.fromIndex < 0 || action.fromIndex >= arr.length || action.toIndex < 0 || action.toIndex >= arr.length) {
+        console.warn(`[Store] REORDER_CLIPS out of bounds: from=${action.fromIndex} to=${action.toIndex} length=${arr.length}`);
+        return state;
+      }
       const [item] = arr.splice(action.fromIndex, 1);
       arr.splice(action.toIndex, 0, item);
       // Update order field
@@ -167,10 +203,12 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "REMOVE_CLIP": {
       const filtered = state.clips.filter((c) => c.id !== action.clipId).map((c, i) => ({ ...c, order: i }));
+      // Keep activeClipId if it still exists, otherwise fall back to nearest clip
+      const activeStillExists = state.activeClipId && filtered.some((c) => c.id === state.activeClipId);
       return {
         ...state,
         clips: filtered,
-        activeClipId: filtered[0]?.id ?? null,
+        activeClipId: activeStillExists ? state.activeClipId : (filtered[0]?.id ?? null),
       };
     }
     case "INCREMENT_EXPORTS":
@@ -178,7 +216,27 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SET_VIRAL_OPTIONS":
       return { ...state, viralOptions: { ...state.viralOptions, ...action.options } };
     case "SET_REGENERATE_FEEDBACK":
-      return { ...state, regenerateFeedback: action.feedback };
+      // Clear pipeline state when starting regeneration so stale data doesn't mix with fresh results
+      return {
+        ...state,
+        regenerateFeedback: action.feedback,
+        ...(action.feedback ? {
+          aiProductionPlan: null,
+          introCard: null,
+          outroCard: null,
+          sfxTracks: [],
+          sfxStatus: "idle" as const,
+          voiceoverSegments: [],
+          voiceoverStatus: "idle" as const,
+          aiMusicStatus: "idle" as const,
+          aiMusicUrl: null,
+          instrumentalMusicUrl: null,
+          stemSeparationStatus: "idle" as const,
+          thumbnail: null,
+          talkingHead: null,
+          validationStatus: "idle" as const,
+        } : {}),
+      };
     case "SET_CREATIVE_DIRECTION":
       return { ...state, creativeDirection: action.direction };
     case "UPDATE_MEDIA_ANIMATION": {
@@ -204,10 +262,41 @@ export function reducer(state: AppState, action: Action): AppState {
         // Reset music state when toggling off
         ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicUrl: null }),
       };
+    case "SET_SFX_ENABLED":
+      return {
+        ...state,
+        sfxEnabled: action.enabled,
+        ...(action.enabled ? {} : { sfxTracks: [], sfxStatus: "idle" as const }),
+      };
+    case "SET_INTRO_OUTRO_ENABLED":
+      return {
+        ...state,
+        introOutroEnabled: action.enabled,
+        ...(action.enabled ? {} : { introCard: null, outroCard: null }),
+      };
+    case "SET_ANIMATE_PHOTOS_ENABLED": {
+      // Toggle all photos' animatePhoto flag to match
+      const toggled = state.mediaFiles.map((f) =>
+        f.type === "photo" ? { ...f, animatePhoto: action.enabled } : f
+      );
+      return { ...state, animatePhotosEnabled: action.enabled, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
+    case "TOGGLE_PHOTO_ANIMATE": {
+      const toggled = state.mediaFiles.map((f) =>
+        f.id === action.fileId ? { ...f, animatePhoto: !f.animatePhoto } : f
+      );
+      // Derive animatePhotosEnabled from whether any photo has animatePhoto=true
+      const anyAnimated = toggled.some((f) => f.type === "photo" && f.animatePhoto);
+      return { ...state, animatePhotosEnabled: anyAnimated, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
     case "SET_AI_MUSIC_PROMPT":
       return { ...state, aiMusicPrompt: action.prompt };
     case "SET_AI_MUSIC_RESULT":
-      return { ...state, aiMusicStatus: action.status, aiMusicUrl: action.audioUrl ?? state.aiMusicUrl };
+      return {
+        ...state,
+        aiMusicStatus: action.status,
+        aiMusicUrl: action.status === "failed" ? null : (action.audioUrl ?? state.aiMusicUrl),
+      };
     // ── AI Production pipeline ──
     case "SET_AI_PRODUCTION_PLAN":
       return { ...state, aiProductionPlan: action.plan };
@@ -251,15 +340,27 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, instrumentalMusicUrl: action.url, stemSeparationStatus: action.status };
     case "SET_STYLE_TRANSFER_PROMPT":
       return { ...state, styleTransferPrompt: action.prompt };
+    case "SET_VALIDATION_STATUS":
+      return { ...state, validationStatus: action.status };
     case "SET_TALKING_HEAD":
       return { ...state, talkingHead: action.talkingHead };
-    case "RESET":
-      state.mediaFiles.forEach((f) => URL.revokeObjectURL(f.url));
+    case "RESET": {
+      // Schedule URL revocation outside the reducer to avoid side effects during render
+      const filesToRevoke = state.mediaFiles;
+      const aiMusicToRevoke = state.aiMusicUrl;
+      setTimeout(() => {
+        filesToRevoke.forEach((f) => {
+          URL.revokeObjectURL(f.url);
+          if (f.animatedVideoUrl) URL.revokeObjectURL(f.animatedVideoUrl);
+        });
+        if (aiMusicToRevoke) URL.revokeObjectURL(aiMusicToRevoke);
+      }, 0);
       return {
         ...initialState,
         isProUser: state.isProUser,
         exportsUsed: state.exportsUsed,
       };
+    }
     default:
       return state;
   }
@@ -273,10 +374,6 @@ export function canExportFree(state: AppState): boolean {
 
 export function getMediaFile(state: AppState, fileId: string): MediaFile | undefined {
   return state.mediaFiles.find((f) => f.id === fileId);
-}
-
-export function getTotalDuration(state: AppState): number {
-  return state.mediaFiles.reduce((sum, f) => sum + f.duration, 0);
 }
 
 // ── Context ──

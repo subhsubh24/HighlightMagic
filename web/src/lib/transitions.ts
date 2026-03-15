@@ -78,17 +78,27 @@ export function getClipAlpha(
 
 // ── Spatial transforms (scale / offset) ──
 
+/** Per-clip transition parameters for fine-tuning transition internals. */
+export interface TransitionParams {
+  zoomOutScale?: number;
+  zoomInScale?: number;
+  glitchJitter?: number;
+  motionBlurAlpha?: number;
+  softZoomScale?: number;
+}
+
 export function getTransitionTransform(
   type: TransitionType,
   progress: number,
   isOutgoing: boolean,
-  canvasWidth: number
+  canvasWidth: number,
+  params?: TransitionParams
 ): TransitionTransform {
   switch (type) {
     case "zoom_punch":
       return isOutgoing
-        ? { scale: 1 + progress * 0.25, offsetX: 0, offsetY: 0 }
-        : { scale: 1 + (1 - progress) * 0.18, offsetX: 0, offsetY: 0 };
+        ? { scale: 1 + progress * (params?.zoomOutScale ?? 0.25), offsetX: 0, offsetY: 0 }
+        : { scale: 1 + (1 - progress) * (params?.zoomInScale ?? 0.18), offsetX: 0, offsetY: 0 };
 
     case "whip": {
       const easeIn = progress * progress;
@@ -99,14 +109,16 @@ export function getTransitionTransform(
     }
 
     case "glitch": {
-      const jitter = Math.sin(progress * 47) * 12;
+      const jitter = Math.sin(progress * 47) * (params?.glitchJitter ?? 12);
       return { scale: 1, offsetX: jitter, offsetY: 0 };
     }
 
-    case "soft_zoom":
+    case "soft_zoom": {
+      const szScale = params?.softZoomScale ?? 0.04;
       return isOutgoing
-        ? { scale: 1 + progress * 0.04, offsetX: 0, offsetY: 0 }
-        : { scale: 1 + (1 - progress) * 0.04, offsetX: 0, offsetY: 0 };
+        ? { scale: 1 + progress * szScale, offsetX: 0, offsetY: 0 }
+        : { scale: 1 + (1 - progress) * szScale, offsetX: 0, offsetY: 0 };
+    }
 
     default:
       return { scale: 1, offsetX: 0, offsetY: 0 };
@@ -115,12 +127,60 @@ export function getTransitionTransform(
 
 // ── Overlay effects drawn ON TOP of the composited clips ──
 
-const NEON_COLORS = [
+const DEFAULT_NEON_COLORS = [
   [147, 51, 234],  // purple
   [6, 182, 212],   // teal
   [236, 72, 153],  // magenta
   [245, 158, 11],  // amber
 ];
+
+/** Parse hex color string to [r, g, b] array */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.startsWith("#") ? hex.slice(1) : hex;
+  return [
+    parseInt(h.slice(0, 2), 16) || 0,
+    parseInt(h.slice(2, 4), 16) || 0,
+    parseInt(h.slice(4, 6), 16) || 0,
+  ];
+}
+
+/** AI-driven rendering overrides for transition effects */
+export interface TransitionRenderOptions {
+  /** Neon colors for color_flash transitions (hex strings) */
+  neonColorHexes?: string[];
+  /** Flash overlay opacity (0-1) */
+  flashOverlayAlpha?: number;
+  /** Zoom punch flash opacity (0-1) */
+  zoomPunchFlashAlpha?: number;
+  /** Color flash overlay opacity (0-1) */
+  colorFlashAlpha?: number;
+  /** Strobe flash count per transition */
+  strobeFlashCount?: number;
+  /** Strobe flash opacity (0-1) */
+  strobeFlashAlpha?: number;
+  /** Light leak tint color as hex */
+  lightLeakColor?: string;
+  /** Glitch channel colors [primary hex, secondary hex] */
+  glitchColors?: [string, string];
+  /** Whip motion blur overlay alpha (default 0.25) */
+  motionBlurAlpha?: number;
+  /** Light leak gradient peak opacity (default 0.35) */
+  lightLeakOpacity?: number;
+  /** Hard flash darken-phase duration as fraction (default 0.3) */
+  hardFlashDarkenPhase?: number;
+  /** Hard flash white-blast end as fraction (default 0.55) */
+  hardFlashBlastPhase?: number;
+  /** Glitch scanline count (default 6) */
+  glitchScanlineCount?: number;
+  /** Glitch channel band width as fraction (default 0.34) */
+  glitchBandWidth?: number;
+  /** Whip motion blur line count (default 8) */
+  whipBlurLineCount?: number;
+  /** Whip brightness overlay opacity (default 0.15) */
+  whipBrightnessAlpha?: number;
+  /** Hard cut brightness bump opacity (default 0.15) */
+  hardCutBumpAlpha?: number;
+}
 
 export function drawTransitionOverlay(
   ctx: CanvasRenderingContext2D,
@@ -129,22 +189,29 @@ export function drawTransitionOverlay(
   type: TransitionType,
   progress: number,
   /** Used for color variation in color_flash */
-  seed: number = 0
+  seed: number = 0,
+  /** AI-decided neon colors for color_flash transitions (hex strings) */
+  neonColorHexes?: string[],
+  /** AI-driven rendering options */
+  renderOptions?: TransitionRenderOptions,
+  /** Per-clip transition intensity (0-1). Scales overlay magnitudes. */
+  transitionIntensity: number = 1.0
 ) {
   ctx.save();
+  const ti = Math.max(0, Math.min(1, transitionIntensity));
 
   switch (type) {
     // ── High-energy ──
 
     case "flash": {
-      const a = Math.sin(progress * Math.PI) * 0.85;
+      const a = Math.sin(progress * Math.PI) * (renderOptions?.flashOverlayAlpha ?? 0.85) * ti;
       ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.fillRect(0, 0, w, h);
       break;
     }
 
     case "zoom_punch": {
-      const a = Math.sin(progress * Math.PI) * 0.35;
+      const a = Math.sin(progress * Math.PI) * (renderOptions?.zoomPunchFlashAlpha ?? 0.35) * ti;
       ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.fillRect(0, 0, w, h);
       break;
@@ -153,31 +220,35 @@ export function drawTransitionOverlay(
     case "whip": {
       const intensity = Math.sin(progress * Math.PI);
       // Horizontal motion-blur lines
-      ctx.globalAlpha = intensity * 0.25;
+      ctx.globalAlpha = intensity * (renderOptions?.motionBlurAlpha ?? 0.25) * ti;
       ctx.fillStyle = "white";
-      const lineCount = 8;
+      const lineCount = renderOptions?.whipBlurLineCount ?? 8;
       for (let i = 0; i < lineCount; i++) {
         const y = (h / lineCount) * i + h / lineCount * 0.5;
         ctx.fillRect(0, y - 1, w, 2);
       }
       // Slight brightness
-      ctx.globalAlpha = intensity * 0.15;
+      ctx.globalAlpha = intensity * (renderOptions?.whipBrightnessAlpha ?? 0.15) * ti;
       ctx.fillRect(0, 0, w, h);
       break;
     }
 
     case "hard_flash": {
+      const darkenEnd = renderOptions?.hardFlashDarkenPhase ?? 0.3;
+      const blastEnd = renderOptions?.hardFlashBlastPhase ?? 0.55;
+      const fadeLen = 1 - blastEnd;
       let a: number;
-      if (progress < 0.3) {
-        a = progress / 0.3;
-        ctx.fillStyle = `rgba(0,0,0,${a * 0.7})`;
+      if (progress < darkenEnd) {
+        a = progress / darkenEnd;
+        ctx.fillStyle = `rgba(0,0,0,${a * 0.7 * ti})`;
         ctx.fillRect(0, 0, w, h);
-      } else if (progress < 0.55) {
+      } else if (progress < blastEnd) {
+        ctx.globalAlpha = ti;
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, w, h);
       } else {
-        a = 1 - (progress - 0.55) / 0.45;
-        ctx.fillStyle = `rgba(255,255,255,${a * 0.95})`;
+        a = fadeLen > 0 ? 1 - (progress - blastEnd) / fadeLen : 0;
+        ctx.fillStyle = `rgba(255,255,255,${a * 0.95 * ti})`;
         ctx.fillRect(0, 0, w, h);
       }
       break;
@@ -185,16 +256,30 @@ export function drawTransitionOverlay(
 
     case "glitch": {
       const intensity = Math.sin(progress * Math.PI);
-      // RGB channel bands
-      ctx.globalAlpha = intensity * 0.2;
-      ctx.fillStyle = "rgba(255,0,80,0.4)";
-      ctx.fillRect(0, 0, w * 0.34, h);
-      ctx.fillStyle = "rgba(0,200,255,0.3)";
-      ctx.fillRect(w * 0.66, 0, w * 0.34, h);
+      const bandW = renderOptions?.glitchBandWidth ?? 0.34;
+      // RGB channel bands — AI can customize colors
+      const glitchPrimary = renderOptions?.glitchColors?.[0];
+      const glitchSecondary = renderOptions?.glitchColors?.[1];
+      ctx.globalAlpha = intensity * 0.2 * ti;
+      if (glitchPrimary) {
+        const [gr, gg, gb] = hexToRgb(glitchPrimary);
+        ctx.fillStyle = `rgba(${gr},${gg},${gb},0.4)`;
+      } else {
+        ctx.fillStyle = "rgba(255,0,80,0.4)";
+      }
+      ctx.fillRect(0, 0, w * bandW, h);
+      if (glitchSecondary) {
+        const [gr, gg, gb] = hexToRgb(glitchSecondary);
+        ctx.fillStyle = `rgba(${gr},${gg},${gb},0.3)`;
+      } else {
+        ctx.fillStyle = "rgba(0,200,255,0.3)";
+      }
+      ctx.fillRect(w * (1 - bandW), 0, w * bandW, h);
       // Scan-line artifacts
-      ctx.globalAlpha = intensity * 0.4;
+      const scanCount = renderOptions?.glitchScanlineCount ?? 6;
+      ctx.globalAlpha = intensity * 0.4 * ti;
       ctx.fillStyle = "black";
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < scanCount; i++) {
         const s = Math.sin((i + 1) * 1337 + progress * 100);
         const y = ((s + 1) / 2) * h;
         ctx.fillRect(0, y, w, 3 + Math.abs(s) * 8);
@@ -202,7 +287,7 @@ export function drawTransitionOverlay(
       // Midpoint white pop
       if (progress > 0.4 && progress < 0.6) {
         const fa = 1 - Math.abs(progress - 0.5) / 0.1;
-        ctx.globalAlpha = Math.max(0, fa) * 0.6;
+        ctx.globalAlpha = Math.max(0, fa) * 0.6 * ti;
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, w, h);
       }
@@ -216,12 +301,20 @@ export function drawTransitionOverlay(
       break;
 
     case "light_leak": {
-      // Warm golden glow peaking at midpoint
-      const a = Math.sin(progress * Math.PI) * 0.35;
+      // Glow peaking at midpoint — AI can customize tint color and opacity
+      const a = Math.sin(progress * Math.PI) * (renderOptions?.lightLeakOpacity ?? 0.35) * ti;
+      const leakHex = renderOptions?.lightLeakColor;
       const gradient = ctx.createLinearGradient(0, 0, w, h);
-      gradient.addColorStop(0, `rgba(255, 200, 100, ${a})`);
-      gradient.addColorStop(0.5, `rgba(255, 170, 50, ${a * 0.8})`);
-      gradient.addColorStop(1, `rgba(255, 220, 150, ${a * 0.5})`);
+      if (leakHex) {
+        const [lr, lg, lb] = hexToRgb(leakHex);
+        gradient.addColorStop(0, `rgba(${lr}, ${lg}, ${lb}, ${a})`);
+        gradient.addColorStop(0.5, `rgba(${lr}, ${lg}, ${lb}, ${a * 0.8})`);
+        gradient.addColorStop(1, `rgba(${lr}, ${lg}, ${lb}, ${a * 0.5})`);
+      } else {
+        gradient.addColorStop(0, `rgba(255, 200, 100, ${a})`);
+        gradient.addColorStop(0.5, `rgba(255, 170, 50, ${a * 0.8})`);
+        gradient.addColorStop(1, `rgba(255, 220, 150, ${a * 0.5})`);
+      }
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, w, h);
       break;
@@ -234,19 +327,22 @@ export function drawTransitionOverlay(
     // ── Stylized ──
 
     case "color_flash": {
-      const [r, g, b] = NEON_COLORS[seed % NEON_COLORS.length];
-      const a = Math.sin(progress * Math.PI) * 0.65;
+      const neonColors = neonColorHexes && neonColorHexes.length > 0
+        ? neonColorHexes.map(hexToRgb)
+        : DEFAULT_NEON_COLORS;
+      const [r, g, b] = neonColors[seed % neonColors.length];
+      const a = Math.sin(progress * Math.PI) * (renderOptions?.colorFlashAlpha ?? 0.65) * ti;
       ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
       ctx.fillRect(0, 0, w, h);
       break;
     }
 
     case "strobe": {
-      // 4 rapid flashes
-      const flashCount = 4;
+      const flashCount = renderOptions?.strobeFlashCount ?? 4;
+      const flashAlpha = (renderOptions?.strobeFlashAlpha ?? 0.9) * ti;
       const cycle = progress * flashCount;
       const phase = cycle - Math.floor(cycle);
-      const a = phase < 0.5 ? phase * 2 * 0.9 : (1 - phase) * 2 * 0.9;
+      const a = phase < 0.5 ? phase * 2 * flashAlpha : (1 - phase) * 2 * flashAlpha;
       ctx.fillStyle = `rgba(255,255,255,${a})`;
       ctx.fillRect(0, 0, w, h);
       break;
@@ -257,7 +353,7 @@ export function drawTransitionOverlay(
     case "hard_cut": {
       // Very brief, subtle brightness bump right at the cut
       if (progress > 0.4 && progress < 0.6) {
-        const a = (1 - Math.abs(progress - 0.5) / 0.1) * 0.15;
+        const a = (1 - Math.abs(progress - 0.5) / 0.1) * (renderOptions?.hardCutBumpAlpha ?? 0.15) * ti;
         ctx.fillStyle = `rgba(255,255,255,${Math.max(0, a)})`;
         ctx.fillRect(0, 0, w, h);
       }

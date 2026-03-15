@@ -19,6 +19,8 @@ import { uuid } from "@/lib/utils";
 import { cacheDetectionData, getCachedDetectionData } from "@/lib/detection-cache";
 import { pollBatched, cancelAllPolls } from "@/lib/poll-manager";
 import { cacheKey, getCachedAsset, setCachedAsset } from "@/lib/asset-cache";
+import { applyClipFixes } from "@/lib/validation-fixes";
+import type { AiProductionPlan, ValidationResult, ValidationFixes } from "@/lib/types";
 
 const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
 function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
@@ -59,7 +61,7 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     selectedFilter: (c.filter ?? selectedTemplate?.suggestedFilter ?? "None") as import("@/lib/types").VideoFilter,
     velocityPreset: ALL_VELOCITY_PRESETS.includes(c.velocityPreset as VelocityPreset)
       ? (c.velocityPreset as VelocityPreset)
-      : ("normal" as VelocityPreset),
+      : (c.velocityPreset ? console.warn(`[AI] Unknown velocity preset "${c.velocityPreset}" for clip ${i}, falling back to "normal"`) : null, "normal" as VelocityPreset),
     transitionType: c.transitionType,
     transitionDuration: c.transitionDuration,
     entryPunchScale: c.entryPunchScale,
@@ -74,6 +76,16 @@ function buildClips(detectedClips: DetectedClip[], selectedTemplate: import("@/l
     customCaptionAnimation: c.customCaptionAnimation,
     customCaptionGlowColor: c.customCaptionGlowColor,
     customCaptionGlowRadius: c.customCaptionGlowRadius,
+    clipAudioVolume: c.clipAudioVolume,
+    transitionIntensity: c.transitionIntensity,
+    beatPulseIntensity: c.beatPulseIntensity,
+    beatFlashOpacity: c.beatFlashOpacity,
+    audioFadeIn: c.audioFadeIn,
+    audioFadeOut: c.audioFadeOut,
+    captionAnimationIntensity: c.captionAnimationIntensity,
+    beatFlashThreshold: c.beatFlashThreshold,
+    captionIdlePulse: c.captionIdlePulse,
+    customCaptionGlowSpread: c.customCaptionGlowSpread,
   }));
 }
 
@@ -118,6 +130,12 @@ const SSE_READ_TIMEOUT_MS = 300_000;
  * The route sends keepalive pings every 15s so the connection doesn't drop
  * during the 2-5 minute Opus response.
  */
+interface DisabledFeatures {
+  music?: boolean;
+  sfx?: boolean;
+  introOutro?: boolean;
+}
+
 async function callPlannerSSE(
   frames: unknown[],
   scores: unknown[],
@@ -127,12 +145,13 @@ async function callPlannerSSE(
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal,
-  onPartial?: (field: string, value: unknown) => void
+  onPartial?: (field: string, value: unknown) => void,
+  disabledFeatures?: DisabledFeatures
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures }),
     signal,
   });
 
@@ -175,13 +194,13 @@ async function callPlannerSSE(
         try {
           const { phase } = JSON.parse(data);
           onPhase?.(phase);
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[SSE] Failed to parse phase event:", e, data); }
       }
       if (eventType === "partial") {
         try {
           const { field, value } = JSON.parse(data);
           onPartial?.(field, value);
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[SSE] Failed to parse partial event:", e, data); }
       }
       // keepalive events — just ignore, they keep the connection alive
     }
@@ -227,6 +246,7 @@ export default function DetectingStep() {
   const [isVerySlow, setIsVerySlow] = useState(false);
   const [animatingPhotos, setAnimatingPhotos] = useState(false);
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
+  const [validationPhase, setValidationPhase] = useState<string | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
   const [batchMode, setBatchMode] = useState(false);
   const batchModeRef = useRef(false);
@@ -239,10 +259,20 @@ export default function DetectingStep() {
   const earlySfxStartedRef = useRef(false);
   const phaseStartRef = useRef(Date.now());
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Keep a ref to the latest mediaFiles so long-running async code
+  // Keep refs to the latest state so long-running async code
   // (animations, validation) reads current state, not the stale closure.
   const mediaFilesRef = useRef(state.mediaFiles);
   mediaFilesRef.current = state.mediaFiles;
+  const musicStatusRef = useRef(state.aiMusicStatus);
+  musicStatusRef.current = state.aiMusicStatus;
+  const sfxStatusRef = useRef(state.sfxStatus);
+  sfxStatusRef.current = state.sfxStatus;
+  const voiceoverStatusRef = useRef(state.voiceoverStatus);
+  voiceoverStatusRef.current = state.voiceoverStatus;
+  const introCardRef = useRef(state.introCard);
+  introCardRef.current = state.introCard;
+  const outroCardRef = useRef(state.outroCard);
+  outroCardRef.current = state.outroCard;
 
   const fileCount = state.mediaFiles.length;
   const isReplan = !!state.regenerateFeedback;
@@ -326,6 +356,7 @@ export default function DetectingStep() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
           });
           const data = await res.json();
           if (!res.ok || data.status !== "completed" || !data.audioUrl) {
@@ -335,7 +366,8 @@ export default function DetectingStep() {
           setCachedAsset(musicCK, data.audioUrl);
           dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
           return data.audioUrl as string;
-        } catch {
+        } catch (e) {
+          console.error("[Music] Early start failed:", e);
           dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
           return null;
         }
@@ -343,7 +375,7 @@ export default function DetectingStep() {
     }
 
     function startSfxEarly(sfxCues: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>) {
-      if (earlySfxStartedRef.current || sfxCues.length === 0) return;
+      if (!state.sfxEnabled || earlySfxStartedRef.current || sfxCues.length === 0) return;
       earlySfxStartedRef.current = true;
       debugLog(`[SFX] Early start from streaming partial — ${sfxCues.length} cues`);
 
@@ -377,6 +409,7 @@ export default function DetectingStep() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+            signal: abort.signal,
           });
           const data = await res.json();
           if (res.ok && data.status === "completed" && data.audioUrl) {
@@ -385,7 +418,8 @@ export default function DetectingStep() {
           } else {
             dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
           }
-        } catch {
+        } catch (e) {
+          console.error(`[SFX] Early cue ${sfxCue.clipIndex} failed:`, e);
           dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
         }
       }
@@ -446,7 +480,9 @@ export default function DetectingStep() {
     async function runReplan() {
       let plannerTimer: ReturnType<typeof setInterval> | undefined;
       try {
-        const cached = getCachedDetectionData();
+        const cached = getCachedDetectionData(
+          mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
+        );
         if (!cached.frames || !cached.scores) {
           // Cache miss — fall back to full detection
           console.warn("Replan: no cached data, falling back to full detection");
@@ -469,8 +505,15 @@ export default function DetectingStep() {
           });
         }, 500);
 
+        // Yield a microtask so React Strict Mode cleanup (which aborts the
+        // signal synchronously after the effect returns) fires BEFORE we check.
+        // Without this, the check below runs while the signal is still live,
+        // then callPlannerSSE gets an immediate AbortError after cleanup fires.
+        await Promise.resolve();
+
         // Fix Strict Mode abort — same logic as runDetection
         if (abort.signal.aborted) {
+          console.warn("[Replan] Abort signal was already aborted (React Strict Mode) — creating fresh controller");
           const fresh = new AbortController();
           abortRef.current = fresh;
           abort = fresh;
@@ -492,7 +535,8 @@ export default function DetectingStep() {
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
-          handlePartialField
+          handlePartialField,
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
         );
 
         clearInterval(plannerTimer);
@@ -500,7 +544,7 @@ export default function DetectingStep() {
         // Clear feedback so we don't re-trigger on next mount
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
 
-        await processResult(result);
+        await processResult(result, cached.frames as Array<{ sourceFileId: string; timestamp: number; base64: string }>);
       } catch (err) {
         clearInterval(plannerTimer);
         dispatch({ type: "SET_REGENERATE_FEEDBACK", feedback: null });
@@ -632,7 +676,10 @@ export default function DetectingStep() {
         debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
-        cacheDetectionData(frames, scores);
+        cacheDetectionData(
+          frames, scores,
+          mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
+        );
 
         // Phase 3: Plan highlights via server action (60-92%)
         setPassIndex(useBatchMode ? 3 : 2);
@@ -683,19 +730,20 @@ export default function DetectingStep() {
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
-          handlePartialField
+          handlePartialField,
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
         );
         debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
-        await processResult(result);
+        await processResult(result, frames);
       } catch (err) {
         clearInterval(plannerTimer);
         handleError(err);
       }
     }
 
-    async function processResult(result: DetectionResult) {
+    async function processResult(result: DetectionResult, allFrames?: Array<{ sourceFileId: string; timestamp: number; base64: string }>) {
       setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
       setProgress(95);
 
@@ -725,6 +773,18 @@ export default function DetectingStep() {
         return true;
       });
 
+      // Build mapping from original (pre-filter) clip index to post-filter index
+      // so SFX/voiceover clipIndex values can be remapped correctly
+      const clipIndexMap = new Map<number, number>();
+      {
+        let postIdx = 0;
+        for (let origIdx = 0; origIdx < result.clips.length; origIdx++) {
+          if (detectedClips.includes(result.clips[origIdx])) {
+            clipIndexMap.set(origIdx, postIdx++);
+          }
+        }
+      }
+
       // Convert to app types
       const highlights = buildHighlights(detectedClips);
       const clips = buildClips(detectedClips, state.selectedTemplate);
@@ -742,6 +802,20 @@ export default function DetectingStep() {
       // ══════════════════════════════════════════════════════════
       const productionPlan = result.productionPlan;
 
+      // Build remapped SFX/voiceover/thumbnail with post-filter clip indices
+      // so generation dispatches use correct indices throughout
+      const remappedSfx = productionPlan?.sfx
+        .filter((s) => clipIndexMap.has(s.clipIndex))
+        .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })) ?? [];
+      const remappedVoSegments = productionPlan?.voiceover?.segments
+        .filter((s) => clipIndexMap.has(s.clipIndex))
+        .map((s) => ({ ...s, clipIndex: clipIndexMap.get(s.clipIndex)! })) ?? [];
+      const remappedThumbnail = productionPlan?.thumbnail
+        ? (clipIndexMap.has(productionPlan.thumbnail.sourceClipIndex)
+            ? { ...productionPlan.thumbnail, sourceClipIndex: clipIndexMap.get(productionPlan.thumbnail.sourceClipIndex)! }
+            : null)
+        : null;
+
       // Store the production plan in state
       if (productionPlan) {
         dispatch({
@@ -749,17 +823,74 @@ export default function DetectingStep() {
           plan: {
             intro: productionPlan.intro,
             outro: productionPlan.outro,
-            sfx: productionPlan.sfx.map((s) => ({
-              clipIndex: s.clipIndex,
-              timing: s.timing as "before" | "on" | "after",
-              prompt: s.prompt,
-              durationMs: s.durationMs,
-            })),
-            voiceover: productionPlan.voiceover,
+            sfx: remappedSfx.map((s) => ({
+                clipIndex: s.clipIndex,
+                timing: s.timing as "before" | "on" | "after",
+                prompt: s.prompt,
+                durationMs: s.durationMs,
+              })),
+            voiceover: {
+              ...productionPlan.voiceover,
+              segments: remappedVoSegments,
+              delaySec: productionPlan.voiceover.delaySec ?? 0.28,
+            },
             musicPrompt: productionPlan.musicPrompt,
             musicDurationMs: productionPlan.musicDurationMs,
-            thumbnail: productionPlan.thumbnail,
-            photoAnimationPrompts: {},
+            musicVolume: productionPlan.musicVolume ?? 0.47,
+            sfxVolume: productionPlan.sfxVolume ?? 0.78,
+            voiceoverVolume: productionPlan.voiceoverVolume ?? 0.95,
+            defaultTransitionDuration: productionPlan.defaultTransitionDuration ?? 0.28,
+            photoDisplayDuration: productionPlan.photoDisplayDuration ?? 3.2,
+            loopCrossfadeDuration: productionPlan.loopCrossfadeDuration ?? 0.47,
+            captionEntranceDuration: productionPlan.captionEntranceDuration ?? 0.45,
+            captionExitDuration: productionPlan.captionExitDuration ?? 0.28,
+            musicDuckRatio: productionPlan.musicDuckRatio ?? 0.28,
+            musicDuckAttack: productionPlan.musicDuckAttack,
+            musicDuckRelease: productionPlan.musicDuckRelease,
+            musicFadeInDuration: productionPlan.musicFadeInDuration,
+            musicFadeOutDuration: productionPlan.musicFadeOutDuration,
+            beatSyncToleranceMs: productionPlan.beatSyncToleranceMs ?? 47,
+            exportBitrate: productionPlan.exportBitrate ?? 12_000_000,
+            watermarkOpacity: productionPlan.watermarkOpacity ?? 0.38,
+            neonColors: productionPlan.neonColors ?? ["#9333ea", "#06b6d4", "#ec4899", "#f59e0b"],
+            beatPulseIntensity: productionPlan.beatPulseIntensity,
+            beatFlashOpacity: productionPlan.beatFlashOpacity,
+            captionFontSize: productionPlan.captionFontSize,
+            captionVerticalPosition: productionPlan.captionVerticalPosition,
+            captionShadowColor: productionPlan.captionShadowColor,
+            captionShadowBlur: productionPlan.captionShadowBlur,
+            flashOverlayAlpha: productionPlan.flashOverlayAlpha,
+            zoomPunchFlashAlpha: productionPlan.zoomPunchFlashAlpha,
+            colorFlashAlpha: productionPlan.colorFlashAlpha,
+            strobeFlashCount: productionPlan.strobeFlashCount,
+            strobeFlashAlpha: productionPlan.strobeFlashAlpha,
+            lightLeakColor: productionPlan.lightLeakColor,
+            glitchColors: productionPlan.glitchColors,
+            grainOpacity: productionPlan.grainOpacity,
+            vignetteIntensity: productionPlan.vignetteIntensity,
+            vignetteTightness: productionPlan.vignetteTightness,
+            captionAppearDelay: productionPlan.captionAppearDelay,
+            exitDecelSpeed: productionPlan.exitDecelSpeed,
+            exitDecelDuration: productionPlan.exitDecelDuration,
+            settleScale: productionPlan.settleScale,
+            settleDuration: productionPlan.settleDuration,
+            clipAudioVolume: productionPlan.clipAudioVolume,
+            finalClipWarmth: productionPlan.finalClipWarmth,
+            filmStock: productionPlan.filmStock,
+            audioBreaths: productionPlan.audioBreaths,
+            beatFlashThreshold: productionPlan.beatFlashThreshold,
+            vignetteHardness: productionPlan.vignetteHardness,
+            watermarkFontSize: productionPlan.watermarkFontSize,
+            watermarkYOffset: productionPlan.watermarkYOffset,
+            settleEasing: productionPlan.settleEasing,
+            exitDecelEasing: productionPlan.exitDecelEasing,
+            defaultEntryPunchScale: productionPlan.defaultEntryPunchScale,
+            defaultEntryPunchDuration: productionPlan.defaultEntryPunchDuration,
+            defaultKenBurnsIntensity: productionPlan.defaultKenBurnsIntensity,
+            thumbnail: remappedThumbnail,
+            photoAnimationPrompts: Object.fromEntries(
+              detectedClips.filter((c) => c.animationPrompt).map((c) => [c.sourceFileId, c.animationPrompt!])
+            ),
             styleTransfer: productionPlan.styleTransfer ?? null,
             talkingHeadSpeech: productionPlan.talkingHeadSpeech ?? null,
           },
@@ -795,6 +926,7 @@ export default function DetectingStep() {
                   prompt,
                   durationMs: productionPlan?.musicDurationMs,
                 }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (!res.ok || data.status !== "completed" || !data.audioUrl) {
@@ -804,22 +936,23 @@ export default function DetectingStep() {
               setCachedAsset(musicCacheKey, data.audioUrl);
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
               return data.audioUrl as string;
-            } catch {
+            } catch (e) {
+              console.error("[Music] Generation failed:", e);
               dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
               return null;
             }
           })()
         : null;
 
-      // 2. SFX generation — skip if already started early (Arch #4)
-      const sfxPromise = earlySfxStartedRef.current
-        ? null // Already started from streaming partial field
-        : (productionPlan && productionPlan.sfx.length > 0)
+      // 2. SFX generation — skip if disabled or already started early (Arch #4)
+      const sfxPromise = (!state.sfxEnabled || earlySfxStartedRef.current)
+        ? null
+        : (remappedSfx.length > 0)
         ? (async () => {
             dispatch({ type: "SET_SFX_STATUS", status: "generating" });
             dispatch({
               type: "SET_SFX_TRACKS",
-              tracks: productionPlan.sfx.map((s) => ({
+              tracks: remappedSfx.map((s) => ({
                 clipIndex: s.clipIndex,
                 timing: s.timing as "before" | "on" | "after",
                 prompt: s.prompt,
@@ -828,79 +961,103 @@ export default function DetectingStep() {
               })),
             });
             try {
-              await Promise.all(
-                productionPlan.sfx.map(async (sfxCue) => {
-                  try {
-                    // Check SFX cache first
-                    const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
-                    const cachedSfx = getCachedAsset(sfxCacheKey);
-                    if (cachedSfx) {
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: cachedSfx.data,
-                        status: "completed",
-                      });
-                      return;
-                    }
-
-                    const res = await fetch("/api/sfx", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        prompt: sfxCue.prompt,
-                        durationMs: sfxCue.durationMs,
-                      }),
-                    });
-                    const data = await res.json();
-                    if (res.ok && data.status === "completed" && data.audioUrl) {
-                      setCachedAsset(sfxCacheKey, data.audioUrl);
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: data.audioUrl,
-                        status: "completed",
-                      });
-                    } else {
-                      dispatch({
-                        type: "UPDATE_SFX_TRACK",
-                        clipIndex: sfxCue.clipIndex,
-                        audioUrl: "",
-                        status: "failed",
-                      });
-                    }
-                  } catch {
-                    dispatch({
-                      type: "UPDATE_SFX_TRACK",
-                      clipIndex: sfxCue.clipIndex,
-                      audioUrl: "",
-                      status: "failed",
-                    });
+              // Limit concurrency to 3 to avoid ElevenLabs rate limits
+              const SFX_CONCURRENCY = 3;
+              const sfxQueue = [...remappedSfx];
+              const processSfxCue = async (sfxCue: typeof sfxQueue[0]) => {
+                try {
+                  const sfxCacheKey = cacheKey("sfx", { prompt: sfxCue.prompt, durationMs: sfxCue.durationMs });
+                  const cachedSfx = getCachedAsset(sfxCacheKey);
+                  if (cachedSfx) {
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: cachedSfx.data, status: "completed" });
+                    return;
                   }
-                })
-              );
+                  const res = await fetch("/api/sfx", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: sfxCue.prompt, durationMs: sfxCue.durationMs }),
+                    signal: abort.signal,
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.status === "completed" && data.audioUrl) {
+                    setCachedAsset(sfxCacheKey, data.audioUrl);
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: data.audioUrl, status: "completed" });
+                  } else {
+                    dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+                  }
+                } catch (e) {
+                  console.error(`[SFX] Cue ${sfxCue.clipIndex} failed:`, e);
+                  dispatch({ type: "UPDATE_SFX_TRACK", clipIndex: sfxCue.clipIndex, audioUrl: "", status: "failed" });
+                }
+              };
+              // Process in batches of SFX_CONCURRENCY
+              for (let i = 0; i < sfxQueue.length; i += SFX_CONCURRENCY) {
+                await Promise.all(sfxQueue.slice(i, i + SFX_CONCURRENCY).map(processSfxCue));
+              }
               dispatch({ type: "SET_SFX_STATUS", status: "completed" });
-            } catch {
+            } catch (e) {
+              console.error("[SFX] Pipeline failed:", e);
               dispatch({ type: "SET_SFX_STATUS", status: "failed" });
             }
           })()
         : null;
 
+      // Pre-declare voiceClonePromise so voiceover can await it (section 6 assigns it)
+      let voiceClonePromise: Promise<string | null> | null = null;
+      if (state.voiceSampleUrl && productionPlan?.voiceover?.enabled) {
+        // Start voice cloning early so voiceover can use the result
+        voiceClonePromise = (async (): Promise<string | null> => {
+          dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
+          try {
+            const parts = state.voiceSampleUrl!.split(",");
+            const b64 = parts.length > 1 ? parts.slice(1).join(",") : parts[0];
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/mpeg" });
+            const formData = new FormData();
+            formData.append("audio", blob, "voice-sample.mp3");
+            formData.append("name", "Highlight Tape Voice");
+            const res = await fetch("/api/voice-clone", {
+              method: "POST",
+              body: formData,
+              signal: abort.signal,
+            });
+            const data = await res.json();
+            if (res.ok && data.status === "completed" && data.voiceId) {
+              dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
+              return data.voiceId as string;
+            }
+            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+            return null;
+          } catch (e) {
+            console.error("[VoiceClone] Cloning failed:", e);
+            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
+            return null;
+          }
+        })();
+      }
+
       // 3. Voiceover generation — sequential for voice consistency
-      const voiceoverPromise = (productionPlan?.voiceover?.enabled && productionPlan.voiceover.segments.length > 0)
+      // If user provided a voice sample, await clone completion and use cloned voice
+      const voiceoverPromise = (productionPlan?.voiceover?.enabled && remappedVoSegments.length > 0)
         ? (async () => {
-            const vo = productionPlan.voiceover;
+            const vo = productionPlan!.voiceover;
+            // Prefer cloned voice over AI-picked voiceCharacter
+            const resolvedVoiceId = voiceClonePromise ? await voiceClonePromise : null;
             dispatch({ type: "SET_VOICEOVER_STATUS", status: "generating" });
             dispatch({
               type: "SET_VOICEOVER_SEGMENTS",
-              segments: vo.segments.map((s) => ({
+              segments: remappedVoSegments.map((s) => ({
                 clipIndex: s.clipIndex,
                 text: s.text,
+                duration: 0,
+                delaySec: s.delaySec,
                 status: "generating" as const,
               })),
             });
             try {
-              for (const segment of vo.segments) {
+              for (const segment of remappedVoSegments) {
                 try {
                   // Check voiceover cache first
                   const voCacheKey = cacheKey("vo", { text: segment.text, voice: vo.voiceCharacter });
@@ -922,7 +1079,9 @@ export default function DetectingStep() {
                     body: JSON.stringify({
                       text: segment.text,
                       voiceCharacter: vo.voiceCharacter,
+                      ...(resolvedVoiceId ? { voiceId: resolvedVoiceId } : {}),
                     }),
+                    signal: abort.signal,
                   });
                   const data = await res.json();
                   if (res.ok && data.status === "completed" && data.audioUrl) {
@@ -943,7 +1102,8 @@ export default function DetectingStep() {
                       status: "failed",
                     });
                   }
-                } catch {
+                } catch (e) {
+                  console.error(`[Voiceover] Segment ${segment.clipIndex} failed:`, e);
                   dispatch({
                     type: "UPDATE_VOICEOVER_SEGMENT",
                     clipIndex: segment.clipIndex,
@@ -954,128 +1114,113 @@ export default function DetectingStep() {
                 }
               }
               dispatch({ type: "SET_VOICEOVER_STATUS", status: "completed" });
-            } catch {
+            } catch (e) {
+              console.error("[Voiceover] Pipeline failed:", e);
               dispatch({ type: "SET_VOICEOVER_STATUS", status: "failed" });
             }
           })()
         : null;
 
-      // 4. Intro card generation (Atlas Cloud T2V)
-      const introPromise = productionPlan?.intro
+      // 4. Intro card generation (Atlas Cloud T2V) — skip if disabled
+      const introPromise = (state.introOutroEnabled && productionPlan?.intro)
         ? (async () => {
+            const rawIntroDur = productionPlan.intro!.duration;
+            const introDur = (typeof rawIntroDur === "number" && Number.isFinite(rawIntroDur) && rawIntroDur > 0) ? rawIntroDur : 4;
+            debugLog(`[Intro] Generating intro card (${introDur}s)...`);
             dispatch({
               type: "SET_INTRO_CARD",
-              card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "generating" },
+              card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "generating" },
             });
             try {
               const submitRes = await fetch("/api/intro", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: 5 }),
+                body: JSON.stringify({ prompt: productionPlan.intro!.stylePrompt, duration: introDur }),
+                signal: abort.signal,
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
+                console.error("[Intro] Submit failed:", submitData.error ?? submitRes.status);
                 dispatch({
                   type: "SET_INTRO_CARD",
-                  card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+                  card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
                 });
                 return;
               }
+              debugLog(`[Intro] Submitted, polling prediction ${submitData.predictionId}...`);
               // Poll using the same animate/check endpoint (Atlas Cloud uses same prediction API)
               const videoUrl = await pollAtlasTask(submitData.predictionId);
+              debugLog(`[Intro] ${videoUrl ? "Completed" : "Failed"} — videoUrl=${videoUrl ? videoUrl.slice(0, 60) + "..." : "none"}`);
               dispatch({
                 type: "SET_INTRO_CARD",
                 card: {
                   text: productionPlan.intro!.text,
                   stylePrompt: productionPlan.intro!.stylePrompt,
+                  duration: introDur,
                   videoUrl,
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[Intro] Card generation failed:", e);
               dispatch({
                 type: "SET_INTRO_CARD",
-                card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, status: "failed" },
+                card: { text: productionPlan.intro!.text, stylePrompt: productionPlan.intro!.stylePrompt, duration: introDur, status: "failed" },
               });
             }
           })()
         : null;
 
-      // 5. Outro card generation (Atlas Cloud T2V)
-      const outroPromise = productionPlan?.outro
+      // 5. Outro card generation (Atlas Cloud T2V) — skip if disabled
+      const outroPromise = (state.introOutroEnabled && productionPlan?.outro)
         ? (async () => {
+            const rawOutroDur = productionPlan.outro!.duration;
+            const outroDur = (typeof rawOutroDur === "number" && Number.isFinite(rawOutroDur) && rawOutroDur > 0) ? rawOutroDur : 4;
+            debugLog(`[Outro] Generating outro card (${outroDur}s)...`);
             dispatch({
               type: "SET_OUTRO_CARD",
-              card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "generating" },
+              card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "generating" },
             });
             try {
               const submitRes = await fetch("/api/outro", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: 5 }),
+                body: JSON.stringify({ prompt: productionPlan.outro!.stylePrompt, duration: outroDur }),
+                signal: abort.signal,
               });
               const submitData = await submitRes.json();
               if (!submitRes.ok || !submitData.predictionId) {
+                console.error("[Outro] Submit failed:", submitData.error ?? submitRes.status);
                 dispatch({
                   type: "SET_OUTRO_CARD",
-                  card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+                  card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
                 });
                 return;
               }
+              debugLog(`[Outro] Submitted, polling prediction ${submitData.predictionId}...`);
               const videoUrl = await pollAtlasTask(submitData.predictionId);
+              debugLog(`[Outro] ${videoUrl ? "Completed" : "Failed"} — videoUrl=${videoUrl ? videoUrl.slice(0, 60) + "..." : "none"}`);
               dispatch({
                 type: "SET_OUTRO_CARD",
                 card: {
                   text: productionPlan.outro!.text,
                   stylePrompt: productionPlan.outro!.stylePrompt,
+                  duration: outroDur,
                   videoUrl,
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[Outro] Card generation failed:", e);
               dispatch({
                 type: "SET_OUTRO_CARD",
-                card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, status: "failed" },
+                card: { text: productionPlan.outro!.text, stylePrompt: productionPlan.outro!.stylePrompt, duration: outroDur, status: "failed" },
               });
             }
           })()
         : null;
 
-      // 6. Voice cloning — if user provided a voice sample, clone it and use for voiceover
-      const voiceClonePromise = (state.voiceSampleUrl && productionPlan?.voiceover?.enabled)
-        ? (async () => {
-            dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "generating" });
-            try {
-              // Upload voice sample to clone API
-              const parts = state.voiceSampleUrl!.split(",");
-              const b64 = parts.length > 1 ? parts.slice(1).join(",") : parts[0];
-              const binary = atob(b64);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              const blob = new Blob([bytes], { type: "audio/mpeg" });
-
-              const formData = new FormData();
-              formData.append("audio", blob, "voice-sample.mp3");
-              formData.append("name", "Highlight Tape Voice");
-
-              const res = await fetch("/api/voice-clone", {
-                method: "POST",
-                body: formData,
-              });
-              const data = await res.json();
-              if (res.ok && data.status === "completed" && data.voiceId) {
-                dispatch({ type: "SET_CLONED_VOICE", voiceId: data.voiceId, status: "completed" });
-                return data.voiceId as string;
-              } else {
-                dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
-                return null;
-              }
-            } catch {
-              dispatch({ type: "SET_CLONED_VOICE", voiceId: null, status: "failed" });
-              return null;
-            }
-          })()
-        : null;
+      // 6. Voice cloning — already started above (before voiceover, so it can await the result)
 
       // 7. Stem separation — isolate instrumental from AI music for smarter ducking
       // Uses musicPromise's returned URL directly (not stale state)
@@ -1090,6 +1235,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ musicDataUri: musicUrl }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (res.ok && data.status === "completed" && data.instrumentalUrl) {
@@ -1097,7 +1243,8 @@ export default function DetectingStep() {
               } else {
                 dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
               }
-            } catch {
+            } catch (e) {
+              console.error("[Stems] Stem separation failed:", e);
               dispatch({ type: "SET_INSTRUMENTAL_MUSIC", url: null, status: "failed" });
             }
           })()
@@ -1140,6 +1287,7 @@ export default function DetectingStep() {
                   voiceCharacter: voiceId ? undefined : "male-broadcaster-hype",
                   voiceId,
                 }),
+                signal: abort.signal,
               });
               const ttsData = await ttsRes.json();
               if (!ttsRes.ok || ttsData.status !== "completed" || !ttsData.audioUrl) {
@@ -1157,6 +1305,7 @@ export default function DetectingStep() {
               const lipRes = await fetch("/api/talking-head", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: abort.signal,
                 body: JSON.stringify({
                   imageData: photoDataUri,
                   audioData: ttsData.audioUrl,
@@ -1183,7 +1332,8 @@ export default function DetectingStep() {
                   status: videoUrl ? "completed" : "failed",
                 },
               });
-            } catch {
+            } catch (e) {
+              console.error("[TalkingHead] Pipeline failed:", e);
               dispatch({
                 type: "SET_TALKING_HEAD",
                 talkingHead: { photoUrl: null, speechText: productionPlan.talkingHeadSpeech, videoUrl: null, status: "failed" },
@@ -1206,6 +1356,7 @@ export default function DetectingStep() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ imageData: dataUri }),
+                signal: abort.signal,
               });
               const data = await res.json();
               if (res.ok && data.predictionId) {
@@ -1216,8 +1367,8 @@ export default function DetectingStep() {
                 }
               }
             }
-          } catch {
-            // Non-blocking — if upscale fails, animation uses original
+          } catch (e) {
+            console.error("[Upscale] Auto-upscale failed (non-blocking):", e);
           }
         });
 
@@ -1229,8 +1380,8 @@ export default function DetectingStep() {
         dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt });
       }
 
-      // 11. Photo animations (existing — already built)
-      if (animatableClips.length > 0) {
+      // 11. Photo animations — skip if disabled
+      if (state.animatePhotosEnabled && animatableClips.length > 0) {
         setProgress(92);
         const uniquePhotoCount = new Set(
           animatableClips.filter((c) => currentMediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
@@ -1247,8 +1398,303 @@ export default function DetectingStep() {
          voiceClonePromise, stemPromise, talkingHeadPromise].filter(Boolean)
       );
 
+      // ── Validation loop ──
+      // After all generators settle, Haiku reviews the tape and can request surgical fixes.
+      // Max 2 passes, fail-open on any error, abort-aware.
+      let finalClips = clips;
       const finalHighlights = highlights;
-      const finalClips = clips;
+
+      // Pick one representative frame per clip (closest to the midpoint) for visual validation.
+      // Limit to 8 frames max to keep payload size and latency reasonable.
+      const clipFrames: Array<{ clipIndex: number; base64: string }> = [];
+      if (allFrames && allFrames.length > 0) {
+        const maxVisualClips = Math.min(finalClips.length, 8);
+        for (let i = 0; i < maxVisualClips; i++) {
+          const c = finalClips[i];
+          const mid = ((c.trimStart ?? 0) + (c.trimEnd ?? 0)) / 2;
+          // Find the frame from the same source file closest to clip midpoint
+          let bestFrame: (typeof allFrames)[0] | null = null;
+          let bestDist = Infinity;
+          for (const f of allFrames) {
+            if (f.sourceFileId !== c.sourceFileId) continue;
+            const dist = Math.abs(f.timestamp - mid);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestFrame = f;
+            }
+          }
+          if (bestFrame) {
+            clipFrames.push({ clipIndex: i, base64: bestFrame.base64 });
+          }
+        }
+        debugLog(`[Validation] Selected ${clipFrames.length} representative frames for visual validation`);
+      }
+
+      // Never decrease progress — animations may have pushed it to ~99%
+      setProgress((prev) => Math.max(prev, 95));
+      dispatch({ type: "SET_VALIDATION_STATUS", status: "validating" });
+      setValidationPhase("Validating your highlight reel...");
+
+      let validationPassed = false;
+
+      for (let pass = 0; pass < 2; pass++) {
+        if (abort.signal.aborted) break;
+
+        try {
+          const assetStatuses = {
+            music: musicStatusRef.current,
+            sfx: sfxStatusRef.current,
+            voiceover: voiceoverStatusRef.current,
+            intro: introCardRef.current?.status ?? "idle",
+            outro: outroCardRef.current?.status ?? "idle",
+          };
+
+          // Use a per-request controller that aborts on either unmount or 15s timeout.
+          // Increase timeout to 25s when sending frames (vision requests take longer).
+          const valTimeout = clipFrames.length > 0 ? 25_000 : 15_000;
+          const valAbort = new AbortController();
+          const timeoutId = setTimeout(() => valAbort.abort("Validation timeout"), valTimeout);
+          const onParentAbort = () => valAbort.abort("Parent aborted");
+          abort.signal.addEventListener("abort", onParentAbort, { once: true });
+          let validateRes: Response;
+          try {
+            validateRes = await fetch("/api/validate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clips: finalClips,
+                plan: productionPlan,
+                contentSummary: result.contentSummary ?? "",
+                assetStatuses,
+                clipFrames: clipFrames.length > 0 ? clipFrames : undefined,
+                // Extra context so the validator can make better-informed decisions
+                sourceFiles: mediaFilesRef.current.map((f) => ({ name: f.name, type: f.type, duration: f.duration })),
+                audioTranscript: state.audioTranscript || undefined,
+                creativeDirection: state.creativeDirection || undefined,
+                regenerateFeedback: state.regenerateFeedback || undefined,
+                viralOptions: state.viralOptions,
+                detectedTheme: state.detectedTheme,
+                introCard: introCardRef.current ? { text: introCardRef.current.text, stylePrompt: introCardRef.current.stylePrompt, duration: introCardRef.current.duration, status: introCardRef.current.status } : undefined,
+                outroCard: outroCardRef.current ? { text: outroCardRef.current.text, stylePrompt: outroCardRef.current.stylePrompt, duration: outroCardRef.current.duration, status: outroCardRef.current.status } : undefined,
+                sfxTracks: state.sfxTracks.length > 0 ? state.sfxTracks.map((t) => ({ clipIndex: t.clipIndex, timing: t.timing, prompt: t.prompt, durationMs: t.durationMs, status: t.status })) : undefined,
+                voiceoverSegments: state.voiceoverSegments.length > 0 ? state.voiceoverSegments.map((s) => ({ clipIndex: s.clipIndex, text: s.text, duration: s.duration, delaySec: s.delaySec, status: s.status })) : undefined,
+              }),
+              signal: valAbort.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+            abort.signal.removeEventListener("abort", onParentAbort);
+          }
+
+          if (!validateRes.ok) {
+            debugLog(`[Validation] Pass ${pass + 1}: HTTP ${validateRes.status} — treating as passed`);
+            break;
+          }
+
+          const validation: ValidationResult = await validateRes.json();
+          debugLog(`[Validation] Pass ${pass + 1}:`, validation.passed ? "PASSED" : `FAILED — ${validation.issues.length} issue(s)`);
+
+          if (validation.passed) {
+            validationPassed = true;
+            break;
+          }
+
+          // Apply fixes
+          dispatch({ type: "SET_VALIDATION_STATUS", status: "fixing" });
+          const issueCount = validation.issues.length;
+          setValidationPhase(`Polishing — fixing ${issueCount} issue${issueCount !== 1 ? "s" : ""}...`);
+          setProgress((prev) => Math.max(prev, 96 + pass));
+
+          const fixes = validation.fixes;
+
+          // 1. Apply instant plan-layer fixes (clip updates, removals)
+          if (fixes.clipUpdates || fixes.clipRemovals) {
+            finalClips = applyClipFixes(finalClips, fixes) as typeof finalClips;
+          }
+
+          // 2. Apply plan updates
+          if (fixes.planUpdates && productionPlan) {
+            dispatch({ type: "SET_AI_PRODUCTION_PLAN", plan: { ...productionPlan, ...fixes.planUpdates } as AiProductionPlan });
+          }
+
+          // 3. Fire targeted regeneration promises in parallel
+          const regenPromises: Promise<void>[] = [];
+
+          if (fixes.regenerateSfx && state.sfxEnabled) {
+            for (const sfx of fixes.regenerateSfx) {
+              regenPromises.push(regenerateSpecificSfx(sfx.clipIndex, sfx.prompt, sfx.durationMs));
+              setValidationPhase(`Regenerating sound effect for clip ${sfx.clipIndex + 1}...`);
+            }
+          }
+
+          if (fixes.regenerateVoiceover) {
+            const vo = productionPlan?.voiceover;
+            for (const seg of fixes.regenerateVoiceover) {
+              regenPromises.push(regenerateSpecificVoiceover(seg.clipIndex, seg.text, vo?.voiceCharacter ?? "alloy"));
+              setValidationPhase(`Regenerating voiceover for clip ${seg.clipIndex + 1}...`);
+            }
+          }
+
+          if (fixes.regenerateIntro && state.introOutroEnabled) {
+            regenPromises.push(regenerateIntroCard(fixes.regenerateIntro.stylePrompt, fixes.regenerateIntro.duration, fixes.regenerateIntro.text));
+            setValidationPhase("Regenerating intro card...");
+          }
+
+          if (fixes.regenerateOutro && state.introOutroEnabled) {
+            regenPromises.push(regenerateOutroCard(fixes.regenerateOutro.stylePrompt, fixes.regenerateOutro.duration, fixes.regenerateOutro.text));
+            setValidationPhase("Regenerating outro card...");
+          }
+
+          if (fixes.regenerateMusic && state.aiMusicEnabled) {
+            regenPromises.push(regenerateMusicTrack(fixes.regenerateMusic.prompt, fixes.regenerateMusic.durationMs));
+            setValidationPhase("Regenerating music...");
+          }
+
+          if (regenPromises.length > 0) {
+            await Promise.allSettled(regenPromises);
+          }
+        } catch (e) {
+          // Fail-open: network errors, JSON parse errors, timeouts → skip validation
+          debugLog("[Validation] Error (fail-open):", e);
+          break;
+        }
+      }
+
+      if (!validationPassed) {
+        debugLog("[Validation] Completed 2 passes without passing — proceeding with best-effort fixes");
+      }
+      dispatch({ type: "SET_VALIDATION_STATUS", status: "passed" });
+      setValidationPhase(null);
+
+      // ── Regeneration helpers for validation loop ──
+      // These are thin wrappers around the existing fetch+dispatch patterns.
+
+      async function regenerateSpecificSfx(clipIndex: number, prompt: string, durationMs: number): Promise<void> {
+        try {
+          const res = await fetch("/api/sfx", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "UPDATE_SFX_TRACK", clipIndex, audioUrl: data.audioUrl, status: "completed" });
+          }
+        } catch (e) {
+          debugLog(`[Validation] SFX regen failed for clip ${clipIndex}:`, e);
+        }
+      }
+
+      async function regenerateSpecificVoiceover(clipIndex: number, text: string, voiceCharacter: string): Promise<void> {
+        try {
+          const res = await fetch("/api/voiceover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, voiceCharacter }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "UPDATE_VOICEOVER_SEGMENT", clipIndex, audioUrl: data.audioUrl, duration: data.duration ?? 2, status: "completed" });
+          }
+        } catch (e) {
+          debugLog(`[Validation] Voiceover regen failed for clip ${clipIndex}:`, e);
+        }
+      }
+
+      // Helper: enforce text fitting constraints on card prompts from the validator
+      function enforceCardPrompt(prompt: string, text: string): string {
+        let p = prompt;
+        if (!p.toLowerCase().includes("9:16") && !p.toLowerCase().includes("portrait")) {
+          p = "9:16 vertical portrait video (1080x1920), " + p;
+        }
+        if (!p.toLowerCase().includes("small") && !p.toLowerCase().includes("compact")) {
+          p += `, text '${text}' displayed as SMALL centered text in the middle third of the frame, text must be fully visible and not cropped, text occupies no more than 30% of frame width, generous padding on all sides`;
+        }
+        return p.slice(0, 600);
+      }
+
+      // Truncate card text (same rules as detect.ts)
+      function truncateCardTextForRegen(text: string): string {
+        const words = text.trim().split(/\s+/).slice(0, 2);
+        let result = words.join(" ");
+        if (result.length > 14) {
+          result = result.slice(0, 14);
+          const lastSpace = result.lastIndexOf(" ");
+          if (lastSpace > 0) result = result.slice(0, lastSpace);
+        }
+        return result.toUpperCase();
+      }
+
+      async function regenerateIntroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
+        try {
+          const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
+          const safeText = truncateCardTextForRegen(text);
+          const safePrompt = enforceCardPrompt(stylePrompt, safeText);
+          dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "generating" } });
+          const submitRes = await fetch("/api/intro", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: safePrompt, duration: dur }),
+            signal: abort.signal,
+          });
+          const submitData = await submitRes.json();
+          if (!submitRes.ok || !submitData.predictionId) {
+            dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "failed" } });
+            return;
+          }
+          const videoUrl = await pollAtlasTask(submitData.predictionId);
+          dispatch({ type: "SET_INTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+        } catch (e) {
+          debugLog("[Validation] Intro regen failed:", e);
+        }
+      }
+
+      async function regenerateOutroCard(stylePrompt: string, duration: number, text: string): Promise<void> {
+        try {
+          const dur = (typeof duration === "number" && Number.isFinite(duration) && duration > 0) ? duration : 4;
+          const safeText = truncateCardTextForRegen(text);
+          const safePrompt = enforceCardPrompt(stylePrompt, safeText);
+          dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "generating" } });
+          const submitRes = await fetch("/api/outro", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: safePrompt, duration: dur }),
+            signal: abort.signal,
+          });
+          const submitData = await submitRes.json();
+          if (!submitRes.ok || !submitData.predictionId) {
+            dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, status: "failed" } });
+            return;
+          }
+          const videoUrl = await pollAtlasTask(submitData.predictionId);
+          dispatch({ type: "SET_OUTRO_CARD", card: { text: safeText, stylePrompt: safePrompt, duration: dur, videoUrl, status: videoUrl ? "completed" : "failed" } });
+        } catch (e) {
+          debugLog("[Validation] Outro regen failed:", e);
+        }
+      }
+
+      async function regenerateMusicTrack(prompt: string, durationMs: number): Promise<void> {
+        try {
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "generating" });
+          const res = await fetch("/api/music/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, durationMs }),
+            signal: abort.signal,
+          });
+          const data = await res.json();
+          if (res.ok && data.status === "completed" && data.audioUrl) {
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: data.audioUrl });
+          } else {
+            dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+          }
+        } catch (e) {
+          debugLog("[Validation] Music regen failed:", e);
+          dispatch({ type: "SET_AI_MUSIC_RESULT", status: "failed" });
+        }
+      }
 
       setProgress(100);
 
@@ -1265,7 +1711,8 @@ export default function DetectingStep() {
     async function pollAtlasTask(predictionId: string): Promise<string> {
       try {
         return await pollBatched(predictionId, { timeoutMs: 300_000 });
-      } catch {
+      } catch (e) {
+        console.error(`[Atlas] Poll failed for prediction ${predictionId}:`, e);
         return ""; // Failed or timed out
       }
     }
@@ -1501,7 +1948,9 @@ export default function DetectingStep() {
       {/* Phase label */}
       <div className="text-center space-y-1.5">
         <p className="text-sm font-medium text-white">
-          {animatingPhotos
+          {validationPhase
+                ? validationPhase
+                : animatingPhotos
                 ? animationProgress.total > 1
                   ? `Animating photos (${animationProgress.completed}/${animationProgress.total})`
                   : "Animating your photo"

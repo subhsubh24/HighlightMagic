@@ -44,7 +44,7 @@ export async function generateMusic(
 ): Promise<MusicGenerateResult> {
   const apiKey = getApiKey();
   const safeDuration = Number.isFinite(durationMs) ? durationMs : DEFAULT_MUSIC_LENGTH_MS;
-  const clampedDuration = Math.max(3_000, Math.min(safeDuration, MAX_MUSIC_LENGTH_MS));
+  const clampedDuration = Math.round(Math.max(3_000, Math.min(safeDuration, MAX_MUSIC_LENGTH_MS)));
 
   console.log(`[elevenlabs-music] Generating: "${prompt.slice(0, 80)}..." (${clampedDuration}ms)`);
 
@@ -73,16 +73,16 @@ export async function generateMusic(
         // ElevenLabs often returns a sanitized prompt_suggestion — retry with it
         const suggestion = errorData.detail?.data?.prompt_suggestion;
         if (!_isRetry && suggestion && typeof suggestion === "string" && suggestion !== prompt) {
-          console.log(`[elevenlabs-music] Prompt rejected, retrying with suggestion: "${suggestion.slice(0, 80)}..."`);
-          return generateMusic(suggestion, durationMs, true);
+          console.warn(`[Music] Prompt rejected by ElevenLabs, retrying once with their suggestion: "${suggestion.slice(0, 80)}..."`);
+          return generateMusic(suggestion, durationMs, true /* prevent further recursion */);
         }
         return {
           status: "failed",
           error: errorData.detail.message || "Prompt was rejected — try different wording (no artist/song names).",
         };
       }
-    } catch {
-      // Not JSON, use generic error
+    } catch (e) {
+      console.warn("[Music] Failed to parse error response body:", e);
     }
 
     return {

@@ -42,7 +42,8 @@ const POLL_TIMEOUT_MS = 300_000; // 5 minutes
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 2_000;
-const FETCH_TIMEOUT_MS = 30_000; // 30s timeout for API calls
+const SUBMIT_TIMEOUT_MS = 120_000; // 120s for submissions (large base64 uploads)
+const POLL_TIMEOUT_FETCH_MS = 30_000; // 30s for poll checks (lightweight)
 
 // ── Response types ──
 
@@ -117,7 +118,7 @@ export async function submitTask(
         Authorization: `Bearer ${apiKey}`,
       },
       body: requestBody,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -136,7 +137,7 @@ export async function submitTask(
     }
 
     const data = (await response.json()) as { data?: { id?: string } };
-    console.log(`[atlascloud] submit response:`, JSON.stringify(data));
+    console.log(`[atlascloud] submit response: id=${data?.data?.id ?? "none"}`);
     if (!data?.data?.id) {
       throw new Error("Atlas Cloud API returned no prediction ID");
     }
@@ -172,7 +173,7 @@ export async function checkTaskResult(
       `${ATLAS_API_BASE}/prediction/${predictionId}`,
       {
         headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(POLL_TIMEOUT_FETCH_MS),
       }
     );
 
@@ -299,20 +300,23 @@ export async function generatePhotoAnimation(
  */
 export async function submitTextToVideo(
   prompt: string,
-  duration: number = 5
+  duration: number = 5,
+  aspectRatio: string = "9:16"
 ): Promise<string> {
   return submitTask(MODELS.WAN_T2V, {
     prompt,
     duration: Math.max(2, Math.min(10, duration)),
+    aspect_ratio: aspectRatio,
   });
 }
 
 /** One-shot T2V (submit + poll). Returns video URL. */
 export async function generateTextToVideo(
   prompt: string,
-  duration: number = 5
+  duration: number = 5,
+  aspectRatio: string = "9:16"
 ): Promise<string> {
-  const predictionId = await submitTextToVideo(prompt, duration);
+  const predictionId = await submitTextToVideo(prompt, duration, aspectRatio);
   return pollTaskResult(predictionId);
 }
 

@@ -5,20 +5,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Download,
-  Play,
   RefreshCw,
   Trash2,
-  ChevronLeft,
   ChevronRight,
   Film,
-  Image,
-  Music,
-  Volume2,
+  Image as ImageIcon,
   Sparkles,
-  Clapperboard,
-  Mic,
-  Zap,
-  ImageIcon,
   CheckCircle2,
   Loader2,
   XCircle,
@@ -59,7 +51,12 @@ export default function EditorStep() {
   );
 
   const style = getEditingStyle(state.detectedTheme);
-  const totalTapeDuration = sortedClips.reduce((sum, c) => sum + (c.trimEnd - c.trimStart), 0);
+  const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
+  const totalTapeDuration = sortedClips.reduce((sum, c, i) => {
+    const dur = c.trimEnd - c.trimStart;
+    const overlap = (i < sortedClips.length - 1) ? (sortedClips[i + 1]?.transitionDuration ?? defaultTransDur) : 0;
+    return sum + dur - overlap;
+  }, 0);
 
   const handleExport = () => {
     haptic();
@@ -124,7 +121,7 @@ export default function EditorStep() {
       </div>
 
       {/* Full tape preview — the star of the show */}
-      <div className="w-full max-w-xs self-center">
+      <div className="w-full max-w-[240px] sm:max-w-xs self-center">
         <TapePreviewPlayer />
       </div>
 
@@ -180,7 +177,7 @@ export default function EditorStep() {
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10">
                   {m?.type === "photo" ? (
-                    <Image className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+                    <ImageIcon className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
                   ) : (
                     <Film className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
                   )}

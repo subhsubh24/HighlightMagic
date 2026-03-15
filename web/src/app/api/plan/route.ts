@@ -19,20 +19,22 @@ export async function POST(req: Request) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
-  } catch {
+  } catch (e) {
+    console.warn("[Plan API] Invalid JSON body:", e);
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations } = body as {
+  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures } = body as {
     frames: unknown;
     scores: unknown;
     templateName?: string;
     userFeedback?: string;
     creativeDirection?: string;
     photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>;
+    disabledFeatures?: { music?: boolean; sfx?: boolean; introOutro?: boolean };
   };
 
   if (!Array.isArray(frames) || !Array.isArray(scores)) {
@@ -51,7 +53,8 @@ export async function POST(req: Request) {
       keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode("event: keepalive\ndata: {}\n\n"));
-        } catch {
+        } catch (e) {
+          console.warn("[Plan API] Keepalive enqueue failed (client disconnected?):", e);
           clearInterval(keepalive);
         }
       }, 15_000);
@@ -63,6 +66,7 @@ export async function POST(req: Request) {
           templateName ?? undefined,
           userFeedback ?? undefined,
           creativeDirection ?? undefined,
+          disabledFeatures ?? undefined,
           (phase) => {
             try {
               controller.enqueue(

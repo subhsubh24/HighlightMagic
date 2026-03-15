@@ -14,8 +14,9 @@ import {
   type TransitionTransform,
 } from "@/lib/transitions";
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
-import { getSpeedAtPosition, getSpeedFromKeyframes } from "@/lib/velocity";
+import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration, getSourceTimeAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
+import { getMicroSettle, getExitDeceleration, drawFilmGrain, drawVignette, getWarmthShiftCSS, applyFilmStock } from "@/lib/post-processing";
 import type { EditedClip, SfxTrack, VoiceoverSegment } from "@/lib/types";
 
 // ── Web Audio mixing types ──
@@ -65,6 +66,7 @@ interface TimelineEntry {
   globalStart: number;
   globalEnd: number;
   clipDuration: number;
+  isLastClip: boolean;
 }
 
 export default function TapePreviewPlayer() {
@@ -107,14 +109,16 @@ export default function TapePreviewPlayer() {
     const entries: TimelineEntry[] = [];
     let t = 0;
 
-    // Prepend intro card if available
+    // Prepend intro card if available — use AI-decided duration
     if (state.introCard?.status === "completed" && state.introCard.videoUrl) {
+      const rawIntroDur = state.introCard.duration;
+      const introDur = (typeof rawIntroDur === "number" && Number.isFinite(rawIntroDur) && rawIntroDur > 0) ? rawIntroDur : 4;
       const introClip: EditedClip = {
         id: "__intro__",
         sourceFileId: "__intro__",
-        segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Intro", detectionSources: [] },
+        segment: { id: "__intro__", sourceFileId: "__intro__", startTime: 0, endTime: introDur, confidenceScore: 1, label: "Intro", detectionSources: [] },
         trimStart: 0,
-        trimEnd: 5,
+        trimEnd: introDur,
         order: -1,
         selectedMusicTrack: null,
         captionText: "",
@@ -126,25 +130,43 @@ export default function TapePreviewPlayer() {
         clip: introClip,
         mediaUrl: state.introCard.videoUrl,
         mediaType: "video",
-        filterCSS: "",
+        filterCSS: "none",
         captionText: "",
         globalStart: 0,
-        globalEnd: 5,
-        clipDuration: 5,
+        globalEnd: introDur,
+        clipDuration: introDur,
+        isLastClip: false,
       });
-      t = 5;
+      t = introDur;
     }
 
+    const voDelay = state.aiProductionPlan?.voiceover?.delaySec ?? 0.3;
     for (let i = 0; i < sortedClips.length; i++) {
       const clip = sortedClips[i];
       const media = getMediaFile(state, clip.sourceFileId);
       if (!media) continue;
-      let dur = clip.trimEnd - clip.trimStart;
+      const sourceDur = clip.trimEnd - clip.trimStart;
+      // Account for velocity/speed ramping — effective duration may differ from source
+      let dur = getEffectiveDuration(sourceDur, clip.velocityPreset, clip.customVelocityKeyframes);
+
+      // Photo clips may have 0 source duration — use AI photo display duration as floor
+      if (media.type === "photo" && (!Number.isFinite(dur) || dur <= 0)) {
+        dur = state.aiProductionPlan?.photoDisplayDuration ?? 3.2;
+      }
 
       // Beat-sync: snap duration to nearest beat boundary
       if (beatGrid && beatGrid.beatInterval > 0) {
         const beats = Math.max(2, Math.round(dur / beatGrid.beatInterval));
         dur = beats * beatGrid.beatInterval;
+      }
+
+      // Voiceover-aware extension: hold clip longer if VO extends past its visual
+      const vo = state.voiceoverSegments.find(
+        (s) => s.clipIndex === i && s.status === "completed" && s.duration > 0
+      );
+      if (vo) {
+        const voEnd = voDelay + vo.duration;
+        if (voEnd > dur) dur = voEnd;
       }
 
       entries.push({
@@ -156,23 +178,27 @@ export default function TapePreviewPlayer() {
         globalStart: t,
         globalEnd: t + dur,
         clipDuration: dur,
+        isLastClip: false, // updated after loop
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
-        // Use next clip's per-clip transition duration (neutral 0.3s default)
+        // Use next clip's per-clip transition duration, fallback to AI-decided default
+        const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
         const nextClip = sortedClips[i + 1];
-        t -= nextClip?.transitionDuration ?? 0.3;
+        t -= nextClip?.transitionDuration ?? defaultTransDur;
       }
     }
 
-    // Append outro card if available
+    // Append outro card if available — use AI-decided duration
     if (state.outroCard?.status === "completed" && state.outroCard.videoUrl) {
+      const rawOutroDur = state.outroCard.duration;
+      const outroDur = (typeof rawOutroDur === "number" && Number.isFinite(rawOutroDur) && rawOutroDur > 0) ? rawOutroDur : 4;
       const outroClip: EditedClip = {
         id: "__outro__",
         sourceFileId: "__outro__",
-        segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: 5, confidenceScore: 1, label: "Outro", detectionSources: [] },
+        segment: { id: "__outro__", sourceFileId: "__outro__", startTime: 0, endTime: outroDur, confidenceScore: 1, label: "Outro", detectionSources: [] },
         trimStart: 0,
-        trimEnd: 5,
+        trimEnd: outroDur,
         order: 9999,
         selectedMusicTrack: null,
         captionText: "",
@@ -184,16 +210,21 @@ export default function TapePreviewPlayer() {
         clip: outroClip,
         mediaUrl: state.outroCard.videoUrl,
         mediaType: "video",
-        filterCSS: "",
+        filterCSS: "none",
         captionText: "",
         globalStart: t,
-        globalEnd: t + 5,
-        clipDuration: 5,
+        globalEnd: t + outroDur,
+        clipDuration: outroDur,
+        isLastClip: false,
       });
     }
 
+    // Mark the last entry for warmth shift
+    if (entries.length > 0) entries[entries.length - 1].isLastClip = true;
+
     return entries;
-  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally list specific state slices to avoid full-state rebuilds
+  }, [sortedClips, state.mediaFiles, beatGrid, state.introCard, state.outroCard, state.aiProductionPlan?.defaultTransitionDuration, state.voiceoverSegments, state.aiProductionPlan?.voiceover?.delaySec]);
 
   const totalDuration = timeline.length > 0 ? timeline[timeline.length - 1].globalEnd : 0;
 
@@ -230,6 +261,7 @@ export default function TapePreviewPlayer() {
         }
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- getMediaFile only reads state.mediaFiles which is already a dep
   }, [timeline, state.mediaFiles]);
 
   // Sync mute state to all active video elements + audio mixer
@@ -286,35 +318,41 @@ export default function TapePreviewPlayer() {
     async function buildMixer() {
       const layers: AudioLayer[] = [];
 
+      // Offset to account for intro card in timeline (clipIndex refers to user clips, not intro/outro)
+      const introOffset = timeline.length > 0 && timeline[0].clip.id === "__intro__" ? 1 : 0;
+
       // Load SFX tracks — positioned relative to their clip's timeline position
       for (const sfx of sfxTracks) {
-        const clipEntry = timeline.find(
-          (e, i) => i === sfx.clipIndex || e.clip.id === `clip-${sfx.clipIndex}`
-        ) ?? timeline[sfx.clipIndex];
+        const adjustedIndex = sfx.clipIndex + introOffset;
+        const clipEntry = timeline[adjustedIndex];
         if (!clipEntry || !sfx.audioUrl) continue;
         const buffer = await fetchBuffer(sfx.audioUrl);
         if (!buffer || cancelled) continue;
 
+        const defaultTransDur = state.aiProductionPlan?.defaultTransitionDuration ?? 0.3;
         let startTime = clipEntry.globalStart;
-        if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - 0.5);
-        else if (sfx.timing === "after") startTime = clipEntry.globalEnd - 0.3;
+        // Use AI-decided SFX duration for "before" lead-in
+        if (sfx.timing === "before") startTime = Math.max(0, clipEntry.globalStart - sfx.durationMs / 1000);
+        else if (sfx.timing === "after") startTime = clipEntry.globalEnd - defaultTransDur;
 
-        layers.push({ buffer, startTime, gain: 0.8, type: "sfx" });
+        const sfxVol = state.aiProductionPlan?.sfxVolume ?? 0.8;
+        layers.push({ buffer, startTime, gain: sfxVol, type: "sfx" });
       }
 
       // Load voiceover segments — timed to their clip
       for (const vo of voSegments) {
-        const clipEntry = timeline.find(
-          (e, i) => i === vo.clipIndex || e.clip.id === `clip-${vo.clipIndex}`
-        ) ?? timeline[vo.clipIndex];
+        const adjustedIndex = vo.clipIndex + introOffset;
+        const clipEntry = timeline[adjustedIndex];
         if (!clipEntry || !vo.audioUrl) continue;
         const buffer = await fetchBuffer(vo.audioUrl);
         if (!buffer || cancelled) continue;
 
+        const voDelay = state.aiProductionPlan?.voiceover?.delaySec ?? 0.3;
+        const voVol = state.aiProductionPlan?.voiceoverVolume ?? 1.0;
         layers.push({
           buffer,
-          startTime: clipEntry.globalStart + 0.3,
-          gain: 1.0,
+          startTime: clipEntry.globalStart + voDelay,
+          gain: voVol,
           type: "voiceover",
         });
       }
@@ -323,7 +361,8 @@ export default function TapePreviewPlayer() {
       if (hasMusicUrl && state.aiMusicUrl) {
         const buffer = await fetchBuffer(state.aiMusicUrl);
         if (buffer && !cancelled) {
-          layers.push({ buffer, startTime: 0, gain: 0.5, type: "music" });
+          const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
+          layers.push({ buffer, startTime: 0, gain: musicVol, type: "music" });
         }
       }
 
@@ -349,16 +388,52 @@ export default function TapePreviewPlayer() {
         if (layer.type === "music") musicGain = gain;
       }
 
-      // Auto-duck music when voiceover is playing
+      // Auto-duck music when voiceover or SFX is playing
       if (musicGain) {
-        const voLayers = layers.filter((l) => l.type === "voiceover");
-        for (const vo of voLayers) {
-          const voEnd = vo.startTime + vo.buffer.duration;
-          // Duck music 0.2s before voiceover, restore 0.3s after
-          musicGain.gain.linearRampToValueAtTime(0.5, Math.max(0, vo.startTime - 0.2));
-          musicGain.gain.linearRampToValueAtTime(0.15, vo.startTime);
-          musicGain.gain.linearRampToValueAtTime(0.15, voEnd);
-          musicGain.gain.linearRampToValueAtTime(0.5, voEnd + 0.3);
+        const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
+        const duckRatio = state.aiProductionPlan?.musicDuckRatio ?? 0.3;
+
+        // Collect all ducking segments: full duck for VO, lighter duck for SFX
+        const duckSegments: { startTime: number; endTime: number; ratio: number }[] = [];
+        for (const layer of layers) {
+          if (layer.type === "voiceover") {
+            duckSegments.push({
+              startTime: layer.startTime,
+              endTime: layer.startTime + layer.buffer.duration,
+              ratio: duckRatio,
+            });
+          } else if (layer.type === "sfx") {
+            // Lighter duck for SFX — halfway between normal and VO duck level
+            const sfxDuckRatio = Math.min(1, duckRatio + (1 - duckRatio) * 0.5);
+            duckSegments.push({
+              startTime: layer.startTime,
+              endTime: layer.startTime + layer.buffer.duration,
+              ratio: sfxDuckRatio,
+            });
+          }
+        }
+
+        // Sort and merge overlapping segments, keeping strongest duck
+        if (duckSegments.length > 0) {
+          const sorted = [...duckSegments].sort((a, b) => a.startTime - b.startTime);
+          const merged: { startTime: number; endTime: number; ratio: number }[] = [];
+          for (const seg of sorted) {
+            const last = merged[merged.length - 1];
+            if (last && seg.startTime <= last.endTime + 0.5) {
+              last.endTime = Math.max(last.endTime, seg.endTime);
+              last.ratio = Math.min(last.ratio, seg.ratio);
+            } else {
+              merged.push({ ...seg });
+            }
+          }
+          for (const seg of merged) {
+            const duckedVol = musicVol * seg.ratio;
+            const duckStart = Math.max(0, seg.startTime - 0.2);
+            musicGain.gain.setValueAtTime(musicVol, duckStart);
+            musicGain.gain.linearRampToValueAtTime(duckedVol, seg.startTime);
+            musicGain.gain.setValueAtTime(duckedVol, seg.endTime);
+            musicGain.gain.linearRampToValueAtTime(musicVol, seg.endTime + 0.3);
+          }
         }
       }
 
@@ -382,6 +457,7 @@ export default function TapePreviewPlayer() {
         mixerRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mute/volume changes handled by separate sync effects; plan props read once at build time
   }, [timeline, state.sfxTracks, state.voiceoverSegments, state.aiMusicStatus, state.aiMusicUrl]);
 
   /** Start all audio layers at the correct offset from the given playback time */
@@ -472,12 +548,25 @@ export default function TapePreviewPlayer() {
       const sa = sw / sh;
       const ca = w / h;
       let dw: number, dh: number;
-      if (sa > ca) {
-        dh = h;
-        dw = dh * sa;
+      const isCardClip = entry.clip.id === "__intro__" || entry.clip.id === "__outro__";
+      if (isCardClip) {
+        // Contain-fit for intro/outro cards: show full video without cropping
+        if (sa > ca) {
+          dw = w;
+          dh = dw / sa;
+        } else {
+          dh = h;
+          dw = dh * sa;
+        }
       } else {
-        dw = w;
-        dh = dw / sa;
+        // Cover-fit for regular clips: fill canvas, crop if needed
+        if (sa > ca) {
+          dh = h;
+          dw = dh * sa;
+        } else {
+          dw = w;
+          dh = dw / sa;
+        }
       }
 
       // Ken Burns zoom for static photos only (animated photos are now video, skip Ken Burns)
@@ -488,29 +577,59 @@ export default function TapePreviewPlayer() {
         dh *= scale;
       }
 
-      // Beat pulse: subtle scale bump on beats (adds satisfying rhythm feel)
+      // Beat pulse: scale bump on beats — AI controls intensity
       if (currentBeatIntensity > 0) {
-        const pulseScale = 1 + currentBeatIntensity * 0.015;
+        const beatPulseIntensity = entry.clip.beatPulseIntensity ?? state.aiProductionPlan?.beatPulseIntensity ?? 0.015;
+        const pulseScale = 1 + currentBeatIntensity * beatPulseIntensity;
         dw *= pulseScale;
         dh *= pulseScale;
       }
+
+      // Micro-settle: subtle scale+position ease on clip entry (matches export)
+      const settle = getMicroSettle(
+        localTime,
+        state.aiProductionPlan?.settleScale ?? 1.006,
+        state.aiProductionPlan?.settleDuration ?? 0.18,
+        state.aiProductionPlan?.settleEasing ?? "cubic"
+      );
+      dw *= settle.scale;
+      dh *= settle.scale;
 
       // Apply transition transform
       dw *= transform.scale;
       dh *= transform.scale;
       const dx = (w - dw) / 2 + transform.offsetX;
-      const dy = (h - dh) / 2 + transform.offsetY;
+      const dy = (h - dh) / 2 + transform.offsetY + settle.offsetY;
 
       try {
         ctx.drawImage(el, dx, dy, dw, dh);
-      } catch {
-        /* media not ready */
+      } catch (e) {
+        console.warn("[Preview] drawImage failed (media not ready):", e);
       }
 
       ctx.filter = "none";
 
+      // Warmth shift on final clip — subtle warm grade in last 2s (matches export)
+      if (entry.isLastClip) {
+        const warmCSS = getWarmthShiftCSS(localTime, entry.clipDuration, state.aiProductionPlan?.finalClipWarmth ?? true);
+        if (warmCSS) {
+          ctx.filter = warmCSS;
+          ctx.drawImage(ctx.canvas, 0, 0);
+          ctx.filter = "none";
+        }
+      }
+
+      // Film stock base + vignette + grain — pro post-processing overlays (matches export)
+      applyFilmStock(ctx, w, h, state.aiProductionPlan?.filmStock);
+      drawVignette(ctx, w, h, state.aiProductionPlan?.vignetteIntensity ?? 0.18, state.aiProductionPlan?.vignetteTightness ?? 0.45, state.aiProductionPlan?.vignetteHardness ?? 0.48);
+      drawFilmGrain(ctx, w, h, state.aiProductionPlan?.grainOpacity ?? 0.045, state.aiProductionPlan?.grainBlockSize ?? 4);
+
       // Kinetic text instead of static caption
-      if (entry.captionText) {
+      // Caption appear delay: let the visual land first before showing text (matches export)
+      const captionDelay = state.aiProductionPlan?.captionAppearDelay ?? 0.12;
+      if (entry.captionText && localTime >= captionDelay) {
+        const captionLocalTime = localTime - captionDelay;
+        const captionClipDuration = entry.clipDuration - captionDelay;
         ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
         const captionCustom: CustomCaptionParams | undefined =
           (entry.clip.customCaptionAnimation || entry.clip.customCaptionFontWeight || entry.clip.customCaptionColor || entry.clip.customCaptionGlowColor)
@@ -524,12 +643,30 @@ export default function TapePreviewPlayer() {
               glowRadius: entry.clip.customCaptionGlowRadius,
             }
           : undefined;
+        const previewKineticParams = state.aiProductionPlan ? {
+          popStartScale: state.aiProductionPlan.captionPopStartScale,
+          popExitScale: state.aiProductionPlan.captionPopExitScale,
+          slideExitDistance: state.aiProductionPlan.captionSlideExitDistance,
+          fadeExitOffset: state.aiProductionPlan.captionFadeExitOffset,
+          flickerSpeed: state.aiProductionPlan.captionFlickerSpeed,
+          popIdleFreq: state.aiProductionPlan.captionPopIdleFreq,
+          flickerIdleFreq: state.aiProductionPlan.captionFlickerIdleFreq,
+          boldSizeMultiplier: state.aiProductionPlan.captionBoldSizeMultiplier,
+          minimalSizeMultiplier: state.aiProductionPlan.captionMinimalSizeMultiplier,
+          popOvershoot: state.aiProductionPlan.captionPopOvershoot,
+        } : undefined;
         const kTransform = getKineticTransform(
           entry.clip.captionStyle,
-          localTime,
-          entry.clipDuration,
+          captionLocalTime,
+          captionClipDuration,
           h,
-          captionCustom
+          captionCustom,
+          state.aiProductionPlan?.captionEntranceDuration ?? 0.5,
+          state.aiProductionPlan?.captionExitDuration ?? 0.3,
+          entry.clip.captionAnimationIntensity ?? 1.0,
+          entry.clip.captionIdlePulse ?? 1.0,
+          entry.clip.captionExitAnimation ?? state.aiProductionPlan?.captionExitAnimation ?? "fade",
+          previewKineticParams
         );
         drawKineticCaption(
           ctx,
@@ -538,14 +675,19 @@ export default function TapePreviewPlayer() {
           kTransform,
           w,
           h,
-          Math.round(h * 0.025),
-          captionCustom
+          Math.round(h * (state.aiProductionPlan?.captionFontSize ?? 0.025)),
+          captionCustom,
+          state.aiProductionPlan?.captionVerticalPosition,
+          state.aiProductionPlan?.captionShadowColor,
+          state.aiProductionPlan?.captionShadowBlur,
+          entry.clip.customCaptionGlowSpread,
+          previewKineticParams
         );
       }
 
       ctx.restore();
     },
-    []
+    [state.aiProductionPlan]
   );
 
   // Draw the full canvas state at a given time
@@ -556,14 +698,14 @@ export default function TapePreviewPlayer() {
       const ctx = c.getContext("2d");
       if (!ctx) return;
 
-      ctx.fillStyle = "black";
+      ctx.fillStyle = state.aiProductionPlan?.letterboxColor ?? "black";
       ctx.fillRect(0, 0, c.width, c.height);
 
       // Beat intensity for visual pulse
-      const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid) : 0;
+      const currentBeatIntensity = beatGrid ? getBeatIntensity(t, beatGrid, state.aiProductionPlan?.beatSyncToleranceMs ?? 50) : 0;
 
       const nowActive = new Set<string>();
-      let activeTransInfo: { type: TransitionType; progress: number; seed: number } | null = null;
+      let activeTransInfo: { type: TransitionType; progress: number; seed: number; intensity: number } | null = null;
 
       for (let i = 0; i < timeline.length; i++) {
         const e = timeline[i];
@@ -576,19 +718,20 @@ export default function TapePreviewPlayer() {
         let alpha = 1;
         let transform: TransitionTransform = { scale: 1, offsetX: 0, offsetY: 0 };
 
-        // Per-clip style values (AI-specified, neutral defaults as last resort)
-        const clipTransDuration = e.clip.transitionDuration ?? 0.3;
-        const clipEntryPunch = e.clip.entryPunchScale ?? 1.0;
-        const clipEntryPunchDur = e.clip.entryPunchDuration ?? 0.15;
-        const clipKenBurns = e.clip.kenBurnsIntensity ?? 0;
+        // Per-clip style: AI per-clip → AI plan-level default → theme default
+        const plan = state.aiProductionPlan;
+        const clipTransDuration = e.clip.transitionDuration ?? plan?.defaultTransitionDuration ?? style.transitionDuration;
+        const clipEntryPunch = e.clip.entryPunchScale ?? plan?.defaultEntryPunchScale ?? style.entryPunchScale;
+        const clipEntryPunchDur = e.clip.entryPunchDuration ?? plan?.defaultEntryPunchDuration ?? style.entryPunchDuration;
+        const clipKenBurns = e.clip.kenBurnsIntensity ?? plan?.defaultKenBurnsIntensity ?? (style.kenBurnsIntensity ?? 0);
 
         // Incoming clip during transition
         if (i > 0 && lt < clipTransDuration) {
           const transType = (e.clip.transitionType as TransitionType) ?? fallbackTransition;
           const progress = lt / clipTransDuration;
           alpha = getClipAlpha(transType, progress, false);
-          transform = getTransitionTransform(transType, progress, false, c.width);
-          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1 };
+          transform = getTransitionTransform(transType, progress, false, c.width, e.clip.transitionParams);
+          if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i - 1, intensity: e.clip.transitionIntensity ?? 1.0 };
         }
 
         // Outgoing clip during transition
@@ -599,8 +742,8 @@ export default function TapePreviewPlayer() {
             const transType = (nextClip?.clip.transitionType as TransitionType) ?? fallbackTransition;
             const progress = 1 - timeToEnd / nextTransDuration;
             alpha = getClipAlpha(transType, progress, true);
-            transform = getTransitionTransform(transType, progress, true, c.width);
-            if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i };
+            transform = getTransitionTransform(transType, progress, true, c.width, nextClip?.clip.transitionParams);
+            if (!activeTransInfo) activeTransInfo = { type: transType, progress, seed: i, intensity: nextClip?.clip.transitionIntensity ?? 1.0 };
           }
         }
 
@@ -613,14 +756,32 @@ export default function TapePreviewPlayer() {
 
       // Transition overlay
       if (activeTransInfo) {
-        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed);
+        drawTransitionOverlay(ctx, c.width, c.height, activeTransInfo.type, activeTransInfo.progress, activeTransInfo.seed, state.aiProductionPlan?.neonColors, {
+          flashOverlayAlpha: state.aiProductionPlan?.flashOverlayAlpha,
+          zoomPunchFlashAlpha: state.aiProductionPlan?.zoomPunchFlashAlpha,
+          colorFlashAlpha: state.aiProductionPlan?.colorFlashAlpha,
+          strobeFlashCount: state.aiProductionPlan?.strobeFlashCount,
+          strobeFlashAlpha: state.aiProductionPlan?.strobeFlashAlpha,
+          lightLeakColor: state.aiProductionPlan?.lightLeakColor,
+          glitchColors: state.aiProductionPlan?.glitchColors,
+          lightLeakOpacity: state.aiProductionPlan?.lightLeakOpacity,
+          hardFlashDarkenPhase: state.aiProductionPlan?.hardFlashDarkenPhase,
+          hardFlashBlastPhase: state.aiProductionPlan?.hardFlashBlastPhase,
+          glitchScanlineCount: state.aiProductionPlan?.glitchScanlineCount,
+          glitchBandWidth: state.aiProductionPlan?.glitchBandWidth,
+          whipBlurLineCount: state.aiProductionPlan?.whipBlurLineCount,
+          whipBrightnessAlpha: state.aiProductionPlan?.whipBrightnessAlpha,
+          hardCutBumpAlpha: state.aiProductionPlan?.hardCutBumpAlpha,
+        }, activeTransInfo.intensity);
       }
 
-      // Beat flash overlay (subtle brightness pulse on strong beats — AI chose the theme, beat sync is user toggle)
-      if (currentBeatIntensity > 0.5) {
+      // Beat flash overlay — per-clip override → plan-level → default (matches export)
+      const beatFlashMax = state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
+      const beatFlashThreshold = state.aiProductionPlan?.beatFlashThreshold ?? 0.5;
+      if (currentBeatIntensity > beatFlashThreshold && beatFlashMax > 0) {
         ctx.save();
-        ctx.globalAlpha = (currentBeatIntensity - 0.5) * 0.12;
-        ctx.fillStyle = "white";
+        ctx.globalAlpha = (currentBeatIntensity - beatFlashThreshold) * beatFlashMax;
+        ctx.fillStyle = state.aiProductionPlan?.beatFlashColor ?? "white";
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.restore();
       }
@@ -630,28 +791,43 @@ export default function TapePreviewPlayer() {
         const e = timeline.find((x) => x.clip.id === id);
         const el = mediaMapRef.current.get(id);
         if (el instanceof HTMLVideoElement && e) {
+          // Exit deceleration — subtle slowdown in the last ~0.14s (matches export)
+          const localT = t - e.globalStart;
+          const exitDecel = getExitDeceleration(localT, e.clipDuration, state.aiProductionPlan?.exitDecelSpeed ?? 0.96, state.aiProductionPlan?.exitDecelDuration ?? 0.14, state.aiProductionPlan?.exitDecelEasing ?? "quad");
           // Apply velocity (playback rate) — custom keyframes take priority over presets
           const customKf = e.clip.customVelocityKeyframes;
           const preset = e.clip.velocityPreset ?? "normal";
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
-            const speed = getSpeedFromKeyframes(posInClip, customKf);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const speed = getSpeedFromKeyframes(posInClip, customKf) * exitDecel;
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
             }
           } else if (preset !== "normal") {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
-            const speed = getSpeedAtPosition(posInClip, preset);
-            const clampedSpeed = Math.max(0.1, Math.min(4, speed));
+            const speed = getSpeedAtPosition(posInClip, preset) * exitDecel;
+            const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
+            }
+          } else if (exitDecel < 1.0) {
+            // Even "normal" speed clips get exit deceleration
+            if (Math.abs(el.playbackRate - exitDecel) > 0.02) {
+              el.playbackRate = exitDecel;
             }
           }
 
           if (!activeClipsRef.current.has(id)) {
-            el.currentTime = e.clip.trimStart + (t - e.globalStart);
-            el.play().catch(() => {});
+            // Account for velocity curves when seeking — a speed-ramped clip's
+            // source time doesn't map linearly to timeline time
+            const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
+            const sourceDur = e.clip.trimEnd - e.clip.trimStart;
+            const sourceOffset = (customKf && customKf.length >= 2)
+              ? getSourceTimeAtPosition(posInClip, sourceDur, preset, 50, customKf)
+              : getSourceTimeAtPosition(posInClip, sourceDur, preset, 50);
+            el.currentTime = e.clip.trimStart + sourceOffset;
+            el.play().catch((e) => console.warn("[Preview] Video play rejected:", e));
           }
         }
       }
@@ -666,7 +842,8 @@ export default function TapePreviewPlayer() {
       }
       activeClipsRef.current = nowActive;
     },
-    [timeline, fallbackTransition, drawMediaFrame, beatGrid]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- style props are stable during playback; including them would reset the render loop
+    [timeline, fallbackTransition, drawMediaFrame, beatGrid, state.aiProductionPlan]
   );
 
   // Animation loop with adaptive frame skipping for mobile performance
@@ -746,9 +923,11 @@ export default function TapePreviewPlayer() {
 
   // Cleanup on unmount
   useEffect(() => {
+    const pb = pbRef.current;
+    const mediaMap = mediaMapRef.current;
     return () => {
-      cancelAnimationFrame(pbRef.current.raf);
-      for (const [, el] of mediaMapRef.current) {
+      cancelAnimationFrame(pb.raf);
+      for (const [, el] of mediaMap) {
         if (el instanceof HTMLVideoElement) el.pause();
       }
       if (mixerRef.current) {

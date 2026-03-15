@@ -44,6 +44,28 @@ export type AiMusicStatus = "idle" | "generating" | "completed" | "failed";
 /** Generic async generation status — used for SFX, voiceover, intro, outro, thumbnail */
 export type GenerationStatus = "idle" | "generating" | "completed" | "failed";
 
+/** Validation loop status — sub-phase of the detecting step */
+export type ValidationStatus = "idle" | "validating" | "fixing" | "passed";
+
+/** Structured fixes that Haiku can request during validation */
+export interface ValidationFixes {
+  clipUpdates?: Array<{ clipIndex: number; updates: Partial<EditedClip> }>;
+  clipRemovals?: number[];
+  regenerateMusic?: { prompt: string; durationMs: number };
+  regenerateSfx?: Array<{ clipIndex: number; prompt: string; durationMs: number }>;
+  regenerateVoiceover?: Array<{ clipIndex: number; text: string }>;
+  regenerateIntro?: { text: string; stylePrompt: string; duration: number };
+  regenerateOutro?: { text: string; stylePrompt: string; duration: number };
+  planUpdates?: Partial<AiProductionPlan>;
+}
+
+/** Result of a single Haiku validation pass */
+export interface ValidationResult {
+  passed: boolean;
+  issues: string[];
+  fixes: ValidationFixes;
+}
+
 // ── AI Production types (auto-pilot pipeline) ──
 
 /** Sound effect mapped to a specific clip transition or accent moment */
@@ -61,7 +83,10 @@ export interface VoiceoverSegment {
   clipIndex: number;
   text: string;
   audioUrl?: string;
-  duration?: number;
+  /** Duration in seconds — 0 until audio is generated */
+  duration: number;
+  /** Per-segment delay override — seconds after clip start before VO begins */
+  delaySec?: number;
   status: GenerationStatus;
 }
 
@@ -70,6 +95,8 @@ export interface GeneratedCard {
   text: string;
   stylePrompt: string;
   videoUrl?: string;
+  /** AI-decided duration in seconds (3-5s range) */
+  duration: number;
   status: GenerationStatus;
 }
 
@@ -85,8 +112,8 @@ export interface GeneratedThumbnail {
 /** Claude's expanded plan output — drives the entire AI autopilot pipeline */
 export interface AiProductionPlan {
   // Intro/outro cards
-  intro: { text: string; stylePrompt: string } | null;
-  outro: { text: string; stylePrompt: string } | null;
+  intro: { text: string; stylePrompt: string; duration: number } | null;
+  outro: { text: string; stylePrompt: string; duration: number } | null;
 
   // Sound effects
   sfx: Array<{
@@ -99,13 +126,219 @@ export interface AiProductionPlan {
   // Voiceover
   voiceover: {
     enabled: boolean;
-    segments: Array<{ clipIndex: number; text: string }>;
+    segments: Array<{ clipIndex: number; text: string; /** Per-segment delay override (0-2s) */ delaySec?: number }>;
     voiceCharacter: string;
+    /** Global fallback delay in seconds before voiceover starts after clip begins (0-1s) */
+    delaySec: number;
   };
 
   // Music
   musicPrompt: string;
   musicDurationMs: number;
+
+  // Audio mix — AI-decided volume levels (0-1)
+  musicVolume: number;
+  sfxVolume: number;
+  voiceoverVolume: number;
+
+  /** AI-decided default transition duration for clips that don't specify one */
+  defaultTransitionDuration: number;
+  /** AI-decided default entry punch scale for clips that don't specify one (1.0-1.1) */
+  defaultEntryPunchScale?: number;
+  /** AI-decided default entry punch duration for clips that don't specify one (0-0.3s) */
+  defaultEntryPunchDuration?: number;
+  /** AI-decided default Ken Burns intensity for photo clips that don't specify one (0-0.08) */
+  defaultKenBurnsIntensity?: number;
+
+  // Timing & pacing
+  /** AI-decided photo display duration in seconds (2-8s) */
+  photoDisplayDuration: number;
+  /** AI-decided loop crossfade duration in seconds (0.2-1.5s) */
+  loopCrossfadeDuration: number;
+  /** AI-decided caption entrance animation duration in seconds (0.2-1.0s) */
+  captionEntranceDuration: number;
+  /** AI-decided caption exit animation duration in seconds (0.1-0.5s) */
+  captionExitDuration: number;
+  /** AI-decided music ducking ratio during voiceover (0.1-0.6) */
+  musicDuckRatio: number;
+  /** Music duck attack time in seconds — how fast music fades down before VO/SFX (0.05-1.0s) */
+  musicDuckAttack?: number;
+  /** Music duck release time in seconds — how fast music fades back up after VO/SFX (0.1-2.0s) */
+  musicDuckRelease?: number;
+  /** Music fade-in duration at tape start (0-3s). 0 = no fade, starts at full volume. */
+  musicFadeInDuration?: number;
+  /** Music fade-out duration at tape end (0-3s). 0 = hard stop, >0 = graceful fade. */
+  musicFadeOutDuration?: number;
+  /** AI-decided beat-sync tolerance in ms (20-200ms) */
+  beatSyncToleranceMs: number;
+  /** AI-decided export bitrate in bps */
+  exportBitrate: number;
+  /** AI-decided watermark opacity (0.1-0.6) */
+  watermarkOpacity: number;
+  /** AI-decided neon transition colors as hex array */
+  neonColors: string[];
+
+  // ── Rendering fine-tuning (AI full creative control) ──
+
+  /** Beat pulse scale multiplier (0 = no pulse, 0.015 = subtle, 0.04 = pronounced) */
+  beatPulseIntensity?: number;
+  /** Beat flash overlay max opacity (0 = none, 0.12 = subtle, 0.3 = punchy) */
+  beatFlashOpacity?: number;
+  /** Beat intensity threshold for flash trigger (0-1). Lower = reacts to weaker beats. */
+  beatFlashThreshold?: number;
+  /** Beat flash overlay color as hex (default "white"). AI can tint flashes to match mood. */
+  beatFlashColor?: string;
+
+  /** Caption font size as fraction of canvas height (0.02 = small, 0.025 = default, 0.04 = large) */
+  captionFontSize?: number;
+  /** Caption vertical position as fraction of canvas height (0.5 = center, 0.89 = bottom, 0.15 = top) */
+  captionVerticalPosition?: number;
+  /** Caption drop shadow color (CSS color string) */
+  captionShadowColor?: string;
+  /** Caption drop shadow blur in pixels */
+  captionShadowBlur?: number;
+
+  /** Flash transition overlay opacity (0-1). Default 0.85. */
+  flashOverlayAlpha?: number;
+  /** Zoom punch flash overlay opacity (0-1). Default 0.35. */
+  zoomPunchFlashAlpha?: number;
+  /** Color flash overlay opacity (0-1). Default 0.65. */
+  colorFlashAlpha?: number;
+  /** Strobe flash count per transition (2-8). Default 4. */
+  strobeFlashCount?: number;
+  /** Strobe flash opacity (0-1). Default 0.9. */
+  strobeFlashAlpha?: number;
+  /** Light leak tint color as hex (default warm gold "#ffc864"). */
+  lightLeakColor?: string;
+  /** Glitch channel colors as [primary hex, secondary hex] (default red/cyan). */
+  glitchColors?: [string, string];
+
+  // ── AI-controlled post-processing (replaces hardcoded values) ──
+
+  /** Film grain noise opacity (0 = none, 0.03 = subtle, 0.06 = heavy). AI decides per-tape. */
+  grainOpacity?: number;
+  /** Vignette edge darkening intensity (0 = none, 0.15 = subtle, 0.3 = dramatic). */
+  vignetteIntensity?: number;
+  /** Vignette inner radius as fraction of outer (0.2 = tight spotlight, 0.45 = default, 0.7 = wide). */
+  vignetteTightness?: number;
+  /** Vignette gradient hardness (0-1). 0 = smooth falloff, 0.5 = standard, 1 = sharp edge. */
+  vignetteHardness?: number;
+  /** Watermark font size as fraction of canvas height (0.012 = small, 0.015 = default, 0.025 = large). */
+  watermarkFontSize?: number;
+  /** Watermark vertical position as fraction of canvas height from bottom (0.02 = tight, 0.03 = default, 0.06 = high). */
+  watermarkYOffset?: number;
+  /** Caption appear delay after cut in seconds (0 = instant, 0.12 = natural, 0.3 = dramatic). */
+  captionAppearDelay?: number;
+  /** Exit deceleration speed multiplier (0.92 = heavy, 0.97 = subtle, 1.0 = none). */
+  exitDecelSpeed?: number;
+  /** Exit deceleration duration in seconds (0 = none, 0.12 = quick, 0.2 = smooth). */
+  exitDecelDuration?: number;
+  /** Micro-settle scale on clip entry (1.0 = none, 1.004 = subtle, 1.01 = noticeable). */
+  settleScale?: number;
+  /** Micro-settle duration in seconds (0.1 = snappy, 0.18 = smooth, 0.25 = cinematic). */
+  settleDuration?: number;
+  /** Micro-settle easing curve: 'cubic' (default), 'quad' (softer), 'expo' (snappy), 'linear'. */
+  settleEasing?: string;
+  /** Exit decel easing curve: 'quad' (default), 'cubic' (heavier), 'linear' (mechanical). */
+  exitDecelEasing?: string;
+  /** Default clip audio volume when music is present (0-1). Per-clip overrides this. */
+  clipAudioVolume?: number;
+  /** Warmth shift on the final clip. true = default warmth, false = none, object = custom. */
+  finalClipWarmth?: boolean | { sepia: number; saturation: number; fadeIn: number };
+
+  /** Film stock — tape-level base post-processing applied uniformly under per-clip grades. */
+  filmStock?: {
+    /** Base grain opacity (0-0.08). Stacks with grainOpacity. */
+    grain: number;
+    /** Base warmth shift (0 = neutral, 0.05 = warm, -0.03 = cool). Positive = sepia tint. */
+    warmth: number;
+    /** Base contrast multiplier (0.9-1.2). Applied before per-clip filterCSS. */
+    contrast: number;
+    /** Faded/lifted blacks (0-0.1). 0 = true black, 0.05 = lifted matte look. */
+    fadedBlacks: number;
+  };
+
+  /** Letterbox/pillarbox fill color as hex (default "black"). AI can use dark tones to match mood. */
+  letterboxColor?: string;
+
+  /** Watermark text color as hex (default "white"). AI can tint to match tape mood. */
+  watermarkColor?: string;
+
+  /** Film grain block size in pixels (2 = fine cinematic, 4 = default, 8 = coarse retro). */
+  grainBlockSize?: number;
+
+  /** Caption exit animation type: "fade" (default), "pop", "slide", "dissolve". */
+  captionExitAnimation?: string;
+
+  // ── Transition overlay fine-tuning ──
+
+  /** Light leak gradient opacity peak (0-1). Default 0.35. */
+  lightLeakOpacity?: number;
+  /** Hard flash darken-phase duration as fraction of transition (0-0.5). Default 0.3. */
+  hardFlashDarkenPhase?: number;
+  /** Hard flash white-blast duration as fraction of transition. Default 0.25. */
+  hardFlashBlastPhase?: number;
+  /** Glitch scanline count (2-12). Default 6. */
+  glitchScanlineCount?: number;
+  /** Glitch channel band width as fraction (0.1-0.5). Default 0.34. */
+  glitchBandWidth?: number;
+  /** Whip motion blur line count (4-16). Default 8. */
+  whipBlurLineCount?: number;
+  /** Whip brightness overlay opacity (0-0.5). Default 0.15. */
+  whipBrightnessAlpha?: number;
+  /** Hard cut brightness bump opacity (0-0.3). Default 0.15. */
+  hardCutBumpAlpha?: number;
+
+  // ── Kinetic text fine-tuning ──
+
+  /** Pop entrance start scale (0.1-0.8). Default 0.3. Lower = more dramatic entrance. */
+  captionPopStartScale?: number;
+  /** Pop exit scale expansion (0.1-0.8). Default 0.3. */
+  captionPopExitScale?: number;
+  /** Slide exit distance in pixels (5-40). Default 20. */
+  captionSlideExitDistance?: number;
+  /** Fade exit vertical offset in pixels (-30 to 30). Default -10. */
+  captionFadeExitOffset?: number;
+  /** Flicker entrance speed multiplier (4-16). Default 8. Controls how fast the neon flickers. */
+  captionFlickerSpeed?: number;
+  /** Pop idle pulse frequency in Hz (0.5-4). Default 1.5. */
+  captionPopIdleFreq?: number;
+  /** Flicker idle glow frequency in Hz (1-6). Default 3. */
+  captionFlickerIdleFreq?: number;
+  /** Bold caption font size multiplier (0.8-1.6). Default 1.2. */
+  captionBoldSizeMultiplier?: number;
+  /** Minimal caption font size multiplier (0.6-1.0). Default 0.9. */
+  captionMinimalSizeMultiplier?: number;
+  /** Pop easeOutBack overshoot constant (1.0-3.0). Default 1.70158. Higher = bouncier. */
+  captionPopOvershoot?: number;
+
+  // ── Editing philosophy (AI articulates its vision before making choices) ──
+
+  /** AI's high-level editing philosophy for this tape. */
+  editingPhilosophy?: {
+    /** The overall feel: raw & authentic, polished & cinematic, energetic & chaotic, etc. */
+    vibe?: string;
+    /** Pacing arc: escalation, double_peak, sine_wave, slow_build, front_loaded, even */
+    paceProfile?: string;
+    /** How transitions should evolve across the tape */
+    transitionArc?: string;
+    /** The foundational color grade the AI is building on */
+    baseGrade?: string;
+  };
+
+  /** Audio breath moments — planned silence dips at emotional peaks. */
+  audioBreaths?: Array<{
+    /** Timestamp in seconds from tape start */
+    time: number;
+    /** Duration of the breath in seconds (0.3-1.0) */
+    duration: number;
+    /** How much to duck ALL audio (0 = full silence, 0.15 = whisper, 0.3 = subtle dip) */
+    depth: number;
+    /** Attack time in seconds — how fast audio dips into the breath (0.05-0.5). Default 0.1. */
+    attack?: number;
+    /** Release time in seconds — how fast audio recovers after the breath (0.1-1.0). Default 0.2. */
+    release?: number;
+  }>;
 
   // Thumbnail
   thumbnail: {
@@ -193,6 +426,51 @@ export interface EditedClip {
   customCaptionGlowColor?: string;
   /** Custom caption glow radius in pixels (0-30). */
   customCaptionGlowRadius?: number;
+  /** Per-clip original audio volume (0-1). Overrides plan-level clipAudioVolume. */
+  clipAudioVolume?: number;
+  /** Per-clip transition intensity (0-1). Scales the effect magnitude. */
+  transitionIntensity?: number;
+  /** Per-clip transition params — fine-tune the chosen transition type's internals. */
+  transitionParams?: {
+    /** Zoom punch outgoing scale factor (default 0.25). Higher = more aggressive zoom-out. */
+    zoomOutScale?: number;
+    /** Zoom punch incoming scale factor (default 0.18). Higher = more aggressive zoom-in. */
+    zoomInScale?: number;
+    /** Glitch jitter amplitude in pixels (default 12). Higher = more chaotic. */
+    glitchJitter?: number;
+    /** Whip motion blur intensity/alpha (default 0.25). */
+    motionBlurAlpha?: number;
+    /** Soft zoom scale factor (default 0.04). */
+    softZoomScale?: number;
+  };
+  /** Per-clip caption exit animation type: "fade" (default), "pop", "slide", "dissolve". */
+  captionExitAnimation?: string;
+  /** Per-clip beat pulse scale intensity (0-0.1). Overrides plan-level beatPulseIntensity. */
+  beatPulseIntensity?: number;
+  /** Per-clip beat flash overlay opacity (0-0.5). Overrides plan-level beatFlashOpacity. */
+  beatFlashOpacity?: number;
+  /** Per-clip beat flash threshold (0-1). Lower = reacts to weaker beats. */
+  beatFlashThreshold?: number;
+  /** Per-clip beat flash color as hex (default "white"). */
+  beatFlashColor?: string;
+  /** Per-clip caption idle pulse intensity (0-1). Controls how much text "breathes" during steady state. */
+  captionIdlePulse?: number;
+  /** Per-clip caption glow spread multiplier (0.5-3). Controls second glow layer blur ratio. */
+  customCaptionGlowSpread?: number;
+  /** Per-clip audio bleed fade-in duration in seconds (0.01-0.3). Controls how clip audio starts. */
+  audioFadeIn?: number;
+  /** Per-clip audio bleed fade-out duration in seconds (0.01-0.3). Controls how clip audio ends. */
+  audioFadeOut?: number;
+  /** Per-clip caption animation intensity (0-1). Scales entrance animation magnitude. */
+  captionAnimationIntensity?: number;
+  /** Per-clip light leak color as hex. Overrides plan-level lightLeakColor. */
+  lightLeakColor?: string;
+  /** Per-clip glitch colors as [primary, secondary] hex. */
+  glitchColors?: [string, string];
+  /** Per-clip light leak opacity (0-1). */
+  lightLeakOpacity?: number;
+  /** Per-clip whip motion blur alpha (0-1). */
+  whipMotionBlurAlpha?: number;
 }
 
 export interface ViralExportOptions {
@@ -200,13 +478,6 @@ export interface ViralExportOptions {
   beatSync: boolean;
   /** Enable seamless loop: cross-fade last 0.5s into first 0.5s for TikTok replay. */
   seamlessLoop: boolean;
-}
-
-export interface FrameAnalysis {
-  timestamp: number;
-  score: number;
-  label: string;
-  reasoning: string;
 }
 
 // ── Editing theme (AI-detected or template-derived) ──
@@ -249,8 +520,11 @@ export interface AppState {
   regenerateFeedback: string | null;
   // Creative direction — optional user-provided style instructions passed to Opus planner
   creativeDirection: string;
-  // AI-generated music (ElevenLabs Eleven Music) — opt-in, Pro only
+  // ── Pro feature toggles (anyone can toggle, labeled Pro) ──
   aiMusicEnabled: boolean;
+  sfxEnabled: boolean;
+  introOutroEnabled: boolean;
+  animatePhotosEnabled: boolean;
   aiMusicStatus: AiMusicStatus;
   aiMusicUrl: string | null;
   aiMusicPrompt: string;
@@ -292,6 +566,9 @@ export interface AppState {
   // ── Style transfer (Pro) — visual post-processing ──
   /** AI-chosen style prompt for the final tape look */
   styleTransferPrompt: string | null;
+
+  // ── Validation loop ──
+  validationStatus: ValidationStatus;
 
   // ── Talking head intro (Pro) — lip-sync video from photo + voice ──
   talkingHead: {

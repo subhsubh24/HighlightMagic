@@ -1,6 +1,7 @@
 import { checkAnimationResult } from "@/lib/kling";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 /** Only allow alphanumeric, hyphens, and underscores in prediction IDs. */
 const PREDICTION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       videoUrl: result.outputUrl,
       error: result.error,
     };
-    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl}` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
+    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl.slice(0, 80)}...` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
     return Response.json(clientResult);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -52,7 +52,11 @@ export interface TtsGenerateResult {
  * Resolve a Claude-chosen voice character string to an ElevenLabs voice ID.
  */
 export function resolveVoiceId(voiceCharacter: string): string {
-  return VOICE_MAP[voiceCharacter] ?? DEFAULT_VOICE_ID;
+  const voiceId = VOICE_MAP[voiceCharacter];
+  if (!voiceId) {
+    console.warn(`[TTS] Unknown voice character "${voiceCharacter}", falling back to default voice`);
+  }
+  return voiceId ?? DEFAULT_VOICE_ID;
 }
 
 /**
