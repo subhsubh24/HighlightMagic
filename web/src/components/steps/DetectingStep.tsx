@@ -368,7 +368,7 @@ export default function DetectingStep() {
     }
 
     function startSfxEarly(sfxCues: Array<{ clipIndex: number; timing: string; prompt: string; durationMs: number }>) {
-      if (earlySfxStartedRef.current || sfxCues.length === 0) return;
+      if (!state.sfxEnabled || earlySfxStartedRef.current || sfxCues.length === 0) return;
       earlySfxStartedRef.current = true;
       debugLog(`[SFX] Early start from streaming partial — ${sfxCues.length} cues`);
 
@@ -935,9 +935,9 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 2. SFX generation — skip if already started early (Arch #4)
-      const sfxPromise = earlySfxStartedRef.current
-        ? null // Already started from streaming partial field
+      // 2. SFX generation — skip if disabled or already started early (Arch #4)
+      const sfxPromise = (!state.sfxEnabled || earlySfxStartedRef.current)
+        ? null
         : (remappedSfx.length > 0)
         ? (async () => {
             dispatch({ type: "SET_SFX_STATUS", status: "generating" });
@@ -1112,8 +1112,8 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 4. Intro card generation (Atlas Cloud T2V)
-      const introPromise = productionPlan?.intro
+      // 4. Intro card generation (Atlas Cloud T2V) — skip if disabled
+      const introPromise = (state.introOutroEnabled && productionPlan?.intro)
         ? (async () => {
             const rawIntroDur = productionPlan.intro!.duration;
             const introDur = (typeof rawIntroDur === "number" && Number.isFinite(rawIntroDur) && rawIntroDur > 0) ? rawIntroDur : 4;
@@ -1162,8 +1162,8 @@ export default function DetectingStep() {
           })()
         : null;
 
-      // 5. Outro card generation (Atlas Cloud T2V)
-      const outroPromise = productionPlan?.outro
+      // 5. Outro card generation (Atlas Cloud T2V) — skip if disabled
+      const outroPromise = (state.introOutroEnabled && productionPlan?.outro)
         ? (async () => {
             const rawOutroDur = productionPlan.outro!.duration;
             const outroDur = (typeof rawOutroDur === "number" && Number.isFinite(rawOutroDur) && rawOutroDur > 0) ? rawOutroDur : 4;
@@ -1371,8 +1371,8 @@ export default function DetectingStep() {
         dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt });
       }
 
-      // 11. Photo animations (existing — already built)
-      if (animatableClips.length > 0) {
+      // 11. Photo animations — skip if disabled
+      if (state.animatePhotosEnabled && animatableClips.length > 0) {
         setProgress(92);
         const uniquePhotoCount = new Set(
           animatableClips.filter((c) => currentMediaFiles.find((m) => m.id === c.sourceFileId)?.type === "photo").map((c) => c.sourceFileId)
@@ -1511,7 +1511,7 @@ export default function DetectingStep() {
           // 3. Fire targeted regeneration promises in parallel
           const regenPromises: Promise<void>[] = [];
 
-          if (fixes.regenerateSfx) {
+          if (fixes.regenerateSfx && state.sfxEnabled) {
             for (const sfx of fixes.regenerateSfx) {
               regenPromises.push(regenerateSpecificSfx(sfx.clipIndex, sfx.prompt, sfx.durationMs));
               setValidationPhase(`Regenerating sound effect for clip ${sfx.clipIndex + 1}...`);
@@ -1526,17 +1526,17 @@ export default function DetectingStep() {
             }
           }
 
-          if (fixes.regenerateIntro) {
+          if (fixes.regenerateIntro && state.introOutroEnabled) {
             regenPromises.push(regenerateIntroCard(fixes.regenerateIntro.stylePrompt, fixes.regenerateIntro.duration, fixes.regenerateIntro.text));
             setValidationPhase("Regenerating intro card...");
           }
 
-          if (fixes.regenerateOutro) {
+          if (fixes.regenerateOutro && state.introOutroEnabled) {
             regenPromises.push(regenerateOutroCard(fixes.regenerateOutro.stylePrompt, fixes.regenerateOutro.duration, fixes.regenerateOutro.text));
             setValidationPhase("Regenerating outro card...");
           }
 
-          if (fixes.regenerateMusic) {
+          if (fixes.regenerateMusic && state.aiMusicEnabled) {
             regenPromises.push(regenerateMusicTrack(fixes.regenerateMusic.prompt, fixes.regenerateMusic.durationMs));
             setValidationPhase("Regenerating music...");
           }

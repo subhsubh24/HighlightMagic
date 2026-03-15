@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, Film, AlertCircle, X, Image as ImageIcon, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2, Wand2, Volume2, Type, Palette, Video, Zap } from "lucide-react";
+import { Upload, Film, AlertCircle, X, Image as ImageIcon, Plus, ArrowRight, GripVertical, Sparkles, Music, Mic, Loader2, Wand2, Volume2, Video, Crown } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { haptic, uuid } from "@/lib/utils";
@@ -18,15 +18,54 @@ const STYLE_PRESETS = [
   { label: "Golden Hour", value: "golden hour warmth, soft lens flare, dreamy mood" },
 ] as const;
 
-/** Features AI auto-creates — shown as teasers */
-const AI_FEATURES = [
-  { icon: Music, label: "Custom soundtrack", color: "text-purple-400" },
-  { icon: Volume2, label: "Sound effects", color: "text-blue-400" },
-  { icon: Type, label: "AI voiceover", color: "text-emerald-400" },
-  { icon: Palette, label: "Style grading", color: "text-orange-400" },
-  { icon: Video, label: "Intro & outro", color: "text-pink-400" },
-  { icon: Zap, label: "Photo animation", color: "text-yellow-400" },
-] as const;
+/** Pro toggle component */
+function ProToggle({
+  icon: Icon,
+  label,
+  description,
+  enabled,
+  onToggle,
+  iconColor,
+}: {
+  icon: typeof Music;
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+  iconColor: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
+      <div className="flex items-center gap-2.5">
+        <Icon className={`h-4 w-4 ${iconColor}`} />
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-white">{label}</span>
+            <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
+              <Crown className="inline h-2 w-2 mr-0.5 -mt-px" />PRO
+            </span>
+          </div>
+          <p className="text-[10px] text-[var(--text-tertiary)]">{description}</p>
+        </div>
+      </div>
+      <button
+        onClick={() => { onToggle(); haptic(5); }}
+        role="switch"
+        aria-checked={enabled}
+        aria-label={`Toggle ${label}`}
+        className={`relative h-6 w-11 rounded-full transition-colors ${
+          enabled ? "bg-[var(--accent)]" : "bg-white/20"
+        } cursor-pointer flex-shrink-0`}
+      >
+        <div
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            enabled ? "translate-x-[22px]" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
 
 export default function UploadStep() {
   const { state, dispatch } = useApp();
@@ -94,6 +133,7 @@ export default function UploadStep() {
             type: "photo",
             duration: PHOTO_DISPLAY_DURATION,
             name: file.name,
+            animatePhoto: state.animatePhotosEnabled,
           });
         }
       }
@@ -103,7 +143,7 @@ export default function UploadStep() {
         dispatch({ type: "ADD_MEDIA", files: newMedia });
       }
     },
-    [dispatch, state.mediaFiles.length]
+    [dispatch, state.mediaFiles.length, state.animatePhotosEnabled]
   );
 
   const handleDrop = useCallback(
@@ -131,7 +171,6 @@ export default function UploadStep() {
 
   const handlePresetClick = (preset: typeof STYLE_PRESETS[number]) => {
     if (activePreset === preset.label) {
-      // Deselect
       setActivePreset(null);
       dispatch({ type: "SET_CREATIVE_DIRECTION", direction: "" });
     } else {
@@ -183,6 +222,9 @@ export default function UploadStep() {
     setDragOverIndex(null);
   };
 
+  // Count how many pro features are enabled
+  const proFeaturesEnabled = [state.aiMusicEnabled, state.sfxEnabled, state.introOutroEnabled, state.animatePhotosEnabled].filter(Boolean).length;
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
       {/* Hero text */}
@@ -205,7 +247,7 @@ export default function UploadStep() {
               <span className="gradient-text">AI does the rest.</span>
             </h1>
             <p className="mx-auto max-w-md text-[var(--text-secondary)]">
-              Upload videos & photos — AI finds the best moments, adds music, SFX, voiceover, and creates a viral-ready highlight tape.
+              Upload videos & photos — AI finds the best moments and creates a viral-ready highlight tape.
             </p>
           </>
         )}
@@ -242,98 +284,68 @@ export default function UploadStep() {
 
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {state.mediaFiles.map((media, index) => (
-              <div key={media.id} className="flex flex-col gap-1.5">
-                <div
-                  draggable
-                  onDragStart={() => handleDragStart(index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragEnd={handleDragEnd}
-                  className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
-                    dragOverIndex === index
-                      ? "border-[var(--accent)] scale-105"
-                      : "border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  {media.type === "video" ? (
-                    <video
-                      src={`${media.url}#t=1`}
-                      className="h-full w-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
-                  )}
+              <div
+                key={media.id}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
+                  dragOverIndex === index
+                    ? "border-[var(--accent)] scale-105"
+                    : "border-white/10 hover:border-white/20"
+                }`}
+              >
+                {media.type === "video" ? (
+                  <video
+                    src={`${media.url}#t=1`}
+                    className="h-full w-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
+                )}
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                  {/* Type badge + duration */}
-                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
-                    {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
-                  </div>
-
-                  {/* Order number */}
-                  <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
-                    {index + 1}
-                  </div>
-
-                  {/* Drag handle */}
-                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <GripVertical className="h-3.5 w-3.5 text-white/70" />
-                  </div>
-
-                  {/* Remove button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemove(media.id);
-                    }}
-                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
-                    aria-label={`Remove ${media.name}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                {/* Type badge + duration */}
+                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                  {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
+                  {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
                 </div>
 
-                {/* Photo animation controls */}
-                {media.type === "photo" && (
-                  <label className="flex items-center gap-1.5 cursor-pointer py-0.5">
-                    <input
-                      type="checkbox"
-                      checked={media.animatePhoto ?? false}
-                      onChange={(e) => {
-                        dispatch({
-                          type: "UPDATE_MEDIA_ANIMATION",
-                          fileId: media.id,
-                          animatePhoto: e.target.checked,
-                          animationInstructions: media.animationInstructions ?? "",
-                        });
-                      }}
-                      className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 accent-[var(--accent)]"
-                    />
-                    <Sparkles className="h-3 w-3 text-[var(--accent)]" />
-                    <span className="text-[11px] text-[var(--text-secondary)]">Animate</span>
-                  </label>
+                {/* Animate badge on photos when enabled */}
+                {media.type === "photo" && state.animatePhotosEnabled && (
+                  <div className="absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md bg-purple-500/50 px-1.5 py-0.5 text-[9px] text-white backdrop-blur-sm">
+                    <Sparkles className="h-2 w-2" />
+                    Animate
+                  </div>
                 )}
-                {media.type === "photo" && media.animatePhoto && (
-                  <input
-                    type="text"
-                    value={media.animationInstructions ?? ""}
-                    onChange={(e) => {
-                      dispatch({
-                        type: "UPDATE_MEDIA_ANIMATION",
-                        fileId: media.id,
-                        animatePhoto: true,
-                        animationInstructions: e.target.value.slice(0, 500),
-                      });
-                    }}
-                    placeholder="e.g. slow zoom in..."
-                    className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] text-white placeholder-[var(--text-tertiary)] outline-none focus:border-[var(--accent)] transition-colors"
-                  />
-                )}
+
+                {/* Order number */}
+                <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
+                  {index + 1}
+                </div>
+
+                {/* Drag handle */}
+                <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <GripVertical className="h-3.5 w-3.5 text-white/70" />
+                </div>
+
+                {/* Remove button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemove(media.id);
+                  }}
+                  className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                  aria-label={`Remove ${media.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
             ))}
 
@@ -375,9 +387,7 @@ export default function UploadStep() {
             </span>
           </div>
 
-          {/* ── AI Creative Controls ── */}
-
-          {/* Style presets — one-tap creative direction */}
+          {/* ── Style Presets ── */}
           <div className="mt-5">
             <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
               <Sparkles className="h-3 w-3 text-[var(--accent)]" />
@@ -413,44 +423,67 @@ export default function UploadStep() {
             />
           </div>
 
-          {/* AI Music toggle */}
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <Music className="h-4 w-4 text-purple-400" />
-              <div>
-                <span className="text-sm font-medium text-white">AI Music</span>
-                <p className="text-[10px] text-[var(--text-tertiary)]">Custom instrumental soundtrack</p>
-              </div>
+          {/* ── Pro Features ── */}
+          <div className="mt-5">
+            <div className="mb-2.5 flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                <Crown className="h-3 w-3 text-purple-400" />
+                Pro Features
+              </label>
+              {proFeaturesEnabled > 0 && (
+                <span className="text-[10px] text-purple-300">{proFeaturesEnabled} enabled</span>
+              )}
             </div>
-            <button
-              onClick={() => {
-                dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled });
-                haptic(5);
-              }}
-              role="switch"
-              aria-checked={state.aiMusicEnabled}
-              aria-label="Toggle AI generated music"
-              className={`relative h-6 w-11 rounded-full transition-colors ${
-                state.aiMusicEnabled ? "bg-[var(--accent)]" : "bg-white/20"
-              } cursor-pointer`}
-            >
-              <div
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  state.aiMusicEnabled ? "translate-x-[22px]" : "translate-x-0.5"
-                }`}
+
+            <div className="space-y-2">
+              <ProToggle
+                icon={Music}
+                label="AI Music"
+                description="Custom instrumental soundtrack"
+                enabled={state.aiMusicEnabled}
+                onToggle={() => dispatch({ type: "SET_AI_MUSIC_ENABLED", enabled: !state.aiMusicEnabled })}
+                iconColor="text-purple-400"
               />
-            </button>
+              <ProToggle
+                icon={Volume2}
+                label="Sound Effects"
+                description="AI-generated SFX synced to clips"
+                enabled={state.sfxEnabled}
+                onToggle={() => dispatch({ type: "SET_SFX_ENABLED", enabled: !state.sfxEnabled })}
+                iconColor="text-blue-400"
+              />
+              <ProToggle
+                icon={Video}
+                label="Intro & Outro Cards"
+                description="AI-generated animated title cards"
+                enabled={state.introOutroEnabled}
+                onToggle={() => dispatch({ type: "SET_INTRO_OUTRO_ENABLED", enabled: !state.introOutroEnabled })}
+                iconColor="text-pink-400"
+              />
+              {photoCount > 0 && (
+                <ProToggle
+                  icon={Sparkles}
+                  label="Photo Animation"
+                  description={`Animate ${photoCount} photo${photoCount !== 1 ? "s" : ""} into video`}
+                  enabled={state.animatePhotosEnabled}
+                  onToggle={() => dispatch({ type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: !state.animatePhotosEnabled })}
+                  iconColor="text-yellow-400"
+                />
+              )}
+            </div>
           </div>
 
           {/* Voice clone */}
           <div className="mt-2 rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Mic className="h-4 w-4 text-blue-400" />
+                <Mic className="h-4 w-4 text-emerald-400" />
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium text-white">Voice Clone</span>
-                    <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-medium text-blue-300">PRO</span>
+                    <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
+                      <Crown className="inline h-2 w-2 mr-0.5 -mt-px" />PRO
+                    </span>
                   </div>
                   <p className="text-[10px] text-[var(--text-tertiary)]">
                     AI narrates in your voice + creates a talking head intro
@@ -475,7 +508,7 @@ export default function UploadStep() {
               <button
                 onClick={() => voiceInputRef.current?.click()}
                 disabled={voiceUploading}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-500/20 bg-white/[0.02] px-4 py-2 text-xs text-[var(--text-tertiary)] transition-colors hover:border-blue-400/40 hover:text-blue-300 disabled:opacity-50"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-emerald-500/20 bg-white/[0.02] px-4 py-2 text-xs text-[var(--text-tertiary)] transition-colors hover:border-emerald-400/40 hover:text-emerald-300 disabled:opacity-50"
               >
                 {voiceUploading ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing...</>
@@ -496,21 +529,6 @@ export default function UploadStep() {
               e.target.value = "";
             }}
           />
-
-          {/* What AI will create — feature teasers */}
-          <div className="mt-5 rounded-xl bg-gradient-to-br from-[var(--accent)]/5 to-purple-500/5 border border-[var(--accent)]/10 p-3">
-            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-              AI will auto-create
-            </p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {AI_FEATURES.map(({ icon: Icon, label, color }) => (
-                <div key={label} className="flex items-center gap-1.5 rounded-lg bg-white/[0.03] px-2 py-1.5">
-                  <Icon className={`h-3 w-3 ${color}`} />
-                  <span className="text-[10px] text-[var(--text-secondary)]">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* CTA */}
           <button
@@ -598,8 +616,8 @@ export default function UploadStep() {
         <div className="grid grid-cols-1 gap-2 text-sm text-[var(--text-secondary)] md:grid-cols-3 w-full max-w-lg">
           {[
             { icon: Wand2, label: "AI picks the best moments" },
-            { icon: Music, label: "Auto music, SFX & voiceover" },
-            { icon: Sparkles, label: "Photos auto-animated" },
+            { icon: Sparkles, label: "Smart transitions & effects" },
+            { icon: Crown, label: "Pro: music, SFX, intros & more" },
           ].map(({ icon: Icon, label }) => (
             <div key={label} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
               <Icon className="h-3.5 w-3.5 text-[var(--accent)]" />

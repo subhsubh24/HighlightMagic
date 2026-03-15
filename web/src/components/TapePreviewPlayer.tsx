@@ -16,6 +16,7 @@ import {
 import { buildBeatGrid, getBeatIntensity, type BeatGrid } from "@/lib/beat-sync";
 import { getSpeedAtPosition, getSpeedFromKeyframes, getEffectiveDuration, getSourceTimeAtPosition } from "@/lib/velocity";
 import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } from "@/lib/kinetic-text";
+import { getMicroSettle, getExitDeceleration, drawFilmGrain, drawVignette, getWarmthShiftCSS, applyFilmStock } from "@/lib/post-processing";
 import type { EditedClip, SfxTrack, VoiceoverSegment } from "@/lib/types";
 
 // ── Web Audio mixing types ──
@@ -65,6 +66,7 @@ interface TimelineEntry {
   globalStart: number;
   globalEnd: number;
   clipDuration: number;
+  isLastClip: boolean;
 }
 
 export default function TapePreviewPlayer() {
@@ -133,6 +135,7 @@ export default function TapePreviewPlayer() {
         globalStart: 0,
         globalEnd: introDur,
         clipDuration: introDur,
+        isLastClip: false,
       });
       t = introDur;
     }
@@ -170,6 +173,7 @@ export default function TapePreviewPlayer() {
         globalStart: t,
         globalEnd: t + dur,
         clipDuration: dur,
+        isLastClip: false, // updated after loop
       });
       t += dur;
       if (i < sortedClips.length - 1 && sortedClips.length > 1) {
@@ -206,8 +210,12 @@ export default function TapePreviewPlayer() {
         globalStart: t,
         globalEnd: t + outroDur,
         clipDuration: outroDur,
+        isLastClip: false,
       });
     }
+
+    // Mark the last entry for warmth shift
+    if (entries.length > 0) entries[entries.length - 1].isLastClip = true;
 
     return entries;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally list specific state slices to avoid full-state rebuilds
@@ -566,17 +574,27 @@ export default function TapePreviewPlayer() {
 
       // Beat pulse: scale bump on beats — AI controls intensity
       if (currentBeatIntensity > 0) {
-        const beatPulseIntensity = state.aiProductionPlan?.beatPulseIntensity ?? 0.015;
+        const beatPulseIntensity = entry.clip.beatPulseIntensity ?? state.aiProductionPlan?.beatPulseIntensity ?? 0.015;
         const pulseScale = 1 + currentBeatIntensity * beatPulseIntensity;
         dw *= pulseScale;
         dh *= pulseScale;
       }
 
+      // Micro-settle: subtle scale+position ease on clip entry (matches export)
+      const settle = getMicroSettle(
+        localTime,
+        state.aiProductionPlan?.settleScale ?? 1.006,
+        state.aiProductionPlan?.settleDuration ?? 0.18,
+        state.aiProductionPlan?.settleEasing ?? "cubic"
+      );
+      dw *= settle.scale;
+      dh *= settle.scale;
+
       // Apply transition transform
       dw *= transform.scale;
       dh *= transform.scale;
       const dx = (w - dw) / 2 + transform.offsetX;
-      const dy = (h - dh) / 2 + transform.offsetY;
+      const dy = (h - dh) / 2 + transform.offsetY + settle.offsetY;
 
       try {
         ctx.drawImage(el, dx, dy, dw, dh);
@@ -586,8 +604,27 @@ export default function TapePreviewPlayer() {
 
       ctx.filter = "none";
 
+      // Warmth shift on final clip — subtle warm grade in last 2s (matches export)
+      if (entry.isLastClip) {
+        const warmCSS = getWarmthShiftCSS(localTime, entry.clipDuration, state.aiProductionPlan?.finalClipWarmth ?? true);
+        if (warmCSS) {
+          ctx.filter = warmCSS;
+          ctx.drawImage(ctx.canvas, 0, 0);
+          ctx.filter = "none";
+        }
+      }
+
+      // Film stock base + vignette + grain — pro post-processing overlays (matches export)
+      applyFilmStock(ctx, w, h, state.aiProductionPlan?.filmStock);
+      drawVignette(ctx, w, h, state.aiProductionPlan?.vignetteIntensity ?? 0.18, state.aiProductionPlan?.vignetteTightness ?? 0.45, state.aiProductionPlan?.vignetteHardness ?? 0.48);
+      drawFilmGrain(ctx, w, h, state.aiProductionPlan?.grainOpacity ?? 0.045, state.aiProductionPlan?.grainBlockSize ?? 4);
+
       // Kinetic text instead of static caption
-      if (entry.captionText) {
+      // Caption appear delay: let the visual land first before showing text (matches export)
+      const captionDelay = state.aiProductionPlan?.captionAppearDelay ?? 0.12;
+      if (entry.captionText && localTime >= captionDelay) {
+        const captionLocalTime = localTime - captionDelay;
+        const captionClipDuration = entry.clipDuration - captionDelay;
         ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
         const captionCustom: CustomCaptionParams | undefined =
           (entry.clip.customCaptionAnimation || entry.clip.customCaptionFontWeight || entry.clip.customCaptionColor || entry.clip.customCaptionGlowColor)
@@ -615,8 +652,8 @@ export default function TapePreviewPlayer() {
         } : undefined;
         const kTransform = getKineticTransform(
           entry.clip.captionStyle,
-          localTime,
-          entry.clipDuration,
+          captionLocalTime,
+          captionClipDuration,
           h,
           captionCustom,
           state.aiProductionPlan?.captionEntranceDuration ?? 0.5,
@@ -733,11 +770,12 @@ export default function TapePreviewPlayer() {
         }, activeTransInfo.intensity);
       }
 
-      // Beat flash overlay — AI controls opacity and color
+      // Beat flash overlay — per-clip override → plan-level → default (matches export)
       const beatFlashMax = state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
-      if (currentBeatIntensity > 0.5 && beatFlashMax > 0) {
+      const beatFlashThreshold = state.aiProductionPlan?.beatFlashThreshold ?? 0.5;
+      if (currentBeatIntensity > beatFlashThreshold && beatFlashMax > 0) {
         ctx.save();
-        ctx.globalAlpha = (currentBeatIntensity - 0.5) * beatFlashMax;
+        ctx.globalAlpha = (currentBeatIntensity - beatFlashThreshold) * beatFlashMax;
         ctx.fillStyle = state.aiProductionPlan?.beatFlashColor ?? "white";
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.restore();
@@ -748,22 +786,30 @@ export default function TapePreviewPlayer() {
         const e = timeline.find((x) => x.clip.id === id);
         const el = mediaMapRef.current.get(id);
         if (el instanceof HTMLVideoElement && e) {
+          // Exit deceleration — subtle slowdown in the last ~0.14s (matches export)
+          const localT = t - e.globalStart;
+          const exitDecel = getExitDeceleration(localT, e.clipDuration, state.aiProductionPlan?.exitDecelSpeed ?? 0.96, state.aiProductionPlan?.exitDecelDuration ?? 0.14, state.aiProductionPlan?.exitDecelEasing ?? "quad");
           // Apply velocity (playback rate) — custom keyframes take priority over presets
           const customKf = e.clip.customVelocityKeyframes;
           const preset = e.clip.velocityPreset ?? "normal";
           if (customKf && customKf.length >= 2) {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
-            const speed = getSpeedFromKeyframes(posInClip, customKf);
+            const speed = getSpeedFromKeyframes(posInClip, customKf) * exitDecel;
             const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
             }
           } else if (preset !== "normal") {
             const posInClip = Math.min(1, (t - e.globalStart) / e.clipDuration);
-            const speed = getSpeedAtPosition(posInClip, preset);
+            const speed = getSpeedAtPosition(posInClip, preset) * exitDecel;
             const clampedSpeed = Math.max(0.05, Math.min(5, speed));
             if (Math.abs(el.playbackRate - clampedSpeed) > 0.05) {
               el.playbackRate = clampedSpeed;
+            }
+          } else if (exitDecel < 1.0) {
+            // Even "normal" speed clips get exit deceleration
+            if (Math.abs(el.playbackRate - exitDecel) > 0.02) {
+              el.playbackRate = exitDecel;
             }
           }
 

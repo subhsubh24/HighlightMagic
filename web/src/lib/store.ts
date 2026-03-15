@@ -23,7 +23,10 @@ export const initialState: AppState = {
   viralOptions: { beatSync: true, seamlessLoop: false },
   regenerateFeedback: null,
   creativeDirection: "",
-  aiMusicEnabled: true,
+  aiMusicEnabled: false,
+  sfxEnabled: false,
+  introOutroEnabled: false,
+  animatePhotosEnabled: false,
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
@@ -92,6 +95,9 @@ export type Action =
   | { type: "UPDATE_MEDIA_ANIMATION"; fileId: string; animatePhoto: boolean; animationInstructions: string }
   | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
   | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
+  | { type: "SET_SFX_ENABLED"; enabled: boolean }
+  | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
+  | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
   // ── AI Production pipeline actions ──
@@ -255,6 +261,25 @@ export function reducer(state: AppState, action: Action): AppState {
         // Reset music state when toggling off
         ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicUrl: null }),
       };
+    case "SET_SFX_ENABLED":
+      return {
+        ...state,
+        sfxEnabled: action.enabled,
+        ...(action.enabled ? {} : { sfxTracks: [], sfxStatus: "idle" as const }),
+      };
+    case "SET_INTRO_OUTRO_ENABLED":
+      return {
+        ...state,
+        introOutroEnabled: action.enabled,
+        ...(action.enabled ? {} : { introCard: null, outroCard: null }),
+      };
+    case "SET_ANIMATE_PHOTOS_ENABLED": {
+      // Toggle all photos' animatePhoto flag to match
+      const toggled = state.mediaFiles.map((f) =>
+        f.type === "photo" ? { ...f, animatePhoto: action.enabled } : f
+      );
+      return { ...state, animatePhotosEnabled: action.enabled, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
     case "SET_AI_MUSIC_PROMPT":
       return { ...state, aiMusicPrompt: action.prompt };
     case "SET_AI_MUSIC_RESULT":

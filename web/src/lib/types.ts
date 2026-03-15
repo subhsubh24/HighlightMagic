@@ -520,8 +520,11 @@ export interface AppState {
   regenerateFeedback: string | null;
   // Creative direction — optional user-provided style instructions passed to Opus planner
   creativeDirection: string;
-  // AI-generated music (ElevenLabs Eleven Music) — opt-in, Pro only
+  // ── Pro feature toggles (anyone can toggle, labeled Pro) ──
   aiMusicEnabled: boolean;
+  sfxEnabled: boolean;
+  introOutroEnabled: boolean;
+  animatePhotosEnabled: boolean;
   aiMusicStatus: AiMusicStatus;
   aiMusicUrl: string | null;
   aiMusicPrompt: string;
