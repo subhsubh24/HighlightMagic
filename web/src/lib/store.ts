@@ -98,6 +98,7 @@ export type Action =
   | { type: "SET_SFX_ENABLED"; enabled: boolean }
   | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
   | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
+  | { type: "TOGGLE_PHOTO_ANIMATE"; fileId: string }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
   // ── AI Production pipeline actions ──
@@ -279,6 +280,14 @@ export function reducer(state: AppState, action: Action): AppState {
         f.type === "photo" ? { ...f, animatePhoto: action.enabled } : f
       );
       return { ...state, animatePhotosEnabled: action.enabled, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
+    case "TOGGLE_PHOTO_ANIMATE": {
+      const toggled = state.mediaFiles.map((f) =>
+        f.id === action.fileId ? { ...f, animatePhoto: !f.animatePhoto } : f
+      );
+      // Derive animatePhotosEnabled from whether any photo has animatePhoto=true
+      const anyAnimated = toggled.some((f) => f.type === "photo" && f.animatePhoto);
+      return { ...state, animatePhotosEnabled: anyAnimated, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
     }
     case "SET_AI_MUSIC_PROMPT":
       return { ...state, aiMusicPrompt: action.prompt };

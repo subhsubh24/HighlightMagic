@@ -133,7 +133,7 @@ export default function UploadStep() {
             type: "photo",
             duration: PHOTO_DISPLAY_DURATION,
             name: file.name,
-            animatePhoto: state.animatePhotosEnabled,
+            animatePhoto: false,
           });
         }
       }
@@ -143,7 +143,7 @@ export default function UploadStep() {
         dispatch({ type: "ADD_MEDIA", files: newMedia });
       }
     },
-    [dispatch, state.mediaFiles.length, state.animatePhotosEnabled]
+    [dispatch, state.mediaFiles.length]
   );
 
   const handleDrop = useCallback(
@@ -223,7 +223,8 @@ export default function UploadStep() {
   };
 
   // Count how many pro features are enabled
-  const proFeaturesEnabled = [state.aiMusicEnabled, state.sfxEnabled, state.introOutroEnabled, state.animatePhotosEnabled].filter(Boolean).length;
+  const animatedPhotoCount = state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).length;
+  const proFeaturesEnabled = [state.aiMusicEnabled, state.sfxEnabled, state.introOutroEnabled, animatedPhotoCount > 0].filter(Boolean).length;
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
@@ -237,7 +238,7 @@ export default function UploadStep() {
                 : `${state.mediaFiles.length} file${state.mediaFiles.length !== 1 ? "s" : ""}`} ready
             </h1>
             <p className="text-sm text-[var(--text-secondary)]">
-              Drag to reorder. AI handles everything else.
+              AI picks the best order, transitions & effects.
             </p>
           </>
         ) : (
@@ -317,18 +318,25 @@ export default function UploadStep() {
                   {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
                 </div>
 
-                {/* Animate badge on photos when enabled */}
-                {media.type === "photo" && state.animatePhotosEnabled && (
-                  <div className="absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md bg-purple-500/50 px-1.5 py-0.5 text-[9px] text-white backdrop-blur-sm">
+                {/* Per-photo animate toggle */}
+                {media.type === "photo" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dispatch({ type: "TOGGLE_PHOTO_ANIMATE", fileId: media.id });
+                      haptic(5);
+                    }}
+                    className={`absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors ${
+                      media.animatePhoto
+                        ? "bg-purple-500/70 text-white"
+                        : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white/80"
+                    }`}
+                    aria-label={media.animatePhoto ? "Disable animation" : "Enable animation"}
+                  >
                     <Sparkles className="h-2 w-2" />
-                    Animate
-                  </div>
+                    {media.animatePhoto ? "Animated" : "Animate"}
+                  </button>
                 )}
-
-                {/* Order number */}
-                <div className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
-                  {index + 1}
-                </div>
 
                 {/* Drag handle */}
                 <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -461,14 +469,20 @@ export default function UploadStep() {
                 iconColor="text-pink-400"
               />
               {photoCount > 0 && (
-                <ProToggle
-                  icon={Sparkles}
-                  label="Photo Animation"
-                  description={`Animate ${photoCount} photo${photoCount !== 1 ? "s" : ""} into video`}
-                  enabled={state.animatePhotosEnabled}
-                  onToggle={() => dispatch({ type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: !state.animatePhotosEnabled })}
-                  iconColor="text-yellow-400"
-                />
+                <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
+                  <Sparkles className="h-4 w-4 text-yellow-400" />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium text-white">Photo Animation</span>
+                      <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
+                        <Crown className="inline h-2 w-2 mr-0.5 -mt-px" />PRO
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-tertiary)]">
+                      Tap &quot;Animate&quot; on each photo above to bring it to life
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           </div>
