@@ -130,6 +130,12 @@ const SSE_READ_TIMEOUT_MS = 300_000;
  * The route sends keepalive pings every 15s so the connection doesn't drop
  * during the 2-5 minute Opus response.
  */
+interface DisabledFeatures {
+  music?: boolean;
+  sfx?: boolean;
+  introOutro?: boolean;
+}
+
 async function callPlannerSSE(
   frames: unknown[],
   scores: unknown[],
@@ -139,12 +145,13 @@ async function callPlannerSSE(
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal,
-  onPartial?: (field: string, value: unknown) => void
+  onPartial?: (field: string, value: unknown) => void,
+  disabledFeatures?: DisabledFeatures
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures }),
     signal,
   });
 
@@ -528,7 +535,8 @@ export default function DetectingStep() {
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
-          handlePartialField
+          handlePartialField,
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
         );
 
         clearInterval(plannerTimer);
@@ -722,7 +730,8 @@ export default function DetectingStep() {
           },
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
-          handlePartialField
+          handlePartialField,
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
         );
         debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
