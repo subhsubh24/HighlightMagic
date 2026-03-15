@@ -282,7 +282,33 @@ function getIdleAnimationByType(animation: string, time: number, custom?: Custom
 }
 
 /**
+ * Word-wrap text to fit within maxWidth.
+ * Returns an array of lines. If a single word exceeds maxWidth it stays on its own line
+ * (the caller should shrink the font to handle that edge case).
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  if (words.length === 0) return [text];
+
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const testLine = currentLine + " " + words[i];
+    if (ctx.measureText(testLine).width <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      lines.push(currentLine);
+      currentLine = words[i];
+    }
+  }
+  lines.push(currentLine);
+  return lines;
+}
+
+/**
  * Draw a caption with kinetic transforms applied.
+ * Long captions are word-wrapped to fit within the canvas with padding.
  */
 export function drawKineticCaption(
   ctx: CanvasRenderingContext2D,
@@ -355,21 +381,38 @@ export function drawKineticCaption(
     ? custom.glowColor  // Use same color for second layer with reduced alpha
     : "rgba(236, 72, 153, 1)";
 
+  // ── Word-wrap: break long captions into multiple lines ──
+  // Leave 10% padding on each side so text doesn't touch the edges.
+  // Divide by scale so the max width is correct in the scaled coordinate space.
+  const padding = canvasWidth * 0.1;
+  const maxTextWidth = (canvasWidth - padding * 2) / Math.max(0.1, transform.scale);
+  const lines = wrapText(ctx, text, maxTextWidth);
+  const lineHeight = fontSize * 1.25;
+  // Center the block vertically around the anchor point
+  const blockOffset = -((lines.length - 1) * lineHeight) / 2;
+
   // Letter spacing (applied by drawing characters individually if needed)
   if (transform.letterSpacing !== 1 && Math.abs(transform.letterSpacing - 1) > 0.05) {
-    drawSpacedText(ctx, text, 0, 0, transform.letterSpacing, transform, textColor, glowColor1, shadowColor ?? "rgba(0,0,0,0.7)", shadowBlur ?? 8);
+    for (let i = 0; i < lines.length; i++) {
+      const ly = blockOffset + i * lineHeight;
+      drawSpacedText(ctx, lines[i], 0, ly, transform.letterSpacing, transform, textColor, glowColor1, shadowColor ?? "rgba(0,0,0,0.7)", shadowBlur ?? 8);
+    }
   } else {
     // Glow effect
     if (transform.glowRadius > 0 && transform.glowAlpha > 0) {
+      ctx.fillStyle = textColor;
       ctx.shadowColor = hexToRgba(glowColor1, transform.glowAlpha);
       ctx.shadowBlur = transform.glowRadius;
-      ctx.fillStyle = textColor;
-      ctx.fillText(text, 0, 0);
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], 0, blockOffset + i * lineHeight);
+      }
 
       // Second glow layer
       ctx.shadowColor = hexToRgba(glowColor2, transform.glowAlpha * 0.7);
       ctx.shadowBlur = transform.glowRadius * (glowSpread ?? 1.5);
-      ctx.fillText(text, 0, 0);
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], 0, blockOffset + i * lineHeight);
+      }
 
       ctx.shadowBlur = 0;
     }
@@ -378,7 +421,9 @@ export function drawKineticCaption(
     ctx.shadowColor = shadowColor ?? "rgba(0,0,0,0.7)";
     ctx.shadowBlur = shadowBlur ?? 8;
     ctx.fillStyle = textColor;
-    ctx.fillText(text, 0, 0);
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], 0, blockOffset + i * lineHeight);
+    }
   }
 
   ctx.restore();
