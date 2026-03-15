@@ -1812,8 +1812,8 @@ The punch curve across the tape should mirror the energy arc. NOT every clip nee
 A real editor wouldn't punch every clip — they'd feel which ones deserve it.
 
 CAPTIONS — text that AMPLIFIES, never NARRATES. Leave empty unless it makes the moment HIT harder:
-HARD LIMIT: 5 words max. Shorter is always better — 1-3 words hit hardest.
-Captions must fit on screen in a single line. The text should add a layer the visual alone can't provide.
+Short captions (1-3 words) hit hardest, but longer captions are fine when the joke or context needs it.
+The renderer auto-wraps text to fit on screen, so prioritize what READS well over length concerns.
 - Emotional amplifier: "no way." / "that feeling." / "every. single. time."
 - Context that transforms meaning: "day 1 vs day 365" / "she had no idea" / "watch this"
 - Reaction trigger: "wait for it" / "the precision." / "obsessed"
@@ -2896,7 +2896,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
           ? p.transitionDuration : undefined,
         filter: (p.filter && VALID_FILTERS.includes(p.filter))
           ? p.filter : undefined,
-        captionText: p.captionText ? String(p.captionText).slice(0, 60) : undefined,
+        captionText: p.captionText || undefined,
         captionStyle: (p.captionStyle && VALID_CAPTION_STYLES.includes(p.captionStyle))
           ? p.captionStyle : undefined,
         entryPunchScale: (typeof p.entryPunchScale === "number" && p.entryPunchScale >= 1.0 && p.entryPunchScale <= 1.1)
