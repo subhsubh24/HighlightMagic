@@ -1734,8 +1734,10 @@ export default function DetectingStep() {
 
     /** Poll for animation completion via batched poll manager. */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
+      console.log(`[Animation] Polling "${mediaName}": predictionId=${predictionId}`);
       try {
         const videoUrl = await pollBatched(predictionId, { timeoutMs: 600_000, maxErrors: 3 });
+        console.log(`[Animation] Completed "${mediaName}": videoUrl=${videoUrl?.slice(0, 80)}...`);
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,
@@ -1745,7 +1747,7 @@ export default function DetectingStep() {
       } catch (err) {
         const signal = animationAbortRef.current?.signal;
         if (signal?.aborted) return;
-        console.error(`Photo animation failed for "${mediaName}":`, err);
+        console.error(`[Animation] Poll failed "${mediaName}":`, err instanceof Error ? err.message : err);
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,
@@ -1784,7 +1786,7 @@ export default function DetectingStep() {
         console.warn("[Detection] triggerPhotoAnimations: no photo clips to animate, skipping");
         return Promise.resolve();
       }
-      debugLog(`[Detection] Animating ${totalAnimations} photos...`);
+      console.log(`[Animation] Starting ${totalAnimations} photo animations (${uniqueClips.length} unique clips, upscaled=${upscaledUrls?.size ?? 0})`);
 
       const promises: Promise<void>[] = [];
 
@@ -1799,6 +1801,9 @@ export default function DetectingStep() {
         const prompt = clip.animationPrompt
           || media.animationInstructions
           || `Bring this photo to life with natural realistic motion. Subjects move naturally, environment has ambient motion. Scene: ${clip.label}`;
+        const promptSource = clip.animationPrompt ? "AI" : media.animationInstructions ? "user" : "fallback";
+        const hasUpscaled = upscaledUrls?.has(media.id) ?? false;
+        console.log(`[Animation] "${media.name}": prompt=${promptSource}, upscaled=${hasUpscaled}, hasFile=${!!media.file}`);
 
         // Mark as generating
         dispatch({
@@ -1838,7 +1843,7 @@ export default function DetectingStep() {
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
             const pct = totalAnimations > 0 ? Math.round(92 + (completedAnimations / totalAnimations) * 7) : 99;
             setProgress(pct);
-            console.error(`Photo animation failed for "${media.name}":`, err);
+            console.error(`[Animation] FAILED "${media.name}":`, err instanceof Error ? err.message : err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
               fileId: media.id,

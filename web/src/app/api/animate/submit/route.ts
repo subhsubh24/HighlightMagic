@@ -18,26 +18,34 @@ export async function POST(req: Request) {
     // Check Content-Length to reject oversized payloads early
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+      console.warn(`[animate/submit] Rejected: payload too large (${contentLength} bytes)`);
       return Response.json({ error: "Request body too large" }, { status: 413 });
     }
 
     const { imageData, prompt, duration } = await req.json();
 
     if (!imageData || typeof imageData !== "string") {
+      console.warn("[animate/submit] Rejected: missing or invalid imageData");
       return Response.json({ error: "imageData is required" }, { status: 400 });
     }
     if (!prompt || typeof prompt !== "string") {
+      console.warn("[animate/submit] Rejected: missing or invalid prompt");
       return Response.json({ error: "prompt is required" }, { status: 400 });
     }
 
     // Validate duration is a number in acceptable range
     const dur = typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;
 
+    const imagePrefix = imageData.slice(0, 30);
+    const imageSize = imageData.length;
+    console.log(`[animate/submit] Submitting: prompt="${prompt.slice(0, 80)}...", duration=${dur}s, imageSize=${(imageSize / 1024).toFixed(0)}KB, imagePrefix="${imagePrefix}..."`);
+
     const predictionId = await submitPhotoAnimation(imageData, prompt, dur);
+    console.log(`[animate/submit] Success: predictionId=${predictionId}`);
     return Response.json({ predictionId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[animate/submit] Error:", message);
-    return Response.json({ error: "Animation submission failed" }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }

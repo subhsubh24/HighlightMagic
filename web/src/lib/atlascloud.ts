@@ -100,17 +100,21 @@ export async function submitTask(
   const apiKey = getApiKey();
 
   const requestBody = JSON.stringify({ model: modelId, ...payload });
+  const payloadKeys = Object.keys(payload).filter((k) => k !== "image" && k !== "audio" && k !== "video");
+  const payloadSummary = payloadKeys.map((k) => `${k}=${JSON.stringify(payload[k])}`).join(", ");
+  console.log(`[atlascloud] submitTask: model=${modelId}, endpoint=${endpoint}, payload={${payloadSummary}}, bodySize=${(requestBody.length / 1024).toFixed(0)}KB`);
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
       console.log(
-        `[atlascloud] Retry ${attempt}/${MAX_RETRIES} after ${delay}ms...`
+        `[atlascloud] Retry ${attempt}/${MAX_RETRIES} for ${modelId} after ${delay}ms...`
       );
       await new Promise((r) => setTimeout(r, delay));
     }
 
+    const fetchStart = Date.now();
     const response = await fetch(`${ATLAS_API_BASE}/${endpoint}`, {
       method: "POST",
       headers: {
@@ -126,6 +130,7 @@ export async function submitTask(
       lastError = new Error(
         `Atlas Cloud API error (${response.status}): ${text}`
       );
+      console.error(`[atlascloud] ${modelId} submit failed: HTTP ${response.status} in ${((Date.now() - fetchStart) / 1000).toFixed(1)}s — ${text.slice(0, 300)}`);
       if (
         [502, 503, 504].includes(response.status) &&
         attempt < MAX_RETRIES
@@ -137,7 +142,7 @@ export async function submitTask(
     }
 
     const data = (await response.json()) as { data?: { id?: string } };
-    console.log(`[atlascloud] submit response: id=${data?.data?.id ?? "none"}`);
+    console.log(`[atlascloud] submit response: model=${modelId}, id=${data?.data?.id ?? "none"}, ${((Date.now() - fetchStart) / 1000).toFixed(1)}s`);
     if (!data?.data?.id) {
       throw new Error("Atlas Cloud API returned no prediction ID");
     }
@@ -268,7 +273,9 @@ export async function submitPhotoAnimation(
   prompt: string,
   duration: number = 5
 ): Promise<string> {
+  const hasDataPrefix = imageUrl.startsWith("data:");
   const image = imageUrl.replace(/^data:image\/[^;]+;base64,/, "");
+  console.log(`[atlascloud] submitPhotoAnimation: model=${MODELS.KLING_I2V}, duration=${duration}s, hasDataPrefix=${hasDataPrefix}, imageLen=${image.length}, prompt="${prompt.slice(0, 60)}..."`);
   return submitTask(MODELS.KLING_I2V, {
     image,
     prompt,
