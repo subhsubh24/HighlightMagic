@@ -76,6 +76,8 @@ export default function UploadStep() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 });
   const dragItemIndex = useRef<number | null>(null);
 
   const hasFiles = state.mediaFiles.length > 0;
@@ -84,6 +86,7 @@ export default function UploadStep() {
 
   const processFiles = useCallback(
     async (fileList: FileList | File[]) => {
+      if (isProcessing) return;
       setError(null);
       const files = Array.from(fileList);
 
@@ -92,9 +95,12 @@ export default function UploadStep() {
         return;
       }
 
+      setIsProcessing(true);
+      setProcessProgress({ current: 0, total: files.length });
       const newMedia: MediaFile[] = [];
 
       for (let file of files) {
+        setProcessProgress((prev) => ({ ...prev, current: prev.current + 1 }));
         let isVideo = file.type.startsWith("video/");
         let isImage = file.type.startsWith("image/");
 
@@ -171,12 +177,13 @@ export default function UploadStep() {
         }
       }
 
+      setIsProcessing(false);
       if (newMedia.length > 0) {
         haptic();
         dispatch({ type: "ADD_MEDIA", files: newMedia });
       }
     },
-    [dispatch, state.mediaFiles.length]
+    [dispatch, state.mediaFiles.length, isProcessing]
   );
 
   const handleDrop = useCallback(
@@ -261,6 +268,23 @@ export default function UploadStep() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
+      {/* Processing overlay */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)] mb-4" />
+          <p className="text-lg font-semibold text-white">Processing files…</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            {processProgress.current} of {processProgress.total}
+          </p>
+          <div className="mt-4 h-1.5 w-64 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+              style={{ width: `${processProgress.total > 0 ? (processProgress.current / processProgress.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Hero text */}
       <div className="text-center">
         {hasFiles ? (
@@ -316,90 +340,92 @@ export default function UploadStep() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {state.mediaFiles.map((media, index) => (
-              <div
-                key={media.id}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
-                  dragOverIndex === index
-                    ? "border-[var(--accent)] scale-105"
-                    : "border-white/10 hover:border-white/20"
-                }`}
-              >
-                {media.type === "video" ? (
-                  <video
-                    src={`${media.url}#t=1`}
-                    className="h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
-                )}
+          <div className="max-h-[40vh] overflow-y-auto rounded-xl">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {state.mediaFiles.map((media, index) => (
+                <div
+                  key={media.id}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
+                    dragOverIndex === index
+                      ? "border-[var(--accent)] scale-105"
+                      : "border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  {media.type === "video" ? (
+                    <video
+                      src={`${media.url}#t=1`}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
+                  )}
 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                {/* Type badge + duration */}
-                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                  {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
-                  {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
-                </div>
+                  {/* Type badge + duration */}
+                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
+                    {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
+                  </div>
 
-                {/* Per-photo animate toggle (hidden when AI decides) */}
-                {media.type === "photo" && !state.aiDecideAnimations && (
+                  {/* Per-photo animate toggle (hidden when AI decides) */}
+                  {media.type === "photo" && !state.aiDecideAnimations && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dispatch({ type: "TOGGLE_PHOTO_ANIMATE", fileId: media.id });
+                        haptic(5);
+                      }}
+                      className={`absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors ${
+                        media.animatePhoto
+                          ? "bg-purple-500/70 text-white"
+                          : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white/80"
+                      }`}
+                      aria-label={media.animatePhoto ? "Disable animation" : "Enable animation"}
+                    >
+                      <Sparkles className="h-2 w-2" />
+                      {media.animatePhoto ? "Animated" : "Animate"}
+                    </button>
+                  )}
+
+                  {/* Drag handle */}
+                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GripVertical className="h-3.5 w-3.5 text-white/70" />
+                  </div>
+
+                  {/* Remove button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      dispatch({ type: "TOGGLE_PHOTO_ANIMATE", fileId: media.id });
-                      haptic(5);
+                      handleRemove(media.id);
                     }}
-                    className={`absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors ${
-                      media.animatePhoto
-                        ? "bg-purple-500/70 text-white"
-                        : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white/80"
-                    }`}
-                    aria-label={media.animatePhoto ? "Disable animation" : "Enable animation"}
+                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                    aria-label={`Remove ${media.name}`}
                   >
-                    <Sparkles className="h-2 w-2" />
-                    {media.animatePhoto ? "Animated" : "Animate"}
+                    <X className="h-3 w-3" />
                   </button>
-                )}
-
-                {/* Drag handle */}
-                <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical className="h-3.5 w-3.5 text-white/70" />
                 </div>
+              ))}
 
-                {/* Remove button */}
+              {/* Add more button */}
+              {state.mediaFiles.length < MAX_FILES && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(media.id);
-                  }}
-                  className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
-                  aria-label={`Remove ${media.name}`}
+                  onClick={() => inputRef.current?.click()}
+                  className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  aria-label="Add more files"
                 >
-                  <X className="h-3 w-3" />
+                  <Plus className="h-8 w-8" />
                 </button>
-              </div>
-            ))}
-
-            {/* Add more button */}
-            {state.mediaFiles.length < MAX_FILES && (
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                aria-label="Add more files"
-              >
-                <Plus className="h-8 w-8" />
-              </button>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Secondary drop zone */}
@@ -586,7 +612,8 @@ export default function UploadStep() {
           {/* CTA */}
           <button
             onClick={handleContinue}
-            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2 animate-pulse-glow-subtle"
+            disabled={isProcessing}
+            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2 animate-pulse-glow-subtle disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Wand2 className="h-4 w-4 transition-transform group-hover:rotate-12" />
             <span>Create Highlight Tape</span>
