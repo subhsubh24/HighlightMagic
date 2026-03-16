@@ -2526,6 +2526,18 @@ CLIP AUDIO — Think like a mixer riding faders in real-time:
   RIDE THE FADERS: The clip audio mix should change with every clip, not sit at one static level.
   This is the single most overlooked detail that separates AI edits from human edits.
 
+  ⚠️ VIDEO CLIPS WITH SPEED CHANGES: When a video clip has velocity keyframes that slow down or
+  speed up playback, the ORIGINAL AUDIO gets pitch-shifted and time-stretched — it sounds terrible.
+  For any clip with significant speed variation (slow-mo zones, ramp_in/ramp_out, hero velocity curves),
+  MUTE the original audio (clipAudioVolume: 0) or dim it heavily (0.05-0.15). Let the AI music and SFX
+  carry those moments instead. Only keep original audio audible on clips playing at ~1x speed.
+
+  ⚠️ VIDEO vs PHOTO: Photo clips have NO original audio — clipAudioVolume is irrelevant for them.
+  Only set clipAudioVolume on clips sourced from VIDEO files. For video clips, default toward MUTING
+  (clipAudioVolume: 0) unless the original audio genuinely adds value (crowd noise, speech, natural ambience
+  at normal speed). The AI music track is designed to carry the edit — competing original audio from video
+  clips usually creates an ugly mashup. When in doubt, mute. A clean mix beats a cluttered one.
+
 FINAL CLIP WARMTH:
 "finalClipWarmth": controls the warm grade shift on the final clip. Can be:
   - true: default warmth (sepia 0.06, saturation boost 0.04, 2s fade-in). Satisfying ending.
