@@ -6,6 +6,7 @@ import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { haptic, uuid } from "@/lib/utils";
 import { clearDetectionCache } from "@/lib/detection-cache";
+import heic2any from "heic2any";
 import type { MediaFile } from "@/lib/types";
 
 /** Style presets — one-tap creative direction chips */
@@ -94,12 +95,33 @@ export default function UploadStep() {
 
       const newMedia: MediaFile[] = [];
 
-      for (const file of files) {
-        const isVideo = file.type.startsWith("video/");
-        const isImage = file.type.startsWith("image/");
+      for (let file of files) {
+        let isVideo = file.type.startsWith("video/");
+        let isImage = file.type.startsWith("image/");
+
+        // Detect HEIC/HEIF by MIME type or extension (some systems report
+        // empty or application/octet-stream for .heic files)
+        const isHEIC = file.type === "image/heic" || file.type === "image/heif"
+          || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
+
+        if (isHEIC) {
+          try {
+            const jpegBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 }) as Blob;
+            file = new File(
+              [jpegBlob],
+              file.name.replace(/\.heic$/i, ".jpg").replace(/\.heif$/i, ".jpg"),
+              { type: "image/jpeg" },
+            );
+            isImage = true;
+            isVideo = false;
+          } catch {
+            setError(`"${file.name}" could not be converted. Try converting to JPEG first.`);
+            continue;
+          }
+        }
 
         if (!isVideo && !isImage) {
-          setError(`"${file.name}" is not a supported format. Use MP4, MOV, WebM, JPG, or PNG.`);
+          setError(`"${file.name}" is not a supported format. Use MP4, MOV, WebM, JPG, PNG, or HEIC.`);
           continue;
         }
 
@@ -111,20 +133,31 @@ export default function UploadStep() {
         const url = URL.createObjectURL(file);
 
         if (isVideo) {
-          const duration = await getVideoDuration(url);
-          if (duration > MAX_VIDEO_DURATION_SECONDS) {
-            setError(`"${file.name}" is too long. Maximum ${MAX_VIDEO_DURATION_SECONDS / 60} minutes per clip.`);
+          try {
+            const duration = await getVideoDuration(url);
+            if (duration > MAX_VIDEO_DURATION_SECONDS) {
+              setError(`"${file.name}" is too long. Maximum ${MAX_VIDEO_DURATION_SECONDS / 60} minutes per clip.`);
+              URL.revokeObjectURL(url);
+              continue;
+            }
+            newMedia.push({
+              id: uuid(),
+              file,
+              url,
+              type: "video",
+              duration,
+              name: file.name,
+            });
+          } catch {
             URL.revokeObjectURL(url);
+            const isMov = /\.mov$/i.test(file.name) || file.type === "video/quicktime";
+            setError(
+              isMov
+                ? `"${file.name}" uses a codec your browser can't play. Open it in Photos and export as MP4, or use Safari.`
+                : `"${file.name}" could not be loaded. Try converting to MP4.`
+            );
             continue;
           }
-          newMedia.push({
-            id: uuid(),
-            file,
-            url,
-            type: "video",
-            duration,
-            name: file.name,
-          });
         } else {
           newMedia.push({
             id: uuid(),
@@ -620,7 +653,7 @@ export default function UploadStep() {
       <input
         ref={inputRef}
         type="file"
-        accept="video/mp4,video/quicktime,video/webm,video/*,image/jpeg,image/png,image/webp,image/*"
+        accept="video/mp4,video/quicktime,video/webm,video/*,image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
         multiple
         className="hidden"
         onChange={(e) => {
