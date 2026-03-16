@@ -50,6 +50,7 @@ export const initialState: AppState = {
   stemSeparationStatus: "idle",
   // Style transfer
   styleTransferPrompt: null,
+  styleTransferStrength: null,
   // Validation loop
   validationStatus: "idle",
   // Talking head
@@ -121,7 +122,7 @@ export type Action =
   // Stem separation
   | { type: "SET_INSTRUMENTAL_MUSIC"; url: string | null; status: GenerationStatus }
   // Style transfer
-  | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null }
+  | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null; strength?: number | null }
   // Validation loop
   | { type: "SET_VALIDATION_STATUS"; status: ValidationStatus }
   // Talking head
@@ -361,7 +362,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SET_INSTRUMENTAL_MUSIC":
       return { ...state, instrumentalMusicUrl: action.url, stemSeparationStatus: action.status };
     case "SET_STYLE_TRANSFER_PROMPT":
-      return { ...state, styleTransferPrompt: action.prompt };
+      return { ...state, styleTransferPrompt: action.prompt, styleTransferStrength: action.strength ?? null };
     case "SET_VALIDATION_STATUS":
       return { ...state, validationStatus: action.status };
     case "SET_TALKING_HEAD":

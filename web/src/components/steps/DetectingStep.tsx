@@ -1317,8 +1317,29 @@ export default function DetectingStep() {
                 return;
               }
 
-              // Convert photo to data URI
-              const photoDataUri = await fileToDataUri(photoMedia.file);
+              // Convert photo to data URI, upscaling low-res photos first
+              let photoDataUri = await fileToDataUri(photoMedia.file);
+              if (photoMedia.file.size < 500_000) {
+                try {
+                  debugLog(`[TalkingHead] Photo "${photoMedia.name}" is low-res (${(photoMedia.file.size / 1000).toFixed(0)}KB), upscaling...`);
+                  const upRes = await fetch("/api/upscale", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ imageData: photoDataUri }),
+                    signal: abort.signal,
+                  });
+                  const upData = await upRes.json();
+                  if (upRes.ok && upData.predictionId) {
+                    const upscaledUrl = await pollAtlasTask(upData.predictionId);
+                    if (upscaledUrl) {
+                      photoDataUri = upscaledUrl;
+                      debugLog(`[TalkingHead] Upscaled photo for lip sync`);
+                    }
+                  }
+                } catch (e) {
+                  console.error("[TalkingHead] Auto-upscale failed (non-blocking):", e);
+                }
+              }
 
               // Submit lip sync task
               const lipRes = await fetch("/api/talking-head", {
@@ -1396,7 +1417,7 @@ export default function DetectingStep() {
 
       // 10. Store style transfer prompt if Claude chose one
       if (productionPlan?.styleTransfer) {
-        dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt });
+        dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt, strength: productionPlan.styleTransfer.strength });
       }
 
       // 11. Photo animations — skip if disabled

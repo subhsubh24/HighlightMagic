@@ -567,6 +567,8 @@ export interface AppState {
   // ── Style transfer (Pro) — visual post-processing ──
   /** AI-chosen style prompt for the final tape look */
   styleTransferPrompt: string | null;
+  /** AI-chosen strength (0.1-1.0) for style transfer */
+  styleTransferStrength: number | null;
 
   // ── Validation loop ──
   validationStatus: ValidationStatus;
