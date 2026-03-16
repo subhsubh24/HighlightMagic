@@ -1070,6 +1070,7 @@ async function analyzeMultiBatch(
       score: number;
       label: string;
       role?: string;
+      cluster?: string;
     }>;
 
     if (!Array.isArray(parsed)) {
@@ -3593,6 +3594,7 @@ export async function retrieveScoringResults(
         score: number;
         label: string;
         role?: string;
+        cluster?: string;
       }>;
 
       if (!Array.isArray(parsed)) continue;
