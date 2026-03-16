@@ -27,6 +27,7 @@ export const initialState: AppState = {
   sfxEnabled: false,
   introOutroEnabled: false,
   animatePhotosEnabled: false,
+  aiDecideAnimations: false,
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
@@ -98,6 +99,7 @@ export type Action =
   | { type: "SET_SFX_ENABLED"; enabled: boolean }
   | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
   | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
+  | { type: "SET_AI_DECIDE_ANIMATIONS"; enabled: boolean }
   | { type: "TOGGLE_PHOTO_ANIMATE"; fileId: string }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
@@ -279,7 +281,20 @@ export function reducer(state: AppState, action: Action): AppState {
       const toggled = state.mediaFiles.map((f) =>
         f.type === "photo" ? { ...f, animatePhoto: action.enabled } : f
       );
-      return { ...state, animatePhotosEnabled: action.enabled, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+      return { ...state, animatePhotosEnabled: action.enabled, aiDecideAnimations: action.enabled ? state.aiDecideAnimations : false, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
+    case "SET_AI_DECIDE_ANIMATIONS": {
+      // When enabling AI decide, turn on animation globally and clear per-photo flags (AI will decide later)
+      const toggled = action.enabled
+        ? state.mediaFiles.map((f) => f.type === "photo" ? { ...f, animatePhoto: false } : f)
+        : state.mediaFiles;
+      return {
+        ...state,
+        aiDecideAnimations: action.enabled,
+        animatePhotosEnabled: action.enabled ? true : state.animatePhotosEnabled,
+        mediaFiles: toggled,
+        ...deriveLegacyVideo(toggled),
+      };
     }
     case "TOGGLE_PHOTO_ANIMATE": {
       const toggled = state.mediaFiles.map((f) =>

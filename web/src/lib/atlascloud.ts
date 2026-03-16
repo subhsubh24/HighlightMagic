@@ -17,8 +17,8 @@ const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
 // ── Model IDs ──
 
 export const MODELS = {
-  /** Image-to-video (photo animation) — cheapest Kling tier */
-  KLING_I2V: "kwaivgi/kling-v2.5-turbo-pro/image-to-video",
+  /** Image-to-video (photo animation) — Kling Standard tier (720p, ~40% cheaper than Pro) */
+  KLING_I2V: "kwaivgi/kling-v2.5-turbo-std/image-to-video",
   /** Text-to-video — Wan 2.6 (Alibaba) */
   WAN_T2V: "alibaba/wan-2.6/text-to-video",
   /** Image upscaler */
@@ -36,7 +36,7 @@ export type AtlasModelId = (typeof MODELS)[keyof typeof MODELS];
 // ── Polling config ──
 
 const POLL_INTERVAL_MS = 5_000;
-const POLL_TIMEOUT_MS = 300_000; // 5 minutes
+const POLL_TIMEOUT_MS = 600_000; // 10 minutes — headroom for large batches (30-40 concurrent animations)
 
 // ── Retry config for transient API errors (502/503/504) ──
 

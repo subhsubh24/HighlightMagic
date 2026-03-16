@@ -146,12 +146,13 @@ async function callPlannerSSE(
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal,
   onPartial?: (field: string, value: unknown) => void,
-  disabledFeatures?: DisabledFeatures
+  disabledFeatures?: DisabledFeatures,
+  aiDecideAnimations?: boolean
 ): Promise<DetectionResult> {
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations }),
     signal,
   });
 
@@ -536,7 +537,8 @@ export default function DetectingStep() {
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
           handlePartialField,
-          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
+          state.aiDecideAnimations || undefined
         );
 
         clearInterval(plannerTimer);
@@ -731,7 +733,8 @@ export default function DetectingStep() {
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
           handlePartialField,
-          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
+          state.aiDecideAnimations || undefined
         );
         debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
@@ -895,6 +898,22 @@ export default function DetectingStep() {
             talkingHeadSpeech: productionPlan.talkingHeadSpeech ?? null,
           },
         });
+      }
+
+      // When AI decides animations, update media files to reflect Opus's choices
+      if (state.aiDecideAnimations) {
+        const aiAnimatedIds = new Set(
+          detectedClips.filter((c) => c.animationPrompt).map((c) => c.sourceFileId)
+        );
+        for (const fileId of aiAnimatedIds) {
+          const clip = detectedClips.find((c) => c.sourceFileId === fileId && c.animationPrompt);
+          dispatch({
+            type: "UPDATE_MEDIA_ANIMATION",
+            fileId,
+            animatePhoto: true,
+            animationInstructions: clip?.animationPrompt ?? "",
+          });
+        }
       }
 
       // 1. Music — use early-started promise if available (Arch #4), otherwise start now
@@ -1710,7 +1729,7 @@ export default function DetectingStep() {
     /** Poll an Atlas Cloud task via batched poll manager. Returns output URL or empty string on failure. */
     async function pollAtlasTask(predictionId: string): Promise<string> {
       try {
-        return await pollBatched(predictionId, { timeoutMs: 300_000 });
+        return await pollBatched(predictionId, { timeoutMs: 600_000 });
       } catch (e) {
         console.error(`[Atlas] Poll failed for prediction ${predictionId}:`, e);
         return ""; // Failed or timed out
@@ -1730,7 +1749,7 @@ export default function DetectingStep() {
     /** Poll for animation completion via batched poll manager. */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
       try {
-        const videoUrl = await pollBatched(predictionId, { timeoutMs: 300_000, maxErrors: 3 });
+        const videoUrl = await pollBatched(predictionId, { timeoutMs: 600_000, maxErrors: 3 });
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,

@@ -382,6 +382,7 @@ export interface ScoredFrame {
   score: number;
   label: string;
   narrativeRole?: string; // HOOK | HERO | REACTION | RHYTHM | CLOSER
+  cluster?: string; // duplicate photo cluster ID (e.g. "group_toast_1")
 }
 
 export type DetectedTheme =
@@ -643,7 +644,8 @@ export async function planFromScores(
   disabledFeatures?: DisabledFeatures,
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: PhotoAnimationInfo[],
-  onPartial?: OnPartialField
+  onPartial?: OnPartialField,
+  aiDecideAnimations?: boolean
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -657,7 +659,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures, aiDecideAnimations);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -894,6 +896,18 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    - Aftermath frames capture raw reaction (the face 0.5s after the surprise, the crowd erupting).
    - Compare each frame to its neighbors in the timeline — is energy building or releasing?
 
+9. DUPLICATE / SIMILAR PHOTO DETECTION (photos only, not video frames):
+   When scoring PHOTOS, also identify near-duplicates — photos that capture the same moment,
+   same group pose, or same scene with minor variations (slightly different angle, someone
+   blinked, lighting shifted).
+   For each photo, add a "cluster" field — a short string ID grouping similar photos:
+   - Photos of the SAME moment/pose/scene → same cluster ID (e.g. "group_toast_1")
+   - Clearly distinct photos → unique cluster IDs (e.g. "dance_floor_wide", "bar_close_up")
+   - Use descriptive cluster names so the planner understands what the cluster represents
+   Within each cluster, the planner will pick the highest-scored photo and skip the rest.
+   Score duplicates honestly — the best version of a moment should score highest.
+   For VIDEO frames, omit the cluster field.
+
 Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 8 dimensions):
 - 0.85-1.0: VIRAL POTENTIAL — this frame alone could carry a reel. Scroll-stopping,
   emotionally loaded, share-worthy. Peak action, raw genuine emotion, stunning composition,
@@ -922,10 +936,11 @@ NOT: "person smiling" → YES: "genuine shocked reaction 0.5s after reveal, mout
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
-[{"index": 0, "score": 0.85, "role": "HERO", "label": "vivid description + viral reason + narrative role"}]
+[{"index": 0, "score": 0.85, "role": "HERO", "label": "vivid description + viral reason + narrative role", "cluster": "group_toast_1"}]
 
 The "role" field must be one of: HOOK, HERO, REACTION, RHYTHM, CLOSER.
-Pick the BEST fit for each frame — what role would this moment play in a viral reel?`;
+Pick the BEST fit for each frame — what role would this moment play in a viral reel?
+The "cluster" field is REQUIRED for photos, OMIT for video frames.`;
 }
 
 /** Build the scoring system prompt — shared between real-time and Batch API paths. */
@@ -1085,6 +1100,7 @@ async function analyzeMultiBatch(
         score: Math.max(0, Math.min(1, p.score)),
         label: p.label || "highlight",
         narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
+        cluster: (typeof p.cluster === "string" && p.cluster.length > 0) ? p.cluster : undefined,
       });
     }
     return results;
@@ -1264,7 +1280,8 @@ async function planHighlightTape(
   onPhase?: (phase: SSEStreamPhase) => void,
   photoAnimations?: PhotoAnimationInfo[],
   onPartial?: OnPartialField,
-  disabledFeatures?: DisabledFeatures
+  disabledFeatures?: DisabledFeatures,
+  aiDecideAnimations?: boolean
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -1323,6 +1340,7 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
+          const clusterTag = s.cluster ? ` cluster:${s.cluster}` : "";
           const key = frameKey(s.sourceFileId, s.timestamp);
           const audioVal = audioLookup.get(key);
           const onsetVal = onsetLookup.get(key);
@@ -1330,7 +1348,7 @@ async function planHighlightTape(
           const onsetTag = onsetVal != null && onsetVal > 0.1 ? `  onset:${onsetVal.toFixed(2)}` : "";
           const spec = specLookup.get(key);
           const specTag = (spec && audioVal != null && audioVal > 0.1) ? `  spectrum:B${spec.bass.toFixed(2)}/M${spec.mid.toFixed(2)}/T${spec.treble.toFixed(2)}` : "";
-          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${specTag}${roleTag}  "${s.label}"`;
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${specTag}${roleTag}${clusterTag}  "${s.label}"`;
         }
       );
 
@@ -1353,6 +1371,7 @@ async function planHighlightTape(
   const plannerFrames = selectPlannerFrames(scores, allFrames);
 
   const sourceCount = sourceFiles.size;
+  const photoSourceCount = Array.from(sourceFiles.values()).filter((s) => s.type === "photo").length;
 
   const systemPrompt = `You are an elite Instagram Reels editor. Your content consistently hits 1M+ views because
 you understand Instagram's algorithm AND human psychology at a deep level.
@@ -1388,13 +1407,35 @@ Your job is to maximize ALL of these. The edit structure directly affects every 
 ═══════════════════════════════════════════════
 USE EVERY SOURCE FILE
 ═══════════════════════════════════════════════
-The user uploaded ${sourceCount} files. They chose these files for a reason.
+${photoSourceCount >= 10
+  ? `The user uploaded ${sourceCount} files (${photoSourceCount} photos). With this many photos,
+you are a CURATOR — not every photo makes the tape. See PHOTO-HEAVY PROJECTS below.
+For VIDEO sources, include at least one clip from every video file.`
+  : `The user uploaded ${sourceCount} files. They chose these files for a reason.
 Include at least one clip from every source file — even if it's brief.
 - Strong sources → longer, more prominent clips that carry the tape
 - Weaker sources → shorter appearances. A brief flash, a reaction cutaway, or a
   transitional beat is enough. YOU decide how long.
-- The user should never open their highlight reel and think "where's my clip?"
+- The user should never open their highlight reel and think "where's my clip?"`}
+${photoSourceCount >= 10 ? `
+═══════════════════════════════════════════════
+PHOTO-HEAVY PROJECTS (${photoSourceCount} photos)
+═══════════════════════════════════════════════
+You are a CURATOR, not a slideshow maker.
 
+DUPLICATE CLUSTERS: The scorer has grouped similar photos into clusters (see "cluster:" tags
+in the scored moments above). For each cluster, pick ONLY the single best photo (highest score).
+Never include two photos from the same cluster — the viewer doesn't want 4 versions of the same
+group toast.
+
+SELECTION: Not every photo makes the tape. With ${photoSourceCount} photos:
+- Select the 15-30 best photos based on scores, narrative diversity, and emotional arc
+- A photo needs to EARN its spot — generic filler weakens the tape
+- Prefer variety: different moments, people, settings, energy levels
+- The tape duration should match the content quality — more great photos = longer tape,
+  lots of mediocre photos = shorter, tighter tape
+- YOU decide the optimal tape length based on what the content deserves
+` : ""}
 ═══════════════════════════════════════════════
 YOUR PROCESS — Full creative autonomy
 ═══════════════════════════════════════════════
@@ -1881,7 +1922,16 @@ Analyze the photo holistically: the subjects, their poses, the environment, the 
 - You CAN add subtle camera motion too (slow push-in, gentle drift) but subject motion comes first.
 - Keep prompts under 300 characters. Be specific about what moves, how, and in what order.
 - For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
-
+${aiDecideAnimations ? `
+AI-DECIDED ANIMATIONS — The user enabled "Let AI decide which photos to animate."
+YOU choose which photos to animate and which to keep as stills. Include "animationPrompt" for
+photos you want animated, omit it for photos that should stay static with Ken Burns.
+Guidelines:
+- ANIMATE: group energy shots, dance moments, celebrations, action, candid motion — motion adds life
+- KEEP STATIC: sharp detail shots, food/drinks, scenic/moody shots, posed portraits — stillness is powerful
+- Mix of both creates rhythm: animated → static → animated feels intentional and cinematic
+- There is no budget cap — animate as many as the content deserves
+` : ""}
 YOU CONTROL EVERYTHING PER CLIP. These are your available tools — use what serves the moment:
 
 Core (always set):
@@ -2583,7 +2633,8 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}${specVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
-      annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;
+      const clusterTag = scoreData.cluster ? ` cluster:${scoreData.cluster}` : "";
+      annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag}${clusterTag} | "${scoreData.label}"`;
     }
     userContent.push({ type: "text", text: annotation });
   }
@@ -3558,6 +3609,7 @@ export async function retrieveScoringResults(
           score: Math.max(0, Math.min(1, p.score)),
           label: p.label || "highlight",
           narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
+          cluster: (typeof p.cluster === "string" && p.cluster.length > 0) ? p.cluster : undefined,
         });
       }
     } catch (err) {

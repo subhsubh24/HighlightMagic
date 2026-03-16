@@ -525,6 +525,7 @@ export interface AppState {
   sfxEnabled: boolean;
   introOutroEnabled: boolean;
   animatePhotosEnabled: boolean;
+  aiDecideAnimations: boolean;
   aiMusicStatus: AiMusicStatus;
   aiMusicUrl: string | null;
   aiMusicPrompt: string;

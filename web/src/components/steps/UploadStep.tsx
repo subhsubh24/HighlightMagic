@@ -318,8 +318,8 @@ export default function UploadStep() {
                   {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
                 </div>
 
-                {/* Per-photo animate toggle */}
-                {media.type === "photo" && (
+                {/* Per-photo animate toggle (hidden when AI decides) */}
+                {media.type === "photo" && !state.aiDecideAnimations && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -469,20 +469,26 @@ export default function UploadStep() {
                 iconColor="text-pink-400"
               />
               {photoCount > 0 && (
-                <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
-                  <Sparkles className="h-4 w-4 text-yellow-400" />
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-white">Photo Animation</span>
-                      <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
-                        <Crown className="inline h-2 w-2 mr-0.5 -mt-px" />PRO
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[var(--text-tertiary)]">
-                      Tap &quot;Animate&quot; on each photo above to bring it to life
-                    </p>
-                  </div>
-                </div>
+                <>
+                  <ProToggle
+                    icon={Sparkles}
+                    label="Photo Animation"
+                    description="Bring photos to life with AI motion"
+                    enabled={state.animatePhotosEnabled}
+                    onToggle={() => dispatch({ type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: !state.animatePhotosEnabled })}
+                    iconColor="text-yellow-400"
+                  />
+                  {state.animatePhotosEnabled && (
+                    <ProToggle
+                      icon={Wand2}
+                      label="AI Picks Animations"
+                      description="Let AI decide which photos to animate"
+                      enabled={state.aiDecideAnimations}
+                      onToggle={() => dispatch({ type: "SET_AI_DECIDE_ANIMATIONS", enabled: !state.aiDecideAnimations })}
+                      iconColor="text-cyan-400"
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>
