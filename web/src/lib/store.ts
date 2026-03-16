@@ -150,7 +150,14 @@ export function reducer(state: AppState, action: Action): AppState {
       // Schedule URL revocation outside the reducer to avoid side effects during render
       const removed = state.mediaFiles.find((f) => f.id === action.fileId);
       if (removed) setTimeout(() => URL.revokeObjectURL(removed.url), 0);
-      return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
+      // Reset photo-animation flags when no photos remain
+      const hasPhotos = updated.some((f) => f.type === "photo");
+      return {
+        ...state,
+        mediaFiles: updated,
+        ...deriveLegacyVideo(updated),
+        ...(hasPhotos ? {} : { animatePhotosEnabled: false, aiDecideAnimations: false }),
+      };
     }
     case "REORDER_MEDIA": {
       const arr = [...state.mediaFiles];
@@ -166,7 +173,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const oldFiles = state.mediaFiles;
       // Schedule URL revocation outside the reducer to avoid side effects during render
       setTimeout(() => oldFiles.forEach((f) => URL.revokeObjectURL(f.url)), 0);
-      return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0 };
+      return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0, animatePhotosEnabled: false, aiDecideAnimations: false };
     }
     case "SET_TEMPLATE":
       return { ...state, selectedTemplate: action.template };
