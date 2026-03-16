@@ -17,8 +17,8 @@ const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
 // ── Model IDs ──
 
 export const MODELS = {
-  /** Image-to-video (photo animation) — Kling Standard tier (720p, ~40% cheaper than Pro) */
-  KLING_I2V: "kwaivgi/kling-v2.5-turbo-std/image-to-video",
+  /** Image-to-video (photo animation) — Kling v2.5 Turbo Pro ($0.06/sec) */
+  KLING_I2V: "kwaivgi/kling-v2.5-turbo-pro/image-to-video",
   /** Text-to-video — Wan 2.6 (Alibaba) */
   WAN_T2V: "alibaba/wan-2.6/text-to-video",
   /** Image upscaler */
