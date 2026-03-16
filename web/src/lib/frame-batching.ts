@@ -22,7 +22,10 @@ export type SourceFileInfo = {
 
 /**
  * Build frame batches from all frames.
- * Groups by source file, splits into MAX_FRAMES_PER_BATCH chunks.
+ * Videos: groups by source file, splits into MAX_FRAMES_PER_BATCH chunks.
+ * Photos: packs single-frame sources together (35 photos per batch instead of
+ * 100 individual API calls). This also helps Haiku detect similar/duplicate
+ * photos since it can compare them within the same batch.
  */
 export function buildFrameBatches<T extends BatchableFrame>(frames: T[]): T[][] {
   const framesBySource = new Map<string, T[]>();
@@ -32,11 +35,24 @@ export function buildFrameBatches<T extends BatchableFrame>(frames: T[]): T[][] 
   }
 
   const batches: T[][] = [];
+  const singleFrameSources: T[] = []; // Photos — pack together for efficiency
+
   for (const [, sourceFrames] of framesBySource) {
-    for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
-      batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
+    if (sourceFrames.length === 1 && sourceFrames[0].sourceType === "photo") {
+      singleFrameSources.push(sourceFrames[0]);
+    } else {
+      // Videos (multi-frame): batch by source as before
+      for (let i = 0; i < sourceFrames.length; i += MAX_FRAMES_PER_BATCH) {
+        batches.push(sourceFrames.slice(i, i + MAX_FRAMES_PER_BATCH));
+      }
     }
   }
+
+  // Pack photos into batches of MAX_FRAMES_PER_BATCH (e.g. 100 photos → 3 batches)
+  for (let i = 0; i < singleFrameSources.length; i += MAX_FRAMES_PER_BATCH) {
+    batches.push(singleFrameSources.slice(i, i + MAX_FRAMES_PER_BATCH));
+  }
+
   return batches;
 }
 
