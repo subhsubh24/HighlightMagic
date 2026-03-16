@@ -1159,7 +1159,9 @@ function frameKey(sourceFileId: string, timestamp: number): string {
   return `${sourceFileId}::${timestamp.toFixed(3)}`;
 }
 
-const API_MAX_IMAGES = 60; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
+const API_MAX_IMAGES_DEFAULT = 60; // Video-heavy: planner has TEXT scores for ALL frames, images are for visual verification
+const API_MAX_IMAGES_PHOTO_HEAVY = 100; // Photo-heavy: each photo is a unique source — send more so planner sees them all
+const PHOTO_HEAVY_THRESHOLD = 0.5; // If ≥50% of source files are photos, use the higher cap
 const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
@@ -1167,6 +1169,13 @@ function selectPlannerFrames(
   scores: ScoredFrame[],
   frames: MultiFrameInput[],
 ): MultiFrameInput[] {
+  // Dynamically set frame cap: photos are small (~20-50KB) and each is a unique source,
+  // so we can safely send more without blowing the payload budget.
+  const uniqueSources = new Set(frames.map((f) => f.sourceFileId));
+  const photoSources = new Set(frames.filter((f) => f.sourceType === "photo").map((f) => f.sourceFileId));
+  const photoRatio = uniqueSources.size > 0 ? photoSources.size / uniqueSources.size : 0;
+  const API_MAX_IMAGES = photoRatio >= PHOTO_HEAVY_THRESHOLD ? API_MAX_IMAGES_PHOTO_HEAVY : API_MAX_IMAGES_DEFAULT;
+  debugLog(`Planner frame selection: ${uniqueSources.size} sources (${photoSources.size} photos, ratio=${photoRatio.toFixed(2)}), cap=${API_MAX_IMAGES}`);
   // Build a lookup from (sourceFileId, timestamp) → frame
   const frameLookup = new Map<string, MultiFrameInput>();
   for (const f of frames) {
