@@ -1212,10 +1212,34 @@ async function renderHighlightTape(
     totalDuration = clips.length * photoDisplayDuration;
   }
 
+  // Build clip timeline to filter audio breaths — breaths during photo clips
+  // make no sense because the music is the only audio source for photos.
+  const clipTimeline: Array<{ start: number; end: number; isPhoto: boolean }> = [];
+  {
+    let t = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+      let dur = getEffectiveDuration(sourceDur, clips[i].clip.velocityPreset, clips[i].clip.customVelocityKeyframes);
+      if (clips[i].mediaType === "photo" && (!Number.isFinite(dur) || dur <= 0)) dur = photoDisplayDuration;
+      if (beatGrid && beatGrid.beatInterval > 0) dur = Math.max(2, Math.round(dur / beatGrid.beatInterval)) * beatGrid.beatInterval;
+      const minDur = clips[i].minCanvasDuration;
+      if (minDur != null && minDur > dur) dur = minDur;
+      clipTimeline.push({ start: t, end: t + dur, isPhoto: clips[i].mediaType === "photo" });
+      t += dur;
+      if (i < clips.length - 1) t -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
+    }
+  }
+  // Filter out audio breaths that land entirely during a photo-only clip
+  const filteredBreaths = aiRenderOpts?.audioBreaths?.filter((breath) => {
+    const mid = breath.time + breath.duration / 2;
+    const photoClip = clipTimeline.find((c) => c.isPhoto && mid >= c.start && mid < c.end);
+    return !photoClip;
+  });
+
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, aiRenderOpts?.audioBreaths);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, filteredBreaths);
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,

@@ -440,8 +440,15 @@ export default function TapePreviewPlayer() {
         }
       }
 
-      // Audio breaths — planned silence dips at emotional peaks (matches export)
-      const audioBreaths = state.aiProductionPlan?.audioBreaths;
+      // Audio breaths — planned silence dips at emotional peaks (matches export).
+      // Filter out breaths that land during photo clips — photos have no original
+      // audio, so ducking the music during them sounds like a random volume drop.
+      const rawBreaths = state.aiProductionPlan?.audioBreaths;
+      const audioBreaths = rawBreaths?.filter((breath) => {
+        const mid = breath.time + breath.duration / 2;
+        const photoEntry = timeline.find((e) => e.mediaType === "photo" && mid >= e.globalStart && mid < e.globalEnd);
+        return !photoEntry;
+      });
       if (audioBreaths && audioBreaths.length > 0 && musicGain) {
         const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
         for (const breath of audioBreaths) {
