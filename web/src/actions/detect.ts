@@ -1160,7 +1160,7 @@ function frameKey(sourceFileId: string, timestamp: number): string {
 }
 
 const API_MAX_IMAGES_DEFAULT = 60; // Video-heavy: planner has TEXT scores for ALL frames, images are for visual verification
-const API_MAX_IMAGES_PHOTO_HEAVY = 100; // Photo-heavy: each photo is a unique source — send more so planner sees them all
+const API_MAX_IMAGES_PHOTO_HEAVY = 150; // Photo-heavy: photos are ~20-50KB each, so 150 ≈ 3-7.5MB (well under 9MB budget)
 const PHOTO_HEAVY_THRESHOLD = 0.5; // If ≥50% of source files are photos, use the higher cap
 const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
