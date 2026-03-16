@@ -29,42 +29,51 @@ async function fetchWithRetry(
   label: string,
   timeoutMs?: number
 ): Promise<Response> {
+  const fetchStart = Date.now();
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const fetchInit = timeoutMs
         ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
         : init;
+      const attemptStart = Date.now();
       const response = await fetch(url, fetchInit);
-      if (response.ok) return response;
+      if (response.ok) {
+        if (attempt > 0) {
+          console.log(`${label}: succeeded on attempt ${attempt + 1} after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s total`);
+        }
+        return response;
+      }
 
       // Only retry on rate-limit (429) or overloaded (529)
       if (response.status === 429 || response.status === 529) {
-        // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
         const retryAfter = response.headers.get("retry-after");
         const retryAfterSec = retryAfter ? parseFloat(retryAfter) : NaN;
         const rawWaitMs = !isNaN(retryAfterSec) && retryAfterSec > 0
           ? retryAfterSec * 1000
           : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
-        console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
+        console.warn(`${label}: HTTP ${response.status} (${response.status === 429 ? "rate-limited" : "overloaded"}), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${Math.round(waitMs)}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
 
       // Non-retryable HTTP error — return as-is
+      console.error(`${label}: non-retryable HTTP ${response.status} after ${((Date.now() - attemptStart) / 1000).toFixed(1)}s`);
       return response;
     } catch (err) {
-      // Retry on timeout and network errors (transient failures)
+      const errMsg = err instanceof Error ? err.message : "network error";
       if (attempt < MAX_RETRIES) {
         const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        console.warn(`${label}: ${err instanceof Error ? err.message : "network error"}, retry ${attempt + 1}/${MAX_RETRIES} in ${waitMs}ms`);
+        console.warn(`${label}: ${errMsg}, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${waitMs}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
+      console.error(`${label}: all ${MAX_RETRIES} retries exhausted after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s — last error: ${errMsg}`);
       throw err;
     }
   }
   // All retries exhausted — make one final attempt (will throw on failure)
+  console.warn(`${label}: retries exhausted, making final attempt (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
   const fetchInit = timeoutMs
     ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
     : init;
@@ -988,6 +997,9 @@ async function analyzeMultiBatch(
   templateName?: string,
   attempt = 0
 ): Promise<ScoredFrame[]> {
+  const batchStart = Date.now();
+  const batchLabel = `Scoring batch (${batch.length} frames, attempt ${attempt + 1}/${MAX_BATCH_RETRIES + 1})`;
+  console.log(`${batchLabel}: starting`);
   const systemPrompt = buildScoringSystemPrompt(sourceFiles, templateName);
   const content = buildScoringContent(batch);
 
@@ -1019,12 +1031,14 @@ async function analyzeMultiBatch(
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
-      console.error(`Scoring batch error (attempt ${attempt + 1}):`, response.status, errorBody);
+      console.error(`${batchLabel}: HTTP ${response.status} after ${((Date.now() - batchStart) / 1000).toFixed(1)}s — ${errorBody.slice(0, 200)}`);
 
       // Don't retry client errors (4xx except 429) — they'll fail identically every time
       const isRetryable = response.status === 429 || response.status >= 500;
       if (isRetryable && attempt < MAX_BATCH_RETRIES) {
-        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        console.warn(`${batchLabel}: retryable error, batch retry in ${waitMs}ms`);
+        await new Promise((r) => setTimeout(r, waitMs));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
       }
       throw new Error(`Scoring failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
@@ -1083,14 +1097,17 @@ async function analyzeMultiBatch(
     }
 
     const results: ScoredFrame[] = [];
+    let skipped = 0;
     for (const p of parsed) {
       // Validate frame index — skip entries that point outside the batch
       if (!Number.isInteger(p.index) || p.index < 0 || p.index >= batch.length) {
-        console.warn(`Scoring: invalid frame index ${p.index} (batch has ${batch.length} frames), skipping`);
+        console.warn(`${batchLabel}: invalid frame index ${p.index} (batch has ${batch.length} frames), skipping`);
+        skipped++;
         continue;
       }
       if (typeof p.score !== "number" || isNaN(p.score)) {
-        console.warn(`Scoring: invalid score ${p.score} for frame ${p.index}, skipping`);
+        console.warn(`${batchLabel}: invalid score ${p.score} for frame ${p.index}, skipping`);
+        skipped++;
         continue;
       }
       const frame = batch[p.index];
@@ -1104,11 +1121,14 @@ async function analyzeMultiBatch(
         cluster: (typeof p.cluster === "string" && p.cluster.length > 0) ? p.cluster : undefined,
       });
     }
+    console.log(`${batchLabel}: completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s — ${results.length} valid scores, ${skipped} skipped, ${batch.length - parsed.length} missing`);
     return results;
   } catch (err) {
-    console.error(`Scoring batch exception (attempt ${attempt + 1}):`, err);
+    console.error(`${batchLabel}: exception after ${((Date.now() - batchStart) / 1000).toFixed(1)}s:`, err);
     if (attempt < MAX_BATCH_RETRIES) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+      const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`${batchLabel}: batch-level retry in ${waitMs}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
       return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
     }
     throw new Error(`Scoring batch failed after ${attempt + 1} attempts: ${err instanceof Error ? err.message : String(err)}`);

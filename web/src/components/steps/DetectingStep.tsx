@@ -543,35 +543,74 @@ export default function DetectingStep() {
       setProgress(30);
 
       const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
-      const SCORING_CONCURRENCY = 10;
-      const STAGGER_MS = 500;
+      const SCORING_CONCURRENCY = 4;
+      const STAGGER_MS = 600;
       let completedBatches = 0;
       let launchedBatches = 0;
+      let consecutiveFailures = 0;
+
+      debugLog(`[Scoring] Starting ${batches.length} batches (concurrency=${SCORING_CONCURRENCY}, stagger=${STAGGER_MS}ms)`);
 
       for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
+        const waveIndex = Math.floor(w / SCORING_CONCURRENCY);
         const wave = batches.slice(w, w + SCORING_CONCURRENCY);
-        const waveResults = await Promise.all(
+        debugLog(`[Scoring] Wave ${waveIndex + 1} — launching ${wave.length} batches (${w + 1}–${w + wave.length} of ${batches.length})`);
+
+        // Circuit breaker: back off if previous wave had failures
+        if (consecutiveFailures >= 2) {
+          const cooldownMs = Math.min(5000 * consecutiveFailures, 20_000);
+          debugLog(`[Scoring] Circuit breaker: ${consecutiveFailures} consecutive failures, cooling down ${cooldownMs}ms`);
+          await new Promise((r) => setTimeout(r, cooldownMs));
+        }
+
+        const waveStart = Date.now();
+        const waveResults = await Promise.allSettled(
           wave.map(async (batch, i) => {
             if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
             launchedBatches++;
-            // Show launch progress (30-40%) then completion progress (40-58%)
             if (batches.length > 0) {
               setProgress(Math.round(30 + (launchedBatches / batches.length) * 10));
             }
+            debugLog(`[Scoring] Batch ${w + i + 1}/${batches.length} launched (${batch.length} frames)`);
             const scores = await scoreSingleBatch(
               batch,
               sourceFileList,
               state.selectedTemplate?.name
             );
             completedBatches++;
+            debugLog(`[Scoring] Batch ${w + i + 1}/${batches.length} done — ${scores.length} scores (${((Date.now() - waveStart) / 1000).toFixed(1)}s)`);
             if (batches.length > 0) {
               setProgress(Math.round(40 + (completedBatches / batches.length) * 18));
             }
             return scores;
           })
         );
-        allScores.push(...waveResults.flat());
+
+        let waveFailures = 0;
+        for (let i = 0; i < waveResults.length; i++) {
+          const r = waveResults[i];
+          if (r.status === "fulfilled") {
+            allScores.push(...r.value);
+          } else {
+            waveFailures++;
+            console.error(`[Scoring] Batch ${w + i + 1}/${batches.length} FAILED:`, r.reason);
+          }
+        }
+
+        if (waveFailures > 0) {
+          consecutiveFailures += waveFailures;
+          console.warn(`[Scoring] Wave ${waveIndex + 1} had ${waveFailures}/${wave.length} failures (${consecutiveFailures} consecutive total)`);
+        } else {
+          consecutiveFailures = 0;
+        }
+        debugLog(`[Scoring] Wave ${waveIndex + 1} complete in ${((Date.now() - waveStart) / 1000).toFixed(1)}s — ${allScores.length} scores so far`);
       }
+
+      if (allScores.length === 0) {
+        throw new Error("All scoring batches failed — no scores returned. The model may be overloaded, please try again.");
+      }
+
+      debugLog(`[Scoring] All waves complete — ${allScores.length} total scores from ${batches.length} batches (${batches.length - Math.floor(allScores.length / (batches[0]?.length || 1))} failed)`);
       return allScores;
     }
 
