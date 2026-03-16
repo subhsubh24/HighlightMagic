@@ -440,6 +440,23 @@ export default function TapePreviewPlayer() {
         }
       }
 
+      // Audio breaths — planned silence dips at emotional peaks (matches export)
+      const audioBreaths = state.aiProductionPlan?.audioBreaths;
+      if (audioBreaths && audioBreaths.length > 0 && musicGain) {
+        const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
+        for (const breath of audioBreaths) {
+          const breathStart = breath.time;
+          const breathEnd = breathStart + breath.duration;
+          const breathVolume = musicVol * breath.depth;
+          const attack = breath.attack ?? 0.1;
+          const release = breath.release ?? 0.2;
+          musicGain.gain.setValueAtTime(musicVol, Math.max(0, breathStart - attack));
+          musicGain.gain.linearRampToValueAtTime(breathVolume, breathStart);
+          musicGain.gain.setValueAtTime(breathVolume, breathEnd);
+          musicGain.gain.linearRampToValueAtTime(musicVol, breathEnd + release);
+        }
+      }
+
       mixerRef.current = {
         ctx: audioCtx,
         layers,
