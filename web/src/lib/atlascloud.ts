@@ -4,7 +4,7 @@
  * Atlas Cloud uses a single endpoint for all models — only the model ID and
  * payload shape change.  This module replaces the Kling-specific `kling.ts`
  * with a reusable submit → poll pattern that works for:
- *   - Image-to-video  (Kling v2.5 Turbo Pro)
+ *   - Image-to-video  (Kling v2.5 Turbo Pro — matches iOS)
  *   - Text-to-video   (Wan 2.6, Seedance 2.0, etc.)
  *   - Image upscaler
  *   - Background remover
@@ -17,8 +17,8 @@ const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
 // ── Model IDs ──
 
 export const MODELS = {
-  /** Image-to-video (photo animation) — Kling v1.6 Multi i2v Standard ($0.042/sec) */
-  KLING_I2V: "kwaivgi/kling-v1.6-multi-i2v-standard/image-to-video",
+  /** Image-to-video (photo animation) — Kling v2.5 Turbo Pro */
+  KLING_I2V: "kwaivgi/kling-v2.5-turbo-pro/image-to-video",
   /** Text-to-video — Wan 2.6 (Alibaba) */
   WAN_T2V: "alibaba/wan-2.6/text-to-video",
   /** Image upscaler */
