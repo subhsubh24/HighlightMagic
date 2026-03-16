@@ -736,6 +736,7 @@ export default function ExportStep() {
             if (styledUrl) {
               // Fetch the styled video and create a local blob URL
               const styledRes = await fetch(styledUrl);
+              if (!styledRes.ok) throw new Error(`Failed to fetch styled video: HTTP ${styledRes.status}`);
               const styledBlob = await styledRes.blob();
               const styledBlobUrl = URL.createObjectURL(styledBlob);
               setBlobUrl(styledBlobUrl);
