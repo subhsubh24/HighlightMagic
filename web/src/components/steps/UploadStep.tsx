@@ -6,7 +6,6 @@ import { useApp } from "@/lib/store";
 import { MAX_UPLOAD_SIZE_MB, MAX_VIDEO_DURATION_SECONDS, MAX_FILES, PHOTO_DISPLAY_DURATION } from "@/lib/constants";
 import { haptic, uuid } from "@/lib/utils";
 import { clearDetectionCache } from "@/lib/detection-cache";
-import heic2any from "heic2any";
 import type { MediaFile } from "@/lib/types";
 
 /** Style presets — one-tap creative direction chips */
@@ -106,6 +105,7 @@ export default function UploadStep() {
 
         if (isHEIC) {
           try {
+            const heic2any = (await import("heic2any")).default;
             const jpegBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 }) as Blob;
             file = new File(
               [jpegBlob],
@@ -639,7 +639,7 @@ export default function UploadStep() {
               {isDragging ? "Drop your files here" : "Drag & drop videos + photos"}
             </p>
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-              or <span className="text-[var(--accent)] underline underline-offset-2">click to browse</span> — MP4, MOV, WebM, JPG, PNG
+              or <span className="text-[var(--accent)] underline underline-offset-2">click to browse</span> — MP4, MOV, WebM, JPG, PNG, HEIC
             </p>
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-[var(--text-tertiary)]">
               <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-white/10 px-1.5 text-[10px] font-medium">{MAX_FILES}</span>
