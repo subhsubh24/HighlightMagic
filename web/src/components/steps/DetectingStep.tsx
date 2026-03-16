@@ -132,15 +132,20 @@ async function callPlannerSSE(
   disabledFeatures?: DisabledFeatures,
   aiDecideAnimations?: boolean
 ): Promise<DetectionResult> {
+  const payloadSize = JSON.stringify({ frames, scores }).length;
+  console.log(`[Planner SSE] Sending request — ${frames.length} frames, ${(scores as unknown[]).length} scores, payload ~${(payloadSize / 1024).toFixed(0)}KB`);
+  const fetchStart = Date.now();
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations }),
     signal,
   });
+  console.log(`[Planner SSE] Response received — HTTP ${response.status} in ${((Date.now() - fetchStart) / 1000).toFixed(1)}s`);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    console.error(`[Planner SSE] Error response: ${text.slice(0, 300)}`);
     throw new Error(`Planner request failed (HTTP ${response.status}): ${text.slice(0, 200)}`);
   }
 
@@ -218,6 +223,7 @@ async function callPlannerSSE(
     if (result) return result;
   }
 
+  console.error("[Planner SSE] Stream ended without a result event");
   throw new Error("Planner stream ended without a result");
 }
 
@@ -633,16 +639,15 @@ export default function DetectingStep() {
         let scores: Awaited<ReturnType<typeof scoreSingleBatch>>;
         debugLog(`[Detection] Starting real-time scoring...`);
         scores = await runRealtimeScoring(batches, sourceFileList);
-        debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
+        console.log(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
         cacheDetectionData(
           frames, scores,
           mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
         );
-
-        // Phase 3: Plan highlights via server action (60-92%)
-        setPassIndex(useBatchMode ? 3 : 2);
+        console.log(`[Detection] Cached detection data, transitioning to planner phase`);
+        setPassIndex(2);
         setProgress(60);
 
         // Slow fallback timer — creeps toward 85% so progress never looks stuck.
@@ -659,7 +664,7 @@ export default function DetectingStep() {
           });
         }, 500);
 
-        debugLog(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
+        console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         // React Strict Mode aborts the signal during its simulated cleanup,
         // but this async function keeps running. Create a fresh controller
         // if the original was killed by Strict Mode (not a real unmount).
@@ -694,17 +699,19 @@ export default function DetectingStep() {
           { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
           state.aiDecideAnimations || undefined
         );
-        debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
+        console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
         await processResult(result, frames);
       } catch (err) {
+        console.error("[Detection] runDetection caught error:", err);
         clearInterval(plannerTimer);
         handleError(err);
       }
     }
 
     async function processResult(result: DetectionResult, allFrames?: Array<{ sourceFileId: string; timestamp: number; base64: string }>) {
+      console.log(`[Detection] processResult — ${result.clips.length} clips, theme=${result.detectedTheme}`);
       setPassIndex(isReplan ? 1 : 3);
       setProgress(95);
 
@@ -1846,9 +1853,12 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
-      if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
-      console.error("Detection failed:", message);
+      console.error("[Detection] handleError:", message, err);
+      if (abort.signal.aborted) {
+        console.warn("[Detection] Error suppressed (component unmounted):", message);
+        return;
+      }
 
       if (message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("TimeoutError") || message.includes("aborted")) {
         setError("Connection to the AI was lost — the planner may need more time for complex footage. Please try again.");
