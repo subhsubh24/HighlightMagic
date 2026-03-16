@@ -57,7 +57,7 @@ export async function generateMusic(
     body: JSON.stringify({
       prompt,
       music_length_ms: clampedDuration,
-      output_format: "mp3_44100_128",
+      output_format: "mp3_44100_192",
     }),
     signal: AbortSignal.timeout(120_000), // Music generation can take 30-60s
   });
@@ -101,8 +101,8 @@ export async function generateMusic(
   const base64 = Buffer.from(audioBuffer).toString("base64");
   const audioUrl = `data:audio/mpeg;base64,${base64}`;
 
-  // Estimate duration from file size (MP3 128kbps ≈ 16KB/s)
-  const estimatedDuration = Math.round(audioBuffer.byteLength / 16_000);
+  // Estimate duration from file size (MP3 192kbps ≈ 24KB/s)
+  const estimatedDuration = Math.round(audioBuffer.byteLength / 24_000);
 
   console.log(`[elevenlabs-music] Generated ${audioBuffer.byteLength} bytes (~${estimatedDuration}s)`);
 

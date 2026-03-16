@@ -125,7 +125,7 @@ export async function generateWithClonedVoice(
       body: JSON.stringify({
         text,
         model_id: "eleven_flash_v2_5",
-        output_format: "mp3_44100_64",
+        output_format: "mp3_44100_128",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.85,
@@ -149,8 +149,8 @@ export async function generateWithClonedVoice(
 
   const base64 = Buffer.from(audioBuffer).toString("base64");
   const audioUrl = `data:audio/mpeg;base64,${base64}`;
-  // MP3 64kbps ≈ 8KB/s
-  const estimatedDuration = Math.round(audioBuffer.byteLength / 8_000);
+  // MP3 128kbps ≈ 16KB/s
+  const estimatedDuration = Math.round(audioBuffer.byteLength / 16_000);
 
   return { status: "completed", audioUrl, duration: estimatedDuration };
 }
