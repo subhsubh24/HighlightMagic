@@ -1966,6 +1966,9 @@ YOU CONTROL EVERYTHING PER CLIP. These are your available tools — use what ser
 
 Core (always set):
   sourceFileId, startTime, endTime (2+ seconds apart), label, confidenceScore
+  ⚠️ PHOTOS: Photos have timestamp=0 because they are single images with no temporal dimension.
+  For photo clips, set startTime=0 and endTime=photoDisplayDuration (the display duration you chose).
+  Example: if photoDisplayDuration=4, then startTime=0, endTime=4 for every photo clip.
 
 Speed & motion:
   velocityKeyframes — custom speed curve (preferred) or velocityPreset
@@ -2917,6 +2920,22 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
         console.warn("Planner: AI returned no clips array or empty clips");
         return { clips: [], detectedTheme: theme, contentSummary };
+      }
+
+      // Auto-repair photo clips with missing/zero timing — photos have no inherent
+      // duration, so the AI sometimes returns startTime=0, endTime=0.
+      const photoDisplayDur = typeof parsed.photoDisplayDuration === "number"
+        ? Math.max(1, Math.min(15, parsed.photoDisplayDuration))
+        : 3.2;
+      for (const p of parsed.clips) {
+        if (typeof p.startTime === "number" && typeof p.endTime === "number" && p.startTime >= p.endTime) {
+          const src = sourceFiles.get(p.sourceFileId);
+          if (src && src.type === "photo") {
+            console.log(`Planner: auto-fixing photo clip "${p.sourceFileId}" timing → 0-${photoDisplayDur}s`);
+            p.startTime = 0;
+            p.endTime = photoDisplayDur;
+          }
+        }
       }
 
       // Tag each clip with its original AI index before filtering, so we can remap
