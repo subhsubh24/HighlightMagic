@@ -6,9 +6,6 @@ import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple, type ExtractedFrame } from "@/lib/frame-extractor";
 import {
   scoreSingleBatch,
-  submitScoringBatch,
-  pollScoringBatch,
-  retrieveScoringResults,
   type DetectionResult,
   type DetectedClip,
 } from "@/actions/detect";
@@ -95,20 +92,6 @@ const DETECTION_PASSES = [
   "Planning your highlight tape...",
   "Applying editing style for best flow...",
 ];
-
-const BATCH_DETECTION_PASSES = [
-  "Extracting frames from all clips...",
-  "Submitting frames to AI (economy mode)...",
-  "Waiting for batch results...",
-  "Planning your highlight tape...",
-  "Applying editing style for best flow...",
-];
-
-/** Minimum total frame count before Batch API mode kicks in (saves 50% on scoring cost).
- *  Photo-only uploads produce 1 frame each — batch API overhead is wasteful for small counts. */
-const BATCH_MODE_FRAME_THRESHOLD = 50;
-/** Polling interval for Batch API status checks. */
-const BATCH_POLL_INTERVAL_MS = 5_000;
 
 const REPLAN_PASSES = [
   "Re-planning with your direction...",
@@ -249,8 +232,6 @@ export default function DetectingStep() {
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
   const [validationPhase, setValidationPhase] = useState<string | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
-  const [batchMode, setBatchMode] = useState(false);
-  const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
   const abortRef = useRef<AbortController>(new AbortController());
   const animationAbortRef = useRef<AbortController | null>(null);
@@ -295,11 +276,10 @@ export default function DetectingStep() {
   }, [passIndex]);
 
   // Tick the planner elapsed timer every second while on the planner pass.
-  // Normal mode = pass 2, batch mode = pass 3, replan = pass 0.
+  // Normal mode = pass 2, replan = pass 0.
   const isPlannerPass =
     (isReplan && passIndex === 0) ||
-    (!isReplan && !batchMode && passIndex === 2) ||
-    (!isReplan && batchMode && passIndex === 3);
+    (!isReplan && passIndex === 2);
   useEffect(() => {
     if (!isPlannerPass) {
       setPlannerElapsed(0);
@@ -595,54 +575,6 @@ export default function DetectingStep() {
       return allScores;
     }
 
-    /** Batch API scoring: submit all at once, poll, retrieve. 50% cheaper. */
-    async function runBatchScoring(
-      batches: ExtractedFrame[][],
-      sourceFileList: ReturnType<typeof buildSourceFileList>
-    ) {
-      // Submit
-      setPassIndex(1);
-      setProgress(32);
-      const { batchId, manifest } = await submitScoringBatch(
-        batches,
-        sourceFileList,
-        state.selectedTemplate?.name
-      );
-
-      // Poll until complete — show real progress from batch counts
-      setPassIndex(2);
-      setProgress(35);
-      let pollCount = 0;
-      let status: Awaited<ReturnType<typeof pollScoringBatch>>;
-      do {
-        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
-        await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
-        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
-        status = await pollScoringBatch(batchId);
-        pollCount++;
-        const total = status.counts.processing + status.counts.succeeded +
-          status.counts.errored + status.counts.canceled + status.counts.expired;
-        const done = status.counts.succeeded + status.counts.errored +
-          status.counts.canceled + status.counts.expired;
-        if (total > 0 && done > 0) {
-          setProgress(Math.round(35 + (done / total) * 20));
-        } else {
-          // No batches done yet — creep slowly so user sees activity
-          setProgress((prev) => Math.min(prev + 0.5, 42));
-        }
-      } while (status.status === "in_progress");
-
-      if (status.counts.succeeded === 0) {
-        throw new Error(`Batch scoring failed: ${status.counts.errored} errored, ${status.counts.expired} expired`);
-      }
-
-      // Retrieve results
-      setProgress(56);
-      const scores = await retrieveScoringResults(batchId, manifest);
-      setProgress(58);
-      return scores;
-    }
-
     async function runDetection() {
       let plannerTimer: ReturnType<typeof setInterval> | undefined;
       try {
@@ -657,24 +589,11 @@ export default function DetectingStep() {
 
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
-        const useBatchMode = frames.length >= BATCH_MODE_FRAME_THRESHOLD;
-        debugLog(`[Detection] ${frames.length} frames, ${batches.length} batches, batchMode=${useBatchMode} (threshold=${BATCH_MODE_FRAME_THRESHOLD} frames)`);
-        if (useBatchMode) {
-          batchModeRef.current = true;
-          setBatchMode(true);
-        }
+        debugLog(`[Detection] ${frames.length} frames, ${batches.length} batches`);
 
         let scores: Awaited<ReturnType<typeof scoreSingleBatch>>;
-
-        if (useBatchMode) {
-          // ── Batch API scoring (50% cost savings) ──
-          debugLog(`[Detection] Starting batch API scoring...`);
-          scores = await runBatchScoring(batches, sourceFileList);
-        } else {
-          // ── Real-time scoring (low latency) ──
-          debugLog(`[Detection] Starting real-time scoring...`);
-          scores = await runRealtimeScoring(batches, sourceFileList);
-        }
+        debugLog(`[Detection] Starting real-time scoring...`);
+        scores = await runRealtimeScoring(batches, sourceFileList);
         debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
@@ -747,7 +666,7 @@ export default function DetectingStep() {
     }
 
     async function processResult(result: DetectionResult, allFrames?: Array<{ sourceFileId: string; timestamp: number; base64: string }>) {
-      setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
+      setPassIndex(isReplan ? 1 : 3);
       setProgress(95);
 
       // Set the detected theme (template override takes priority)
@@ -1912,7 +1831,7 @@ export default function DetectingStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const passes = isReplan ? REPLAN_PASSES : batchMode ? BATCH_DETECTION_PASSES : DETECTION_PASSES;
+  const passes = isReplan ? REPLAN_PASSES : DETECTION_PASSES;
 
   if (error) {
     return (
