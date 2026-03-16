@@ -37,6 +37,8 @@ interface AudioMixer {
   gains: GainNode[];
   masterGain: GainNode;
   musicGain: GainNode | null;
+  /** Track connected video elements for per-clip audio routing */
+  videoSources: Map<string, { source: MediaElementAudioSourceNode; gain: GainNode }>;
 }
 
 // ── Adaptive resolution: lower on mobile for smoother playback ──
@@ -264,19 +266,20 @@ export default function TapePreviewPlayer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- getMediaFile only reads state.mediaFiles which is already a dep
   }, [timeline, state.mediaFiles]);
 
-  // Sync mute state to all active video elements + audio mixer
+  // Sync mute state — video elements stay muted (audio routed through Web Audio API),
+  // master gain controls all audio including clip audio
   useEffect(() => {
-    for (const [, el] of mediaMapRef.current) {
-      if (el instanceof HTMLVideoElement) {
-        el.muted = isMuted;
-      }
-    }
-    // Mute/unmute the audio mixer master gain
     if (mixerRef.current) {
       mixerRef.current.masterGain.gain.setValueAtTime(
         isMuted ? 0 : 1,
         mixerRef.current.ctx.currentTime
       );
+    }
+    // If no mixer yet, keep videos muted/unmuted as fallback
+    for (const [, el] of mediaMapRef.current) {
+      if (el instanceof HTMLVideoElement) {
+        el.muted = isMuted || !!mixerRef.current;
+      }
     }
   }, [isMuted]);
 
@@ -444,6 +447,7 @@ export default function TapePreviewPlayer() {
         gains,
         masterGain,
         musicGain,
+        videoSources: new Map(),
       };
     }
 
@@ -453,6 +457,10 @@ export default function TapePreviewPlayer() {
       cancelled = true;
       if (mixerRef.current) {
         mixerRef.current.sources.forEach((s) => { try { s.stop(); } catch {} });
+        for (const [, vs] of mixerRef.current.videoSources) {
+          try { vs.source.disconnect(); vs.gain.disconnect(); } catch {}
+        }
+        mixerRef.current.videoSources.clear();
         mixerRef.current.ctx.close();
         mixerRef.current = null;
       }
@@ -501,6 +509,11 @@ export default function TapePreviewPlayer() {
     if (!mixer) return;
     mixer.sources.forEach((s) => { try { s.stop(); } catch {} });
     mixer.sources = [];
+    // Disconnect all clip audio sources
+    for (const [, vs] of mixer.videoSources) {
+      try { vs.source.disconnect(); vs.gain.disconnect(); } catch {}
+    }
+    mixer.videoSources.clear();
   }, []);
 
   // Set canvas size — lower resolution on mobile for smoother playback
@@ -776,12 +789,14 @@ export default function TapePreviewPlayer() {
       }
 
       // Beat flash overlay — per-clip override → plan-level → default (matches export)
-      const beatFlashMax = state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
-      const beatFlashThreshold = state.aiProductionPlan?.beatFlashThreshold ?? 0.5;
+      // Find the current active clip to read per-clip overrides
+      const activeEntry = timeline.find((entry) => t >= entry.globalStart && t <= entry.globalEnd);
+      const beatFlashMax = activeEntry?.clip.beatFlashOpacity ?? state.aiProductionPlan?.beatFlashOpacity ?? 0.12;
+      const beatFlashThreshold = activeEntry?.clip.beatFlashThreshold ?? state.aiProductionPlan?.beatFlashThreshold ?? 0.5;
       if (currentBeatIntensity > beatFlashThreshold && beatFlashMax > 0) {
         ctx.save();
         ctx.globalAlpha = (currentBeatIntensity - beatFlashThreshold) * beatFlashMax;
-        ctx.fillStyle = state.aiProductionPlan?.beatFlashColor ?? "white";
+        ctx.fillStyle = activeEntry?.clip.beatFlashColor ?? state.aiProductionPlan?.beatFlashColor ?? "white";
         ctx.fillRect(0, 0, c.width, c.height);
         ctx.restore();
       }
@@ -828,6 +843,37 @@ export default function TapePreviewPlayer() {
               : getSourceTimeAtPosition(posInClip, sourceDur, preset, 50);
             el.currentTime = e.clip.trimStart + sourceOffset;
             el.play().catch((e) => console.warn("[Preview] Video play rejected:", e));
+
+            // Route clip audio through Web Audio API with per-clip volume (matches export)
+            const mixer = mixerRef.current;
+            if (mixer) {
+              // Per-clip volume: AI per-clip → plan-level default → 0.45 when music present
+              const defaultClipVol = mixer.musicGain ? (state.aiProductionPlan?.clipAudioVolume ?? 0.45) : 1.0;
+              const clipVol = e.clip.clipAudioVolume ?? defaultClipVol;
+              const fadeIn = e.clip.audioFadeIn ?? 0.05;
+              const existing = mixer.videoSources.get(id);
+              if (existing) {
+                // Source already connected from a previous activation — just fade in gain
+                existing.gain.gain.setValueAtTime(0, mixer.ctx.currentTime);
+                existing.gain.gain.linearRampToValueAtTime(clipVol, mixer.ctx.currentTime + fadeIn);
+              } else {
+                try {
+                  // Ensure video is muted natively — audio goes through Web Audio only
+                  el.muted = true;
+                  const source = mixer.ctx.createMediaElementSource(el);
+                  const gain = mixer.ctx.createGain();
+                  gain.gain.setValueAtTime(0, mixer.ctx.currentTime);
+                  gain.gain.linearRampToValueAtTime(clipVol, mixer.ctx.currentTime + fadeIn);
+                  source.connect(gain);
+                  gain.connect(mixer.masterGain);
+                  mixer.videoSources.set(id, { source, gain });
+                } catch (err) {
+                  // MediaElementSource fails if element already captured — just mute
+                  console.warn("[Preview] MediaElementSource failed, muting clip audio:", err);
+                  el.muted = true;
+                }
+              }
+            }
           }
         }
       }
@@ -837,6 +883,17 @@ export default function TapePreviewPlayer() {
           if (el instanceof HTMLVideoElement) {
             el.pause();
             el.playbackRate = 1;
+          }
+          // Fade out clip audio when clip becomes inactive (keep source connected for reuse)
+          const mixer = mixerRef.current;
+          const videoSource = mixer?.videoSources.get(id);
+          if (videoSource) {
+            try {
+              const fadeOut = 0.08;
+              const now = mixer!.ctx.currentTime;
+              videoSource.gain.gain.setValueAtTime(videoSource.gain.gain.value, now);
+              videoSource.gain.gain.linearRampToValueAtTime(0, now + fadeOut);
+            } catch { /* already disconnected */ }
           }
         }
       }
