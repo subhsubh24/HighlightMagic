@@ -1339,6 +1339,8 @@ async function planHighlightTape(
         line += animInfo.animationInstructions
           ? ` [ANIMATE — user wants: "${animInfo.animationInstructions}"]`
           : ` [ANIMATE — generate a motion prompt for this photo]`;
+      } else if (aiDecideAnimations && info.type === "photo") {
+        line += ` [ANIMATION CANDIDATE — you decide: animate or keep still]`;
       }
       return line;
     })
@@ -1954,13 +1956,24 @@ Analyze the photo holistically: the subjects, their poses, the environment, the 
 - For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
 ${aiDecideAnimations ? `
 AI-DECIDED ANIMATIONS — The user enabled "Let AI decide which photos to animate."
-YOU choose which photos to animate and which to keep as stills. Include "animationPrompt" for
-photos you want animated, omit it for photos that should stay static with Ken Burns.
-Guidelines:
-- ANIMATE: group energy shots, dance moments, celebrations, action, candid motion — motion adds life
-- KEEP STATIC: sharp detail shots, food/drinks, scenic/moody shots, posed portraits — stillness is powerful
-- Mix of both creates rhythm: animated → static → animated feels intentional and cinematic
+Every photo marked [ANIMATION CANDIDATE] is yours to animate or keep still. Include "animationPrompt"
+for photos you want animated, omit it for photos that should stay static with Ken Burns.
+
+DECISION FRAMEWORK — For each photo, ask: "Would animating this INCREASE the quality score of the
+final video?" Think holistically about the tape as a whole:
+- Does this photo have implied motion that animation would bring to life? (people mid-action,
+  animals, wind, water, sports, dancing, celebrations) → ANIMATE — motion multiplies the impact
+- Would this photo feel MORE powerful as a living moment than a still? Most photos of PEOPLE do.
+  A smiling face that turns, a couple that sways, a group that laughs — these feel alive.
+- Is this a texture/detail/flat-lay/graphic where stillness IS the point? → KEEP STILL
+- Would the viewer's experience of this tape be better with more motion or more stillness here?
+
+BIAS TOWARD ANIMATING. When in doubt, animate. A photo that moves — even subtly — almost always
+scores higher than a static Ken Burns pan. The user chose photos they care about; bringing them
+to life is the whole point of this feature. Aim to animate 60-80% of photos unless the content
+clearly calls for more stillness (e.g., a gallery of architectural details).
 - There is no budget cap — animate as many as the content deserves
+- Variety of motion types (subtle sway, dramatic action, environmental movement) creates richness
 ` : ""}
 YOU CONTROL EVERYTHING PER CLIP. These are your available tools — use what serves the moment:
 
