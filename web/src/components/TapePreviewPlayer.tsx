@@ -391,12 +391,14 @@ export default function TapePreviewPlayer() {
         if (layer.type === "music") musicGain = gain;
       }
 
-      // Auto-duck music when voiceover or SFX is playing
+      // Auto-duck music when voiceover is playing.
+      // SFX do NOT duck music — they're short punctuation sounds (whooshes, impacts)
+      // designed to layer on top of music, not replace it. Ducking for SFX caused
+      // noticeable random dips, especially during photo clips which have no other audio.
       if (musicGain) {
         const musicVol = state.aiProductionPlan?.musicVolume ?? 0.5;
         const duckRatio = state.aiProductionPlan?.musicDuckRatio ?? 0.3;
 
-        // Collect all ducking segments: full duck for VO, lighter duck for SFX
         const duckSegments: { startTime: number; endTime: number; ratio: number }[] = [];
         for (const layer of layers) {
           if (layer.type === "voiceover") {
@@ -404,14 +406,6 @@ export default function TapePreviewPlayer() {
               startTime: layer.startTime,
               endTime: layer.startTime + layer.buffer.duration,
               ratio: duckRatio,
-            });
-          } else if (layer.type === "sfx") {
-            // Lighter duck for SFX — halfway between normal and VO duck level
-            const sfxDuckRatio = Math.min(1, duckRatio + (1 - duckRatio) * 0.5);
-            duckSegments.push({
-              startTime: layer.startTime,
-              endTime: layer.startTime + layer.buffer.duration,
-              ratio: sfxDuckRatio,
             });
           }
         }
