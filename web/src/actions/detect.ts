@@ -29,42 +29,51 @@ async function fetchWithRetry(
   label: string,
   timeoutMs?: number
 ): Promise<Response> {
+  const fetchStart = Date.now();
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const fetchInit = timeoutMs
         ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
         : init;
+      const attemptStart = Date.now();
       const response = await fetch(url, fetchInit);
-      if (response.ok) return response;
+      if (response.ok) {
+        if (attempt > 0) {
+          console.log(`${label}: succeeded on attempt ${attempt + 1} after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s total`);
+        }
+        return response;
+      }
 
       // Only retry on rate-limit (429) or overloaded (529)
       if (response.status === 429 || response.status === 529) {
-        // Use Retry-After header if available, else exponential backoff — capped to avoid absurd waits
         const retryAfter = response.headers.get("retry-after");
         const retryAfterSec = retryAfter ? parseFloat(retryAfter) : NaN;
         const rawWaitMs = !isNaN(retryAfterSec) && retryAfterSec > 0
           ? retryAfterSec * 1000
           : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
-        console.warn(`${label}: ${response.status}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(waitMs)}ms`);
+        console.warn(`${label}: HTTP ${response.status} (${response.status === 429 ? "rate-limited" : "overloaded"}), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${Math.round(waitMs)}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
 
       // Non-retryable HTTP error — return as-is
+      console.error(`${label}: non-retryable HTTP ${response.status} after ${((Date.now() - attemptStart) / 1000).toFixed(1)}s`);
       return response;
     } catch (err) {
-      // Retry on timeout and network errors (transient failures)
+      const errMsg = err instanceof Error ? err.message : "network error";
       if (attempt < MAX_RETRIES) {
         const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        console.warn(`${label}: ${err instanceof Error ? err.message : "network error"}, retry ${attempt + 1}/${MAX_RETRIES} in ${waitMs}ms`);
+        console.warn(`${label}: ${errMsg}, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${waitMs}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
+      console.error(`${label}: all ${MAX_RETRIES} retries exhausted after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s — last error: ${errMsg}`);
       throw err;
     }
   }
   // All retries exhausted — make one final attempt (will throw on failure)
+  console.warn(`${label}: retries exhausted, making final attempt (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
   const fetchInit = timeoutMs
     ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
     : init;
@@ -382,6 +391,7 @@ export interface ScoredFrame {
   score: number;
   label: string;
   narrativeRole?: string; // HOOK | HERO | REACTION | RHYTHM | CLOSER
+  cluster?: string; // duplicate photo cluster ID (e.g. "group_toast_1")
 }
 
 export type DetectedTheme =
@@ -643,7 +653,8 @@ export async function planFromScores(
   disabledFeatures?: DisabledFeatures,
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: PhotoAnimationInfo[],
-  onPartial?: OnPartialField
+  onPartial?: OnPartialField,
+  aiDecideAnimations?: boolean
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -657,7 +668,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures, aiDecideAnimations);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -894,6 +905,18 @@ FOR EVERY FRAME, evaluate these 6 VIRALITY DIMENSIONS:
    - Aftermath frames capture raw reaction (the face 0.5s after the surprise, the crowd erupting).
    - Compare each frame to its neighbors in the timeline — is energy building or releasing?
 
+9. DUPLICATE / SIMILAR PHOTO DETECTION (photos only, not video frames):
+   When scoring PHOTOS, also identify near-duplicates — photos that capture the same moment,
+   same group pose, or same scene with minor variations (slightly different angle, someone
+   blinked, lighting shifted).
+   For each photo, add a "cluster" field — a short string ID grouping similar photos:
+   - Photos of the SAME moment/pose/scene → same cluster ID (e.g. "group_toast_1")
+   - Clearly distinct photos → unique cluster IDs (e.g. "dance_floor_wide", "bar_close_up")
+   - Use descriptive cluster names so the planner understands what the cluster represents
+   Within each cluster, the planner will pick the highest-scored photo and skip the rest.
+   Score duplicates honestly — the best version of a moment should score highest.
+   For VIDEO frames, omit the cluster field.
+
 Score each frame 0.0-1.0 based on OVERALL VIRALITY (weighing all 8 dimensions):
 - 0.85-1.0: VIRAL POTENTIAL — this frame alone could carry a reel. Scroll-stopping,
   emotionally loaded, share-worthy. Peak action, raw genuine emotion, stunning composition,
@@ -922,10 +945,11 @@ NOT: "person smiling" → YES: "genuine shocked reaction 0.5s after reveal, mout
 ${templateName ? `\nStyle context: ${templateName} template` : ""}
 
 Respond with ONLY a JSON array:
-[{"index": 0, "score": 0.85, "role": "HERO", "label": "vivid description + viral reason + narrative role"}]
+[{"index": 0, "score": 0.85, "role": "HERO", "label": "vivid description + viral reason + narrative role", "cluster": "group_toast_1"}]
 
 The "role" field must be one of: HOOK, HERO, REACTION, RHYTHM, CLOSER.
-Pick the BEST fit for each frame — what role would this moment play in a viral reel?`;
+Pick the BEST fit for each frame — what role would this moment play in a viral reel?
+The "cluster" field is REQUIRED for photos, OMIT for video frames.`;
 }
 
 /** Build the scoring system prompt — shared between real-time and Batch API paths. */
@@ -973,6 +997,9 @@ async function analyzeMultiBatch(
   templateName?: string,
   attempt = 0
 ): Promise<ScoredFrame[]> {
+  const batchStart = Date.now();
+  const batchLabel = `Scoring batch (${batch.length} frames, attempt ${attempt + 1}/${MAX_BATCH_RETRIES + 1})`;
+  console.log(`${batchLabel}: starting`);
   const systemPrompt = buildScoringSystemPrompt(sourceFiles, templateName);
   const content = buildScoringContent(batch);
 
@@ -1004,12 +1031,14 @@ async function analyzeMultiBatch(
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
-      console.error(`Scoring batch error (attempt ${attempt + 1}):`, response.status, errorBody);
+      console.error(`${batchLabel}: HTTP ${response.status} after ${((Date.now() - batchStart) / 1000).toFixed(1)}s — ${errorBody.slice(0, 200)}`);
 
       // Don't retry client errors (4xx except 429) — they'll fail identically every time
       const isRetryable = response.status === 429 || response.status >= 500;
       if (isRetryable && attempt < MAX_BATCH_RETRIES) {
-        await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+        const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        console.warn(`${batchLabel}: retryable error, batch retry in ${waitMs}ms`);
+        await new Promise((r) => setTimeout(r, waitMs));
         return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
       }
       throw new Error(`Scoring failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
@@ -1055,6 +1084,7 @@ async function analyzeMultiBatch(
       score: number;
       label: string;
       role?: string;
+      cluster?: string;
     }>;
 
     if (!Array.isArray(parsed)) {
@@ -1067,14 +1097,17 @@ async function analyzeMultiBatch(
     }
 
     const results: ScoredFrame[] = [];
+    let skipped = 0;
     for (const p of parsed) {
       // Validate frame index — skip entries that point outside the batch
       if (!Number.isInteger(p.index) || p.index < 0 || p.index >= batch.length) {
-        console.warn(`Scoring: invalid frame index ${p.index} (batch has ${batch.length} frames), skipping`);
+        console.warn(`${batchLabel}: invalid frame index ${p.index} (batch has ${batch.length} frames), skipping`);
+        skipped++;
         continue;
       }
       if (typeof p.score !== "number" || isNaN(p.score)) {
-        console.warn(`Scoring: invalid score ${p.score} for frame ${p.index}, skipping`);
+        console.warn(`${batchLabel}: invalid score ${p.score} for frame ${p.index}, skipping`);
+        skipped++;
         continue;
       }
       const frame = batch[p.index];
@@ -1085,13 +1118,17 @@ async function analyzeMultiBatch(
         score: Math.max(0, Math.min(1, p.score)),
         label: p.label || "highlight",
         narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
+        cluster: (typeof p.cluster === "string" && p.cluster.length > 0) ? p.cluster : undefined,
       });
     }
+    console.log(`${batchLabel}: completed in ${((Date.now() - batchStart) / 1000).toFixed(1)}s — ${results.length} valid scores, ${skipped} skipped, ${batch.length - parsed.length} missing`);
     return results;
   } catch (err) {
-    console.error(`Scoring batch exception (attempt ${attempt + 1}):`, err);
+    console.error(`${batchLabel}: exception after ${((Date.now() - batchStart) / 1000).toFixed(1)}s:`, err);
     if (attempt < MAX_BATCH_RETRIES) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
+      const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+      console.warn(`${batchLabel}: batch-level retry in ${waitMs}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
       return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
     }
     throw new Error(`Scoring batch failed after ${attempt + 1} attempts: ${err instanceof Error ? err.message : String(err)}`);
@@ -1122,7 +1159,9 @@ function frameKey(sourceFileId: string, timestamp: number): string {
   return `${sourceFileId}::${timestamp.toFixed(3)}`;
 }
 
-const API_MAX_IMAGES = 60; // Top-scored frames for visual verification; planner has TEXT scores for ALL frames
+const API_MAX_IMAGES_DEFAULT = 60; // Video-heavy: planner has TEXT scores for ALL frames, images are for visual verification
+const API_MAX_IMAGES_PHOTO_HEAVY = 150; // Photo-heavy: photos are ~20-50KB each, so 150 ≈ 3-7.5MB (well under 9MB budget)
+const PHOTO_HEAVY_THRESHOLD = 0.5; // If ≥50% of source files are photos, use the higher cap
 const API_IMAGE_PAYLOAD_BUDGET = 9 * 1024 * 1024; // 9 MB budget (480p/0.6 frames are ~20-50KB each)
 const API_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image
 
@@ -1130,6 +1169,13 @@ function selectPlannerFrames(
   scores: ScoredFrame[],
   frames: MultiFrameInput[],
 ): MultiFrameInput[] {
+  // Dynamically set frame cap: photos are small (~20-50KB) and each is a unique source,
+  // so we can safely send more without blowing the payload budget.
+  const uniqueSources = new Set(frames.map((f) => f.sourceFileId));
+  const photoSources = new Set(frames.filter((f) => f.sourceType === "photo").map((f) => f.sourceFileId));
+  const photoRatio = uniqueSources.size > 0 ? photoSources.size / uniqueSources.size : 0;
+  const API_MAX_IMAGES = photoRatio >= PHOTO_HEAVY_THRESHOLD ? API_MAX_IMAGES_PHOTO_HEAVY : API_MAX_IMAGES_DEFAULT;
+  debugLog(`Planner frame selection: ${uniqueSources.size} sources (${photoSources.size} photos, ratio=${photoRatio.toFixed(2)}), cap=${API_MAX_IMAGES}`);
   // Build a lookup from (sourceFileId, timestamp) → frame
   const frameLookup = new Map<string, MultiFrameInput>();
   for (const f of frames) {
@@ -1264,7 +1310,8 @@ async function planHighlightTape(
   onPhase?: (phase: SSEStreamPhase) => void,
   photoAnimations?: PhotoAnimationInfo[],
   onPartial?: OnPartialField,
-  disabledFeatures?: DisabledFeatures
+  disabledFeatures?: DisabledFeatures,
+  aiDecideAnimations?: boolean
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -1292,6 +1339,8 @@ async function planHighlightTape(
         line += animInfo.animationInstructions
           ? ` [ANIMATE — user wants: "${animInfo.animationInstructions}"]`
           : ` [ANIMATE — generate a motion prompt for this photo]`;
+      } else if (aiDecideAnimations && info.type === "photo") {
+        line += ` [ANIMATION CANDIDATE — you decide: animate or keep still]`;
       }
       return line;
     })
@@ -1323,6 +1372,7 @@ async function planHighlightTape(
       const lines = sorted.map(
         (s) => {
           const roleTag = s.narrativeRole ? ` [${s.narrativeRole}]` : "";
+          const clusterTag = s.cluster ? ` cluster:${s.cluster}` : "";
           const key = frameKey(s.sourceFileId, s.timestamp);
           const audioVal = audioLookup.get(key);
           const onsetVal = onsetLookup.get(key);
@@ -1330,7 +1380,7 @@ async function planHighlightTape(
           const onsetTag = onsetVal != null && onsetVal > 0.1 ? `  onset:${onsetVal.toFixed(2)}` : "";
           const spec = specLookup.get(key);
           const specTag = (spec && audioVal != null && audioVal > 0.1) ? `  spectrum:B${spec.bass.toFixed(2)}/M${spec.mid.toFixed(2)}/T${spec.treble.toFixed(2)}` : "";
-          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${specTag}${roleTag}  "${s.label}"`;
+          return `  t:${s.timestamp.toFixed(1)}s  score:${s.score.toFixed(2)}${audioTag}${onsetTag}${specTag}${roleTag}${clusterTag}  "${s.label}"`;
         }
       );
 
@@ -1353,6 +1403,7 @@ async function planHighlightTape(
   const plannerFrames = selectPlannerFrames(scores, allFrames);
 
   const sourceCount = sourceFiles.size;
+  const photoSourceCount = Array.from(sourceFiles.values()).filter((s) => s.type === "photo").length;
 
   const systemPrompt = `You are an elite Instagram Reels editor. Your content consistently hits 1M+ views because
 you understand Instagram's algorithm AND human psychology at a deep level.
@@ -1388,13 +1439,35 @@ Your job is to maximize ALL of these. The edit structure directly affects every 
 ═══════════════════════════════════════════════
 USE EVERY SOURCE FILE
 ═══════════════════════════════════════════════
-The user uploaded ${sourceCount} files. They chose these files for a reason.
+${photoSourceCount >= 10
+  ? `The user uploaded ${sourceCount} files (${photoSourceCount} photos). With this many photos,
+you are a CURATOR — not every photo makes the tape. See PHOTO-HEAVY PROJECTS below.
+For VIDEO sources, include at least one clip from every video file.`
+  : `The user uploaded ${sourceCount} files. They chose these files for a reason.
 Include at least one clip from every source file — even if it's brief.
 - Strong sources → longer, more prominent clips that carry the tape
 - Weaker sources → shorter appearances. A brief flash, a reaction cutaway, or a
   transitional beat is enough. YOU decide how long.
-- The user should never open their highlight reel and think "where's my clip?"
+- The user should never open their highlight reel and think "where's my clip?"`}
+${photoSourceCount >= 10 ? `
+═══════════════════════════════════════════════
+PHOTO-HEAVY PROJECTS (${photoSourceCount} photos)
+═══════════════════════════════════════════════
+You are a CURATOR, not a slideshow maker.
 
+DUPLICATE CLUSTERS: The scorer has grouped similar photos into clusters (see "cluster:" tags
+in the scored moments above). For each cluster, pick ONLY the single best photo (highest score).
+Never include two photos from the same cluster — the viewer doesn't want 4 versions of the same
+group toast.
+
+SELECTION: Not every photo makes the tape. With ${photoSourceCount} photos:
+- Select the 15-30 best photos based on scores, narrative diversity, and emotional arc
+- A photo needs to EARN its spot — generic filler weakens the tape
+- Prefer variety: different moments, people, settings, energy levels
+- The tape duration should match the content quality — more great photos = longer tape,
+  lots of mediocre photos = shorter, tighter tape
+- YOU decide the optimal tape length based on what the content deserves
+` : ""}
 ═══════════════════════════════════════════════
 YOUR PROCESS — Full creative autonomy
 ═══════════════════════════════════════════════
@@ -1881,11 +1954,34 @@ Analyze the photo holistically: the subjects, their poses, the environment, the 
 - You CAN add subtle camera motion too (slow push-in, gentle drift) but subject motion comes first.
 - Keep prompts under 300 characters. Be specific about what moves, how, and in what order.
 - For non-animated photos, do NOT include animationPrompt — they use Ken Burns.
+${aiDecideAnimations ? `
+AI-DECIDED ANIMATIONS — The user enabled "Let AI decide which photos to animate."
+Every photo marked [ANIMATION CANDIDATE] is yours to animate or keep still. Include "animationPrompt"
+for photos you want animated, omit it for photos that should stay static with Ken Burns.
 
+DECISION FRAMEWORK — For each photo, ask: "Would animating this INCREASE the quality score of the
+final video?" Think holistically about the tape as a whole:
+- Does this photo have implied motion that animation would bring to life? (people mid-action,
+  animals, wind, water, sports, dancing, celebrations) → ANIMATE — motion multiplies the impact
+- Would this photo feel MORE powerful as a living moment than a still? Most photos of PEOPLE do.
+  A smiling face that turns, a couple that sways, a group that laughs — these feel alive.
+- Is this a texture/detail/flat-lay/graphic where stillness IS the point? → KEEP STILL
+- Would the viewer's experience of this tape be better with more motion or more stillness here?
+
+BIAS TOWARD ANIMATING. When in doubt, animate. A photo that moves — even subtly — almost always
+scores higher than a static Ken Burns pan. The user chose photos they care about; bringing them
+to life is the whole point of this feature. Aim to animate 60-80% of photos unless the content
+clearly calls for more stillness (e.g., a gallery of architectural details).
+- There is no budget cap — animate as many as the content deserves
+- Variety of motion types (subtle sway, dramatic action, environmental movement) creates richness
+` : ""}
 YOU CONTROL EVERYTHING PER CLIP. These are your available tools — use what serves the moment:
 
 Core (always set):
   sourceFileId, startTime, endTime (2+ seconds apart), label, confidenceScore
+  ⚠️ PHOTOS: Photos have timestamp=0 because they are single images with no temporal dimension.
+  For photo clips, set startTime=0 and endTime=photoDisplayDuration (the display duration you chose).
+  Example: if photoDisplayDuration=4, then startTime=0, endTime=4 for every photo clip.
 
 Speed & motion:
   velocityKeyframes — custom speed curve (preferred) or velocityPreset
@@ -2443,6 +2539,18 @@ CLIP AUDIO — Think like a mixer riding faders in real-time:
   RIDE THE FADERS: The clip audio mix should change with every clip, not sit at one static level.
   This is the single most overlooked detail that separates AI edits from human edits.
 
+  ⚠️ VIDEO CLIPS WITH SPEED CHANGES: When a video clip has velocity keyframes that slow down or
+  speed up playback, the ORIGINAL AUDIO gets pitch-shifted and time-stretched — it sounds terrible.
+  For any clip with significant speed variation (slow-mo zones, ramp_in/ramp_out, hero velocity curves),
+  MUTE the original audio (clipAudioVolume: 0) or dim it heavily (0.05-0.15). Let the AI music and SFX
+  carry those moments instead. Only keep original audio audible on clips playing at ~1x speed.
+
+  ⚠️ VIDEO vs PHOTO: Photo clips have NO original audio — clipAudioVolume is irrelevant for them.
+  Only set clipAudioVolume on clips sourced from VIDEO files. For video clips, default toward MUTING
+  (clipAudioVolume: 0) unless the original audio genuinely adds value (crowd noise, speech, natural ambience
+  at normal speed). The AI music track is designed to carry the edit — competing original audio from video
+  clips usually creates an ugly mashup. When in doubt, mute. A clean mix beats a cluttered one.
+
 FINAL CLIP WARMTH:
 "finalClipWarmth": controls the warm grade shift on the final clip. Can be:
   - true: default warmth (sepia 0.06, saturation boost 0.04, 2s fade-in). Satisfying ending.
@@ -2583,7 +2691,8 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     let annotation = `↑ "${frame.sourceFileName}" (${frame.sourceType}), fileID: ${frame.sourceFileId}, t=${frame.timestamp.toFixed(1)}s (${position})${audioVal}${onsetVal}${specVal}`;
     if (scoreData) {
       const roleTag = scoreData.narrativeRole ? ` [${scoreData.narrativeRole}]` : "";
-      annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag} | "${scoreData.label}"`;
+      const clusterTag = scoreData.cluster ? ` cluster:${scoreData.cluster}` : "";
+      annotation += ` | SCORE: ${scoreData.score.toFixed(2)}${roleTag}${clusterTag} | "${scoreData.label}"`;
     }
     userContent.push({ type: "text", text: annotation });
   }
@@ -2836,6 +2945,22 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       if (!Array.isArray(parsed.clips) || parsed.clips.length === 0) {
         console.warn("Planner: AI returned no clips array or empty clips");
         return { clips: [], detectedTheme: theme, contentSummary };
+      }
+
+      // Auto-repair photo clips with missing/zero timing — photos have no inherent
+      // duration, so the AI sometimes returns startTime=0, endTime=0.
+      const photoDisplayDur = typeof parsed.photoDisplayDuration === "number"
+        ? Math.max(1, Math.min(15, parsed.photoDisplayDuration))
+        : 3.2;
+      for (const p of parsed.clips) {
+        if (typeof p.startTime === "number" && typeof p.endTime === "number" && p.startTime >= p.endTime) {
+          const src = sourceFiles.get(p.sourceFileId);
+          if (src && src.type === "photo") {
+            console.log(`Planner: auto-fixing photo clip "${p.sourceFileId}" timing → 0-${photoDisplayDur}s`);
+            p.startTime = 0;
+            p.endTime = photoDisplayDur;
+          }
+        }
       }
 
       // Tag each clip with its original AI index before filtering, so we can remap
@@ -3325,246 +3450,4 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
   throw new Error("Planner response could not be parsed as JSON");
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ── Batch API scoring (50% cost savings) ────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Manifest entry — lightweight metadata (no base64) for mapping batch results
- * back to ScoredFrame objects after retrieval.
- */
-export interface ScoringBatchManifestEntry {
-  customId: string;
-  frames: Array<{
-    sourceFileId: string;
-    sourceType: "video" | "photo";
-    timestamp: number;
-  }>;
-}
-
-/**
- * Submit ALL scoring batches to the Anthropic Batch API in a single request.
- * Returns a batchId for polling and a manifest for result parsing.
- *
- * Cost: 50% off all input/output tokens vs real-time API.
- * Tradeoff: async processing — most batches finish in <1 hour.
- */
-export async function submitScoringBatch(
-  allBatches: MultiFrameInput[][],
-  sourceFileList: SourceFileInfo[],
-  templateName?: string
-): Promise<{ batchId: string; manifest: ScoringBatchManifestEntry[] }> {
-  "use server";
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
-  }
-
-  const sourceFiles = new Map(
-    sourceFileList.map((s) => [s.id, { name: s.name, type: s.type, frameCount: s.frameCount }])
-  );
-  const systemPrompt = buildScoringSystemPrompt(sourceFiles, templateName);
-
-  // Build one Batch API request per scoring batch
-  const requests = allBatches.map((batch, i) => ({
-    custom_id: `score-batch-${i}`,
-    params: {
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 16000,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: buildScoringContent(batch) }],
-    },
-  }));
-
-  // Build lightweight manifest (no base64) for mapping results → ScoredFrame
-  const manifest: ScoringBatchManifestEntry[] = allBatches.map((batch, i) => ({
-    customId: `score-batch-${i}`,
-    frames: batch.map((f) => ({
-      sourceFileId: f.sourceFileId,
-      sourceType: f.sourceType,
-      timestamp: f.timestamp,
-    })),
-  }));
-
-  const response = await fetchWithRetry(
-    "https://api.anthropic.com/v1/messages/batches",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({ requests }),
-    },
-    "Batch submit"
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(`Batch submit failed (HTTP ${response.status}): ${errorBody.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
-  return { batchId: data.id, manifest };
-}
-
-/**
- * Poll a scoring batch for completion.
- */
-export async function pollScoringBatch(batchId: string): Promise<{
-  status: "in_progress" | "ended" | "canceling" | "expired";
-  counts: {
-    processing: number;
-    succeeded: number;
-    errored: number;
-    canceled: number;
-    expired: number;
-  };
-  resultsUrl: string | null;
-}> {
-  "use server";
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
-
-  const response = await fetch(`https://api.anthropic.com/v1/messages/batches/${batchId}`, {
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(`Batch poll failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  return {
-    status: data.processing_status,
-    counts: data.request_counts ?? {
-      processing: 0,
-      succeeded: 0,
-      errored: 0,
-      canceled: 0,
-      expired: 0,
-    },
-    resultsUrl: data.results_url ?? null,
-  };
-}
-
-/**
- * Retrieve and parse all results from a completed scoring batch.
- * The manifest maps custom_ids back to frame metadata for ScoredFrame construction.
- */
-export async function retrieveScoringResults(
-  batchId: string,
-  manifest: ScoringBatchManifestEntry[]
-): Promise<ScoredFrame[]> {
-  "use server";
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
-
-  // Fetch JSONL results
-  const response = await fetch(
-    `https://api.anthropic.com/v1/messages/batches/${batchId}/results`,
-    {
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-    }
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(`Batch results fetch failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
-  }
-
-  // Parse JSONL — each line is a complete JSON object
-  const text = await response.text();
-  const lines = text.split("\n").filter((l) => l.trim());
-
-  const manifestMap = new Map(manifest.map((m) => [m.customId, m]));
-  const allScores: ScoredFrame[] = [];
-
-  for (const line of lines) {
-    try {
-      const entry = JSON.parse(line) as {
-        custom_id: string;
-        result: {
-          type: "succeeded" | "errored" | "canceled" | "expired";
-          message?: { content: Array<{ type: string; text?: string }>; stop_reason?: string };
-          error?: { type: string; message: string };
-        };
-      };
-
-      if (entry.result.type !== "succeeded" || !entry.result.message) {
-        console.warn(`Batch result ${entry.custom_id}: ${entry.result.type}`, entry.result.error);
-        continue;
-      }
-
-      if (entry.result.message.stop_reason === "max_tokens") {
-        console.warn(`Batch result ${entry.custom_id}: truncated (max_tokens)`);
-      }
-
-      const manifestEntry = manifestMap.get(entry.custom_id);
-      if (!manifestEntry) {
-        console.warn(`Batch result ${entry.custom_id}: no manifest entry, skipping`);
-        continue;
-      }
-
-      // Extract text from response content
-      const textBlock = entry.result.message.content.find((b) => b.type === "text");
-      if (!textBlock?.text) {
-        console.warn(`Batch result ${entry.custom_id}: no text block`);
-        continue;
-      }
-
-      // Parse JSON array from text
-      const jsonMatchStr = extractBalancedJSON(textBlock.text, "[");
-      if (!jsonMatchStr) {
-        console.warn(`Batch result ${entry.custom_id}: unparsable response`);
-        continue;
-      }
-
-      const parsed = safeParseJSONArray(jsonMatchStr) as Array<{
-        index: number;
-        score: number;
-        label: string;
-        role?: string;
-      }>;
-
-      if (!Array.isArray(parsed)) continue;
-
-      for (const p of parsed) {
-        if (!Number.isInteger(p.index) || p.index < 0 || p.index >= manifestEntry.frames.length) continue;
-        if (typeof p.score !== "number" || isNaN(p.score)) continue;
-
-        const frame = manifestEntry.frames[p.index];
-        allScores.push({
-          sourceFileId: frame.sourceFileId,
-          sourceType: frame.sourceType,
-          timestamp: frame.timestamp,
-          score: Math.max(0, Math.min(1, p.score)),
-          label: p.label || "highlight",
-          narrativeRole: (p.role && VALID_ROLES.includes(p.role)) ? p.role : undefined,
-        });
-      }
-    } catch (err) {
-      console.warn("Batch result parse error:", err);
-    }
-  }
-
-  return allScores;
-}
 

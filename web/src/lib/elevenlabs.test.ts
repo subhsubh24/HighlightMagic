@@ -119,7 +119,7 @@ describe("ElevenLabs Music", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.prompt).toBe("upbeat sports rock");
     expect(body.music_length_ms).toBe(30_000);
-    expect(body.output_format).toBe("mp3_44100_128");
+    expect(body.output_format).toBe("mp3_44100_192");
   });
 
   it("clamps duration to valid range", async () => {

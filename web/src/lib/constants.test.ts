@@ -29,7 +29,7 @@ describe("constants", () => {
 
   it("has valid upload limits", () => {
     expect(MAX_UPLOAD_SIZE_MB).toBe(500);
-    expect(MAX_FILES).toBe(20);
+    expect(MAX_FILES).toBe(100);
   });
 
   it("has valid export dimensions", () => {

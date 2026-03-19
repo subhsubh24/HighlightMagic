@@ -24,6 +24,7 @@ import { getKineticTransform, drawKineticCaption, type CustomCaptionParams } fro
 import { getMicroSettle, getExitDeceleration, drawFilmGrain, drawVignette, getWarmthShiftCSS, applyFilmStock } from "@/lib/post-processing";
 import { createAudioPipeline, type AudioPipeline, type ScheduledAudioLayer } from "@/lib/audio-mux";
 import { haptic } from "@/lib/utils";
+import { pollBatched } from "@/lib/poll-manager";
 import Confetti from "@/components/Confetti";
 import type { EditedClip, EditingTheme, CaptionStyle, ViralExportOptions, AppState } from "@/lib/types";
 import { EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_FRAME_RATE } from "@/lib/constants";
@@ -31,7 +32,7 @@ import { EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_FRAME_RATE } from "@/lib/constants"
 const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
 function debugLog(...args: unknown[]) { if (DEBUG) console.log(...args); }
 
-type ExportPhase = "preview" | "rendering" | "done" | "limit-hit" | "error";
+type ExportPhase = "preview" | "rendering" | "styling" | "done" | "limit-hit" | "error";
 type ThumbnailPhase = "idle" | "generating" | "done" | "failed";
 
 /**
@@ -702,8 +703,66 @@ export default function ExportStep() {
         } : undefined,
       );
 
-      const url = URL.createObjectURL(blob);
-      setBlobUrl(url);
+      // Style transfer — if the planner chose one, apply AI visual post-processing
+      if (state.styleTransferPrompt) {
+        setPhase("styling");
+        setProgress(0);
+        try {
+          // Convert blob to base64 data URI for the API
+          const reader = new FileReader();
+          const videoDataUri = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          debugLog(`[StyleTransfer] Submitting (${(blob.size / 1_000_000).toFixed(1)}MB) with prompt: "${state.styleTransferPrompt.slice(0, 60)}..."`);
+
+          const stRes = await fetch("/api/style-transfer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              videoData: videoDataUri,
+              prompt: state.styleTransferPrompt,
+              strength: state.styleTransferStrength ?? 0.5,
+            }),
+          });
+          const stData = await stRes.json();
+
+          if (stRes.ok && stData.predictionId) {
+            debugLog(`[StyleTransfer] Submitted, polling prediction ${stData.predictionId}...`);
+            const styledUrl = await pollBatched(stData.predictionId, { timeoutMs: 600_000 });
+
+            if (styledUrl) {
+              // Fetch the styled video and create a local blob URL
+              const styledRes = await fetch(styledUrl);
+              if (!styledRes.ok) throw new Error(`Failed to fetch styled video: HTTP ${styledRes.status}`);
+              const styledBlob = await styledRes.blob();
+              const styledBlobUrl = URL.createObjectURL(styledBlob);
+              setBlobUrl(styledBlobUrl);
+              debugLog(`[StyleTransfer] Applied successfully`);
+            } else {
+              // Style transfer failed — fall back to unstyled video
+              debugLog(`[StyleTransfer] Failed — using unstyled video`);
+              const url = URL.createObjectURL(blob);
+              setBlobUrl(url);
+            }
+          } else {
+            debugLog(`[StyleTransfer] Submission failed — using unstyled video`);
+            const url = URL.createObjectURL(blob);
+            setBlobUrl(url);
+          }
+        } catch (e) {
+          console.error("[StyleTransfer] Error:", e);
+          // Fall back to unstyled video on any error
+          const url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+        }
+      } else {
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+      }
+
       dispatch({ type: "INCREMENT_EXPORTS" });
       setPhase("done");
       haptic([10, 50, 10]);
@@ -880,6 +939,21 @@ export default function ExportStep() {
           </div>
         );
       })()}
+
+      {/* Styling phase — AI style transfer in progress */}
+      {phase === "styling" && (
+        <div className="flex w-full flex-col items-center gap-5 py-12 animate-fade-in">
+          <div className="relative h-12 w-12">
+            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--accent)] border-r-[var(--accent-pink)]" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-white">Applying AI style transfer</p>
+            <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+              {state.styleTransferPrompt?.slice(0, 60)}...
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Done phase — video player */}
       {phase === "done" && (
@@ -1138,10 +1212,34 @@ async function renderHighlightTape(
     totalDuration = clips.length * photoDisplayDuration;
   }
 
+  // Build clip timeline to filter audio breaths — breaths during photo clips
+  // make no sense because the music is the only audio source for photos.
+  const clipTimeline: Array<{ start: number; end: number; isPhoto: boolean }> = [];
+  {
+    let t = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const sourceDur = clips[i].clip.trimEnd - clips[i].clip.trimStart;
+      let dur = getEffectiveDuration(sourceDur, clips[i].clip.velocityPreset, clips[i].clip.customVelocityKeyframes);
+      if (clips[i].mediaType === "photo" && (!Number.isFinite(dur) || dur <= 0)) dur = photoDisplayDuration;
+      if (beatGrid && beatGrid.beatInterval > 0) dur = Math.max(2, Math.round(dur / beatGrid.beatInterval)) * beatGrid.beatInterval;
+      const minDur = clips[i].minCanvasDuration;
+      if (minDur != null && minDur > dur) dur = minDur;
+      clipTimeline.push({ start: t, end: t + dur, isPhoto: clips[i].mediaType === "photo" });
+      t += dur;
+      if (i < clips.length - 1) t -= clips[i + 1]?.clip.transitionDuration ?? defaultTransitionDuration;
+    }
+  }
+  // Filter out audio breaths that land entirely during a photo-only clip
+  const filteredBreaths = aiRenderOpts?.audioBreaths?.filter((breath) => {
+    const mid = breath.time + breath.duration / 2;
+    const photoClip = clipTimeline.find((c) => c.isPhoto && mid >= c.start && mid < c.end);
+    return !photoClip;
+  });
+
   // Audio pipeline: captures original clip audio + optional background music
   const canvasStream = canvas.captureStream(EXPORT_FRAME_RATE);
   const musicTrack = clips.find((c) => c.clip.selectedMusicTrack)?.clip.selectedMusicTrack ?? null;
-  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, aiRenderOpts?.audioBreaths);
+  const audioPipeline = await createAudioPipeline(canvasStream, musicTrack, aiMusicUrl, scheduledLayers, musicVolume, musicDuckRatio, musicDuckAttack, musicDuckRelease, musicFadeInDuration, musicFadeOutDuration, totalDuration, aiRenderOpts?.clipAudioVolume, filteredBreaths);
 
   const recorder = new MediaRecorder(audioPipeline.stream, {
     mimeType,

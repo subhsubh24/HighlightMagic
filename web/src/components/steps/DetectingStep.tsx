@@ -6,9 +6,6 @@ import { useApp } from "@/lib/store";
 import { extractFramesFromMultiple, type ExtractedFrame } from "@/lib/frame-extractor";
 import {
   scoreSingleBatch,
-  submitScoringBatch,
-  pollScoringBatch,
-  retrieveScoringResults,
   type DetectionResult,
   type DetectedClip,
 } from "@/actions/detect";
@@ -96,20 +93,6 @@ const DETECTION_PASSES = [
   "Applying editing style for best flow...",
 ];
 
-const BATCH_DETECTION_PASSES = [
-  "Extracting frames from all clips...",
-  "Submitting frames to AI (economy mode)...",
-  "Waiting for batch results...",
-  "Planning your highlight tape...",
-  "Applying editing style for best flow...",
-];
-
-/** Minimum total frame count before Batch API mode kicks in (saves 50% on scoring cost).
- *  Photo-only uploads produce 1 frame each — batch API overhead is wasteful for small counts. */
-const BATCH_MODE_FRAME_THRESHOLD = 50;
-/** Polling interval for Batch API status checks. */
-const BATCH_POLL_INTERVAL_MS = 5_000;
-
 const REPLAN_PASSES = [
   "Re-planning with your direction...",
   "Applying editing style for best flow...",
@@ -146,17 +129,23 @@ async function callPlannerSSE(
   photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>,
   signal?: AbortSignal,
   onPartial?: (field: string, value: unknown) => void,
-  disabledFeatures?: DisabledFeatures
+  disabledFeatures?: DisabledFeatures,
+  aiDecideAnimations?: boolean
 ): Promise<DetectionResult> {
+  const payloadSize = JSON.stringify({ frames, scores }).length;
+  console.log(`[Planner SSE] Sending request — ${frames.length} frames, ${(scores as unknown[]).length} scores, payload ~${(payloadSize / 1024).toFixed(0)}KB`);
+  const fetchStart = Date.now();
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations }),
     signal,
   });
+  console.log(`[Planner SSE] Response received — HTTP ${response.status} in ${((Date.now() - fetchStart) / 1000).toFixed(1)}s`);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    console.error(`[Planner SSE] Error response: ${text.slice(0, 300)}`);
     throw new Error(`Planner request failed (HTTP ${response.status}): ${text.slice(0, 200)}`);
   }
 
@@ -234,6 +223,7 @@ async function callPlannerSSE(
     if (result) return result;
   }
 
+  console.error("[Planner SSE] Stream ended without a result event");
   throw new Error("Planner stream ended without a result");
 }
 
@@ -248,8 +238,6 @@ export default function DetectingStep() {
   const [animationProgress, setAnimationProgress] = useState<{ total: number; completed: number; failed: number }>({ total: 0, completed: 0, failed: 0 });
   const [validationPhase, setValidationPhase] = useState<string | null>(null);
   const [plannerElapsed, setPlannerElapsed] = useState(0);
-  const [batchMode, setBatchMode] = useState(false);
-  const batchModeRef = useRef(false);
   const hasStarted = useRef(false);
   const abortRef = useRef<AbortController>(new AbortController());
   const animationAbortRef = useRef<AbortController | null>(null);
@@ -294,11 +282,10 @@ export default function DetectingStep() {
   }, [passIndex]);
 
   // Tick the planner elapsed timer every second while on the planner pass.
-  // Normal mode = pass 2, batch mode = pass 3, replan = pass 0.
+  // Normal mode = pass 2, replan = pass 0.
   const isPlannerPass =
     (isReplan && passIndex === 0) ||
-    (!isReplan && !batchMode && passIndex === 2) ||
-    (!isReplan && batchMode && passIndex === 3);
+    (!isReplan && passIndex === 2);
   useEffect(() => {
     if (!isPlannerPass) {
       setPlannerElapsed(0);
@@ -536,7 +523,8 @@ export default function DetectingStep() {
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
           handlePartialField,
-          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
+          state.aiDecideAnimations || undefined
         );
 
         clearInterval(plannerTimer);
@@ -561,84 +549,75 @@ export default function DetectingStep() {
       setProgress(30);
 
       const allScores: Awaited<ReturnType<typeof scoreSingleBatch>> = [];
-      const SCORING_CONCURRENCY = 10;
-      const STAGGER_MS = 500;
+      const SCORING_CONCURRENCY = 4;
+      const STAGGER_MS = 600;
       let completedBatches = 0;
       let launchedBatches = 0;
+      let consecutiveFailures = 0;
+
+      debugLog(`[Scoring] Starting ${batches.length} batches (concurrency=${SCORING_CONCURRENCY}, stagger=${STAGGER_MS}ms)`);
 
       for (let w = 0; w < batches.length; w += SCORING_CONCURRENCY) {
+        const waveIndex = Math.floor(w / SCORING_CONCURRENCY);
         const wave = batches.slice(w, w + SCORING_CONCURRENCY);
-        const waveResults = await Promise.all(
+        debugLog(`[Scoring] Wave ${waveIndex + 1} — launching ${wave.length} batches (${w + 1}–${w + wave.length} of ${batches.length})`);
+
+        // Circuit breaker: back off if previous wave had failures
+        if (consecutiveFailures >= 2) {
+          const cooldownMs = Math.min(5000 * consecutiveFailures, 20_000);
+          debugLog(`[Scoring] Circuit breaker: ${consecutiveFailures} consecutive failures, cooling down ${cooldownMs}ms`);
+          await new Promise((r) => setTimeout(r, cooldownMs));
+        }
+
+        const waveStart = Date.now();
+        const waveResults = await Promise.allSettled(
           wave.map(async (batch, i) => {
             if (i > 0) await new Promise((r) => setTimeout(r, i * STAGGER_MS));
             launchedBatches++;
-            // Show launch progress (30-40%) then completion progress (40-58%)
             if (batches.length > 0) {
               setProgress(Math.round(30 + (launchedBatches / batches.length) * 10));
             }
+            debugLog(`[Scoring] Batch ${w + i + 1}/${batches.length} launched (${batch.length} frames)`);
             const scores = await scoreSingleBatch(
               batch,
               sourceFileList,
               state.selectedTemplate?.name
             );
             completedBatches++;
+            debugLog(`[Scoring] Batch ${w + i + 1}/${batches.length} done — ${scores.length} scores (${((Date.now() - waveStart) / 1000).toFixed(1)}s)`);
             if (batches.length > 0) {
               setProgress(Math.round(40 + (completedBatches / batches.length) * 18));
             }
             return scores;
           })
         );
-        allScores.push(...waveResults.flat());
-      }
-      return allScores;
-    }
 
-    /** Batch API scoring: submit all at once, poll, retrieve. 50% cheaper. */
-    async function runBatchScoring(
-      batches: ExtractedFrame[][],
-      sourceFileList: ReturnType<typeof buildSourceFileList>
-    ) {
-      // Submit
-      setPassIndex(1);
-      setProgress(32);
-      const { batchId, manifest } = await submitScoringBatch(
-        batches,
-        sourceFileList,
-        state.selectedTemplate?.name
-      );
-
-      // Poll until complete — show real progress from batch counts
-      setPassIndex(2);
-      setProgress(35);
-      let pollCount = 0;
-      let status: Awaited<ReturnType<typeof pollScoringBatch>>;
-      do {
-        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
-        await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
-        if (abort.signal.aborted) throw new Error("Batch scoring aborted");
-        status = await pollScoringBatch(batchId);
-        pollCount++;
-        const total = status.counts.processing + status.counts.succeeded +
-          status.counts.errored + status.counts.canceled + status.counts.expired;
-        const done = status.counts.succeeded + status.counts.errored +
-          status.counts.canceled + status.counts.expired;
-        if (total > 0 && done > 0) {
-          setProgress(Math.round(35 + (done / total) * 20));
-        } else {
-          // No batches done yet — creep slowly so user sees activity
-          setProgress((prev) => Math.min(prev + 0.5, 42));
+        let waveFailures = 0;
+        for (let i = 0; i < waveResults.length; i++) {
+          const r = waveResults[i];
+          if (r.status === "fulfilled") {
+            allScores.push(...r.value);
+          } else {
+            waveFailures++;
+            console.error(`[Scoring] Batch ${w + i + 1}/${batches.length} FAILED:`, r.reason);
+          }
         }
-      } while (status.status === "in_progress");
 
-      if (status.counts.succeeded === 0) {
-        throw new Error(`Batch scoring failed: ${status.counts.errored} errored, ${status.counts.expired} expired`);
+        if (waveFailures > 0) {
+          consecutiveFailures += waveFailures;
+          console.warn(`[Scoring] Wave ${waveIndex + 1} had ${waveFailures}/${wave.length} failures (${consecutiveFailures} consecutive total)`);
+        } else {
+          consecutiveFailures = 0;
+        }
+        debugLog(`[Scoring] Wave ${waveIndex + 1} complete in ${((Date.now() - waveStart) / 1000).toFixed(1)}s — ${allScores.length} scores so far`);
       }
 
-      // Retrieve results
-      setProgress(56);
-      const scores = await retrieveScoringResults(batchId, manifest);
-      setProgress(58);
-      return scores;
+      if (allScores.length === 0) {
+        throw new Error("All scoring batches failed — no scores returned. The model may be overloaded, please try again.");
+      }
+
+      debugLog(`[Scoring] All waves complete — ${allScores.length} total scores from ${batches.length} batches (${batches.length - Math.floor(allScores.length / (batches[0]?.length || 1))} failed)`);
+      return allScores;
     }
 
     async function runDetection() {
@@ -655,34 +634,20 @@ export default function DetectingStep() {
 
         const batches = buildFrameBatches(frames);
         const sourceFileList = buildSourceFileList(frames);
-        const useBatchMode = frames.length >= BATCH_MODE_FRAME_THRESHOLD;
-        debugLog(`[Detection] ${frames.length} frames, ${batches.length} batches, batchMode=${useBatchMode} (threshold=${BATCH_MODE_FRAME_THRESHOLD} frames)`);
-        if (useBatchMode) {
-          batchModeRef.current = true;
-          setBatchMode(true);
-        }
+        debugLog(`[Detection] ${frames.length} frames, ${batches.length} batches`);
 
         let scores: Awaited<ReturnType<typeof scoreSingleBatch>>;
-
-        if (useBatchMode) {
-          // ── Batch API scoring (50% cost savings) ──
-          debugLog(`[Detection] Starting batch API scoring...`);
-          scores = await runBatchScoring(batches, sourceFileList);
-        } else {
-          // ── Real-time scoring (low latency) ──
-          debugLog(`[Detection] Starting real-time scoring...`);
-          scores = await runRealtimeScoring(batches, sourceFileList);
-        }
-        debugLog(`[Detection] Scoring complete — ${scores.length} scores`);
+        debugLog(`[Detection] Starting real-time scoring...`);
+        scores = await runRealtimeScoring(batches, sourceFileList);
+        console.log(`[Detection] Scoring complete — ${scores.length} scores`);
 
         // Cache frames + scores for fast regeneration
         cacheDetectionData(
           frames, scores,
           mediaFilesRef.current.map((f) => ({ name: f.name, size: f.file?.size }))
         );
-
-        // Phase 3: Plan highlights via server action (60-92%)
-        setPassIndex(useBatchMode ? 3 : 2);
+        console.log(`[Detection] Cached detection data, transitioning to planner phase`);
+        setPassIndex(2);
         setProgress(60);
 
         // Slow fallback timer — creeps toward 85% so progress never looks stuck.
@@ -699,7 +664,7 @@ export default function DetectingStep() {
           });
         }, 500);
 
-        debugLog(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
+        console.log(`[Detection] Calling planner SSE — frames=${frames.length}, scores=${scores.length}, photoAnimations=${photoAnimations.length}`);
         // React Strict Mode aborts the signal during its simulated cleanup,
         // but this async function keeps running. Create a fresh controller
         // if the original was killed by Strict Mode (not a real unmount).
@@ -731,20 +696,23 @@ export default function DetectingStep() {
           photoAnimations.length > 0 ? photoAnimations : undefined,
           abort.signal,
           handlePartialField,
-          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled }
+          { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
+          state.aiDecideAnimations || undefined
         );
-        debugLog(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
+        console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
         clearInterval(plannerTimer);
         await processResult(result, frames);
       } catch (err) {
+        console.error("[Detection] runDetection caught error:", err);
         clearInterval(plannerTimer);
         handleError(err);
       }
     }
 
     async function processResult(result: DetectionResult, allFrames?: Array<{ sourceFileId: string; timestamp: number; base64: string }>) {
-      setPassIndex(isReplan ? 1 : batchModeRef.current ? 4 : 3);
+      console.log(`[Detection] processResult — ${result.clips.length} clips, theme=${result.detectedTheme}`);
+      setPassIndex(isReplan ? 1 : 3);
       setProgress(95);
 
       // Set the detected theme (template override takes priority)
@@ -895,6 +863,22 @@ export default function DetectingStep() {
             talkingHeadSpeech: productionPlan.talkingHeadSpeech ?? null,
           },
         });
+      }
+
+      // When AI decides animations, update media files to reflect Opus's choices
+      if (state.aiDecideAnimations) {
+        const aiAnimatedIds = new Set(
+          detectedClips.filter((c) => c.animationPrompt).map((c) => c.sourceFileId)
+        );
+        for (const fileId of aiAnimatedIds) {
+          const clip = detectedClips.find((c) => c.sourceFileId === fileId && c.animationPrompt);
+          dispatch({
+            type: "UPDATE_MEDIA_ANIMATION",
+            fileId,
+            animatePhoto: true,
+            animationInstructions: clip?.animationPrompt ?? "",
+          });
+        }
       }
 
       // 1. Music — use early-started promise if available (Arch #4), otherwise start now
@@ -1298,8 +1282,29 @@ export default function DetectingStep() {
                 return;
               }
 
-              // Convert photo to data URI
-              const photoDataUri = await fileToDataUri(photoMedia.file);
+              // Convert photo to data URI, upscaling low-res photos first
+              let photoDataUri = await fileToDataUri(photoMedia.file);
+              if (photoMedia.file.size < 500_000) {
+                try {
+                  debugLog(`[TalkingHead] Photo "${photoMedia.name}" is low-res (${(photoMedia.file.size / 1000).toFixed(0)}KB), upscaling...`);
+                  const upRes = await fetch("/api/upscale", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ imageData: photoDataUri }),
+                    signal: abort.signal,
+                  });
+                  const upData = await upRes.json();
+                  if (upRes.ok && upData.predictionId) {
+                    const upscaledUrl = await pollAtlasTask(upData.predictionId);
+                    if (upscaledUrl) {
+                      photoDataUri = upscaledUrl;
+                      debugLog(`[TalkingHead] Upscaled photo for lip sync`);
+                    }
+                  }
+                } catch (e) {
+                  console.error("[TalkingHead] Auto-upscale failed (non-blocking):", e);
+                }
+              }
 
               // Submit lip sync task
               const lipRes = await fetch("/api/talking-head", {
@@ -1377,7 +1382,7 @@ export default function DetectingStep() {
 
       // 10. Store style transfer prompt if Claude chose one
       if (productionPlan?.styleTransfer) {
-        dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt });
+        dispatch({ type: "SET_STYLE_TRANSFER_PROMPT", prompt: productionPlan.styleTransfer.prompt, strength: productionPlan.styleTransfer.strength });
       }
 
       // 11. Photo animations — skip if disabled
@@ -1710,7 +1715,7 @@ export default function DetectingStep() {
     /** Poll an Atlas Cloud task via batched poll manager. Returns output URL or empty string on failure. */
     async function pollAtlasTask(predictionId: string): Promise<string> {
       try {
-        return await pollBatched(predictionId, { timeoutMs: 300_000 });
+        return await pollBatched(predictionId, { timeoutMs: 600_000 });
       } catch (e) {
         console.error(`[Atlas] Poll failed for prediction ${predictionId}:`, e);
         return ""; // Failed or timed out
@@ -1729,8 +1734,10 @@ export default function DetectingStep() {
 
     /** Poll for animation completion via batched poll manager. */
     async function pollAnimationOnClient(predictionId: string, mediaId: string, mediaName: string) {
+      console.log(`[Animation] Polling "${mediaName}": predictionId=${predictionId}`);
       try {
-        const videoUrl = await pollBatched(predictionId, { timeoutMs: 300_000, maxErrors: 3 });
+        const videoUrl = await pollBatched(predictionId, { timeoutMs: 600_000, maxErrors: 3 });
+        console.log(`[Animation] Completed "${mediaName}": videoUrl=${videoUrl?.slice(0, 80)}...`);
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,
@@ -1740,7 +1747,7 @@ export default function DetectingStep() {
       } catch (err) {
         const signal = animationAbortRef.current?.signal;
         if (signal?.aborted) return;
-        console.error(`Photo animation failed for "${mediaName}":`, err);
+        console.error(`[Animation] Poll failed "${mediaName}":`, err instanceof Error ? err.message : err);
         dispatch({
           type: "SET_ANIMATION_RESULT",
           fileId: mediaId,
@@ -1779,7 +1786,7 @@ export default function DetectingStep() {
         console.warn("[Detection] triggerPhotoAnimations: no photo clips to animate, skipping");
         return Promise.resolve();
       }
-      debugLog(`[Detection] Animating ${totalAnimations} photos...`);
+      console.log(`[Animation] Starting ${totalAnimations} photo animations (${uniqueClips.length} unique clips, upscaled=${upscaledUrls?.size ?? 0})`);
 
       const promises: Promise<void>[] = [];
 
@@ -1794,6 +1801,9 @@ export default function DetectingStep() {
         const prompt = clip.animationPrompt
           || media.animationInstructions
           || `Bring this photo to life with natural realistic motion. Subjects move naturally, environment has ambient motion. Scene: ${clip.label}`;
+        const promptSource = clip.animationPrompt ? "AI" : media.animationInstructions ? "user" : "fallback";
+        const hasUpscaled = upscaledUrls?.has(media.id) ?? false;
+        console.log(`[Animation] "${media.name}": prompt=${promptSource}, upscaled=${hasUpscaled}, hasFile=${!!media.file}`);
 
         // Mark as generating
         dispatch({
@@ -1833,7 +1843,7 @@ export default function DetectingStep() {
             setAnimationProgress((prev) => ({ ...prev, completed: prev.completed + 1, failed: prev.failed + 1 }));
             const pct = totalAnimations > 0 ? Math.round(92 + (completedAnimations / totalAnimations) * 7) : 99;
             setProgress(pct);
-            console.error(`Photo animation failed for "${media.name}":`, err);
+            console.error(`[Animation] FAILED "${media.name}":`, err instanceof Error ? err.message : err);
             dispatch({
               type: "SET_ANIMATION_RESULT",
               fileId: media.id,
@@ -1848,9 +1858,12 @@ export default function DetectingStep() {
     }
 
     function handleError(err: unknown) {
-      if (abort.signal.aborted) return; // unmounted — don't show errors
       const message = err instanceof Error ? err.message : String(err);
-      console.error("Detection failed:", message);
+      console.error("[Detection] handleError:", message, err);
+      if (abort.signal.aborted) {
+        console.warn("[Detection] Error suppressed (component unmounted):", message);
+        return;
+      }
 
       if (message.includes("Failed to fetch") || message.includes("fetch failed") || message.includes("TimeoutError") || message.includes("aborted")) {
         setError("Connection to the AI was lost — the planner may need more time for complex footage. Please try again.");
@@ -1872,7 +1885,7 @@ export default function DetectingStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const passes = isReplan ? REPLAN_PASSES : batchMode ? BATCH_DETECTION_PASSES : DETECTION_PASSES;
+  const passes = isReplan ? REPLAN_PASSES : DETECTION_PASSES;
 
   if (error) {
     return (

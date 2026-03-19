@@ -152,7 +152,7 @@ actor ElevenLabsService {
             let body: [String: Any] = [
                 "text": text,
                 "model_id": "eleven_flash_v2_5",
-                "output_format": "mp3_44100_64",
+                "output_format": "mp3_44100_128",
                 "voice_settings": [
                     "stability": 0.5,
                     "similarity_boost": 0.75,
@@ -177,8 +177,8 @@ actor ElevenLabsService {
                 return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Empty audio response")
             }
 
-            // MP3 64kbps ≈ 8KB/s
-            let estimatedDuration = Double(data.count) / 8_000.0
+            // MP3 128kbps ≈ 16KB/s
+            let estimatedDuration = Double(data.count) / 16_000.0
             logger.info("Generated \(data.count) bytes (~\(Int(estimatedDuration))s)")
 
             return AudioResult(status: .completed, audioData: data, estimatedDuration: estimatedDuration, error: nil)
@@ -227,7 +227,7 @@ actor ElevenLabsService {
             let body: [String: Any] = [
                 "prompt": prompt,
                 "music_length_ms": clampedDuration,
-                "output_format": "mp3_44100_128"
+                "output_format": "mp3_44100_192"
             ]
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -243,8 +243,8 @@ actor ElevenLabsService {
                 return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Empty music response")
             }
 
-            // MP3 128kbps ≈ 16KB/s
-            let estimatedDuration = Double(data.count) / 16_000.0
+            // MP3 192kbps ≈ 24KB/s
+            let estimatedDuration = Double(data.count) / 24_000.0
             logger.info("Generated music: \(data.count) bytes (~\(Int(estimatedDuration))s)")
 
             return AudioResult(status: .completed, audioData: data, estimatedDuration: estimatedDuration, error: nil)
@@ -505,7 +505,7 @@ actor ElevenLabsService {
             let body: [String: Any] = [
                 "text": text,
                 "model_id": "eleven_flash_v2_5",
-                "output_format": "mp3_44100_64",
+                "output_format": "mp3_44100_128",
                 "voice_settings": [
                     "stability": 0.5,
                     "similarity_boost": 0.85,
@@ -525,7 +525,7 @@ actor ElevenLabsService {
                 return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Empty audio response")
             }
 
-            let estimatedDuration = Double(data.count) / 8_000.0
+            let estimatedDuration = Double(data.count) / 16_000.0
             return AudioResult(status: .completed, audioData: data, estimatedDuration: estimatedDuration, error: nil)
         } catch {
             return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: error.localizedDescription)

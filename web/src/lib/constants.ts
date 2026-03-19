@@ -2,7 +2,7 @@
 
 export const MAX_VIDEO_DURATION_SECONDS = 600; // 10 minutes
 export const MAX_UPLOAD_SIZE_MB = 500;
-export const MAX_FILES = 20; // max clips/photos per project
+export const MAX_FILES = 100; // max clips/photos per project
 export const MAX_TOTAL_DURATION_SECONDS = 1800; // 30 min total across all clips
 export const PHOTO_DISPLAY_DURATION = 3.2; // seconds a photo shows in the final edit — slightly off-round for human feel
 export const FREE_EXPORT_LIMIT = 5;

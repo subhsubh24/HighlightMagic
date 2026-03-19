@@ -13,7 +13,7 @@
  */
 
 const POLL_INTERVAL_MS = 5_000;
-const DEFAULT_TIMEOUT_MS = 300_000; // 5 min
+const DEFAULT_TIMEOUT_MS = 600_000; // 10 min — headroom for large animation batches
 
 interface PendingTask {
   predictionId: string;

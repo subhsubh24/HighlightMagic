@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures } = body as {
+  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations } = body as {
     frames: unknown;
     scores: unknown;
     templateName?: string;
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     creativeDirection?: string;
     photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>;
     disabledFeatures?: { music?: boolean; sfx?: boolean; introOutro?: boolean };
+    aiDecideAnimations?: boolean;
   };
 
   if (!Array.isArray(frames) || !Array.isArray(scores)) {
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
           photoAnimations ?? undefined,
           (field, value) => {
             // Forward early production plan fields to client
+
             try {
               controller.enqueue(
                 encoder.encode(`event: partial\ndata: ${JSON.stringify({ field, value })}\n\n`)
@@ -86,7 +88,8 @@ export async function POST(req: Request) {
             } catch {
               // Controller closed — ignore
             }
-          }
+          },
+          aiDecideAnimations ?? undefined
         );
         clearInterval(keepalive);
         controller.enqueue(

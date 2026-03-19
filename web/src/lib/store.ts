@@ -27,6 +27,7 @@ export const initialState: AppState = {
   sfxEnabled: false,
   introOutroEnabled: false,
   animatePhotosEnabled: false,
+  aiDecideAnimations: false,
   aiMusicStatus: "idle",
   aiMusicUrl: null,
   aiMusicPrompt: "",
@@ -49,6 +50,7 @@ export const initialState: AppState = {
   stemSeparationStatus: "idle",
   // Style transfer
   styleTransferPrompt: null,
+  styleTransferStrength: null,
   // Validation loop
   validationStatus: "idle",
   // Talking head
@@ -98,6 +100,7 @@ export type Action =
   | { type: "SET_SFX_ENABLED"; enabled: boolean }
   | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
   | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
+  | { type: "SET_AI_DECIDE_ANIMATIONS"; enabled: boolean }
   | { type: "TOGGLE_PHOTO_ANIMATE"; fileId: string }
   | { type: "SET_AI_MUSIC_PROMPT"; prompt: string }
   | { type: "SET_AI_MUSIC_RESULT"; status: AiMusicStatus; audioUrl?: string | null }
@@ -119,7 +122,7 @@ export type Action =
   // Stem separation
   | { type: "SET_INSTRUMENTAL_MUSIC"; url: string | null; status: GenerationStatus }
   // Style transfer
-  | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null }
+  | { type: "SET_STYLE_TRANSFER_PROMPT"; prompt: string | null; strength?: number | null }
   // Validation loop
   | { type: "SET_VALIDATION_STATUS"; status: ValidationStatus }
   // Talking head
@@ -148,7 +151,14 @@ export function reducer(state: AppState, action: Action): AppState {
       // Schedule URL revocation outside the reducer to avoid side effects during render
       const removed = state.mediaFiles.find((f) => f.id === action.fileId);
       if (removed) setTimeout(() => URL.revokeObjectURL(removed.url), 0);
-      return { ...state, mediaFiles: updated, ...deriveLegacyVideo(updated) };
+      // Reset photo-animation flags when no photos remain
+      const hasPhotos = updated.some((f) => f.type === "photo");
+      return {
+        ...state,
+        mediaFiles: updated,
+        ...deriveLegacyVideo(updated),
+        ...(hasPhotos ? {} : { animatePhotosEnabled: false, aiDecideAnimations: false }),
+      };
     }
     case "REORDER_MEDIA": {
       const arr = [...state.mediaFiles];
@@ -164,7 +174,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const oldFiles = state.mediaFiles;
       // Schedule URL revocation outside the reducer to avoid side effects during render
       setTimeout(() => oldFiles.forEach((f) => URL.revokeObjectURL(f.url)), 0);
-      return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0 };
+      return { ...state, mediaFiles: [], videoFile: null, videoUrl: null, videoDuration: 0, animatePhotosEnabled: false, aiDecideAnimations: false };
     }
     case "SET_TEMPLATE":
       return { ...state, selectedTemplate: action.template };
@@ -279,7 +289,20 @@ export function reducer(state: AppState, action: Action): AppState {
       const toggled = state.mediaFiles.map((f) =>
         f.type === "photo" ? { ...f, animatePhoto: action.enabled } : f
       );
-      return { ...state, animatePhotosEnabled: action.enabled, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+      return { ...state, animatePhotosEnabled: action.enabled, aiDecideAnimations: action.enabled ? state.aiDecideAnimations : false, mediaFiles: toggled, ...deriveLegacyVideo(toggled) };
+    }
+    case "SET_AI_DECIDE_ANIMATIONS": {
+      // When enabling AI decide, turn on animation globally and clear per-photo flags (AI will decide later)
+      const toggled = action.enabled
+        ? state.mediaFiles.map((f) => f.type === "photo" ? { ...f, animatePhoto: false } : f)
+        : state.mediaFiles;
+      return {
+        ...state,
+        aiDecideAnimations: action.enabled,
+        animatePhotosEnabled: action.enabled ? true : state.animatePhotosEnabled,
+        mediaFiles: toggled,
+        ...deriveLegacyVideo(toggled),
+      };
     }
     case "TOGGLE_PHOTO_ANIMATE": {
       const toggled = state.mediaFiles.map((f) =>
@@ -339,7 +362,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SET_INSTRUMENTAL_MUSIC":
       return { ...state, instrumentalMusicUrl: action.url, stemSeparationStatus: action.status };
     case "SET_STYLE_TRANSFER_PROMPT":
-      return { ...state, styleTransferPrompt: action.prompt };
+      return { ...state, styleTransferPrompt: action.prompt, styleTransferStrength: action.strength ?? null };
     case "SET_VALIDATION_STATUS":
       return { ...state, validationStatus: action.status };
     case "SET_TALKING_HEAD":

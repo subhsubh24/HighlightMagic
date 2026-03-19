@@ -76,6 +76,8 @@ export default function UploadStep() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [voiceUploading, setVoiceUploading] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processProgress, setProcessProgress] = useState({ current: 0, total: 0 });
   const dragItemIndex = useRef<number | null>(null);
 
   const hasFiles = state.mediaFiles.length > 0;
@@ -84,6 +86,7 @@ export default function UploadStep() {
 
   const processFiles = useCallback(
     async (fileList: FileList | File[]) => {
+      if (isProcessing) return;
       setError(null);
       const files = Array.from(fileList);
 
@@ -92,14 +95,39 @@ export default function UploadStep() {
         return;
       }
 
+      setIsProcessing(true);
+      setProcessProgress({ current: 0, total: files.length });
       const newMedia: MediaFile[] = [];
 
-      for (const file of files) {
-        const isVideo = file.type.startsWith("video/");
-        const isImage = file.type.startsWith("image/");
+      for (let file of files) {
+        setProcessProgress((prev) => ({ ...prev, current: prev.current + 1 }));
+        let isVideo = file.type.startsWith("video/");
+        let isImage = file.type.startsWith("image/");
+
+        // Detect HEIC/HEIF by MIME type or extension (some systems report
+        // empty or application/octet-stream for .heic files)
+        const isHEIC = file.type === "image/heic" || file.type === "image/heif"
+          || /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
+
+        if (isHEIC) {
+          try {
+            const heic2any = (await import("heic2any")).default;
+            const jpegBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 }) as Blob;
+            file = new File(
+              [jpegBlob],
+              file.name.replace(/\.heic$/i, ".jpg").replace(/\.heif$/i, ".jpg"),
+              { type: "image/jpeg" },
+            );
+            isImage = true;
+            isVideo = false;
+          } catch {
+            setError(`"${file.name}" could not be converted. Try converting to JPEG first.`);
+            continue;
+          }
+        }
 
         if (!isVideo && !isImage) {
-          setError(`"${file.name}" is not a supported format. Use MP4, MOV, WebM, JPG, or PNG.`);
+          setError(`"${file.name}" is not a supported format. Use MP4, MOV, WebM, JPG, PNG, or HEIC.`);
           continue;
         }
 
@@ -111,20 +139,31 @@ export default function UploadStep() {
         const url = URL.createObjectURL(file);
 
         if (isVideo) {
-          const duration = await getVideoDuration(url);
-          if (duration > MAX_VIDEO_DURATION_SECONDS) {
-            setError(`"${file.name}" is too long. Maximum ${MAX_VIDEO_DURATION_SECONDS / 60} minutes per clip.`);
+          try {
+            const duration = await getVideoDuration(url);
+            if (duration > MAX_VIDEO_DURATION_SECONDS) {
+              setError(`"${file.name}" is too long. Maximum ${MAX_VIDEO_DURATION_SECONDS / 60} minutes per clip.`);
+              URL.revokeObjectURL(url);
+              continue;
+            }
+            newMedia.push({
+              id: uuid(),
+              file,
+              url,
+              type: "video",
+              duration,
+              name: file.name,
+            });
+          } catch {
             URL.revokeObjectURL(url);
+            const isMov = /\.mov$/i.test(file.name) || file.type === "video/quicktime";
+            setError(
+              isMov
+                ? `"${file.name}" uses a codec your browser can't play. Open it in Photos and export as MP4, or use Safari.`
+                : `"${file.name}" could not be loaded. Try converting to MP4.`
+            );
             continue;
           }
-          newMedia.push({
-            id: uuid(),
-            file,
-            url,
-            type: "video",
-            duration,
-            name: file.name,
-          });
         } else {
           newMedia.push({
             id: uuid(),
@@ -138,12 +177,13 @@ export default function UploadStep() {
         }
       }
 
+      setIsProcessing(false);
       if (newMedia.length > 0) {
         haptic();
         dispatch({ type: "ADD_MEDIA", files: newMedia });
       }
     },
-    [dispatch, state.mediaFiles.length]
+    [dispatch, state.mediaFiles.length, isProcessing]
   );
 
   const handleDrop = useCallback(
@@ -228,6 +268,23 @@ export default function UploadStep() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 animate-fade-in">
+      {/* Processing overlay */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--accent)] mb-4" />
+          <p className="text-lg font-semibold text-white">Processing files…</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
+            {processProgress.current} of {processProgress.total}
+          </p>
+          <div className="mt-4 h-1.5 w-64 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+              style={{ width: `${processProgress.total > 0 ? (processProgress.current / processProgress.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Hero text */}
       <div className="text-center">
         {hasFiles ? (
@@ -283,90 +340,92 @@ export default function UploadStep() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {state.mediaFiles.map((media, index) => (
-              <div
-                key={media.id}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-                className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
-                  dragOverIndex === index
-                    ? "border-[var(--accent)] scale-105"
-                    : "border-white/10 hover:border-white/20"
-                }`}
-              >
-                {media.type === "video" ? (
-                  <video
-                    src={`${media.url}#t=1`}
-                    className="h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
-                )}
+          <div className="max-h-[40vh] overflow-y-auto rounded-xl">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {state.mediaFiles.map((media, index) => (
+                <div
+                  key={media.id}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`group relative aspect-square overflow-hidden rounded-xl border transition-all cursor-grab active:cursor-grabbing ${
+                    dragOverIndex === index
+                      ? "border-[var(--accent)] scale-105"
+                      : "border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  {media.type === "video" ? (
+                    <video
+                      src={`${media.url}#t=1`}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={media.url} alt={media.name} className="h-full w-full object-cover" />
+                  )}
 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                {/* Type badge + duration */}
-                <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                  {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
-                  {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
-                </div>
+                  {/* Type badge + duration */}
+                  <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                    {media.type === "video" ? <Film className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
+                    {media.type === "video" ? `${Math.round(media.duration)}s` : "Photo"}
+                  </div>
 
-                {/* Per-photo animate toggle */}
-                {media.type === "photo" && (
+                  {/* Per-photo animate toggle (hidden when AI decides) */}
+                  {media.type === "photo" && !state.aiDecideAnimations && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dispatch({ type: "TOGGLE_PHOTO_ANIMATE", fileId: media.id });
+                        haptic(5);
+                      }}
+                      className={`absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors ${
+                        media.animatePhoto
+                          ? "bg-purple-500/70 text-white"
+                          : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white/80"
+                      }`}
+                      aria-label={media.animatePhoto ? "Disable animation" : "Enable animation"}
+                    >
+                      <Sparkles className="h-2 w-2" />
+                      {media.animatePhoto ? "Animated" : "Animate"}
+                    </button>
+                  )}
+
+                  {/* Drag handle */}
+                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GripVertical className="h-3.5 w-3.5 text-white/70" />
+                  </div>
+
+                  {/* Remove button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      dispatch({ type: "TOGGLE_PHOTO_ANIMATE", fileId: media.id });
-                      haptic(5);
+                      handleRemove(media.id);
                     }}
-                    className={`absolute left-1.5 bottom-7 flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[9px] backdrop-blur-sm transition-colors ${
-                      media.animatePhoto
-                        ? "bg-purple-500/70 text-white"
-                        : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white/80"
-                    }`}
-                    aria-label={media.animatePhoto ? "Disable animation" : "Enable animation"}
+                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                    aria-label={`Remove ${media.name}`}
                   >
-                    <Sparkles className="h-2 w-2" />
-                    {media.animatePhoto ? "Animated" : "Animate"}
+                    <X className="h-3 w-3" />
                   </button>
-                )}
-
-                {/* Drag handle */}
-                <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical className="h-3.5 w-3.5 text-white/70" />
                 </div>
+              ))}
 
-                {/* Remove button */}
+              {/* Add more button */}
+              {state.mediaFiles.length < MAX_FILES && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove(media.id);
-                  }}
-                  className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
-                  aria-label={`Remove ${media.name}`}
+                  onClick={() => inputRef.current?.click()}
+                  className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  aria-label="Add more files"
                 >
-                  <X className="h-3 w-3" />
+                  <Plus className="h-8 w-8" />
                 </button>
-              </div>
-            ))}
-
-            {/* Add more button */}
-            {state.mediaFiles.length < MAX_FILES && (
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-white/10 text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                aria-label="Add more files"
-              >
-                <Plus className="h-8 w-8" />
-              </button>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Secondary drop zone */}
@@ -469,20 +528,26 @@ export default function UploadStep() {
                 iconColor="text-pink-400"
               />
               {photoCount > 0 && (
-                <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-white/5 px-4 py-3">
-                  <Sparkles className="h-4 w-4 text-yellow-400" />
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-white">Photo Animation</span>
-                      <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/20 px-1.5 py-0.5 text-[9px] font-medium text-purple-300">
-                        <Crown className="inline h-2 w-2 mr-0.5 -mt-px" />PRO
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[var(--text-tertiary)]">
-                      Tap &quot;Animate&quot; on each photo above to bring it to life
-                    </p>
-                  </div>
-                </div>
+                <>
+                  <ProToggle
+                    icon={Sparkles}
+                    label="Photo Animation"
+                    description="Bring photos to life with AI motion"
+                    enabled={state.animatePhotosEnabled}
+                    onToggle={() => dispatch({ type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: !state.animatePhotosEnabled })}
+                    iconColor="text-yellow-400"
+                  />
+                  {state.animatePhotosEnabled && (
+                    <ProToggle
+                      icon={Wand2}
+                      label="AI Picks Animations"
+                      description="Let AI decide which photos to animate"
+                      enabled={state.aiDecideAnimations}
+                      onToggle={() => dispatch({ type: "SET_AI_DECIDE_ANIMATIONS", enabled: !state.aiDecideAnimations })}
+                      iconColor="text-cyan-400"
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -547,7 +612,8 @@ export default function UploadStep() {
           {/* CTA */}
           <button
             onClick={handleContinue}
-            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2 animate-pulse-glow-subtle"
+            disabled={isProcessing}
+            className="btn-primary group mt-5 flex w-full items-center justify-center gap-2 animate-pulse-glow-subtle disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Wand2 className="h-4 w-4 transition-transform group-hover:rotate-12" />
             <span>Create Highlight Tape</span>
@@ -600,7 +666,7 @@ export default function UploadStep() {
               {isDragging ? "Drop your files here" : "Drag & drop videos + photos"}
             </p>
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-              or <span className="text-[var(--accent)] underline underline-offset-2">click to browse</span> — MP4, MOV, WebM, JPG, PNG
+              or <span className="text-[var(--accent)] underline underline-offset-2">click to browse</span> — MP4, MOV, WebM, JPG, PNG, HEIC
             </p>
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-[var(--text-tertiary)]">
               <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-white/10 px-1.5 text-[10px] font-medium">{MAX_FILES}</span>
@@ -614,7 +680,7 @@ export default function UploadStep() {
       <input
         ref={inputRef}
         type="file"
-        accept="video/mp4,video/quicktime,video/webm,video/*,image/jpeg,image/png,image/webp,image/*"
+        accept="video/mp4,video/quicktime,video/webm,video/*,image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
         multiple
         className="hidden"
         onChange={(e) => {

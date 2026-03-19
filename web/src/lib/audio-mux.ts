@@ -142,9 +142,8 @@ export async function createAudioPipeline(
 
   // Schedule voiceover / SFX layers at their designated times
   const scheduledSources: AudioBufferSourceNode[] = [];
-  // Track voiceover and SFX timing for auto-ducking music
+  // Track voiceover timing for auto-ducking music
   const voiceovers: { startTime: number; duration: number }[] = [];
-  const sfxTimings: { startTime: number; duration: number }[] = [];
 
   if (scheduledLayers && scheduledLayers.length > 0) {
     // Capture the current AudioContext time as the render start reference.
@@ -166,11 +165,9 @@ export async function createAudioPipeline(
         source.start(renderStartTime + Math.max(0, layer.startTime));
         scheduledSources.push(source);
 
-        // Record timing for auto-ducking music using actual decoded buffer duration
+        // Record voiceover timing for auto-ducking music
         if (layer.layerType === "voiceover") {
           voiceovers.push({ startTime: layer.startTime, duration: buffer.duration });
-        } else if (layer.layerType === "sfx") {
-          sfxTimings.push({ startTime: layer.startTime, duration: buffer.duration });
         }
       } catch (e) {
         console.error(`[Audio] Scheduled layer failed (${layer.layerType ?? "unknown"}):`, layer.url, e);
@@ -178,30 +175,19 @@ export async function createAudioPipeline(
     }
   }
 
-  // Auto-duck music during voiceover and SFX — professional mixing behavior.
-  // Voiceover gets full ducking (musicDuckRatio), SFX gets lighter ducking
-  // to keep the mix clean without killing the energy.
-  // Sort by start time and merge overlapping/adjacent segments to avoid conflicting ramps.
+  // Auto-duck music during voiceover only.
+  // SFX do NOT duck music — they're short punctuation sounds (whooshes, impacts)
+  // designed to layer on top of music, not replace it. Ducking for SFX caused
+  // noticeable random volume dips, especially during photo clips which have no
+  // other audio besides the background music.
   if (musicGainNode) {
     const duckSegments: { startTime: number; endTime: number; ratio: number }[] = [];
 
-    // Full duck for voiceover
     for (const vo of voiceovers) {
       duckSegments.push({
         startTime: vo.startTime,
         endTime: vo.startTime + vo.duration,
         ratio: musicDuckRatio,
-      });
-    }
-
-    // Lighter duck for SFX (halfway between normal and VO duck level)
-    // Uses actual decoded buffer duration recorded during layer scheduling
-    for (const sfx of sfxTimings) {
-      const sfxDuckRatio = Math.min(1, musicDuckRatio + (1 - musicDuckRatio) * 0.5);
-      duckSegments.push({
-        startTime: sfx.startTime,
-        endTime: sfx.startTime + sfx.duration,
-        ratio: sfxDuckRatio,
       });
     }
 
