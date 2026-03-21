@@ -9,7 +9,7 @@
  * Between keyframes, speed is interpolated with smooth easing.
  */
 
-export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage" | "smooth";
+export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage";
 
 export interface VelocityKeyframe {
   /** Position within the clip (0-1). */
@@ -88,18 +88,6 @@ export const VELOCITY_PRESETS: Record<VelocityPreset, VelocityKeyframe[]> = {
     { position: 0.76, speed: 0.37 },  // beat 3
     { position: 0.88, speed: 2.1 },
     { position: 1.0, speed: 1.03 },
-  ],
-
-  /**
-   * Smooth — gentle, elegant speed curves with subtle velocity changes.
-   * Parity with iOS VelocityStyle.smooth.
-   */
-  smooth: [
-    { position: 0.0, speed: 1.05 },
-    { position: 0.25, speed: 0.82 },
-    { position: 0.5, speed: 0.68 },   // gentle slow-mo
-    { position: 0.75, speed: 0.85 },
-    { position: 1.0, speed: 1.05 },
   ],
 };
 
@@ -216,11 +204,10 @@ export const VELOCITY_LABELS: Record<VelocityPreset, { label: string; descriptio
   ramp_in: { label: "Speed Up", description: "Build momentum over the clip" },
   ramp_out: { label: "Slow Down", description: "Dramatic deceleration" },
   montage: { label: "Montage", description: "Pulse between fast and slow" },
-  smooth: { label: "Smooth", description: "Subtle, elegant speed curves" },
 };
 
 export const ALL_VELOCITY_PRESETS: VelocityPreset[] = [
-  "normal", "hero", "bullet", "ramp_in", "ramp_out", "montage", "smooth",
+  "normal", "hero", "bullet", "ramp_in", "ramp_out", "montage",
 ];
 
 /** Get the suggested velocity preset for a theme. */

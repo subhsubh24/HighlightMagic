@@ -30,30 +30,7 @@ export interface HighlightTemplate {
   suggestedFilter: VideoFilter;
   suggestedCaptionStyle: CaptionStyle;
   suggestedMusicMood: TrackMood;
-  /** Suggested velocity preset — parity with iOS */
-  suggestedVelocityStyle?: VelocityPreset;
-  /** Suggested kinetic caption style — parity with iOS */
-  suggestedKineticCaption?: KineticCaptionStyle;
   colorAccent: string; // hex
-}
-
-/** Kinetic caption animation styles — parity with iOS KineticCaptionStyle */
-export type KineticCaptionStyle = "none" | "pop" | "bounce" | "slide" | "typewriter" | "flicker" | "fade";
-
-/** Cinematic color grade — parity with iOS CinematicGrade */
-export type CinematicGrade =
-  | "None" | "Warm Glow" | "Teal & Orange" | "Moody" | "Vintage Film" | "Clean Airy";
-
-/** Premium effect category — parity with iOS EffectCategory */
-export type EffectCategory = "Cinematic LUTs" | "Particles" | "Transitions" | "Overlays";
-
-/** Premium visual effect — parity with iOS PremiumEffect */
-export interface PremiumEffect {
-  id: string;
-  name: string;
-  icon: string;
-  category: EffectCategory;
-  isPremium: boolean;
 }
 
 // ── Multi-file support ──
@@ -406,23 +383,9 @@ export interface HighlightSegment {
   confidenceScore: number;
   label: string;
   detectionSources: string[];
-  /** AI-suggested optimal start time — refines raw detection boundary (parity with iOS) */
-  aiSuggestedStart?: number;
-  /** AI-suggested optimal end time — refines raw detection boundary (parity with iOS) */
-  aiSuggestedEnd?: number;
 }
 
-/** Best available start time: AI-suggested if available, otherwise raw detection boundary (parity with iOS effectiveStartTime) */
-export function effectiveStartTime(seg: HighlightSegment): number {
-  return seg.aiSuggestedStart ?? seg.startTime;
-}
-
-/** Best available end time: AI-suggested if available, otherwise raw detection boundary (parity with iOS effectiveEndTime) */
-export function effectiveEndTime(seg: HighlightSegment): number {
-  return seg.aiSuggestedEnd ?? seg.endTime;
-}
-
-export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage" | "smooth";
+export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage";
 
 export interface EditedClip {
   id: string;
@@ -435,10 +398,6 @@ export interface EditedClip {
   captionText: string;
   captionStyle: CaptionStyle;
   selectedFilter: VideoFilter;
-  /** Cinematic color grade — parity with iOS */
-  cinematicGrade?: CinematicGrade;
-  /** Selected premium visual effects — parity with iOS */
-  selectedPremiumEffects?: PremiumEffect[];
   velocityPreset: VelocityPreset;
   // Per-clip style overrides (AI-decided, user-overridable)
   // When present, these take priority over theme defaults in rendering
@@ -519,12 +478,6 @@ export interface ViralExportOptions {
   beatSync: boolean;
   /** Enable seamless loop: cross-fade last 0.5s into first 0.5s for TikTok replay. */
   seamlessLoop: boolean;
-  /** Reorder segments by confidence before generating clips — parity with iOS hookFirstOrdering */
-  hookFirstOrdering?: boolean;
-  /** Kinetic caption animation style — parity with iOS */
-  kineticCaptionStyle?: KineticCaptionStyle;
-  /** Velocity editing style — parity with iOS */
-  velocityStyle?: VelocityPreset;
 }
 
 // ── Editing theme (AI-detected or template-derived) ──
@@ -569,8 +522,6 @@ export interface AppState {
   creativeDirection: string;
   // ── Pro feature toggles (anyone can toggle, labeled Pro) ──
   aiMusicEnabled: boolean;
-  /** Voiceover narration toggle — parity with iOS */
-  voiceoverEnabled: boolean;
   sfxEnabled: boolean;
   introOutroEnabled: boolean;
   animatePhotosEnabled: boolean;
