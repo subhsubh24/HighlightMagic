@@ -35,3 +35,6 @@ Thumbs.db
 
 # Next.js build output (from root-level builds)
 .next/
+
+# Node modules (from root-level installs)
+node_modules/
