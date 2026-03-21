@@ -412,6 +412,16 @@ export interface HighlightSegment {
   aiSuggestedEnd?: number;
 }
 
+/** Best available start time: AI-suggested if available, otherwise raw detection boundary (parity with iOS effectiveStartTime) */
+export function effectiveStartTime(seg: HighlightSegment): number {
+  return seg.aiSuggestedStart ?? seg.startTime;
+}
+
+/** Best available end time: AI-suggested if available, otherwise raw detection boundary (parity with iOS effectiveEndTime) */
+export function effectiveEndTime(seg: HighlightSegment): number {
+  return seg.aiSuggestedEnd ?? seg.endTime;
+}
+
 export type VelocityPreset = "normal" | "hero" | "bullet" | "ramp_in" | "ramp_out" | "montage" | "smooth";
 
 export interface EditedClip {

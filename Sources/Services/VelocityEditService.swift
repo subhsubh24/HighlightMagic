@@ -172,7 +172,7 @@ actor VelocityEditService {
         clipStartInMusic: Double = 0,
         intensity: Double = 1.0
     ) -> VelocityMap {
-        guard style != .none else {
+        guard style != .none, style != .normal else {
             return VelocityMap(
                 segments: [VelocitySegment(
                     sourceStart: 0,
@@ -184,6 +184,14 @@ actor VelocityEditService {
                 originalDuration: clipDuration,
                 outputDuration: clipDuration
             )
+        }
+
+        // For rampIn/rampOut, use preset keyframes matching web (no beat dependency)
+        if style == .rampIn {
+            return generateVelocityMapFromKeyframes(clipDuration: clipDuration, keyframes: Self.rampInKeyframes)
+        }
+        if style == .rampOut {
+            return generateVelocityMapFromKeyframes(clipDuration: clipDuration, keyframes: Self.rampOutKeyframes)
         }
 
         // Get beats that fall within this clip's time range in the music
@@ -226,8 +234,8 @@ actor VelocityEditService {
                 beatInterval: beatMap.beatInterval,
                 intensity: clampedIntensity
             )
-        case .none:
-            // Unreachable due to guard above, but required for exhaustive switch
+        case .normal, .none, .rampIn, .rampOut:
+            // Unreachable due to guards above, but required for exhaustive switch
             return VelocityMap(
                 segments: [VelocitySegment(
                     sourceStart: 0,
@@ -474,4 +482,22 @@ actor VelocityEditService {
         let outputDuration = segments.reduce(0.0) { $0 + $1.outputDuration }
         return VelocityMap(segments: segments, originalDuration: clipDuration, outputDuration: outputDuration)
     }
+
+    // MARK: - Preset Keyframes (parity with web velocity.ts VELOCITY_PRESETS)
+
+    /// Ramp In: build up speed (for approach/travel shots) — matches web ramp_in preset
+    private static let rampInKeyframes: [VelocityKeyframe] = [
+        VelocityKeyframe(position: 0.0, speed: 0.48),
+        VelocityKeyframe(position: 0.38, speed: 0.72),
+        VelocityKeyframe(position: 0.68, speed: 1.55),
+        VelocityKeyframe(position: 1.0, speed: 2.85),
+    ]
+
+    /// Ramp Out: dramatic slow-down (for impact moments) — matches web ramp_out preset
+    private static let rampOutKeyframes: [VelocityKeyframe] = [
+        VelocityKeyframe(position: 0.0, speed: 2.45),
+        VelocityKeyframe(position: 0.32, speed: 1.95),
+        VelocityKeyframe(position: 0.62, speed: 0.97),
+        VelocityKeyframe(position: 1.0, speed: 0.28),
+    ]
 }
