@@ -5,9 +5,13 @@ import CoreImage
 struct EditedClip: Identifiable, Hashable, Sendable {
     let id: UUID
     let sourceVideoID: UUID
+    /// Which uploaded source file this clip came from (parity with web sourceFileId)
+    var sourceFileId: String?
     var segment: HighlightSegment
     var trimStart: CMTime
     var trimEnd: CMTime
+    /// Position in the final highlight tape (parity with web order field)
+    var order: Int
     var selectedMusicTrack: MusicTrack?
     var captionText: String
     var captionStyle: CaptionStyle
@@ -17,6 +21,50 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     var selectedPremiumEffects: [PremiumEffect]
     var aiEffectConfig: CustomEffectConfig?
     var exportURL: URL?
+
+    // ── Per-clip style overrides (AI-decided, user-overridable — parity with web) ──
+    var velocityPreset: VelocityEditService.VelocityStyle
+    var transitionType: String?
+    var transitionDuration: Double?
+    var entryPunchScale: Double?
+    var entryPunchDuration: Double?
+    var kenBurnsIntensity: Double?
+    /// Custom CSS filter string from AI (web parity — maps to CIFilter chain on iOS)
+    var customFilterCSS: String?
+    /// Per-clip original audio volume (0-1). Overrides plan-level clipAudioVolume.
+    var clipAudioVolume: Double?
+    /// Per-clip transition intensity (0-1). Scales the effect magnitude.
+    var transitionIntensity: Double?
+    /// Per-clip transition params — fine-tune the chosen transition type's internals.
+    var transitionParams: TransitionParams?
+    /// Per-clip caption exit animation type
+    var captionExitAnimation: String?
+    /// Per-clip beat pulse scale intensity (0-0.1)
+    var beatPulseIntensity: Double?
+    /// Per-clip beat flash overlay opacity (0-0.5)
+    var beatFlashOpacity: Double?
+    /// Per-clip beat flash threshold (0-1)
+    var beatFlashThreshold: Double?
+    /// Per-clip beat flash color as hex
+    var beatFlashColor: String?
+    /// Per-clip caption idle pulse intensity (0-1)
+    var captionIdlePulse: Double?
+    /// Per-clip caption glow spread multiplier (0.5-3)
+    var customCaptionGlowSpread: Double?
+    /// Per-clip audio bleed fade-in duration in seconds (0.01-0.3)
+    var audioFadeIn: Double?
+    /// Per-clip audio bleed fade-out duration in seconds (0.01-0.3)
+    var audioFadeOut: Double?
+    /// Per-clip caption animation intensity (0-1)
+    var captionAnimationIntensity: Double?
+    /// Per-clip light leak color as hex
+    var lightLeakColor: String?
+    /// Per-clip glitch colors as [primary, secondary] hex
+    var glitchColors: [String]?
+    /// Per-clip light leak opacity (0-1)
+    var lightLeakOpacity: Double?
+    /// Per-clip whip motion blur alpha (0-1)
+    var whipMotionBlurAlpha: Double?
 
     // AI-generated audio (feature parity with web)
     /// AI-generated music data (MP3) from ElevenLabs, used instead of bundled music
@@ -35,13 +83,16 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     init(
         id: UUID = UUID(),
         sourceVideoID: UUID,
+        sourceFileId: String? = nil,
         segment: HighlightSegment,
         trimStart: CMTime? = nil,
         trimEnd: CMTime? = nil,
+        order: Int = 0,
         selectedMusicTrack: MusicTrack? = nil,
         captionText: String = "",
         captionStyle: CaptionStyle = .bold,
         selectedFilter: VideoFilter = .none,
+        velocityPreset: VelocityEditService.VelocityStyle = .hero,
         viralConfig: ViralEditConfig = .default,
         cinematicGrade: CinematicGrade = .none,
         selectedPremiumEffects: [PremiumEffect] = [],
@@ -49,14 +100,17 @@ struct EditedClip: Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.sourceVideoID = sourceVideoID
+        self.sourceFileId = sourceFileId
         self.segment = segment
         // Use AI-suggested trim points when available, falling back to detection boundaries
         self.trimStart = trimStart ?? segment.effectiveStartTime
         self.trimEnd = trimEnd ?? segment.effectiveEndTime
+        self.order = order
         self.selectedMusicTrack = selectedMusicTrack
         self.captionText = captionText
         self.captionStyle = captionStyle
         self.selectedFilter = selectedFilter
+        self.velocityPreset = velocityPreset
         self.viralConfig = viralConfig
         self.cinematicGrade = cinematicGrade
         self.selectedPremiumEffects = selectedPremiumEffects
@@ -153,4 +207,18 @@ enum VideoFilter: String, CaseIterable, Hashable, Sendable {
         default: false
         }
     }
+}
+
+/// Per-clip transition parameter overrides — parity with web `transitionParams`.
+struct TransitionParams: Hashable, Sendable {
+    /// Zoom punch outgoing scale factor (default 0.25)
+    var zoomOutScale: Double?
+    /// Zoom punch incoming scale factor (default 0.18)
+    var zoomInScale: Double?
+    /// Glitch jitter amplitude in pixels (default 12)
+    var glitchJitter: Double?
+    /// Whip motion blur intensity/alpha (default 0.25)
+    var motionBlurAlpha: Double?
+    /// Soft zoom scale factor (default 0.04)
+    var softZoomScale: Double?
 }

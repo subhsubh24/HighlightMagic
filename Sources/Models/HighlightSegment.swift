@@ -3,6 +3,8 @@ import CoreMedia
 
 struct HighlightSegment: Identifiable, Hashable, Sendable {
     let id: UUID
+    /// Which uploaded source file this segment came from (parity with web sourceFileId)
+    var sourceFileId: String?
     var startTime: CMTime
     var endTime: CMTime
     var confidenceScore: Double

@@ -52,16 +52,22 @@ actor VelocityEditService {
     // MARK: - Velocity Edit Styles
 
     enum VelocityStyle: String, CaseIterable, Sendable {
+        case normal = "Normal"      // No velocity editing (parity with web "normal")
         case hero = "Hero"          // Classic speed ramp: fast build-up, slow on beat, fast recovery
         case bullet = "Bullet"      // Sharp slow-mo snaps on every strong beat
+        case rampIn = "Ramp In"     // Build up speed (parity with web "ramp_in")
+        case rampOut = "Ramp Out"   // Dramatic slow-down (parity with web "ramp_out")
         case montage = "Montage"    // Moderate speed variation for multi-clip sequences
         case smooth = "Smooth"      // Gentle speed curves, subtle velocity changes
-        case none = "None"          // No velocity editing
+        case none = "None"          // Legacy — same as normal
 
         var description: String {
             switch self {
+            case .normal: "Original speed"
             case .hero: "Dramatic slow-mo on beat drops"
             case .bullet: "Sharp speed snaps on every beat"
+            case .rampIn: "Build momentum over the clip"
+            case .rampOut: "Dramatic deceleration"
             case .montage: "Smooth multi-clip pacing"
             case .smooth: "Subtle, elegant speed curves"
             case .none: "Normal speed"
@@ -70,8 +76,11 @@ actor VelocityEditService {
 
         var icon: String {
             switch self {
+            case .normal: "play"
             case .hero: "bolt.fill"
             case .bullet: "scope"
+            case .rampIn: "arrow.up.right"
+            case .rampOut: "arrow.down.right"
             case .montage: "film.stack"
             case .smooth: "water.waves"
             case .none: "play"

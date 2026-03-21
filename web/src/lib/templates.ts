@@ -1,6 +1,7 @@
 import type { HighlightTemplate } from "./types";
 
 // ── 8 templates ported from iOS TemplateLibrary ──
+// Now includes suggestedVelocityStyle and suggestedKineticCaption for full iOS parity.
 
 export const TEMPLATES: HighlightTemplate[] = [
   {
@@ -11,6 +12,8 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedFilter: "Vibrant",
     suggestedCaptionStyle: "Bold",
     suggestedMusicMood: "Epic",
+    suggestedVelocityStyle: "hero",
+    suggestedKineticCaption: "pop",
     colorAccent: "#F59E0B",
   },
   {
@@ -21,16 +24,20 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedFilter: "Warm",
     suggestedCaptionStyle: "Classic",
     suggestedMusicMood: "Chill",
+    suggestedVelocityStyle: "smooth",
+    suggestedKineticCaption: "slide",
     colorAccent: "#EF4444",
   },
   {
     id: "fitness",
     name: "Fitness",
     icon: "Dumbbell",
-    description: "High-energy workout clips",
+    description: "High-energy workout clips with beat-synced velocity",
     suggestedFilter: "Cool",
     suggestedCaptionStyle: "Bold",
     suggestedMusicMood: "Energetic",
+    suggestedVelocityStyle: "bullet",
+    suggestedKineticCaption: "bounce",
     colorAccent: "#10B981",
   },
   {
@@ -41,16 +48,20 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedFilter: "Vibrant",
     suggestedCaptionStyle: "Neon",
     suggestedMusicMood: "Fun",
+    suggestedVelocityStyle: "montage",
+    suggestedKineticCaption: "bounce",
     colorAccent: "#F97316",
   },
   {
     id: "travel",
     name: "Travel",
     icon: "Plane",
-    description: "Beautiful travel memories with cinematic warmth",
+    description: "Cinematic travel memories with smooth velocity",
     suggestedFilter: "Warm",
     suggestedCaptionStyle: "Minimal",
     suggestedMusicMood: "Chill",
+    suggestedVelocityStyle: "smooth",
+    suggestedKineticCaption: "slide",
     colorAccent: "#3B82F6",
   },
   {
@@ -61,26 +72,32 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedFilter: "None",
     suggestedCaptionStyle: "Minimal",
     suggestedMusicMood: "Upbeat",
+    suggestedVelocityStyle: "montage",
+    suggestedKineticCaption: "typewriter",
     colorAccent: "#8B5CF6",
   },
   {
     id: "gaming",
     name: "Gaming",
     icon: "Gamepad2",
-    description: "Bold, high-contrast gaming highlights",
+    description: "Bold, high-contrast gaming highlights with sharp cuts",
     suggestedFilter: "Noir",
     suggestedCaptionStyle: "Neon",
     suggestedMusicMood: "Energetic",
+    suggestedVelocityStyle: "bullet",
+    suggestedKineticCaption: "pop",
     colorAccent: "#06B6D4",
   },
   {
     id: "party",
     name: "Party",
     icon: "PartyPopper",
-    description: "Vibrant party and celebration clips",
+    description: "Vibrant party clips with beat-drop velocity",
     suggestedFilter: "Vibrant",
     suggestedCaptionStyle: "Bold",
     suggestedMusicMood: "Fun",
+    suggestedVelocityStyle: "hero",
+    suggestedKineticCaption: "pop",
     colorAccent: "#EC4899",
   },
   {
@@ -91,6 +108,8 @@ export const TEMPLATES: HighlightTemplate[] = [
     suggestedFilter: "Warm",
     suggestedCaptionStyle: "Minimal",
     suggestedMusicMood: "Epic",
+    suggestedVelocityStyle: "smooth",
+    suggestedKineticCaption: "slide",
     colorAccent: "#F9A8D4",
   },
 ];

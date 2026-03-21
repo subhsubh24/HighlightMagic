@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, ValidationStatus, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment } from "./types";
+import type { AppState, AiMusicStatus, AiProductionPlan, AnimationStatus, AppStep, EditedClip, EditingTheme, GeneratedCard, GeneratedThumbnail, GenerationStatus, HighlightSegment, HighlightTemplate, MediaFile, MusicTrack, SfxTrack, ValidationStatus, VideoFilter, CaptionStyle, ViralExportOptions, VoiceoverSegment, VelocityPreset } from "./types";
 import { FREE_EXPORT_LIMIT } from "./constants";
 
 // ── Initial state ──
@@ -24,6 +24,7 @@ export const initialState: AppState = {
   regenerateFeedback: null,
   creativeDirection: "",
   aiMusicEnabled: false,
+  voiceoverEnabled: false,
   sfxEnabled: false,
   introOutroEnabled: false,
   animatePhotosEnabled: false,
@@ -97,6 +98,7 @@ export type Action =
   | { type: "UPDATE_MEDIA_ANIMATION"; fileId: string; animatePhoto: boolean; animationInstructions: string }
   | { type: "SET_ANIMATION_RESULT"; fileId: string; animatedVideoUrl: string | null; animationStatus: AnimationStatus }
   | { type: "SET_AI_MUSIC_ENABLED"; enabled: boolean }
+  | { type: "SET_VOICEOVER_ENABLED"; enabled: boolean }
   | { type: "SET_SFX_ENABLED"; enabled: boolean }
   | { type: "SET_INTRO_OUTRO_ENABLED"; enabled: boolean }
   | { type: "SET_ANIMATE_PHOTOS_ENABLED"; enabled: boolean }
@@ -271,6 +273,12 @@ export function reducer(state: AppState, action: Action): AppState {
         aiMusicEnabled: action.enabled,
         // Reset music state when toggling off
         ...(action.enabled ? {} : { aiMusicStatus: "idle" as const, aiMusicUrl: null }),
+      };
+    case "SET_VOICEOVER_ENABLED":
+      return {
+        ...state,
+        voiceoverEnabled: action.enabled,
+        ...(action.enabled ? {} : { voiceoverSegments: [], voiceoverStatus: "idle" as const }),
       };
     case "SET_SFX_ENABLED":
       return {

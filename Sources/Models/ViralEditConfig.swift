@@ -42,6 +42,8 @@ enum KineticCaptionStyle: String, CaseIterable, Hashable, Sendable {
     case bounce = "Bounce"
     case slide = "Slide"
     case typewriter = "Typewriter"
+    case flicker = "Flicker"       // Neon flicker entrance — parity with web
+    case fade = "Fade"             // Soft fade in — parity with web
 
     var description: String {
         switch self {
@@ -50,6 +52,8 @@ enum KineticCaptionStyle: String, CaseIterable, Hashable, Sendable {
         case .bounce: "Bounces into view"
         case .slide: "Slides in from side"
         case .typewriter: "Types in letter by letter"
+        case .flicker: "Neon flicker entrance"
+        case .fade: "Soft fade in"
         }
     }
 
@@ -60,6 +64,8 @@ enum KineticCaptionStyle: String, CaseIterable, Hashable, Sendable {
         case .bounce: "arrow.up.and.down"
         case .slide: "arrow.right"
         case .typewriter: "keyboard"
+        case .flicker: "bolt.horizontal.circle"
+        case .fade: "circle.lefthalf.filled"
         }
     }
 }
