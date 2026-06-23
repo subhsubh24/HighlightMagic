@@ -6,12 +6,14 @@ import os.log
 /// Haiku-powered validation pass — mirrors the web platform's /api/validate endpoint.
 /// Reviews the assembled tape (clips, captions, transitions, production plan) and returns
 /// structured fixes. Fail-open: any error means the tape passes and export proceeds.
+/// Supports the full validation loop (max 2 passes) matching web parity.
 actor TapeValidationService {
     static let shared = TapeValidationService()
 
     private let endpoint = "https://api.anthropic.com/v1/messages"
     private let logger = Logger(subsystem: "com.highlightmagic.app", category: "Validation")
-    private let maxRetries = 1
+    /// Maximum validation passes to keep cost bounded — matches web (2 passes max)
+    private let maxValidationPasses = 2
 
     private init() {}
 
@@ -34,23 +36,6 @@ actor TapeValidationService {
 
     var isAvailable: Bool { apiKey != nil }
 
-    // MARK: - Result Types
-
-    struct ValidationResult: Sendable {
-        let passed: Bool
-        let issues: [String]
-        let fixes: ValidationFixes
-    }
-
-    struct ValidationFixes: Sendable {
-        /// Partial clip updates by index (caption rewrites, reordering, etc.)
-        var clipUpdates: [(clipIndex: Int, captionText: String?)]
-        /// Clip indices to remove
-        var clipRemovals: [Int]
-        /// SFX prompts to regenerate
-        var regenerateSfx: [(clipIndex: Int, prompt: String, durationMs: Int)]
-    }
-
     // MARK: - Validate Tape
 
     /// Run a Haiku validation pass on the assembled tape.
@@ -62,7 +47,7 @@ actor TapeValidationService {
         contentSummary: String,
         sourceURL: URL?
     ) async -> ValidationResult {
-        let passedResult = ValidationResult(passed: true, issues: [], fixes: ValidationFixes(clipUpdates: [], clipRemovals: [], regenerateSfx: []))
+        let passedResult = ValidationResult(passed: true, issues: [], fixes: .empty)
 
         guard let apiKey else { return passedResult }
         guard !clips.isEmpty else { return passedResult }
@@ -97,6 +82,69 @@ actor TapeValidationService {
             logger.warning("Validation failed (fail-open): \(error.localizedDescription)")
             return passedResult
         }
+    }
+
+    /// Run the full validation loop (up to maxValidationPasses).
+    /// Applies fixes between passes. Matches web validation-fixes.ts logic.
+    func runValidationLoop(
+        clips: inout [EditedClip],
+        plan: inout AiProductionPlan?,
+        contentSummary: String,
+        sourceURL: URL?,
+        onStatusChange: @Sendable (ValidationStatus) -> Void
+    ) async -> ValidationResult {
+        for pass in 0..<maxValidationPasses {
+            onStatusChange(.validating)
+            let result = await validateTape(
+                clips: clips,
+                plan: plan,
+                contentSummary: contentSummary,
+                sourceURL: sourceURL
+            )
+
+            if result.passed {
+                onStatusChange(.passed)
+                return result
+            }
+
+            // Apply fixes
+            onStatusChange(.fixing)
+            logger.info("Validation pass \(pass + 1): \(result.issues.count) issues, applying fixes")
+            applyFixes(result.fixes, to: &clips, plan: &plan)
+        }
+
+        // After max passes, pass anyway (fail-open)
+        onStatusChange(.passed)
+        logger.info("Validation loop exhausted (\(maxValidationPasses) passes) — passing anyway")
+        return ValidationResult(passed: true, issues: [], fixes: .empty)
+    }
+
+    // MARK: - Apply Fixes (parity with web validation-fixes.ts)
+
+    private func applyFixes(_ fixes: ValidationFixes, to clips: inout [EditedClip], plan: inout AiProductionPlan?) {
+        // Apply clip updates (caption rewrites, etc.)
+        for update in fixes.clipUpdates {
+            guard update.clipIndex >= 0, update.clipIndex < clips.count else { continue }
+            if let caption = update.captionText {
+                clips[update.clipIndex].captionText = caption
+            }
+        }
+
+        // Remove clips (apply in reverse order to preserve indices)
+        let sortedRemovals = fixes.clipRemovals.sorted(by: >)
+        for idx in sortedRemovals {
+            guard idx >= 0, idx < clips.count else { continue }
+            clips.remove(at: idx)
+        }
+
+        // Re-number clip order after removals
+        for i in clips.indices {
+            clips[i].order = i
+        }
+
+        // Note: regenerateMusic, regenerateVoiceover, regenerateIntro, regenerateOutro
+        // are handled by the caller (they require async generation which this method
+        // cannot perform). The fixes are returned so the caller can trigger regeneration.
     }
 
     // MARK: - Haiku API Call
@@ -163,7 +211,7 @@ actor TapeValidationService {
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             logger.warning("Haiku validation returned non-200 — treating as passed")
-            return ValidationResult(passed: true, issues: [], fixes: ValidationFixes(clipUpdates: [], clipRemovals: [], regenerateSfx: []))
+            return ValidationResult(passed: true, issues: [], fixes: .empty)
         }
 
         return parseValidationResponse(data: data)
@@ -202,7 +250,7 @@ actor TapeValidationService {
 
         ## Output format
         Return a single JSON object:
-        {"passed": boolean, "issues": ["description"], "fixes": {"clipUpdates": [{"clipIndex": number, "captionText": "new text"}], "clipRemovals": [number], "regenerateSfx": [{"clipIndex": number, "prompt": "corrected prompt", "durationMs": number}]}}
+        {"passed": boolean, "issues": ["description"], "fixes": {"clipUpdates": [{"clipIndex": number, "captionText": "new text"}], "clipRemovals": [number], "regenerateSfx": [{"clipIndex": number, "prompt": "corrected prompt", "durationMs": number}], "regenerateMusic": {"prompt": "new prompt", "durationMs": number}, "regenerateVoiceover": [{"clipIndex": number, "text": "new text"}], "regenerateIntro": {"text": "new text", "stylePrompt": "new style", "duration": number}, "regenerateOutro": {"text": "new text", "stylePrompt": "new style", "duration": number}}}
 
         Only include fix fields that are needed. If passed is true, fixes should be empty.
         """
@@ -217,7 +265,8 @@ actor TapeValidationService {
             let dur = String(format: "%.1fs", c.duration)
             let caption = c.captionText.isEmpty ? "(no caption)" : c.captionText
             let filter = c.selectedFilter.rawValue
-            parts.append("\(i). \"\(caption)\" [\(dur)] filter=\(filter)")
+            let transition = c.transitionType ?? "default"
+            parts.append("\(i). \"\(caption)\" [\(dur)] filter=\(filter) transition=\(transition)")
         }
 
         if let plan {
@@ -229,6 +278,16 @@ actor TapeValidationService {
                 let sfxDesc = plan.sfx.map { "clip\($0.clipIndex): \"\($0.prompt)\"" }.joined(separator: ", ")
                 parts.append("SFX: \(sfxDesc)")
             }
+            if let vo = plan.voiceover, vo.enabled {
+                let voDesc = vo.segments.map { "clip\($0.clipIndex): \"\($0.text)\"" }.joined(separator: ", ")
+                parts.append("Voiceover: \(voDesc)")
+            }
+            if let philosophy = plan.editingPhilosophy {
+                var phParts: [String] = []
+                if let vibe = philosophy.vibe { phParts.append("vibe: \(vibe)") }
+                if let pace = philosophy.paceProfile { phParts.append("pace: \(pace)") }
+                if !phParts.isEmpty { parts.append("Philosophy: \(phParts.joined(separator: ", "))") }
+            }
         }
 
         return parts.joined(separator: "\n")
@@ -237,7 +296,7 @@ actor TapeValidationService {
     // MARK: - Response Parsing
 
     private func parseValidationResponse(data: Data) -> ValidationResult {
-        let passedResult = ValidationResult(passed: true, issues: [], fixes: ValidationFixes(clipUpdates: [], clipRemovals: [], regenerateSfx: []))
+        let passedResult = ValidationResult(passed: true, issues: [], fixes: .empty)
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]],
@@ -255,8 +314,9 @@ actor TapeValidationService {
         let passed = result["passed"] as? Bool ?? true
         let issues = result["issues"] as? [String] ?? []
 
-        var fixes = ValidationFixes(clipUpdates: [], clipRemovals: [], regenerateSfx: [])
+        var fixes = ValidationFixes.empty
         if let fixesDict = result["fixes"] as? [String: Any] {
+            // Clip updates
             if let updates = fixesDict["clipUpdates"] as? [[String: Any]] {
                 fixes.clipUpdates = updates.compactMap { dict in
                     guard let idx = dict["clipIndex"] as? Int else { return nil }
@@ -264,9 +324,11 @@ actor TapeValidationService {
                     return (clipIndex: idx, captionText: caption)
                 }
             }
+            // Clip removals
             if let removals = fixesDict["clipRemovals"] as? [Int] {
                 fixes.clipRemovals = removals
             }
+            // SFX regeneration
             if let sfx = fixesDict["regenerateSfx"] as? [[String: Any]] {
                 fixes.regenerateSfx = sfx.compactMap { dict in
                     guard let idx = dict["clipIndex"] as? Int,
@@ -274,6 +336,34 @@ actor TapeValidationService {
                     let dur = dict["durationMs"] as? Int ?? 1500
                     return (clipIndex: idx, prompt: prompt, durationMs: dur)
                 }.prefix(3).map { $0 } // Max 3 regenerations
+            }
+            // Music regeneration (parity with web)
+            if let music = fixesDict["regenerateMusic"] as? [String: Any],
+               let prompt = music["prompt"] as? String {
+                let durationMs = music["durationMs"] as? Int ?? 30000
+                fixes.regenerateMusic = (prompt: prompt, durationMs: durationMs)
+            }
+            // Voiceover regeneration (parity with web)
+            if let vo = fixesDict["regenerateVoiceover"] as? [[String: Any]] {
+                fixes.regenerateVoiceover = vo.compactMap { dict in
+                    guard let idx = dict["clipIndex"] as? Int,
+                          let text = dict["text"] as? String else { return nil }
+                    return (clipIndex: idx, text: text)
+                }
+            }
+            // Intro regeneration (parity with web)
+            if let intro = fixesDict["regenerateIntro"] as? [String: Any],
+               let text = intro["text"] as? String,
+               let style = intro["stylePrompt"] as? String {
+                let duration = intro["duration"] as? Double ?? 4.0
+                fixes.regenerateIntro = (text: text, stylePrompt: style, duration: duration)
+            }
+            // Outro regeneration (parity with web)
+            if let outro = fixesDict["regenerateOutro"] as? [String: Any],
+               let text = outro["text"] as? String,
+               let style = outro["stylePrompt"] as? String {
+                let duration = outro["duration"] as? Double ?? 4.0
+                fixes.regenerateOutro = (text: text, stylePrompt: style, duration: duration)
             }
         }
 
