@@ -52,6 +52,8 @@ struct RootView: View {
             PaywallView()
         case .settings:
             SettingsView()
+        case .onboarding:
+            OnboardingView()
         case .home:
             HomeView()
         }

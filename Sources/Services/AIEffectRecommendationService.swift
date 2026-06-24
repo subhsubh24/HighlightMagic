@@ -623,8 +623,8 @@ actor AIEffectRecommendationService {
             // Parse custom velocity keyframes
             if let kfArray = dict["velocityKeyframes"] as? [[String: Any]] {
                 config.customVelocityKeyframes = kfArray.compactMap { kf in
-                    guard let pos = Self.jsonDouble(kf, "position", default: -1),
-                          let spd = Self.jsonDouble(kf, "speed", default: -1),
+                    guard case let pos = Self.jsonDouble(kf, "position", default: -1),
+                          case let spd = Self.jsonDouble(kf, "speed", default: -1),
                           pos >= 0, pos <= 1, spd > 0 else { return nil }
                     return VelocityKeyframe(position: pos, speed: min(spd, 5.0))
                 }
@@ -636,14 +636,14 @@ actor AIEffectRecommendationService {
             // Parse per-clip creative overrides
             config.customTransitionType = dict["transitionType"] as? String
             // Gap 5: transitionDuration clamped to [0.1, 2.0] (was [0.1, 1.5]) — matches web
-            if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
+            if case let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
                 config.customTransitionDuration = min(max(td, 0.1), 2.0)
             }
-            if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
+            if case let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
                 config.entryPunchScale = min(max(eps, 1.0), 1.1)
             }
             // Gap 5: entryPunchDuration floor is 0.0 (was 0.05) — matches web
-            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
+            if case let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
                 config.entryPunchDuration = min(max(epd, 0.0), 0.5)
             }
             config.customCaptionAnimation = dict["captionAnimation"] as? String
@@ -654,7 +654,7 @@ actor AIEffectRecommendationService {
             config.customCaptionFontFamily = dict["captionFontFamily"] as? String
             config.customCaptionColor = dict["captionColor"] as? String
             config.customCaptionGlowColor = dict["captionGlowColor"] as? String
-            if let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
+            if case let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
                 config.customCaptionGlowRadius = min(gr, 30)
             }
 
@@ -1156,8 +1156,8 @@ actor AIEffectRecommendationService {
             // Parse custom velocity keyframes
             if let kfArray = dict["velocityKeyframes"] as? [[String: Any]] {
                 config.customVelocityKeyframes = kfArray.compactMap { kf in
-                    guard let pos = Self.jsonDouble(kf, "position", default: -1),
-                          let spd = Self.jsonDouble(kf, "speed", default: -1),
+                    guard case let pos = Self.jsonDouble(kf, "position", default: -1),
+                          case let spd = Self.jsonDouble(kf, "speed", default: -1),
                           pos >= 0, pos <= 1, spd > 0 else { return nil }
                     return VelocityKeyframe(position: pos, speed: min(spd, 5.0))
                 }
@@ -1169,14 +1169,14 @@ actor AIEffectRecommendationService {
             // Parse per-clip creative overrides
             config.customTransitionType = dict["transitionType"] as? String
             // Gap 5: transitionDuration clamped to [0.1, 2.0] (was [0.1, 1.5]) — matches web
-            if let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
+            if case let td = Self.jsonDouble(dict, "transitionDuration", default: -1), td > 0 {
                 config.customTransitionDuration = min(max(td, 0.1), 2.0)
             }
-            if let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
+            if case let eps = Self.jsonDouble(dict, "entryPunchScale", default: -1), eps > 0 {
                 config.entryPunchScale = min(max(eps, 1.0), 1.1)
             }
             // Gap 5: entryPunchDuration floor is 0.0 (was 0.05) — matches web
-            if let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
+            if case let epd = Self.jsonDouble(dict, "entryPunchDuration", default: -1), epd >= 0 {
                 config.entryPunchDuration = min(max(epd, 0.0), 0.5)
             }
             config.customCaptionAnimation = dict["captionAnimation"] as? String
@@ -1187,7 +1187,7 @@ actor AIEffectRecommendationService {
             config.customCaptionFontFamily = dict["captionFontFamily"] as? String
             config.customCaptionColor = dict["captionColor"] as? String
             config.customCaptionGlowColor = dict["captionGlowColor"] as? String
-            if let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
+            if case let gr = Self.jsonDouble(dict, "captionGlowRadius", default: -1), gr >= 0 {
                 config.customCaptionGlowRadius = min(gr, 30)
             }
 
@@ -1486,16 +1486,16 @@ actor AIEffectRecommendationService {
         // Parse AI-driven edit parameters
         config.beatSyncEnabled = dict["beatSyncEnabled"] as? Bool
         config.seamlessLoopEnabled = dict["seamlessLoopEnabled"] as? Bool
-        if let mv = Self.jsonDouble(dict, "musicVolume", default: -1), mv >= 0 {
+        if case let mv = Self.jsonDouble(dict, "musicVolume", default: -1), mv >= 0 {
             config.musicVolume = min(max(mv, 0), 1)
         }
-        if let ov = Self.jsonDouble(dict, "originalAudioVolume", default: -1), ov >= 0 {
+        if case let ov = Self.jsonDouble(dict, "originalAudioVolume", default: -1), ov >= 0 {
             config.originalAudioVolume = min(max(ov, 0), 1)
         }
-        if let fd = Self.jsonDouble(dict, "fadeDuration", default: -1), fd >= 0 {
+        if case let fd = Self.jsonDouble(dict, "fadeDuration", default: -1), fd >= 0 {
             config.fadeDuration = min(max(fd, 0.1), 1.0)
         }
-        if let vi = Self.jsonDouble(dict, "velocityIntensity", default: -1), vi >= 0 {
+        if case let vi = Self.jsonDouble(dict, "velocityIntensity", default: -1), vi >= 0 {
             config.velocityIntensity = min(max(vi, 0), 1)
         }
 

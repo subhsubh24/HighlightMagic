@@ -182,13 +182,13 @@ struct MusicTrackRow: View {
     private var moodColor: Color {
         guard let mood else { return .gray }
         switch mood {
-        case .upbeat: .orange
-        case .chill: .blue
-        case .epic: .red
-        case .fun: .yellow
-        case .energetic: .green
-        case .dramatic: .purple
-        case .funny: .pink
+        case .upbeat: Color.orange
+        case .chill: Color.blue
+        case .epic: Color.red
+        case .fun: Color.yellow
+        case .energetic: Color.green
+        case .dramatic: Color.purple
+        case .funny: Color.pink
         }
     }
 }

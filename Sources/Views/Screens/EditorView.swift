@@ -490,7 +490,7 @@ struct EditorView: View {
                     .font(.caption2)
                     .foregroundStyle(Theme.accent)
             }
-        case .done:
+        case .completed:
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.caption2)
