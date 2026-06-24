@@ -141,8 +141,11 @@ actor ElevenLabsService {
         let voiceId = Self.resolveVoiceId(voiceCharacter)
         logger.info("Generating TTS: \"\(text.prefix(80))\" (voice: \(voiceCharacter) → \(voiceId))")
 
+        guard let url = URL(string: "\(apiBase)/text-to-speech/\(voiceId)") else {
+            return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Invalid TTS URL")
+        }
+
         do {
-            let url = URL(string: "\(apiBase)/text-to-speech/\(voiceId)")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -216,8 +219,11 @@ actor ElevenLabsService {
         let clampedDuration = max(3_000, min(durationMs, 300_000))
         logger.info("Generating music: \"\(prompt.prefix(80))\" (\(clampedDuration)ms)")
 
+        guard let url = URL(string: "\(apiBase)/music/compose") else {
+            return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Invalid music URL")
+        }
+
         do {
-            let url = URL(string: "\(apiBase)/music/compose")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -269,8 +275,11 @@ actor ElevenLabsService {
         let clampedDuration = max(500, min(durationMs, 10_000))
         logger.info("Generating SFX: \"\(prompt.prefix(80))\" (\(clampedDuration)ms)")
 
+        guard let url = URL(string: "\(apiBase)/sound-generation") else {
+            return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Invalid SFX URL")
+        }
+
         do {
-            let url = URL(string: "\(apiBase)/sound-generation")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -334,9 +343,12 @@ actor ElevenLabsService {
 
         logger.info("Transcribing \"\(fileName)\" (\(audioData.count) bytes)")
 
+        let boundary = UUID().uuidString
+        guard let url = URL(string: "\(apiBase)/speech-to-text") else {
+            return ScribeResult(status: .failed, text: nil, segments: [], language: nil, error: "Invalid Scribe URL")
+        }
+
         do {
-            let boundary = UUID().uuidString
-            let url = URL(string: "\(apiBase)/speech-to-text")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -404,7 +416,7 @@ actor ElevenLabsService {
             let fullText = (json["text"] as? String) ?? segments.map(\.text).joined(separator: " ")
             let language = json["language_code"] as? String
 
-            logger.info("Transcribed: \(segments.count) segments, \(fullText.count) chars, language=\(language ?? "unknown")")
+            logger.info("Transcribed: \(segments.count) segments, \(fullText.count) chars, language=\(language ?? \"unknown\")")
 
             return ScribeResult(status: .completed, text: fullText, segments: segments, language: language, error: nil)
         } catch {
@@ -437,9 +449,12 @@ actor ElevenLabsService {
 
         logger.info("Creating voice clone \"\(name)\" from \(fileName) (\(audioData.count) bytes)")
 
+        let boundary = UUID().uuidString
+        guard let url = URL(string: "\(apiBase)/voices/add") else {
+            return VoiceCloneResult(status: .failed, voiceId: nil, error: "Invalid voice clone URL")
+        }
+
         do {
-            let boundary = UUID().uuidString
-            let url = URL(string: "\(apiBase)/voices/add")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -475,8 +490,12 @@ actor ElevenLabsService {
     /// Delete a cloned voice (cleanup after export).
     func deleteVoiceClone(voiceId: String) async {
         guard let apiKey else { return }
+        guard let url = URL(string: "\(apiBase)/voices/\(voiceId)") else {
+            logger.error("Invalid URL for voice deletion: \(voiceId)")
+            return
+        }
         do {
-            var request = URLRequest(url: URL(string: "\(apiBase)/voices/\(voiceId)")!)
+            var request = URLRequest(url: url)
             request.httpMethod = "DELETE"
             request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
             _ = try await URLSession.shared.data(for: request)
@@ -494,8 +513,11 @@ actor ElevenLabsService {
 
         logger.info("Generating TTS with clone \(voiceId): \"\(text.prefix(80))\"")
 
+        guard let url = URL(string: "\(apiBase)/text-to-speech/\(voiceId)") else {
+            return AudioResult(status: .failed, audioData: nil, estimatedDuration: nil, error: "Invalid TTS URL for cloned voice")
+        }
+
         do {
-            let url = URL(string: "\(apiBase)/text-to-speech/\(voiceId)")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -546,9 +568,12 @@ actor ElevenLabsService {
 
         logger.info("Separating stems from \"\(fileName)\" (\(audioData.count) bytes)")
 
+        let boundary = UUID().uuidString
+        guard let url = URL(string: "\(apiBase)/audio-isolation") else {
+            return StemSeparationResult(status: .failed, instrumentalData: nil, error: "Invalid stem separation URL")
+        }
+
         do {
-            let boundary = UUID().uuidString
-            let url = URL(string: "\(apiBase)/audio-isolation")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -594,7 +619,7 @@ actor ElevenLabsService {
         await exportSession.export()
 
         guard exportSession.status == .completed else {
-            throw ElevenLabsError.invalidData("Audio export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
+            throw ElevenLabsError.invalidData("Audio export failed: \(exportSession.error?.localizedDescription ?? \"unknown\")")
         }
 
         let data = try Data(contentsOf: tempURL)
