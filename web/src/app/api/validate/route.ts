@@ -1,3 +1,5 @@
+import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -174,7 +176,7 @@ If passed is true, fixes should be empty or omitted.`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: CLAUDE_VALIDATOR,
         max_tokens: 4096,
         stream: true,
         system: fullSystemPrompt,
