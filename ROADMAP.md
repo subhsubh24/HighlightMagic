@@ -12,7 +12,7 @@ BOTH of these at 100%, independently verified:
   2. **MARKETING + GROWTH** — a real, built marketing engine: landing/waitlist site, brand,
      ASO, content/owned-channel assets, analytics, and a funnel — everything buildable
      without the owner's live accounts.
-It is NOT done until a **documented, benchmark-grounded revenue model (REVENUE.md)** shows a
+It is NOT done until a **documented, benchmark-grounded revenue model (docs/BUSINESS_CASE.md)** shows a
 **defensible path to ~$100K/year**, AND a complete **REMAINING_STEPS.md** lists — IN ORDER —
 only the things the OWNER must do that the loop physically cannot (billing, signing,
 submission, funding accounts). Anything the loop CAN build, it builds.
@@ -73,7 +73,7 @@ client run up cost and bypass the free limit. Enforce the model:
       *(client-side sync fixed #31; server verification still needed — ties to P0/B3)*
 - [ ] C2. Paywall at the real value moment; restore purchases; manage subscription;
       5 free exports/mo + watermark, Pro unlimited + no watermark. Price points chosen from
-      researched comps (record rationale in REVENUE.md).
+      researched comps (record rationale in docs/BUSINESS_CASE.md).
 
 ## Track D — Store readiness & compliance
 - [x] D1. Honest privacy policy + terms (hosted on web/); PrivacyInfo.xcprivacy + App
@@ -97,15 +97,30 @@ client run up cost and bypass the free limit. Enforce the model:
       STAGE only — never auto-publish; publishing/ads are owner steps on funded accounts.
 - [ ] E5. **Analytics + funnel**: privacy-respecting web analytics + event taxonomy
       (visit → waitlist → install → activate → export → Pro), conversion instrumentation,
-      and a simple dashboard. No fake numbers — measure the real funnel once live.
+      and a simple dashboard. No fake numbers — measure the real funnel once live. These
+      real numbers feed back into docs/BUSINESS_CASE.md (Track F) over time, so the estimate
+      improves from data instead of staying a launch-day guess.
 
-## Track F — Revenue model & business case (the finish-line gate)
-- [ ] F1. **REVENUE.md**: a grounded unit-economics model — pricing, realistic free→Pro
-      conversion + retention from researched comps (cite sources/dates), COGS per export
-      (from docs/MODEL_COSTS.md), LTV/CAC, and the math for a defensible path to ~$100K/year,
-      with best/base/worst sensitivity and the assumptions that must hold. NO invented metrics.
-- [ ] F2. **Go-to-market plan** tying Track E to F1: which channels, the funnel targets, and
-      what the owner must fund/launch to hit the model.
+## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
+`docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
+Not vibes — math, with cited inputs. It must contain:
+- [ ] F1. **Bottoms-up model**: annual revenue = paying_users × price × 12 − churn/refunds/
+      fees, with the FULL funnel spelled out (reach → signup% → free→paid%), each step a number.
+- [ ] F2. **Research-grounded inputs** (cited, NEVER invented): category/competitor pricing;
+      typical freemium free→paid (realistically a few %); retention/churn norms; traffic/
+      acquisition assumptions. Pull via web research; cite source + date for each input.
+- [ ] F3. **Unit economics**: per-user (per-export) inference cost from docs/MODEL_COSTS.md →
+      gross margin per plan. An unprofitable-per-user plan is a FAILURE to flag and fix —
+      this is exactly why the API COST CONTRACT matters.
+- [ ] F4. **Three scenarios**: conservative / base / optimistic, each with the inputs behind
+      it, and an explicit statement of which one is the TARGET/expected.
+- [ ] F5. **Honesty + levers**: if the BASE case does not reach $100K/yr, SAY SO plainly and
+      name the specific levers (higher tier, better paywall conversion, a growth channel,
+      usage/add-on revenue) — then go BUILD them (they become roadmap work, not just notes).
+- [ ] F6. **Go-to-market**: tie Track E channels to the funnel targets and what the owner
+      must fund/launch to hit the model.
+- [ ] F7. **Living feedback**: once E5 analytics is live, fold REAL funnel numbers back into
+      the model so the projection converges on reality.
 
 ## Evals (first-class)
 - [ ] Golden video fixtures + expected highlight ranges; a live `.eval` (env-flag-gated so
@@ -117,8 +132,12 @@ Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL ho
      COGS within a viable margin (B4 / docs/MODEL_COSTS.md).
   2. MARKETING/GROWTH: Track E complete and staged (landing+waitlist, brand, ASO, content,
      analytics/funnel built).
-  3. BUSINESS CASE: REVENUE.md (F1) presents a credible, benchmark-grounded path to ~$100K/year,
-     and F2 GTM plan is documented.
+  3. BUSINESS CASE: docs/BUSINESS_CASE.md presents a credible, benchmark-grounded BASE-case
+     path to ≥$100K/year (or, if the base case falls short, names the specific levers AND
+     they've been built so a credible scenario clears it); unit economics are gross-margin-
+     positive; the GTM (F6) is documented. The final `FACTORY: 100%` issue must include the
+     one-paragraph "here's the math on why this can realistically make $100K/yr — and here
+     are the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
   4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 If any box is open, advance the lowest incomplete item. Do not declare done early.
 
