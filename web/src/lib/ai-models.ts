@@ -34,6 +34,7 @@ export const ELEVENLABS_VOICE_CLONE_MODEL = "eleven_flash_v2_5";
  */
 export const MODEL_PRICES_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
   [CLAUDE_FRAME_SCORER]: { input: 0.80, output: 4.00 },
+  [CLAUDE_VALIDATOR]: { input: 0.80, output: 4.00 },
   [CLAUDE_PLANNER]: { input: 15.0, output: 75.0 },
 };
 
