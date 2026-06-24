@@ -33,7 +33,7 @@ limit. Decide and enforce the model:
       captions, filters, music/SFX/voiceover) -> 1080x1920 export -> share sheet.
 - [ ] A3. Swift 6 strict-concurrency correctness (no data races; actors correct; no
       main-thread blocking); remove crash risks (e.g. the fatalError in UserAccountService).
-      *(fatalError removed in #13; broader crash audit pending)*
+      *(fatalError removed in #13; baseAddress! fixed #23; model ID + blocking read fixed #26; broader audit pending)*
 - [ ] A4. Real empty/loading/error states; smooth playback/scrubbing/trim; performance; no
       crashes on the core path.
 - [ ] A5. Design quality bar (intentional, not generated-looking); correct Info.plist
@@ -42,8 +42,10 @@ limit. Decide and enforce the model:
 ## Track B — Backend + API cost (web/, on Vercel)
 - [ ] B1. Generation pipeline reliable (detection -> selection -> music/SFX/voiceover ->
       assembly -> validation loop) with the retry/backoff already present in detect.ts.
-- [ ] B2. API COST discipline: cheapest capable model by default; escalate only on a
+- [x] B2. API COST discipline: cheapest capable model by default; escalate only on a
       deterministic signal; minimize payload; cache; cap regeneration; cost metering.
+      *(cost metering #17; frame cap #19; model IDs centralized #11; CLAUDE_PLANNER fixed #25;
+      ClaudeVisionService model ID fixed #26; CLAUDE_VALIDATOR pricing #28 — COMPLETE)*
 - [ ] B3. Server-side freemium enforcement + entitlement (ties to P0).
 - [ ] B4. Cost-optimized model selection (multimodal COGS is the margin — see
       docs/MODEL_COSTS.md). RESEARCH current options on the open internet (WebSearch/
@@ -58,8 +60,10 @@ limit. Decide and enforce the model:
 
 ## Track C — Monetization (StoreKit 2)
 - [ ] C1. Pro subscription (StoreKitService exists) with SERVER-VERIFIED entitlement.
+      *(StoreKit→AppState client-side sync fixed in #31; server verification still needed)*
 - [ ] C2. Paywall at the real value moment; restore purchases; manage subscription;
       5 free exports/mo + watermark, Pro unlimited + no watermark.
+      *(paywall UI exists; restore purchases now propagates correctly client-side #31; server verification still needed)*
 
 ## Track D — Store readiness & compliance
 - [x] D1. Privacy policy + terms (host on web/) that HONESTLY disclose video is uploaded to
@@ -67,7 +71,10 @@ limit. Decide and enforce the model:
       *(Honest policy shipped in #12; PrivacyInfo.xcprivacy still needed)*
 - [ ] D2. In-app account deletion if accounts exist (Apple 5.1.1(v)); ATT only if tracking.
 - [ ] D3. App Store assets: icon (present), screenshots, preview video, ASO copy, support URL.
-- [ ] D4. Stability pass: no crashes; sensible permissions; no debug/placeholder content.
+      *(Terms of Use /terms #32; Support/FAQ /support #32; ASO copy improved #22; support URL live;
+      screenshots + preview video need device/simulator — owner task)*
+- [x] D4. Stability pass: no crashes; sensible permissions; no debug/placeholder content.
+      *(D4 COMPLETE: PR #22 merged; all 4 false on-device/no-upload claims removed)*
 
 ## Track E — Marketing engine + web site
 - [ ] E1. Waitlist/landing page, brand kit, ASO/store copy, content + owned-channel post
