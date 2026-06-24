@@ -382,12 +382,16 @@ struct ProcessingView: View {
         if appState.voiceCloneEnabled, let video = appState.selectedVideo {
             await MainActor.run { appState.voiceCloneStatus = .generating }
             do {
-                // Extract audio data from the video for voice cloning
-                let audioData = try Data(contentsOf: video.sourceURL)
+                // Load the video file off the main actor: large videos can be multiple GB
+                // and Data(contentsOf:) is synchronous — calling it here blocks the UI.
+                let videoURL = video.sourceURL
+                let audioData = try await Task.detached(priority: .userInitiated) {
+                    try Data(contentsOf: videoURL)
+                }.value
                 let cloneResult = await ElevenLabsService.shared.createVoiceClone(
                     audioData: audioData,
                     name: "User Voice",
-                    fileName: video.sourceURL.lastPathComponent
+                    fileName: videoURL.lastPathComponent
                 )
                 guard case .completed = cloneResult.status, let voiceId = cloneResult.voiceId else {
                     await MainActor.run { appState.voiceCloneStatus = .failed }
