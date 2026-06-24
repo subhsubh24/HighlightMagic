@@ -12,9 +12,9 @@ enum AppStoreMetadata {
     static let copyright = "2026 Highlight Magic"
 
     static let description = """
-    Turn your raw personal videos into share-ready short highlights in seconds — powered by on-device AI.
+    Turn your raw personal videos into share-ready short highlights in seconds — powered by AI.
 
-    Highlight Magic automatically finds the best moments in your videos using smart motion, face, and scene detection. No cloud uploads. No editing experience needed. Just pick a video, and we do the rest.
+    Highlight Magic automatically finds the best moments in your videos using smart motion, face, and scene detection. No editing experience needed. Just pick a video, and we do the rest.
 
     SMART AI HIGHLIGHT DETECTION
     Our multi-pass AI pipeline analyzes every frame for motion intensity, facial expressions, scene composition, and visual interest. Tell us what you're looking for — "funny pet reactions", "epic hiking views", "best dance moves" — and we prioritize exactly those moments.
@@ -29,7 +29,7 @@ enum AppStoreMetadata {
     Fine-tune your highlights with a gesture-based trim slider, live video preview, custom captions, 14 royalty-free music tracks, and 6 professional filters. Premium users unlock cinematic LUTs, particle overlays, and exclusive effects.
 
     PRIVACY-FIRST
-    All video analysis happens 100% on your device using Apple's Vision framework and Core ML. Your videos never leave your phone.
+    By default, all video analysis runs on-device — no sign-in, no cloud uploads required. If you choose to enable enhanced AI detection in Settings > AI Settings, individual video frames (at ~1fps) are sent to the Anthropic API using your own API key. Your full videos never leave your device; only sampled frames are analyzed in the cloud when you opt in.
 
     FREE PLAN INCLUDES:
     • 5 exports per month
@@ -54,7 +54,7 @@ enum AppStoreMetadata {
 
     static let whatsNew = """
     v1.0.0 — Launch!
-    • Smart multi-pass highlight detection with on-device AI
+    • Smart multi-pass highlight detection (on-device; enhanced AI available via optional API key)
     • 8 curated style templates (Adventure, Foodie, Fitness & more)
     • Interactive gesture-based trim editor with live preview
     • 14 royalty-free music tracks across 6 categories
@@ -108,9 +108,9 @@ enum AppStoreMetadata {
             screenContent: "Export complete screen → green checkmark → 'Share' button → 'Made with Highlight Magic' badge"
         ),
         (
-            headline: "Your Videos Never Leave Your Phone",
-            subtitle: "100% on-device AI, privacy-first design",
-            screenContent: "Settings screen → Privacy Policy link → 'All processing stays on device' banner → lock icon"
+            headline: "Private By Default, Powerful When You Want",
+            subtitle: "On-device AI + optional cloud enhancement",
+            screenContent: "AI Settings screen → optional Anthropic API key field → 'Enhanced AI Detection' toggle → Privacy Policy link"
         )
     ]
 
