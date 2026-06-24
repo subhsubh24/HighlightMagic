@@ -3,6 +3,7 @@
 import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
+import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER } from "@/lib/ai-models";
 
 // ── Debug logging ──
 
@@ -789,7 +790,7 @@ Rules:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: CLAUDE_FRAME_SCORER,
         max_tokens: 2000,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -1014,7 +1015,7 @@ async function analyzeMultiBatch(
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
+          model: CLAUDE_FRAME_SCORER,
           max_tokens: 16000,
           system: [
             {
@@ -2710,7 +2711,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     }\n\nNow create the highlight tape.`,
   });
 
-  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=claude-opus-4-6, effort=medium`);
+  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${CLAUDE_PLANNER}, effort=medium`);
   const plannerStartMs = Date.now();
 
   const response = await fetchWithRetry(
@@ -2723,7 +2724,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-opus-4-6",
+        model: CLAUDE_PLANNER,
         max_tokens: 32000,
         stream: true,
         thinking: {

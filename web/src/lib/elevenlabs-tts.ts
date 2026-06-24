@@ -8,6 +8,8 @@
  * Server-side only — requires ELEVENLABS_API_KEY env var.
  */
 
+import { ELEVENLABS_TTS } from "@/lib/ai-models";
+
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
 /**
@@ -84,7 +86,7 @@ export async function generateVoiceover(
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_flash_v2_5",
+        model_id: ELEVENLABS_TTS,
         output_format: "mp3_44100_128",
         voice_settings: {
           stability: 0.5,
