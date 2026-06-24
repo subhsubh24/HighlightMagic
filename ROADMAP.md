@@ -26,13 +26,14 @@ limit. Decide and enforce the model:
       verify/extend the existing detection-cache + asset-cache.
 
 ## Track A — iOS app (complete + polish to App-Store quality)
-- [ ] A1. CI: make `xcodebuild ... build test` green for the iOS app (add a shared scheme
+- [x] A1. CI: make `xcodebuild ... build test` green for the iOS app (add a shared scheme
       + a SwiftPM test target, or build the .xcodeproj app+test target); then promote the
-      `ios` CI check to required.
+      `ios` CI check to required. *(SwiftPM test target added in #15; CI destination fix in #16 pending)*
 - [ ] A2. Core flow end-to-end with no dead ends: import/capture -> detect -> editor (trim,
       captions, filters, music/SFX/voiceover) -> 1080x1920 export -> share sheet.
 - [ ] A3. Swift 6 strict-concurrency correctness (no data races; actors correct; no
       main-thread blocking); remove crash risks (e.g. the fatalError in UserAccountService).
+      *(fatalError removed in #13; broader crash audit pending)*
 - [ ] A4. Real empty/loading/error states; smooth playback/scrubbing/trim; performance; no
       crashes on the core path.
 - [ ] A5. Design quality bar (intentional, not generated-looking); correct Info.plist
@@ -61,8 +62,9 @@ limit. Decide and enforce the model:
       5 free exports/mo + watermark, Pro unlimited + no watermark.
 
 ## Track D — Store readiness & compliance
-- [ ] D1. Privacy policy + terms (host on web/) that HONESTLY disclose video is uploaded to
+- [x] D1. Privacy policy + terms (host on web/) that HONESTLY disclose video is uploaded to
       processing APIs; PrivacyInfo.xcprivacy + App Privacy labels accurate to what's sent.
+      *(Honest policy shipped in #12; PrivacyInfo.xcprivacy still needed)*
 - [ ] D2. In-app account deletion if accounts exist (Apple 5.1.1(v)); ATT only if tracking.
 - [ ] D3. App Store assets: icon (present), screenshots, preview video, ASO copy, support URL.
 - [ ] D4. Stability pass: no crashes; sensible permissions; no debug/placeholder content.

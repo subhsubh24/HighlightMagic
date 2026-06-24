@@ -5,6 +5,11 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #15 | Make iOS CI green via SwiftPM test target | A1 | 2026-06-24 |
+| #14 | Add housekeeping docs: IMPROVEMENT_LOG, PENDING_OPS, LOOP_MEMORY | meta | 2026-06-24 |
+| #13 | Remove fatalError crash in UserAccountService init | A3 | 2026-06-24 |
+| #12 | Honest privacy policy with third-party API disclosure | D1 | 2026-06-24 |
+| #11 | Centralize AI model IDs in ai-models.ts | B4 | 2026-06-24 |
 | #10 | Add cost-optimized model selection mandate + MODEL_COSTS.md | B4 | 2026-06-24 |
 | #9 | Add CI status badge to README | meta | 2026-06-24 |
 | #8 | iOS/web feature parity: validation loop, photo animation, production plan | A + B1 | 2026-06-24 |
@@ -17,6 +22,5 @@ Format: newest first. Only MERGED changes appear here.
 | #1 | Add Highlight Magic MVP (iOS + web) | all | 2026-02-23 |
 
 ## Pending (open PRs — not yet logged)
-- PR #11: Centralize AI model IDs in ai-models.ts (B4 partial)
-- PR #12: Honest privacy policy with third-party API disclosure (D1)
-- PR #13: Remove fatalError crash in UserAccountService init (A3)
+- PR #16: A1 iOS CI destination fix (drop OS=latest)
+- PR #17: Add per-call cost metering for all Claude API calls (B2)
