@@ -125,7 +125,10 @@ actor AtlasCloudService {
             }
 
             do {
-                var request = URLRequest(url: URL(string: "\(apiBase)/\(endpoint)")!)
+                guard let url = URL(string: "\(apiBase)/\(endpoint)") else {
+                    throw AtlasCloudError.apiError(statusCode: 0, message: "Invalid URL: \(apiBase)/\(endpoint)")
+                }
+                var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -175,7 +178,10 @@ actor AtlasCloudService {
     func checkTaskResult(predictionId: String) async throws -> TaskPollResult {
         guard let apiKey else { throw AtlasCloudError.noAPIKey }
 
-        var request = URLRequest(url: URL(string: "\(apiBase)/prediction/\(predictionId)")!)
+        guard let url = URL(string: "\(apiBase)/prediction/\(predictionId)") else {
+            throw AtlasCloudError.apiError(statusCode: 0, message: "Invalid URL")
+        }
+        var request = URLRequest(url: url)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = fetchTimeoutSeconds
 

@@ -73,6 +73,8 @@ final class AppState {
     // Intro/outro video cards (Atlas Cloud T2V) — matches web introCard/outroCard
     var introCard: GeneratedCard?
     var outroCard: GeneratedCard?
+    var introCardEnabled: Bool = false
+    var outroCardEnabled: Bool = false
 
     // Sound effects (ElevenLabs SFX v2) — matches web sfxTracks/sfxStatus
     var sfxTracks: [SfxTrack] = []
@@ -165,6 +167,8 @@ final class AppState {
         aiProductionPlan = nil
         introCard = nil
         outroCard = nil
+        introCardEnabled = false
+        outroCardEnabled = false
         sfxTracks = []
         sfxStatus = .idle
         voiceoverSegments = []
