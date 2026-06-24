@@ -54,7 +54,7 @@ enum AppStoreMetadata {
 
     static let whatsNew = """
     v1.0.0 — Launch!
-    • Smart multi-pass highlight detection with on-device AI
+    • Smart multi-pass highlight detection with AI
     • 8 curated style templates (Adventure, Foodie, Fitness & more)
     • Interactive gesture-based trim editor with live preview
     • 14 royalty-free music tracks across 6 categories
@@ -110,7 +110,7 @@ enum AppStoreMetadata {
         (
             headline: "No Account. No Uploads By Default.",
             subtitle: "Privacy-first design, optional cloud AI",
-            screenContent: "Settings screen → Privacy Policy link → 'Processing stays on device by default' banner → lock icon"
+            screenContent: "Settings screen → Privacy Policy link → AI Settings section showing optional API key field → lock icon"
         )
     ]
 
@@ -121,8 +121,8 @@ enum AppStoreMetadata {
 
     static let reviewNotes = """
     AI DISCLOSURE:
-    - This app uses Apple Vision framework and Core ML for on-device video analysis. \
-    All AI processing happens locally on the user's device.
+    - This app uses Apple Vision framework and Core ML for on-device video analysis \
+    by default. No data leaves the device unless the user explicitly opts in.
     - An optional third-party AI enhancement (Anthropic Claude Vision API) is available \
     only when the user explicitly configures their own API key in Settings > AI Settings. \
     This feature sends individual video frames (not full videos) to the Anthropic API \
