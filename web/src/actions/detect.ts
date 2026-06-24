@@ -3,7 +3,7 @@
 import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
-import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER, estimateCostUSD } from "@/lib/ai-models";
+import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER, CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
 
 // ── Debug logging ──
 
