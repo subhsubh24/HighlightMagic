@@ -14,8 +14,8 @@ struct HighlightMagicApp: App {
         WindowGroup {
             RootView()
                 .environment(appState)
-                .onChange(of: storeService.isProUser) { _, isProUser in
-                    appState.isProUser = isProUser
+                .onChange(of: storeService.isProUser) { _, newValue in
+                    appState.isProUser = newValue
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(
