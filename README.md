@@ -1,5 +1,7 @@
 # Highlight Magic
 
+[![CI](https://github.com/subhsubh24/HighlightMagic/actions/workflows/ci.yml/badge.svg)](https://github.com/subhsubh24/HighlightMagic/actions/workflows/ci.yml)
+
 A freemium iOS app that turns raw personal videos into share-ready short highlights automatically.
 
 ## Features
