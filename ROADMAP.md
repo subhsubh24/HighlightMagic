@@ -44,6 +44,16 @@ limit. Decide and enforce the model:
 - [ ] B2. API COST discipline: cheapest capable model by default; escalate only on a
       deterministic signal; minimize payload; cache; cap regeneration; cost metering.
 - [ ] B3. Server-side freemium enforcement + entitlement (ties to P0).
+- [ ] B4. Cost-optimized model selection (multimodal COGS is the margin — see
+      docs/MODEL_COSTS.md). RESEARCH current options on the open internet (WebSearch/
+      WebFetch): cheaper hosted models AND open-source / self-hostable multimodal models
+      for each paid task (frame scoring, planning, validation, music/SFX/voiceover, video
+      gen/upscale/lipsync). Benchmark quality-vs-cost per task; route each task to the
+      CHEAPEST model that clears its quality bar; escalate to a pricier model ONLY on a
+      deterministic signal. Make models config-driven (a single model map) so a swap is a
+      one-line change, and keep a dated decision log in docs/MODEL_COSTS.md. DONE when the
+      model map + benchmark + decision log exist and each task uses its cheapest passing
+      model; ongoing re-evaluation is a maintenance practice, not a blocker.
 
 ## Track C — Monetization (StoreKit 2)
 - [ ] C1. Pro subscription (StoreKitService exists) with SERVER-VERIFIED entitlement.
@@ -68,7 +78,8 @@ limit. Decide and enforce the model:
 
 ## Definition of Done (STOP gate)
 All tracks' boxes ticked AND verified in CI, P0 resolved, detection/generation evals pass,
-and per-export COGS is within a viable freemium margin -> open `FACTORY: ready for submission`
+and per-export COGS is within a viable freemium margin (B4 / docs/MODEL_COSTS.md: each
+paid task on the cheapest model that clears its quality bar) -> open `FACTORY: ready for submission`
 and stop building.
 
 ## Human Core (only the owner can do)
