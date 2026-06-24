@@ -23,6 +23,14 @@ let package = Package(
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
+        ),
+        .testTarget(
+            name: "HighlightMagicTests",
+            dependencies: ["HighlightMagic"],
+            path: "Tests/HighlightMagicTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
         )
     ]
 )
