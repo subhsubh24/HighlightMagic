@@ -24,9 +24,10 @@ export default function TermsPage() {
           </p>
           <p className="mt-2">
             The web application processes video on our servers via third-party AI providers
-            (Anthropic, ElevenLabs, AtlasCloud). The iOS app uses on-device processing by default;
-            enhanced AI detection via user-provided API keys is optional and configurable in
-            Settings.
+            (Anthropic, ElevenLabs, AtlasCloud). The iOS app uses a bring-your-own-key (BYOK)
+            model: you provide your own Anthropic API key in Settings, and AI analysis is performed
+            via your API account. No frames or video data are stored by Highlight Magic beyond the
+            duration of your session.
           </p>
         </section>
 
@@ -80,11 +81,10 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-white">6. Third-Party API Keys (iOS)</h2>
           <p>
-            The iOS app offers optional enhanced AI detection using your own Anthropic API key.
-            When you provide a third-party API key, you are subject to that provider&apos;s terms
-            of service and are solely responsible for any costs incurred on your account. Highlight
-            Magic does not charge for third-party API usage; those costs accrue directly to your
-            API account.
+            The iOS app uses a bring-your-own-key model. When you provide an Anthropic API key,
+            you are subject to Anthropic&apos;s terms of service and are solely responsible for
+            any costs incurred on your account. Highlight Magic does not charge for third-party
+            API usage; those costs accrue directly to your API account.
           </p>
         </section>
 
