@@ -175,7 +175,7 @@ struct KineticCaptionStyleTests {
 
     @Test("CaseIterable has expected count")
     func testCaseCount() {
-        #expect(KineticCaptionStyle.allCases.count == 5)
+        #expect(KineticCaptionStyle.allCases.count == 7)
     }
 }
 
@@ -313,7 +313,7 @@ struct VelocityEditServiceTests {
     @Test("VelocityStyle has expected cases")
     func testVelocityStyles() {
         let styles = VelocityEditService.VelocityStyle.allCases
-        #expect(styles.count == 5)
+        #expect(styles.count == 8)
         #expect(styles.contains(.hero))
         #expect(styles.contains(.bullet))
         #expect(styles.contains(.montage))

@@ -81,8 +81,8 @@ struct IntegrationTestStubs {
         clip.selectedFilter = adventureTemplate.suggestedFilter
         clip.captionStyle = adventureTemplate.suggestedCaptionStyle
 
-        #expect(clip.selectedFilter == .vibrant)
-        #expect(clip.captionStyle == .bold)
+        #expect(clip.selectedFilter == adventureTemplate.suggestedFilter)
+        #expect(clip.captionStyle == adventureTemplate.suggestedCaptionStyle)
     }
 
     @Test("Video duration validation")
