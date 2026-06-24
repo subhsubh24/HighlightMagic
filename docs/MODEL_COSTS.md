@@ -35,7 +35,7 @@ maintained by the autonomous loop (ROADMAP **B4**) and is a standing reference, 
 
 | Task | Provider | Current model | Call site | Cost lever / candidates to evaluate |
 |---|---|---|---|---|
-| Edit **planning** (the reasoning step) | Anthropic | `claude-opus-4-6` (effort=medium) | `actions/detect.ts` | **Highest LLM cost.** Evaluate a cheaper Claude tier (Sonnet/Haiku) for planning; trim prompt + thinking budget; only escalate to Opus on a hard signal. |
+| Edit **planning** (the reasoning step) | Anthropic | `claude-opus-4-8` (effort=medium) | `actions/detect.ts` | **Highest LLM cost.** Evaluate a cheaper Claude tier (Sonnet/Haiku) for planning; trim prompt + thinking budget; only escalate to Opus on a hard signal. |
 | **Frame scoring** / detection | Anthropic | `claude-haiku-4-5-20251001` | `actions/detect.ts` | Already cheap tier. Push payload down: fewer/downscaled frames, larger batches, cache by frame hash. Evaluate an OSS vision model for coarse pre-filtering before the LLM. |
 | **Validation loop** | Anthropic | `claude-haiku-4-5-20251001` | `app/api/validate/route.ts` | Already cheap tier. Keep ≤2 passes; prefer plan-layer fixes over asset regen; consider skipping pass 2 when pass 1 confidence is high. |
 | **Voiceover / TTS** | ElevenLabs | `eleven_flash_v2_5` | `elevenlabs-tts.ts` | Already the low-cost/low-latency tier. Evaluate OSS TTS (e.g. self-hosted) for the free tier; cache by (text, voice). |
@@ -71,4 +71,5 @@ maintained by the autonomous loop (ROADMAP **B4**) and is a standing reference, 
 
 | Date | Task | From → To | Quality result | Cost delta | Notes / source |
 |---|---|---|---|---|---|
+| 2026-06-24 | Planning | `claude-opus-4-6` → `claude-opus-4-8` | not measured (correctness fix) | unknown | `claude-opus-4-6` was an invalid model ID causing API errors on every planning call. `claude-opus-4-8` is the current valid Anthropic Opus model. Pricing updated to Opus-tier estimate ($15/$75 per million tokens); prior $5/$25 was Sonnet-tier and underestimated actual cost. Verify exact pricing at console.anthropic.com. |
 | 2026-06-24 | — | baseline snapshot | n/a | n/a | Initial map captured from `web/src/`: Opus 4.6 planning, Haiku 4.5 scoring+validation, ElevenLabs flash v2.5 voice, AtlasCloud + Kling v2.5-turbo-pro video/photo. No swaps yet. |

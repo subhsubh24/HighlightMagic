@@ -13,7 +13,7 @@
 export const CLAUDE_FRAME_SCORER = "claude-haiku-4-5-20251001";
 
 /** Tape planning: uses extended thinking — needs a stronger reasoning model. */
-export const CLAUDE_PLANNER = "claude-opus-4-6";
+export const CLAUDE_PLANNER = "claude-opus-4-8";
 
 /** Tape validation: cheap structured-output Haiku call. */
 export const CLAUDE_VALIDATOR = "claude-haiku-4-5-20251001";
@@ -29,12 +29,12 @@ export const ELEVENLABS_VOICE_CLONE_MODEL = "eleven_flash_v2_5";
 // ── Cost metering ──
 
 /**
- * Per-million-token USD prices. Last verified 2026-06-24 via Anthropic pricing.
+ * Per-million-token USD prices (estimates — verify against console.anthropic.com).
  * Update this map whenever a model is swapped and record the change in docs/MODEL_COSTS.md.
  */
 export const MODEL_PRICES_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
   [CLAUDE_FRAME_SCORER]: { input: 1.0, output: 5.0 },
-  [CLAUDE_PLANNER]: { input: 5.0, output: 25.0 },
+  [CLAUDE_PLANNER]: { input: 15.0, output: 75.0 },
 };
 
 /** Returns the estimated USD cost for a single API call, or 0 if the model is unknown. */
