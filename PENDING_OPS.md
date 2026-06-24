@@ -13,17 +13,36 @@ Set these in the Vercel dashboard for the `web/` deployment:
 | `ELEVENLABS_API_KEY` | Music, SFX, voiceover, voice clone generation | Audio features |
 | `ATLASCLOUD_API_KEY` | Photo animation (Kling), video generation (Wan), upscale | Photo animation + intro/outro |
 
-## Server-Side Quota (B3 prerequisite)
+## Server-Side Quota (B3 — BLOCKED: requires auth layer first)
 
 Free tier enforcement (5 exports/user/month) is currently CLIENT-SIDE ONLY in the iOS app
 (`AppState.exportsUsedThisMonth` in UserDefaults). This can be bypassed by reinstalling the
 app or modifying client state.
 
-To enforce server-side:
-1. Add **Vercel KV** (Redis) to the Vercel project
+To enforce server-side, two infrastructure prerequisites must be added first:
+
+### Prerequisite 1 — Auth layer (owner decision required)
+
+Without a server-verified identity, any HTTP client can pass `{ "isProUser": true }` in the
+request body to bypass the quota limit entirely. The `userId` must come from a verified
+session token, not the caller-supplied request body.
+
+Add an auth provider before implementing quota routes:
+- **Clerk** (recommended for Next.js): `npm install @clerk/nextjs`; wrap route handlers with `auth()`
+- **Supabase Auth**: provides JWT + optional row-level security
+
+Once auth is added, the `quota.ts` library and tests from the closed PR #29 branch
+(`claude/b3-quota-api`) can be restored and the route handlers updated to derive `userId`
+from the verified session.
+
+### Prerequisite 2 — Vercel KV
+1. Add **Vercel KV** (Redis) to the Vercel project (Storage tab in Vercel dashboard)
 2. Set `KV_REST_API_URL` and `KV_REST_API_TOKEN` env vars (Vercel provides these automatically)
-3. Implement `/api/quota/check` and `/api/quota/increment` endpoints that read/write
-   `quota:{userID}:{YYYY-MM}` keys with a 31-day TTL
+
+### Implementation steps (after both prerequisites are met)
+3. Restore `/api/quota/check` and `/api/quota/increment` from PR #29 branch, updated to
+   derive `userId` from the auth session (e.g. `auth().userId`) instead of the request body
+   Key pattern: `quota:{userId}:{YYYY-MM}`, TTL: 31 days
 4. Call `quota/check` at the start of the detection pipeline; call `quota/increment` on
    successful export; return HTTP 402 if limit is exceeded for free users
 

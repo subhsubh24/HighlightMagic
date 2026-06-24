@@ -5,6 +5,8 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #26 | Fix iOS: update Sonnet model ID + unblock main thread in voice clone | A3 | 2026-06-24 |
+| #25 | Fix CLAUDE_PLANNER to valid model ID claude-opus-4-8 | B2 | 2026-06-24 |
 | #24 | Housekeeping: update loop state for Run 4 | meta | 2026-06-24 |
 | #23 | Remove force-unwrap on baseAddress in AudioFeatureService FFT pack | A3 | 2026-06-24 |
 | #22 | Fix AppStoreMetadata.swift false on-device/no-upload claims | D4 | 2026-06-24 |
@@ -30,5 +32,4 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
-- PR #25: B2 — Fix CLAUDE_PLANNER from invalid `claude-opus-4-6` to `claude-opus-4-8`; correct Opus-tier pricing in cost metering (pending CI as of Run 5)
-- PR #26: A3 — Fix ClaudeVisionService model ID `claude-sonnet-4-20250514` → `claude-sonnet-4-6`; fix blocking `Data(contentsOf:)` in ProcessingView voice clone path (pending CI as of Run 5)
+- PR #28: B2 — Correct Haiku 4.5 pricing in ai-models.ts from 1.0/5.0 to actual 0.80/4.00 per M tokens (auto-merge enabled, waiting for web CI)
