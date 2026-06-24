@@ -141,6 +141,26 @@ Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL ho
   4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 If any box is open, advance the lowest incomplete item. Do not declare done early.
 
+## DONE GUARD (a box counts as done ONLY with verified artifacts — never self-assessment)
+Before ticking ANY checkbox in this file (or recording any item complete in IMPROVEMENT_LOG/
+loop-memory), ALL THREE must hold IN THE SAME RUN. A box ticked without them is a FALSE
+completion and a FAILURE — it wastes the owner's time worse than leaving it open:
+  1. **MERGED** — the change is actually merged to `main` (verify with git/gh). NEVER tick on
+     an open, draft, or CI-failing PR.
+  2. **ARTIFACTS EXIST** — the concrete deliverable the item promises is present on `main` at
+     its real path and is REAL, not a stub/placeholder/TODO. E.g.: a web page/route that
+     actually builds and renders; brand/marketing/screenshot asset FILES that exist; a
+     docs/BUSINESS_CASE.md section filled with CITED numbers (not "TBD"); a test/eval file
+     that exists AND runs; a code path that is wired in and reachable, not dead. Open the
+     file(s) and confirm.
+  3. **GATE RE-RUN GREEN** — re-run the relevant gate to GREEN this run, do not trust a prior
+     run or a self-assessment: web → `cd web && npm ci && npm run build && npm test`; iOS →
+     the `ios` CI check on the merge commit; evals → actually run the eval.
+When unsure whether an artifact truly exists or works, treat the item as NOT done. The SAME
+standard gates the final Definition of Done: do NOT declare 100% / open the `FACTORY: 100%`
+issue unless every track's artifacts are verified-present on `main` AND both `web` + `ios`
+gates are green in that run, AND docs/BUSINESS_CASE.md actually contains the cited model.
+
 ## REMAINING_STEPS.md (owner-only, IN ORDER — maintained by the loop)
 Maintain a top-level `REMAINING_STEPS.md` listing, in the exact order the owner should do them,
 ONLY the actions the loop physically cannot take. Keep it current every run. Expected contents:
