@@ -50,22 +50,30 @@ jobs:
       - run: npm run lint
 
   # ---- iOS (Swift app) ----
-  # Kept NON-required until reliably green. The repo currently has NO shared Xcode
-  # scheme and Package.swift declares NO test target, so the scheme/test wiring
-  # likely needs a one-time fix (the loop's first iOS task: get this green, then
-  # promote `ios` to a required check).
+  # Kept NON-required until reliably green, then promote `ios` to a required check.
+  # The app builds as a SwiftPM package (Package.swift, target HighlightMagic +
+  # test target HighlightMagicTests); xcodebuild resolves the package scheme.
   ios:
     name: ios
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode 16
-        run: sudo xcode-select -switch /Applications/Xcode_16.app 2>/dev/null || xcode-select -p
+      - name: Select newest Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "Selecting $LATEST"
+          [ -n "$LATEST" ] && sudo xcode-select -switch "$LATEST/Contents/Developer" || xcode-select -p
+          xcodebuild -version
       - name: List schemes (diagnostic)
-        run: xcodebuild -list -project HighlightMagic.xcodeproj || xcodebuild -list || true
+        run: xcodebuild -list || true
       - name: Build & test (iOS Simulator)
         run: |
           set -o pipefail
-          DEST='platform=iOS Simulator,name=iPhone 16,OS=latest'
-          xcodebuild -scheme HighlightMagic -destination "$DEST" clean build test \
-          || xcodebuild -project HighlightMagic.xcodeproj -scheme HighlightMagic -destination "$DEST" clean build test
+          # Runner-provided simulators vary; create one explicitly and target it by UDID.
+          xcrun simctl list runtimes available
+          RUNTIME=$(xcrun simctl list runtimes available \
+            | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+' | tail -1)
+          echo "Using iOS runtime: $RUNTIME"
+          UDID=$(xcrun simctl create ci-iphone 'iPhone 16' "$RUNTIME")
+          echo "Created simulator: $UDID"
+          xcodebuild -scheme HighlightMagic -destination "id=$UDID" clean build test

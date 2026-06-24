@@ -416,7 +416,7 @@ actor ElevenLabsService {
             let fullText = (json["text"] as? String) ?? segments.map(\.text).joined(separator: " ")
             let language = json["language_code"] as? String
 
-            logger.info("Transcribed: \(segments.count) segments, \(fullText.count) chars, language=\(language ?? \"unknown\")")
+            logger.info("Transcribed: \(segments.count) segments, \(fullText.count) chars, language=\(language ?? "unknown")")
 
             return ScribeResult(status: .completed, text: fullText, segments: segments, language: language, error: nil)
         } catch {
@@ -619,7 +619,7 @@ actor ElevenLabsService {
         await exportSession.export()
 
         guard exportSession.status == .completed else {
-            throw ElevenLabsError.invalidData("Audio export failed: \(exportSession.error?.localizedDescription ?? \"unknown\")")
+            throw ElevenLabsError.invalidData("Audio export failed: \(exportSession.error?.localizedDescription ?? "unknown")")
         }
 
         let data = try Data(contentsOf: tempURL)

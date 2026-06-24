@@ -1900,7 +1900,6 @@ actor AIEffectRecommendationService {
             }
         }
     }
-}
 
     /// Add slight randomization to a base value within ±range, clamped to [0, 1].
     /// Makes fallback defaults feel less mechanical — each clip gets slightly different values.

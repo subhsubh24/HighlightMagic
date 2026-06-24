@@ -445,7 +445,7 @@ struct ProcessingView: View {
 
     /// Apply validation fixes from the Haiku QA pass.
     /// Mirrors web platform's validation-fixes.ts: caption rewrites, clip removals, SFX regeneration.
-    private func applyValidationFixes(_ fixes: TapeValidationService.ValidationFixes) async {
+    private func applyValidationFixes(_ fixes: ValidationFixes) async {
         await MainActor.run {
             // Caption rewrites — free fix, apply immediately
             for update in fixes.clipUpdates {
