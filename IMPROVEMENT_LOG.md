@@ -5,6 +5,9 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #24 | Housekeeping: update loop state for Run 4 | meta | 2026-06-24 |
+| #23 | Remove force-unwrap on baseAddress in AudioFeatureService FFT pack | A3 | 2026-06-24 |
+| #22 | Fix AppStoreMetadata.swift false on-device/no-upload claims | D4 | 2026-06-24 |
 | #20 | Fix Swift 6 strict-concurrency error in StoreKitService | A3 | 2026-06-24 |
 | #19 | Cap base frame extraction per video to 120 frames | B2 | 2026-06-24 |
 | #18 | Housekeeping: update loop state for Run 2 | meta | 2026-06-24 |
@@ -27,5 +30,5 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
-- PR #22: D4 — Fix AppStoreMetadata false on-device/no-upload claims (pending CI as of Run 4)
-- PR #23: A3 — Remove force-unwrap on baseAddress in AudioFeatureService FFT (pending CI as of Run 4)
+- PR #25: B2 — Fix CLAUDE_PLANNER from invalid `claude-opus-4-6` to `claude-opus-4-8`; correct Opus-tier pricing in cost metering (pending CI as of Run 5)
+- PR #26: A3 — Fix ClaudeVisionService model ID `claude-sonnet-4-20250514` → `claude-sonnet-4-6`; fix blocking `Data(contentsOf:)` in ProcessingView voice clone path (pending CI as of Run 5)
