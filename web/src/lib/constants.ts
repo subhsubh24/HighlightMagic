@@ -16,6 +16,7 @@ export const WATERMARK_OPACITY = 0.38;
 
 export const FRAME_SAMPLE_INTERVAL_SECONDS = 1; // Extract 1 frame per second — miss nothing
 export const MAX_FRAMES_PER_BATCH = 35; // 35 frames/batch — fewer waves at higher concurrency, ~same per-call time
+export const MAX_BASE_FRAMES_PER_VIDEO = 120; // Cap base frames per video — 1fps up to 2 min, then adaptively slower; prevents runaway API cost on long videos
 
 // ── Viral features ──
 export const LOOP_CROSSFADE_DURATION = 0.47; // seconds of crossfade for seamless loop — slightly off-round

@@ -1,6 +1,6 @@
 "use client";
 
-import { FRAME_SAMPLE_INTERVAL_SECONDS } from "./constants";
+import { FRAME_SAMPLE_INTERVAL_SECONDS, MAX_BASE_FRAMES_PER_VIDEO } from "./constants";
 import type { MediaFile } from "./types";
 
 const DEBUG = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG === "1";
@@ -307,18 +307,29 @@ export async function extractFrames(
   }
 
   const interval = FRAME_SAMPLE_INTERVAL_SECONDS;
-  const totalBaseFrames = Math.floor(duration / interval);
+  // For long videos, increase the sampling interval so we never exceed MAX_BASE_FRAMES_PER_VIDEO
+  // base frames. A 2-min video samples at 1fps (unchanged); a 10-min video samples at ~5fps,
+  // capping base frames at 120 regardless of length. Adaptive bonus frames still fire around
+  // interest points so no peak moment is missed.
+  const effectiveInterval = Math.max(interval, duration / MAX_BASE_FRAMES_PER_VIDEO);
+  if (effectiveInterval > interval) {
+    console.log(
+      `[FrameExtractor] ${duration.toFixed(0)}s video: using ${effectiveInterval.toFixed(1)}s interval ` +
+      `(${Math.floor(duration / effectiveInterval)} base frames, capped from ${Math.floor(duration / interval)})`
+    );
+  }
+  const totalBaseFrames = Math.floor(duration / effectiveInterval);
 
   // ── Decode audio once — shared between prescan and full analysis ──
   const decodedAudioPromise = decodeVideoAudio(videoUrl);
 
-  // ── Pass 2: Extract base frames at 1fps + detect visual scene changes ──
+  // ── Pass 2: Extract base frames + detect visual scene changes ──
   const baseFrames: FrameResult[] = [];
   const sceneChangeTimestamps: number[] = [];
   let prevImageData: ImageData | null = null;
 
   for (let i = 0; i <= totalBaseFrames; i++) {
-    const time = i * interval;
+    const time = i * effectiveInterval;
     video.currentTime = time;
     await new Promise<void>((resolve) => { video.onseeked = () => resolve(); });
 
@@ -329,9 +340,9 @@ export async function extractFrames(
     if (prevImageData) {
       const diff = frameDifference(prevImageData, currentImageData);
       if (diff >= SCENE_CHANGE_THRESHOLD) {
-        // Scene change detected between (time - interval) and time
+        // Scene change detected between (time - effectiveInterval) and time
         // The actual change is somewhere in between — mark the midpoint
-        sceneChangeTimestamps.push(time - interval / 2);
+        sceneChangeTimestamps.push(time - effectiveInterval / 2);
       }
     }
     prevImageData = currentImageData;
