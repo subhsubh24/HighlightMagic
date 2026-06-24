@@ -616,26 +616,22 @@ actor ExportService {
 
         var currentTime = CMTime.zero
 
-        // Helper to append a video file
-        func appendVideo(url: URL) async throws {
+        // Append intro (optional), main, then outro (optional) in order.
+        // Inlined (no capturing async nested closure) so the non-Sendable composition
+        // tracks aren't "sent" across an await under Swift 6 region isolation.
+        for url in [introURL, mainVideoURL, outroURL].compactMap({ $0 }) {
             let asset = AVURLAsset(url: url)
             let duration = try await asset.load(.duration)
+            let loadedVideoTracks = try await asset.loadTracks(withMediaType: .video)
+            let loadedAudioTracks = try await asset.loadTracks(withMediaType: .audio)
             let range = CMTimeRange(start: .zero, duration: duration)
-            if let vTrack = try await asset.loadTracks(withMediaType: .video).first {
+            if let vTrack = loadedVideoTracks.first {
                 try videoTrack.insertTimeRange(range, of: vTrack, at: currentTime)
             }
-            if let aTrack = try await asset.loadTracks(withMediaType: .audio).first {
+            if let aTrack = loadedAudioTracks.first {
                 try audioTrack.insertTimeRange(range, of: aTrack, at: currentTime)
             }
             currentTime = CMTimeAdd(currentTime, duration)
-        }
-
-        if let introURL {
-            try await appendVideo(url: introURL)
-        }
-        try await appendVideo(url: mainVideoURL)
-        if let outroURL {
-            try await appendVideo(url: outroURL)
         }
 
         let outputURL = FileManager.default.temporaryDirectory
@@ -711,8 +707,11 @@ actor ExportService {
         let preferredTransform = try await sourceTrack.load(.preferredTransform)
         let targetSize = config.outputSize
 
+        // AVMutableComposition isn't Sendable; this self-contained build is safe to
+        // pass into the async factory under Swift 6 region isolation.
+        nonisolated(unsafe) let unsafeComposition = composition
         let filterComposition = try await AVMutableVideoComposition.videoComposition(
-            with: composition,
+            with: unsafeComposition,
             applyingCIFiltersWithHandler: { [config, targetSize] request in
                 var image = request.sourceImage.clampedToExtent()
 
