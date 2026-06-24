@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Highlight Magic — AI Video Highlights in Seconds",
   description:
-    "Turn raw footage into viral Reels, TikToks, and Shorts. On-device AI finds your best moments. Free to try.",
+    "Turn raw footage into viral Reels, TikToks, and Shorts. AI finds your best moments automatically. Free to try.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://highlightmagic.app"),
   openGraph: {
     title: "Highlight Magic — AI Video Highlights in Seconds",
