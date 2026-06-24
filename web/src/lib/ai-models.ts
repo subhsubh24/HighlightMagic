@@ -25,3 +25,21 @@ export const ELEVENLABS_TTS = "eleven_flash_v2_5";
 
 /** Voice-clone TTS: same low-latency tier as standard TTS. */
 export const ELEVENLABS_VOICE_CLONE_MODEL = "eleven_flash_v2_5";
+
+// ── Cost metering ──
+
+/**
+ * Per-million-token USD prices. Last verified 2026-06-24 via Anthropic pricing.
+ * Update this map whenever a model is swapped and record the change in docs/MODEL_COSTS.md.
+ */
+export const MODEL_PRICES_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
+  [CLAUDE_FRAME_SCORER]: { input: 1.0, output: 5.0 },
+  [CLAUDE_PLANNER]: { input: 5.0, output: 25.0 },
+};
+
+/** Returns the estimated USD cost for a single API call, or 0 if the model is unknown. */
+export function estimateCostUSD(model: string, inputTokens: number, outputTokens: number): number {
+  const prices = MODEL_PRICES_USD_PER_MILLION[model];
+  if (!prices) return 0;
+  return (inputTokens / 1_000_000) * prices.input + (outputTokens / 1_000_000) * prices.output;
+}

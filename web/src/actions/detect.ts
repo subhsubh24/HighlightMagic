@@ -3,7 +3,7 @@
 import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
-import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER } from "@/lib/ai-models";
+import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER, estimateCostUSD } from "@/lib/ai-models";
 
 // ── Debug logging ──
 
@@ -174,12 +174,14 @@ async function consumeSSEStream(
   response: Response,
   onPhase?: (phase: SSEStreamPhase) => void,
   onPartial?: OnPartialField
-): Promise<{ text: string; stopReason: string | null }> {
+): Promise<{ text: string; stopReason: string | null; inputTokens: number; outputTokens: number }> {
   const streamStartMs = Date.now();
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let text = "";
   let stopReason: string | null = null;
+  let inputTokens = 0;
+  let outputTokens = 0;
   let buffer = "";
   let chunkCount = 0;
   let lastLogMs = Date.now();
@@ -214,7 +216,9 @@ async function consumeSSEStream(
 
       try {
         const event = JSON.parse(dataStr);
-        if (event.type === "content_block_start") {
+        if (event.type === "message_start") {
+          inputTokens = event.message?.usage?.input_tokens ?? 0;
+        } else if (event.type === "content_block_start") {
           if (event.content_block?.type === "thinking") {
             debugLog(`[Planner SSE] Thinking phase started (+${((Date.now() - streamStartMs) / 1000).toFixed(1)}s)`);
             onPhase?.("thinking");
@@ -238,6 +242,7 @@ async function consumeSSEStream(
           }
         } else if (event.type === "message_delta") {
           stopReason = event.delta?.stop_reason ?? null;
+          outputTokens = event.usage?.output_tokens ?? outputTokens;
         } else if (event.type === "error") {
           console.error(`[Planner SSE] Stream error event:`, JSON.stringify(event));
         }
@@ -248,7 +253,7 @@ async function consumeSSEStream(
   }
 
   debugLog(`[Planner SSE] Stream complete — ${chunkCount} chunks, ${text.length} chars, stop_reason=${stopReason}, ${((Date.now() - streamStartMs) / 1000).toFixed(1)}s total`);
-  return { text, stopReason };
+  return { text, stopReason, inputTokens, outputTokens };
 }
 
 // ── JSON extraction helpers ──
@@ -807,6 +812,9 @@ Rules:
 
   const body = await response.json();
   const text = body.content?.[0]?.text ?? "";
+  const vtIn = body.usage?.input_tokens ?? 0;
+  const vtOut = body.usage?.output_tokens ?? 0;
+  console.log(`[CostMeter] validate: model=${CLAUDE_FRAME_SCORER}, in=${vtIn}, out=${vtOut}, est=$${estimateCostUSD(CLAUDE_FRAME_SCORER, vtIn, vtOut).toFixed(4)}`);
 
   // Extract JSON from response
   const jsonMatchStr = extractBalancedJSON(text, "{");
@@ -1046,6 +1054,9 @@ async function analyzeMultiBatch(
     }
 
     const data = await response.json();
+    const scoreIn = data.usage?.input_tokens ?? 0;
+    const scoreOut = data.usage?.output_tokens ?? 0;
+    console.log(`[CostMeter] score: model=${CLAUDE_FRAME_SCORER}, in=${scoreIn}, out=${scoreOut}, est=$${estimateCostUSD(CLAUDE_FRAME_SCORER, scoreIn, scoreOut).toFixed(4)}`);
 
     // Warn on truncated response — still attempt to parse what we got
     if (data.stop_reason === "max_tokens") {
@@ -2755,7 +2766,8 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
 
   // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
   // Pass onPartial to extract production plan fields early for pre-emptive generator start
-  const { text, stopReason } = await consumeSSEStream(response, onPhase, onPartial);
+  const { text, stopReason, inputTokens: plannerIn, outputTokens: plannerOut } = await consumeSSEStream(response, onPhase, onPartial);
+  console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
 
   if (stopReason === "max_tokens") {
     console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
