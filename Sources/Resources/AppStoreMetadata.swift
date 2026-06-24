@@ -125,9 +125,9 @@ enum AppStoreMetadata {
     by default. No data leaves the device unless the user explicitly opts in.
     - An optional third-party AI enhancement (Anthropic Claude Vision API) is available \
     only when the user explicitly configures their own API key in Settings > AI Settings. \
-    This feature sends individual video frames (not full videos) to the Anthropic API \
-    for scoring only when on-device confidence is below 60%. No data is sent without \
-    user configuration, and the feature works fully without it.
+    When configured, sampled video frames (approximately one per second; full videos are \
+    never uploaded) are sent to the Anthropic API for highlight scoring. No data is sent \
+    without user configuration, and the feature works fully without it.
     - The app does NOT use generative AI to create synthetic content. \
     AI is used solely to identify and rank existing video frames by highlight potential.
 
