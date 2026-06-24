@@ -296,7 +296,7 @@ actor CloudScoringService {
         // Fallback: try regex extraction
         if let range = text.range(of: #"\[[\s\S]*\]"#, options: .regularExpression) {
             let rawJSON = String(text[range])
-                .replacingOccurrences(of: #",\s*[\]\}]"#, with: { String($0.last!) }, options: .regularExpression)
+                .replacingOccurrences(of: #",\s*([\]}])"#, with: "$1", options: .regularExpression)
             if let jsonData = rawJSON.data(using: .utf8),
                let results = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] {
                 return parseFrameArray(results, batch: batch)

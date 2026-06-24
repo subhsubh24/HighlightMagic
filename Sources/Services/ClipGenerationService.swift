@@ -7,7 +7,7 @@ import os.log
 actor ClipGenerationService {
     static let shared = ClipGenerationService()
 
-    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
+    private nonisolated let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
 
     private init() {}
 
@@ -360,7 +360,7 @@ actor ExportService {
             do {
                 beatMap = try await BeatSyncService.shared.detectBeats(from: track)
             } catch {
-                beatMap = BeatSyncService.shared.syntheticBeatMap(
+                beatMap = await BeatSyncService.shared.syntheticBeatMap(
                     bpm: Double(track.bpm),
                     duration: track.durationSeconds
                 )
@@ -561,11 +561,13 @@ actor ExportService {
         exportSession.audioMix = audioMix
         exportSession.shouldOptimizeForNetworkUse = true
 
-        // Progress polling
+        // Progress polling. AVAssetExportSession isn't Sendable; reading .progress
+        // from the polling task is safe, so capture it via nonisolated(unsafe).
+        nonisolated(unsafe) let progressSession = exportSession
         let progressTask = Task { @Sendable in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                let progress = 0.65 + Double(exportSession.progress) * 0.33
+                let progress = 0.65 + Double(progressSession.progress) * 0.33
                 progressHandler(progress)
             }
         }
@@ -708,7 +710,7 @@ actor ExportService {
         let preferredTransform = try await sourceTrack.load(.preferredTransform)
         let targetSize = config.outputSize
 
-        let filterComposition = try AVMutableVideoComposition.videoComposition(
+        let filterComposition = try await AVMutableVideoComposition.videoComposition(
             with: composition,
             applyingCIFiltersWithHandler: { [config, targetSize] request in
                 var image = request.sourceImage.clampedToExtent()
@@ -783,10 +785,11 @@ actor ExportService {
         exportSession.videoComposition = filterComposition
         exportSession.audioMix = audioMix
 
+        nonisolated(unsafe) let progressSession = exportSession
         let progressTask = Task { @Sendable in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                progressHandler(Double(exportSession.progress))
+                progressHandler(Double(progressSession.progress))
             }
         }
 

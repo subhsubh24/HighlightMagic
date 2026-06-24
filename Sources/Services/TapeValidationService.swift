@@ -62,7 +62,7 @@ actor TapeValidationService {
                 generator.maximumSize = CGSize(width: 384, height: 384)
 
                 for (i, clip) in clips.enumerated() {
-                    let midTime = (clip.trimStart + clip.trimEnd) / 2
+                    let midTime = (clip.trimStart.seconds + clip.trimEnd.seconds) / 2
                     let time = CMTime(seconds: midTime, preferredTimescale: 600)
                     guard let cgImage = try? await generator.image(at: time).image else { continue }
                     let uiImage = UIImage(cgImage: cgImage)
@@ -115,7 +115,7 @@ actor TapeValidationService {
 
         // After max passes, pass anyway (fail-open)
         onStatusChange(.passed)
-        logger.info("Validation loop exhausted (\(maxValidationPasses) passes) — passing anyway")
+        logger.info("Validation loop exhausted (\(self.maxValidationPasses) passes) — passing anyway")
         return ValidationResult(passed: true, issues: [], fixes: .empty)
     }
 

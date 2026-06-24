@@ -53,7 +53,7 @@ struct RootView: View {
         case .settings:
             SettingsView()
         case .onboarding:
-            OnboardingView()
+            OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
         case .home:
             HomeView()
         }
