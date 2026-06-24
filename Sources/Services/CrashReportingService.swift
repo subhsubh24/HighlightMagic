@@ -49,6 +49,8 @@ enum CrashReporting {
 
     static func initialize() {
         NSSetUncaughtExceptionHandler { exception in
+            // C-convention handler: must not capture context, so build a local Logger.
+            let logger = Logger(subsystem: "com.highlightmagic.app", category: "crash")
             logger.fault("Uncaught exception: \(exception.name.rawValue) — \(exception.reason ?? "no reason")")
         }
 

@@ -350,7 +350,7 @@ actor ExportService {
 
     func exportClip(
         config: ExportConfig,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
         let asset = AVURLAsset(url: config.sourceURL)
         let composition = AVMutableComposition()
@@ -705,7 +705,7 @@ actor ExportService {
         sourceTrack: AVAssetTrack,
         config: ExportConfig,
         velocityMap: VelocityEditService.VelocityMap?,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
         let naturalSize = try await sourceTrack.load(.naturalSize)
         let preferredTransform = try await sourceTrack.load(.preferredTransform)

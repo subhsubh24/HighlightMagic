@@ -32,7 +32,7 @@ actor HighlightDetectionService {
         in videoURL: URL,
         prompt: String,
         creativeDirection: String = "",
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         let asset = AVURLAsset(url: videoURL)
         let duration = try await asset.load(.duration)
@@ -76,7 +76,7 @@ actor HighlightDetectionService {
         totalSeconds: Double,
         prompt: String,
         creativeDirection: String = "",
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
 
@@ -270,7 +270,7 @@ actor HighlightDetectionService {
         asset: AVURLAsset,
         totalSeconds: Double,
         prompt: String,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
         logger.info("On-device detection pipeline (offline fallback)")
 
@@ -364,7 +364,7 @@ actor HighlightDetectionService {
         asset: AVURLAsset,
         prompt: String,
         totalSeconds: Double,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async -> [HighlightSegment] {
         // Build candidate context with full segment boundaries for Claude
         let candidates = segments.map {
@@ -443,7 +443,7 @@ actor HighlightDetectionService {
     private func analyzeMotion(
         asset: AVURLAsset,
         totalSeconds: Double,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async -> [Double] {
         let sampleCount = min(Int(totalSeconds * 2), 120) // 2 samples/sec, max 120
         guard sampleCount > 1 else { return [0.5] }
@@ -521,7 +521,7 @@ actor HighlightDetectionService {
     private func analyzeFaces(
         asset: AVURLAsset,
         totalSeconds: Double,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async -> [Double] {
         let sampleCount = min(Int(totalSeconds), 60) // 1 sample/sec, max 60
         guard sampleCount > 0 else { return [0] }
@@ -566,7 +566,7 @@ actor HighlightDetectionService {
     private func analyzeScenes(
         asset: AVURLAsset,
         totalSeconds: Double,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async -> [Double] {
         let sampleCount = min(Int(totalSeconds), 60)
         guard sampleCount > 0 else { return [0] }
