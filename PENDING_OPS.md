@@ -109,6 +109,12 @@ match what the privacy policy discloses.
 
 ## Marketing / Web
 
-- Connect and fund social / ad accounts before publishing the landing page / waitlist
-- The `web/` landing page is staged; do not publish paid traffic until Pro subscription
+- **Waitlist email provider**: `/api/waitlist` (PR #42) logs emails to Vercel function logs.
+  Connect a real provider (Resend recommended) before launch — see REMAINING_STEPS.md §2.
+- **Landing page URL**: available at `/landing` on the Vercel deployment. Consider redirecting
+  `/` → `/landing` and the editor to `/app` before launch.
+- Connect and fund social / ad accounts before publishing paid traffic to the landing page
+- The landing page and waitlist are staged; do not publish paid traffic until Pro subscription
   is live in App Store Connect
+- **Anthropic spend cap**: set at console.anthropic.com before opening to users; suggested
+  $50–100/month initially while monitoring per-export costs in Vercel logs

@@ -5,6 +5,7 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #42 | Add E1 marketing landing page at /landing + /api/waitlist email capture endpoint | E1 | 2026-06-24 |
 | #37 | Fix A3: replace 8 URL force-unwraps in ElevenLabsService with guard-let | A3 | 2026-06-24 |
 | #36 | Fix A3: missing introCardEnabled/outroCardEnabled in AppState; remove force-unwraps | A3 | 2026-06-24 |
 | #34 | Fix: use Haiku for iOS frame scoring instead of Sonnet (B2/B4) | B2/B4 | 2026-06-24 |
