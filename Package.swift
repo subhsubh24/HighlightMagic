@@ -16,9 +16,12 @@ let package = Package(
         .target(
             name: "HighlightMagic",
             path: "Sources",
+            exclude: [
+                "Info.plist",
+                "HighlightMagic.entitlements"
+            ],
             resources: [
-                .process("Resources"),
-                .copy("Info.plist")
+                .process("Resources")
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
