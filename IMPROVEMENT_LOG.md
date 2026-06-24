@@ -5,6 +5,10 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #33 | Housekeeping: update loop state for Run 7 | meta | 2026-06-24 |
+| #32 | Add Terms of Use + Support pages; fix inaccurate web metadata (D3) | D3 | 2026-06-24 |
+| #31 | Fix StoreKit entitlement sync to AppState at launch and restore (C1/C2) | C1/C2 | 2026-06-24 |
+| #28 | Add CLAUDE_VALIDATOR cost metering to ai-models.ts (B2) | B2 | 2026-06-24 |
 | #26 | Fix iOS: update Sonnet model ID + unblock main thread in voice clone | A3 | 2026-06-24 |
 | #25 | Fix CLAUDE_PLANNER to valid model ID claude-opus-4-8 | B2 | 2026-06-24 |
 | #24 | Housekeeping: update loop state for Run 4 | meta | 2026-06-24 |
@@ -32,4 +36,3 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
-- PR #28: B2 — Correct Haiku 4.5 pricing in ai-models.ts from 1.0/5.0 to actual 0.80/4.00 per M tokens (auto-merge enabled, waiting for web CI)
