@@ -27,16 +27,14 @@ To enforce server-side:
 4. Call `quota/check` at the start of the detection pipeline; call `quota/increment` on
    successful export; return HTTP 402 if limit is exceeded for free users
 
-## P0 — iOS API Keys (Cost + Security)
+## P0 — iOS API Keys (BYOK model confirmed)
 
-The iOS app currently calls `api.anthropic.com` DIRECTLY using a key from env/Keychain.
-This means anyone who extracts the Keychain key can run up the API bill.
+The app is confirmed BYOK (bring-your-own-key). Users configure their own Anthropic API key
+in Settings > AI Settings. The implementation is already functionally correct.
 
-Decision needed: **bring-your-own-key (BYOK)** or **business-paid**?
-- If BYOK: document this clearly in onboarding; the current implementation is already
-  functionally correct; add a Settings UI for users to enter their own key.
-- If business-paid: route all iOS API calls through the `web/` backend (add `/api/detect`
-  proxy); remove key storage from the iOS app; enforce quota server-side before each call.
+Remaining owner action: add a clear onboarding screen explaining BYOK and where to get an
+API key (console.anthropic.com). The factory will add a Settings UI entry point in a future
+run; the onboarding copy needs owner review before it ships.
 
 ## iOS App Signing & Provisioning
 
@@ -55,12 +53,10 @@ Enable StoreKit configuration in Xcode for development testing.
 
 ## iOS CI (A1)
 
-The `ios` CI job is non-blocking because `HighlightMagic.xcodeproj/project.pbxproj` has
-`targets = ()` — no buildable target exists. Once the owner promotes `ios` to a required
-check (after A1 is fixed), the factory will enforce iOS CI green on every merge.
-
-The factory cannot interactively test xcodebuild (Linux runner, no Xcode). A1 work must be
-validated on macOS. The PR for A1 will be opened for CI validation.
+A1 is substantially done — SwiftPM test target added in #15 and the xcodeproj was removed.
+The `ios` CI job is NON-BLOCKING. PR #16 (`claude/a1-ci-destination`) attempted a destination
+fix but is broken (edits .github/ BLAST RADIUS + Swift syntax bug) — **close this PR without
+merging**. If the `ios` CI job fails on future PRs, diagnose the runner failure separately.
 
 ## App Store Assets
 
@@ -85,9 +81,12 @@ Set up `privacy@highlightmagic.app` email to respond to privacy requests.
 
 ## PrivacyInfo.xcprivacy
 
-The `Sources/HighlightMagic.entitlements` exists but `PrivacyInfo.xcprivacy` has not been
-created. This is required by App Store (required reason APIs, NSPrivacyAccessedAPITypes).
-Check which APIs the app uses and document them.
+`Sources/Resources/PrivacyInfo.xcprivacy` EXISTS and contains:
+- `NSPrivacyAccessedAPICategoryUserDefaults` (CA92.1)
+- `NSPrivacyAccessedAPICategoryFileTimestamp` (C617.1)
+
+No action needed on PrivacyInfo.xcprivacy. Verify App Privacy labels in App Store Connect
+match what the privacy policy discloses.
 
 ## Marketing / Web
 

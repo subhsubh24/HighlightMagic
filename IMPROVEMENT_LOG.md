@@ -5,6 +5,10 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #20 | Fix Swift 6 strict-concurrency error in StoreKitService | A3 | 2026-06-24 |
+| #19 | Cap base frame extraction per video to 120 frames | B2 | 2026-06-24 |
+| #18 | Housekeeping: update loop state for Run 2 | meta | 2026-06-24 |
+| #17 | Add per-call cost metering for all Claude API calls | B2 | 2026-06-24 |
 | #15 | Make iOS CI green via SwiftPM test target | A1 | 2026-06-24 |
 | #14 | Add housekeeping docs: IMPROVEMENT_LOG, PENDING_OPS, LOOP_MEMORY | meta | 2026-06-24 |
 | #13 | Remove fatalError crash in UserAccountService init | A3 | 2026-06-24 |
@@ -22,5 +26,12 @@ Format: newest first. Only MERGED changes appear here.
 | #1 | Add Highlight Magic MVP (iOS + web) | all | 2026-02-23 |
 
 ## Pending (open PRs — not yet logged)
-- PR #16: A1 iOS CI destination fix (drop OS=latest)
-- PR #17: Add per-call cost metering for all Claude API calls (B2)
+- PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner review or close)
+- PR #21: Housekeeping Run 3 (this PR)
+
+## Incomplete work — needs next run
+- **D4 description accuracy** (`claude/d4-description-accuracy`): Branch was prepared with
+  accurate BYOK disclosure for AppStoreMetadata. Hit 2-cycle review cap without dual-APPROVE.
+  File also moved from `Sources/Resources/` to `Sources/Utilities/` (in #18) so changes must
+  be re-applied to new path. Priority: HIGH — current description falsely claims "videos never
+  leave your phone" and "No cloud uploads." when BYOK cloud scoring exists.
