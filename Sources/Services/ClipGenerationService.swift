@@ -259,6 +259,7 @@ actor ClipGenerationService {
 actor ExportService {
     static let shared = ExportService()
 
+    private nonisolated let logger = Logger(subsystem: "com.highlightmagic.app", category: "Export")
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private init() {}
