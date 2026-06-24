@@ -4,20 +4,17 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-24 (Run 5)
+## Last run: 2026-06-24 (Run 6)
 
 ### What was shipped (merged this run)
-- **PR #22** (D4): Fix AppStoreMetadata.swift — removed 4 false on-device/no-upload claims (description, PRIVACY-FIRST section, whatsNew, screenshot #8)
-- **PR #23** (A3): Remove baseAddress! force-unwrap in AudioFeatureService FFT pack — `guard let base = ptr.baseAddress else { return }`
-- **PR #24** (meta): Housekeeping Run 4 state
+- **PR #25** (B2): Fix `CLAUDE_PLANNER` from invalid `claude-opus-4-6` to `claude-opus-4-8`; correct Opus-tier pricing ($15/$75/M) in cost-metering logs
+- **PR #26** (A3): Fix `ClaudeVisionService` model ID (`claude-sonnet-4-20250514` → `claude-sonnet-4-6`); fix blocking `Data(contentsOf:)` in ProcessingView voice-clone path with `Task.detached`
 
 ### PRs opened this run (pending merge)
-- **PR #25** (`claude/b2-fix-planner-model`): B2 — Fix `CLAUDE_PLANNER` from invalid `"claude-opus-4-6"` to `"claude-opus-4-8"` in `web/src/lib/ai-models.ts`; corrects Opus-tier pricing ($15/$75/M) in cost-metering logs; updates `docs/MODEL_COSTS.md` planning row
-  - web-only change; will pass `web` CI gate; auto-merge enabled
-- **PR #26** (`claude/a3-ios-model-blocking-read`): A3 — Two iOS fixes:
-  1. `Sources/Services/ClaudeVisionService.swift`: model `"claude-sonnet-4-20250514"` → `"claude-sonnet-4-6"` (old date-pinned format no longer valid)
-  2. `Sources/Views/Screens/ProcessingView.swift`: replace blocking `Data(contentsOf:)` on main actor with `Task.detached(priority: .userInitiated)` in voice-clone path (fixes UI freeze on large videos)
-  - iOS-only change; non-blocking `ios` CI gate; auto-merge enabled
+- **PR #28** (`claude/b2-validator-pricing`): B2 — Correct Haiku 4.5 price in `MODEL_PRICES_USD_PER_MILLION` from `1.0/5.0` to actual `0.80/4.00` per M tokens; auto-merge enabled; CI re-triggered after fixing duplicate-key build error
+
+### PRs closed without merging this run
+- **PR #29** (`claude/b3-quota-api`): B3 quota API routes — closed by factory. Reviewer A flagged 3 critical issues (isProUser bypass, TOCTOU race, attacker-controlled userId) that cannot be fixed without a server-side auth layer. The `quota.ts` library and tests in this PR remain valid infrastructure for when auth is added. See PENDING_OPS.md.
 
 ### Known blockers / recurring issues
 
@@ -35,22 +32,25 @@ Read every run BEFORE selecting work.
 - iOS app calls `api.anthropic.com` directly via `ClaudeVisionService` (BYOK model confirmed)
 - The BYOK model is intentional — users provide their own API keys
 - Free quota is enforced client-side only (UserDefaults) — bypassable by reinstall
-- Server-side quota (B3) still valuable but requires Vercel KV (owner must provision it)
+- Server-side quota (B3) requires BOTH Vercel KV AND an auth layer before it is meaningful
 
-**B3 (server-side quota) — NOT STARTED**
-- Requires Vercel KV; owner must provision it (see PENDING_OPS.md)
-- No database means any "server-side" check is stateless and bypassable
+**B3 (server-side quota) — BLOCKED: needs auth layer + Vercel KV**
+- Any `/api/quota/*` endpoint is trivially bypassable without server-verified identity
+- The `isProUser` flag must come from a verified session token, not the request body
+- Requires an auth provider (Clerk, Supabase Auth, or similar) before quota routes make sense
+- After auth is added: re-use `quota.ts` library from the closed PR #29 branch (`claude/b3-quota-api`)
+- Owner must also provision Vercel KV (see PENDING_OPS.md)
 
-### ROADMAP box status (verified against git + PRs as of 2026-06-24 Run 5)
+### ROADMAP box status (verified against git + PRs as of 2026-06-24 Run 6)
 - [ ] P0 — BYOK model confirmed; P0 "business-paid routing" bullets don't apply; B3 still needed
 - [x] A1 — iOS CI green via SwiftPM (#15); destination issue minor; treat as done
 - [ ] A2 — substantially done in PRs #1–#8 (needs verification pass)
-- [ ] A3 — partial: fatalError removed (#13), StoreKit concurrency fixed (#20), baseAddress! fixed (#23), model ID + blocking-read fix in voice clone path (PR #26 pending)
+- [ ] A3 — partial: fatalError removed (#13), StoreKit concurrency fixed (#20), baseAddress! fixed (#23), model ID + blocking-read fix merged (#26); more Swift 6 / sendability gaps may remain
 - [ ] A4 — not started
 - [ ] A5 — not started
 - [ ] B1 — substantially done in PRs #3–#8 (needs live-env reliability pass)
-- [ ] B2 — partial: cost metering (#17), frame cap (#19), model selection (#11), 480p downscaling (already in frame-extractor.ts), validation loop capped (already in DetectingStep.tsx), CLAUDE_PLANNER valid model ID (PR #25 pending)
-- [ ] B3 — not started (needs Vercel KV)
+- [ ] B2 — partial: cost metering (#17), frame cap (#19), model selection (#11), CLAUDE_PLANNER valid ID (#25), Haiku price correction (PR #28 pending merge)
+- [ ] B3 — BLOCKED: needs auth layer before quota routes are meaningful (see PENDING_OPS.md)
 - [ ] B4 — partial: MODEL_COSTS.md (#10) + model config map (#11) done; benchmarks pending
 - [ ] C1 — not started (StoreKit exists but no server verification)
 - [ ] C2 — not started (paywall UI exists; freemium logic partial)
@@ -71,19 +71,19 @@ Read every run BEFORE selecting work.
 - Do not re-fix StoreKit concurrency — done in #20
 - Do not re-fix AppStoreMetadata false claims — D4 COMPLETE via #22
 - Do not re-fix AudioFeatureService baseAddress! — done in #23
-- Do not re-fix CLAUDE_PLANNER model ID — PR #25 pending (will be done once merged)
-- Do not re-fix ClaudeVisionService model ID or ProcessingView blocking read — PR #26 pending
+- Do not re-fix CLAUDE_PLANNER model ID — done in #25
+- Do not re-fix ClaudeVisionService model ID or ProcessingView blocking read — done in #26
 - Do not re-add frame downscaling (480p JPEG 0.6 already in frame-extractor.ts)
 - Do not re-cap validation loop (already at 2 passes in DetectingStep.tsx)
 - Do not create a new BYOK Settings UI — the app already uses BYOK
+- Do not create B3 quota endpoints without first adding an auth layer
 
 ### Next priorities (by ROADMAP order)
-1. **Verify #25/#26 merged** — if still open after CI, investigate; #25 passes web gate, #26 is iOS-only (non-blocking)
-2. **A3 final pass** — scan remaining Swift files for blocking calls, force-unwraps, Swift 6 sendability gaps not yet addressed
-3. **B2 remaining** — any model config accuracy issues left; benchmark data for B4
+1. **Verify #28 merged** — if still open after CI, investigate; should auto-merge once web CI passes
+2. **A3 remaining** — scan remaining Swift files for blocking calls, force-unwraps, Swift 6 sendability gaps not yet addressed
+3. **C1/C2** — StoreKit server verification + paywall polish
 4. **D3** — ASO copy improvements reviewable on Linux; screenshots require device (owner task)
-5. **B3** — server-side quota (requires Vercel KV — see PENDING_OPS.md)
-6. **C1/C2** — StoreKit server verification + paywall polish
+5. **B3 + auth** — add auth provider first, then re-implement quota routes using quota.ts from closed PR #29 branch
 
 ### Runner constraints
 - This factory runs on Linux — cannot run `xcodebuild`, `simctl`, or iOS simulator
