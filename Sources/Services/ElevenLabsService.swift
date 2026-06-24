@@ -350,7 +350,7 @@ actor ElevenLabsService {
             body.appendMultipartField(boundary: boundary, name: "model_id", value: "scribe_v1")
             // timestamps_granularity field
             body.appendMultipartField(boundary: boundary, name: "timestamps_granularity", value: "word")
-            body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+            body.append("--\(boundary)--\r\n".data(using: .utf8) ?? Data())
 
             request.httpBody = body
 
@@ -450,7 +450,7 @@ actor ElevenLabsService {
             body.appendMultipart(boundary: boundary, name: "files", filename: fileName, mimeType: "audio/mpeg", data: audioData)
             body.appendMultipartField(boundary: boundary, name: "name", value: name)
             body.appendMultipartField(boundary: boundary, name: "description", value: "Voice clone for highlight tape narration")
-            body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+            body.append("--\(boundary)--\r\n".data(using: .utf8) ?? Data())
 
             request.httpBody = body
 
@@ -557,7 +557,7 @@ actor ElevenLabsService {
 
             var body = Data()
             body.appendMultipart(boundary: boundary, name: "audio", filename: fileName, mimeType: "audio/mpeg", data: audioData)
-            body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+            body.append("--\(boundary)--\r\n".data(using: .utf8) ?? Data())
 
             request.httpBody = body
 
@@ -607,16 +607,16 @@ actor ElevenLabsService {
 
 extension Data {
     mutating func appendMultipart(boundary: String, name: String, filename: String, mimeType: String, data: Data) {
-        append("--\(boundary)\r\n".data(using: .utf8)!)
-        append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        append("--\(boundary)\r\n".data(using: .utf8) ?? Data())
+        append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".data(using: .utf8) ?? Data())
+        append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8) ?? Data())
         append(data)
-        append("\r\n".data(using: .utf8)!)
+        append("\r\n".data(using: .utf8) ?? Data())
     }
 
     mutating func appendMultipartField(boundary: String, name: String, value: String) {
-        append("--\(boundary)\r\n".data(using: .utf8)!)
-        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-        append("\(value)\r\n".data(using: .utf8)!)
+        append("--\(boundary)\r\n".data(using: .utf8) ?? Data())
+        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8) ?? Data())
+        append("\(value)\r\n".data(using: .utf8) ?? Data())
     }
 }
