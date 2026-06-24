@@ -24,10 +24,10 @@ final class UserAccountService {
             userID = newID
         }
 
-        // Setup projects directory
-        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            fatalError("Documents directory unavailable")
-        }
+        // Setup projects directory — Documents is always available on iOS/iPadOS;
+        // the temp fallback exists only for edge cases in test environments.
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("HighlightMagic", isDirectory: true)
         projectsDirectory = docs.appendingPathComponent("Projects", isDirectory: true)
         try? FileManager.default.createDirectory(
             at: projectsDirectory,
