@@ -15,6 +15,7 @@ import {
   WATERMARK_OPACITY,
   FRAME_SAMPLE_INTERVAL_SECONDS,
   MAX_FRAMES_PER_BATCH,
+  MAX_BASE_FRAMES_PER_VIDEO,
   LOOP_CROSSFADE_DURATION,
   EXPORT_BITRATE,
   BEAT_SYNC_TOLERANCE_MS,
@@ -49,6 +50,11 @@ describe("constants", () => {
   it("has valid frame extraction settings", () => {
     expect(FRAME_SAMPLE_INTERVAL_SECONDS).toBe(1);
     expect(MAX_FRAMES_PER_BATCH).toBe(35);
+    expect(MAX_BASE_FRAMES_PER_VIDEO).toBe(120);
+    // Effective interval for a long video must keep base frames within the cap
+    const tenMinutes = 600;
+    const effectiveInterval = Math.max(FRAME_SAMPLE_INTERVAL_SECONDS, tenMinutes / MAX_BASE_FRAMES_PER_VIDEO);
+    expect(Math.floor(tenMinutes / effectiveInterval)).toBeLessThanOrEqual(MAX_BASE_FRAMES_PER_VIDEO);
   });
 
   it("has valid watermark settings", () => {
