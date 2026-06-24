@@ -4,15 +4,15 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-24 (Run 7)
+## Last run: 2026-06-24 (Run 8)
 
 ### What was shipped (merged this run)
-- **PR #28** (B2): Add `CLAUDE_VALIDATOR` entry to `MODEL_PRICES_USD_PER_MILLION` in `ai-models.ts`; Haiku 4.5 pricing ($0.80/$4.00 per M tokens); validation calls now log accurate cost instead of $0.00
-- **PR #31** (C1/C2): Fix `AppState.isProUser` never syncing from `StoreKitService.isProUser` at launch/restore; add `@State private var storeService = StoreKitService.shared` + `.onChange(of: storeService.isProUser)` to `HighlightMagicApp`; pro subscribers no longer see free-tier limits after restart
-- **PR #32** (D3): Add `/terms` (Terms of Use) and `/support` (Support FAQ) pages to web; fix inaccurate "On-device AI" claim in web HTML metadata description
+- **PR #34** (B2/B4): Fix iOS `ClaudeVisionService` to use `claude-haiku-4-5-20251001` instead of hardcoded `claude-sonnet-4-6` for frame scoring — ~75% cost reduction on the dominant LLM call path
+- **PR #36** (A3): Fix missing `introCardEnabled`/`outroCardEnabled` in `AppState` (was a compile error in EditorView/ProcessingView); fix 10 `.data(using: .utf8)!` force-unwraps in `ElevenLabsService`; fix 2 URL force-unwraps in `AtlasCloudService`
+- **PR #37** (A3): Fix 8 remaining `URL(string:)!` force-unwraps in `ElevenLabsService.swift` — voiceId interpolation cases (`deleteVoiceClone`, `generateWithClonedVoice`) are genuine crash risks; merged 2026-06-24
 
-### PRs opened this run (pending merge)
-(none)
+### PRs opened this run (none merged)
+- **PR #38** (B2): Closed — attempted to add duplicate `[CLAUDE_VALIDATOR]` entry but `CLAUDE_VALIDATOR === CLAUDE_FRAME_SCORER === "claude-haiku-4-5-20251001"`; TypeScript rejects duplicate computed-property keys. The lookup already works via the existing CLAUDE_FRAME_SCORER entry. B2 was complete before this PR.
 
 ### Known blockers / recurring issues
 
@@ -44,15 +44,15 @@ Read every run BEFORE selecting work.
 - After auth is added: re-use `quota.ts` library from the closed PR #29 branch (`claude/b3-quota-api`)
 - Owner must also provision Vercel KV (see PENDING_OPS.md)
 
-### ROADMAP box status (verified against git + PRs as of 2026-06-24 Run 7)
+### ROADMAP box status (verified against git + PRs as of 2026-06-24 Run 8)
 - [ ] P0 — BYOK model confirmed; P0 "business-paid routing" bullets don't apply; B3 still needed
 - [x] A1 — iOS CI green via SwiftPM (#15); destination issue minor; treat as done
 - [ ] A2 — substantially done in PRs #1–#8 (needs verification pass)
-- [ ] A3 — partial: fatalError removed (#13), StoreKit concurrency fixed (#20), baseAddress! fixed (#23), model ID + blocking-read fix merged (#26); more Swift 6 / sendability gaps may remain
+- [ ] A3 — partial: fatalError removed (#13), StoreKit concurrency fixed (#20), baseAddress! fixed (#23), model ID + blocking-read fix merged (#26), AppState props + AtlasCloud/ElevenLabs force-unwraps (#36), ElevenLabsService URL force-unwraps fixed (#37); broader sendability audit of remaining services still pending
 - [ ] A4 — not started
 - [ ] A5 — not started
 - [ ] B1 — substantially done in PRs #3–#8 (needs live-env reliability pass)
-- [x] B2 — COMPLETE: cost metering (#17), frame cap (#19), model selection (#11), CLAUDE_PLANNER valid ID (#25), ClaudeVisionService model ID (#26), CLAUDE_VALIDATOR pricing (#28); ongoing model research is B4
+- [x] B2 — COMPLETE: cost metering (#17), frame cap (#19), model selection (#11), CLAUDE_PLANNER valid ID (#25), ClaudeVisionService model ID (#26); CLAUDE_VALIDATOR shares model ID "claude-haiku-4-5-20251001" with CLAUDE_FRAME_SCORER so the lookup already returns correct values; ongoing model research is B4
 - [ ] B3 — BLOCKED: needs auth layer before quota routes are meaningful (see PENDING_OPS.md)
 - [ ] B4 — partial: MODEL_COSTS.md (#10) + model config map (#11) done; benchmarks pending
 - [ ] C1 — PARTIAL: StoreKit→AppState client-side sync fixed (#31); server-verified entitlement still needed
@@ -65,6 +65,8 @@ Read every run BEFORE selecting work.
 - [ ] Evals — not started
 
 ### What NOT to re-do
+- Do not re-fix ElevenLabsService URL force-unwraps — done in #37
+- Do not add a separate CLAUDE_VALIDATOR entry to MODEL_PRICES_USD_PER_MILLION — CLAUDE_VALIDATOR === CLAUDE_FRAME_SCORER === "claude-haiku-4-5-20251001"; the existing entry covers the lookup; adding a duplicate causes a TypeScript duplicate-key error (was PR #38, now closed)
 - Do not re-add MODEL_COSTS.md (done in #10)
 - Do not re-add CI badge to README (done in #9)
 - Do not write another privacy policy — D1 done in #12
@@ -76,7 +78,6 @@ Read every run BEFORE selecting work.
 - Do not re-fix AudioFeatureService baseAddress! — done in #23
 - Do not re-fix CLAUDE_PLANNER model ID — done in #25
 - Do not re-fix ClaudeVisionService model ID or ProcessingView blocking read — done in #26
-- Do not re-add CLAUDE_VALIDATOR pricing — done in #28
 - Do not re-wire StoreKit→AppState isProUser sync at launch — done in #31
 - Do not re-add Terms of Use page at /terms — done in #32
 - Do not re-add Support/FAQ page at /support — done in #32
@@ -87,11 +88,11 @@ Read every run BEFORE selecting work.
 - Do not create B3 quota endpoints without first adding an auth layer
 
 ### Next priorities (by ROADMAP order)
-1. **A3 remaining** — scan remaining Swift files for force-unwraps, blocking main-thread calls, Swift 6 sendability gaps not yet addressed
-2. **C1 server-side** — add server-verified entitlement (App Store Server API / signed transaction); blocked until owner adds auth provider
-3. **D3 screenshots** — screenshots require device/simulator (owner task); Terms/Support/ASO copy are done
-4. **B3 + auth** — add auth provider first, then re-implement quota routes using quota.ts from closed PR #29 branch
-5. **E1 landing page** — landing page skeleton exists in web/; needs content + copy
+1. **A3 remaining** — ElevenLabsService URL force-unwraps done in #37 (merged); broader Swift 6 sendability audit of remaining services (AIEffectRecommendationService, ClipGenerationService, HighlightDetectionService, etc.) still pending
+2. **B4** — MODEL_COSTS.md decision log; research cheaper planning alternatives to claude-opus-4-8 (highest cost task); benchmark needed
+3. **E1 landing page** — web/ root is the editor app itself; consider a separate /landing or home route with marketing content + app store CTA
+4. **C1 server-side** — add server-verified entitlement; blocked until owner adds auth provider
+5. **B3 + auth** — add auth provider first, then re-implement quota routes
 
 ### Runner constraints
 - This factory runs on Linux — cannot run `xcodebuild`, `simctl`, or iOS simulator
