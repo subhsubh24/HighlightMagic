@@ -31,6 +31,9 @@ enum KineticCaptionRenderer {
             addSlideCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration)
         case .typewriter:
             addTypewriterCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration)
+        case .flicker, .fade:
+            // TODO: dedicated flicker/fade animations; render statically for now so the caption still appears.
+            addStaticCaption(to: parentLayer, text: text, style: style, videoSize: videoSize)
         }
     }
 

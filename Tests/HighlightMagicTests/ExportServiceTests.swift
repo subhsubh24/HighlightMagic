@@ -78,7 +78,7 @@ struct FreemiumTests {
 }
 
 @Suite("App Constants")
-struct ConstantsTests {
+struct AppConstantsTests {
 
     @Test("Video limits are reasonable")
     func testVideoLimits() {

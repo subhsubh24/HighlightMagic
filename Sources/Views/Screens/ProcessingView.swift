@@ -203,7 +203,7 @@ struct ProcessingView: View {
             )
             if case .completed = result.status, let data = result.audioData {
                 await MainActor.run {
-                    appState.aiMusicStatus = .done
+                    appState.aiMusicStatus = .completed
                     appState.aiMusicData = data
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].aiMusicData = data
@@ -229,7 +229,7 @@ struct ProcessingView: View {
                         appState.generatedClips[clipIndex].voiceoverData = data
                     }
                 }
-                appState.voiceoverStatus = anyFailed ? .failed : .done
+                appState.voiceoverStatus = anyFailed ? .failed : .completed
             }
         }
 
@@ -264,14 +264,14 @@ struct ProcessingView: View {
                 return (prompt: sfxPrompt, durationMs: 1500)
             }
             let results = await ElevenLabsService.shared.generateSoundEffectBatch(requests: requests)
-            let anyFailed = results.contains { _, result in result.status != .completed }
+            let anyFailed = results.contains { $0.status != .completed }
             await MainActor.run {
                 for (i, result) in results.enumerated() where i < appState.generatedClips.count {
                     if case .completed = result.status, let data = result.audioData {
                         appState.generatedClips[i].sfxData = data
                     }
                 }
-                appState.sfxStatus = anyFailed ? .failed : .done
+                appState.sfxStatus = anyFailed ? .failed : .completed
             }
         }
     }
@@ -310,7 +310,7 @@ struct ProcessingView: View {
                 )
                 await MainActor.run {
                     appState.introCard?.videoUrl = introURL
-                    appState.introCard?.status = .done
+                    appState.introCard?.status = .completed
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].introVideoURL = introURL
                     }
@@ -346,7 +346,7 @@ struct ProcessingView: View {
                 )
                 await MainActor.run {
                     appState.outroCard?.videoUrl = outroURL
-                    appState.outroCard?.status = .done
+                    appState.outroCard?.status = .completed
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].outroVideoURL = outroURL
                     }
@@ -399,7 +399,7 @@ struct ProcessingView: View {
                 }
                 await MainActor.run {
                     appState.clonedVoiceId = voiceId
-                    appState.voiceCloneStatus = .done
+                    appState.voiceCloneStatus = .completed
                 }
 
                 // If voiceover is also enabled, regenerate using the cloned voice
@@ -431,7 +431,7 @@ struct ProcessingView: View {
             if case .completed = stemResult.status, let instrumental = stemResult.instrumentalData {
                 await MainActor.run {
                     appState.instrumentalMusicData = instrumental
-                    appState.stemSeparationStatus = .done
+                    appState.stemSeparationStatus = .completed
                     // Replace AI music with instrumental-only version
                     for i in appState.generatedClips.indices {
                         appState.generatedClips[i].aiMusicData = instrumental
@@ -445,7 +445,7 @@ struct ProcessingView: View {
 
     /// Apply validation fixes from the Haiku QA pass.
     /// Mirrors web platform's validation-fixes.ts: caption rewrites, clip removals, SFX regeneration.
-    private func applyValidationFixes(_ fixes: TapeValidationService.ValidationFixes) async {
+    private func applyValidationFixes(_ fixes: ValidationFixes) async {
         await MainActor.run {
             // Caption rewrites — free fix, apply immediately
             for update in fixes.clipUpdates {

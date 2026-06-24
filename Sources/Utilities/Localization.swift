@@ -46,12 +46,12 @@ enum L10n {
 
     // MARK: - Accessibility
     static func highlightLabel(_ name: String, duration: Int) -> String {
-        String(localized: "accessibility.highlight_label \(name) \(duration)",
+        String(localized: "accessibility.highlight_label",
                defaultValue: "Highlight: \(name), \(duration) seconds")
     }
 
     static func exportCounter(used: Int, limit: Int) -> String {
-        String(localized: "accessibility.export_counter \(used) \(limit)",
+        String(localized: "accessibility.export_counter",
                defaultValue: "\(used) of \(limit) free exports used")
     }
 }

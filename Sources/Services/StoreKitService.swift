@@ -14,7 +14,7 @@ final class StoreKitService {
         SubscriptionProduct.yearly.rawValue
     ]
 
-    private var updateListenerTask: Task<Void, Never>?
+    nonisolated(unsafe) private var updateListenerTask: Task<Void, Never>?
 
     init() {
         updateListenerTask = listenForTransactions()

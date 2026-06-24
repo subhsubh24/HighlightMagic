@@ -39,7 +39,7 @@ struct AiProductionPlan: Sendable {
     /// Caption appear delay after cut in seconds (0 = instant, 0.12 = natural)
     var captionAppearDelay: Double
     /// AI-decided music ducking ratio during voiceover (0.1-0.6)
-    var musicDuckRatio: Double
+    var musicDuckRatio: Double = 0.5
     /// Music duck attack time in seconds — how fast music fades down (0.05-1.0s)
     var musicDuckAttack: Double?
     /// Music duck release time in seconds — how fast music fades back up (0.1-2.0s)
@@ -49,11 +49,11 @@ struct AiProductionPlan: Sendable {
     /// Music fade-out duration at tape end (0-3s)
     var musicFadeOutDuration: Double?
     /// AI-decided beat-sync tolerance in ms (20-200ms)
-    var beatSyncToleranceMs: Double
+    var beatSyncToleranceMs: Double = 50
     /// AI-decided export bitrate in bps
-    var exportBitrate: Int
+    var exportBitrate: Int = 10_000_000
     /// AI-decided neon transition colors as hex array
-    var neonColors: [String]
+    var neonColors: [String] = []
 
     // ── Post-processing fine-tuning (matches web) ──
 
@@ -191,7 +191,7 @@ struct AiProductionPlan: Sendable {
     var thumbnail: ThumbnailPlan?
 
     // Enhanced photo animation prompts (Claude improves user's vague instructions)
-    var photoAnimationPrompts: [String: String]
+    var photoAnimationPrompts: [String: String] = [:]
 
     // Style transfer — AI-chosen visual post-processing look
     var styleTransfer: StyleTransferPlan?

@@ -7,7 +7,7 @@ import os.log
 actor ClipGenerationService {
     static let shared = ClipGenerationService()
 
-    private let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
+    private nonisolated let logger = Logger(subsystem: "com.highlightmagic.app", category: "ClipGeneration")
 
     private init() {}
 
@@ -259,6 +259,7 @@ actor ClipGenerationService {
 actor ExportService {
     static let shared = ExportService()
 
+    private nonisolated let logger = Logger(subsystem: "com.highlightmagic.app", category: "Export")
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     private init() {}
@@ -349,7 +350,7 @@ actor ExportService {
 
     func exportClip(
         config: ExportConfig,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
         let asset = AVURLAsset(url: config.sourceURL)
         let composition = AVMutableComposition()
@@ -360,7 +361,7 @@ actor ExportService {
             do {
                 beatMap = try await BeatSyncService.shared.detectBeats(from: track)
             } catch {
-                beatMap = BeatSyncService.shared.syntheticBeatMap(
+                beatMap = await BeatSyncService.shared.syntheticBeatMap(
                     bpm: Double(track.bpm),
                     duration: track.durationSeconds
                 )
@@ -561,11 +562,13 @@ actor ExportService {
         exportSession.audioMix = audioMix
         exportSession.shouldOptimizeForNetworkUse = true
 
-        // Progress polling
+        // Progress polling. AVAssetExportSession isn't Sendable; reading .progress
+        // from the polling task is safe, so capture it via nonisolated(unsafe).
+        nonisolated(unsafe) let progressSession = exportSession
         let progressTask = Task { @Sendable in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                let progress = 0.65 + Double(exportSession.progress) * 0.33
+                let progress = 0.65 + Double(progressSession.progress) * 0.33
                 progressHandler(progress)
             }
         }
@@ -613,26 +616,22 @@ actor ExportService {
 
         var currentTime = CMTime.zero
 
-        // Helper to append a video file
-        func appendVideo(url: URL) async throws {
+        // Append intro (optional), main, then outro (optional) in order.
+        // Inlined (no capturing async nested closure) so the non-Sendable composition
+        // tracks aren't "sent" across an await under Swift 6 region isolation.
+        for url in [introURL, mainVideoURL, outroURL].compactMap({ $0 }) {
             let asset = AVURLAsset(url: url)
             let duration = try await asset.load(.duration)
+            let loadedVideoTracks = try await asset.loadTracks(withMediaType: .video)
+            let loadedAudioTracks = try await asset.loadTracks(withMediaType: .audio)
             let range = CMTimeRange(start: .zero, duration: duration)
-            if let vTrack = try await asset.loadTracks(withMediaType: .video).first {
+            if let vTrack = loadedVideoTracks.first {
                 try videoTrack.insertTimeRange(range, of: vTrack, at: currentTime)
             }
-            if let aTrack = try await asset.loadTracks(withMediaType: .audio).first {
+            if let aTrack = loadedAudioTracks.first {
                 try audioTrack.insertTimeRange(range, of: aTrack, at: currentTime)
             }
             currentTime = CMTimeAdd(currentTime, duration)
-        }
-
-        if let introURL {
-            try await appendVideo(url: introURL)
-        }
-        try await appendVideo(url: mainVideoURL)
-        if let outroURL {
-            try await appendVideo(url: outroURL)
         }
 
         let outputURL = FileManager.default.temporaryDirectory
@@ -702,14 +701,17 @@ actor ExportService {
         sourceTrack: AVAssetTrack,
         config: ExportConfig,
         velocityMap: VelocityEditService.VelocityMap?,
-        progressHandler: @Sendable (Double) -> Void
+        progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
         let naturalSize = try await sourceTrack.load(.naturalSize)
         let preferredTransform = try await sourceTrack.load(.preferredTransform)
         let targetSize = config.outputSize
 
-        let filterComposition = try AVMutableVideoComposition.videoComposition(
-            with: composition,
+        // AVMutableComposition isn't Sendable; this self-contained build is safe to
+        // pass into the async factory under Swift 6 region isolation.
+        nonisolated(unsafe) let unsafeComposition = composition
+        let filterComposition = try await AVMutableVideoComposition.videoComposition(
+            with: unsafeComposition,
             applyingCIFiltersWithHandler: { [config, targetSize] request in
                 var image = request.sourceImage.clampedToExtent()
 
@@ -783,10 +785,11 @@ actor ExportService {
         exportSession.videoComposition = filterComposition
         exportSession.audioMix = audioMix
 
+        nonisolated(unsafe) let progressSession = exportSession
         let progressTask = Task { @Sendable in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
-                progressHandler(Double(exportSession.progress))
+                progressHandler(Double(progressSession.progress))
             }
         }
 
