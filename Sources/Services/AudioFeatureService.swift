@@ -181,7 +181,8 @@ actor AudioFeatureService {
         var realPart = [Float](repeating: 0, count: halfN)
         var imagPart = [Float](repeating: 0, count: halfN)
         windowed.withUnsafeBufferPointer { ptr in
-            ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { complexPtr in
+            guard let base = ptr.baseAddress else { return }
+            base.withMemoryRebound(to: DSPComplex.self, capacity: halfN) { complexPtr in
                 var splitComplex = DSPSplitComplex(realp: &realPart, imagp: &imagPart)
                 vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(halfN))
             }
