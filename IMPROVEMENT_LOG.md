@@ -25,13 +25,7 @@ Format: newest first. Only MERGED changes appear here.
 | #2 | Add cloud-first AI effect recommendation + unified tape planning | A2 + B1 | 2026-03-05 |
 | #1 | Add Highlight Magic MVP (iOS + web) | all | 2026-02-23 |
 
-## Pending (open PRs — not yet logged)
-- PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner review or close)
-- PR #21: Housekeeping Run 3 (this PR)
-
-## Incomplete work — needs next run
-- **D4 description accuracy** (`claude/d4-description-accuracy`): Branch was prepared with
-  accurate BYOK disclosure for AppStoreMetadata. Hit 2-cycle review cap without dual-APPROVE.
-  File also moved from `Sources/Resources/` to `Sources/Utilities/` (in #18) so changes must
-  be re-applied to new path. Priority: HIGH — current description falsely claims "videos never
-  leave your phone" and "No cloud uploads." when BYOK cloud scoring exists.
+## Pending (open PRs — not yet logged; add to table above once merged)
+- PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
+- PR #22: D4 — Fix AppStoreMetadata false on-device/no-upload claims (pending CI as of Run 4)
+- PR #23: A3 — Remove force-unwrap on baseAddress in AudioFeatureService FFT (pending CI as of Run 4)
