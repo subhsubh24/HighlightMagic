@@ -180,7 +180,7 @@ actor ClaudeVisionService {
 
         // Build segment context string for the prompt
         let segmentContext = candidates.enumerated().map { idx, c in
-            "Segment \(idx + 1): \(String(format: "%.1f", c.start))s–\(String(format: "%.1f", c.end))s (center: \(String(format: "%.1f", c.midpoint))s)"
+            "Segment \(idx + 1): \(String(format: "%.1f", c.start))s\u{2013}\(String(format: "%.1f", c.end))s (center: \(String(format: "%.1f", c.midpoint))s)"
         }.joined(separator: "\n")
 
         let instruction = """
@@ -220,8 +220,11 @@ actor ClaudeVisionService {
             ])
         }
 
+        // Haiku is the cheapest capable vision tier — same model used by the web backend
+        // for frame scoring (CLAUDE_FRAME_SCORER). Adequate for highlight quality scoring
+        // and trim-point suggestions; escalate only on a hard quality signal.
         let requestBody: [String: Any] = [
-            "model": "claude-sonnet-4-6",
+            "model": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
             "messages": [
                 ["role": "user", "content": contentBlocks]
