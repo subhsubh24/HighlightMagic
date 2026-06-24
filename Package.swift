@@ -16,10 +16,21 @@ let package = Package(
         .target(
             name: "HighlightMagic",
             path: "Sources",
-            resources: [
-                .process("Resources"),
-                .copy("Info.plist")
+            exclude: [
+                "Info.plist",
+                "HighlightMagic.entitlements"
             ],
+            resources: [
+                .process("Resources")
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
+        .testTarget(
+            name: "HighlightMagicTests",
+            dependencies: ["HighlightMagic"],
+            path: "Tests/HighlightMagicTests",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
