@@ -142,9 +142,28 @@ Not vibes — math, with cited inputs. It must contain:
 - [ ] F7. **Living feedback**: once E5 analytics is live, fold REAL funnel numbers back into
       the model so the projection converges on reality.
 
-## Evals (first-class)
-- [ ] Golden video fixtures + expected highlight ranges; a live `.eval` (env-flag-gated so
-      normal CI doesn't spend) that runs real detection and asserts quality; grow over time.
+## Track G — World-class quality, validation & evals
+How quality is continuously re-validated IN DEPTH — enforced gates on every change + complete
+evals + periodic deep audits. (This is NOT a pretense of re-reviewing every character every
+run; it is layered, automated, and auditable.) NOTE: "Track F" is the business case above;
+this quality track is G.
+- [ ] G1. Lint/format clean + ENFORCED — web lint (and Swift lint, e.g. SwiftLint, if present)
+      at ZERO errors and no new warnings, kept clean. Reviewer A rejects any change that
+      introduces a lint error/warning. Owner promotes lint to a REQUIRED CI check once green.
+- [ ] G2. Coverage floor — enforce a meaningful test-coverage threshold on web/backend critical
+      paths (Vitest `--coverage`) and on iOS logic modules (XCTest); a drop below the floor FAILS.
+- [ ] G3. Detection/generation EVAL coverage COMPLETE — a live eval per CORE PIPELINE STAGE
+      (highlight-detection accuracy, clip selection, music/SFX/voiceover quality, export
+      correctness) against a GROWING gold set of real video fixtures, gated behind an env flag
+      (e.g. `RUN_EVALS=1`) so normal CI doesn't spend; wire a SCHEDULED eval run so AI-output
+      quality regressions are caught. Live eval API spend is approved.
+- [ ] G4. E2E + accessibility + visual + performance gates — XCUITest (iOS) for the core
+      journey (import → detect → edit → export → share) + Playwright (web); automated a11y
+      checks on key surfaces; visual checks on the design-bar screens; a performance/stability
+      budget (no jank/crashes on the core path; export within a time budget).
+- [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff
+      review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
+      findings (security, crashes, runaway API cost, data loss) for done.
 
 ## Definition of Done (STOP gate — BOTH halves at 100%)
 Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL of these checkboxes
@@ -160,6 +179,9 @@ are ticked under the DONE GUARD, CI-verified:
       one-paragraph "here's the math on why this can realistically make $100K/yr — and here
       are the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
 - [ ] DOD4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
+- [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
+      the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
+      latest deep audit (G5) is clean of CRITICAL findings.
 If any box is open, advance the lowest incomplete item. Do not declare done early.
 
 ## DONE GUARD (a box counts as done ONLY with verified artifacts — never self-assessment)
