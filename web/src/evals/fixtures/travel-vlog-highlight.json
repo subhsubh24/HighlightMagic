@@ -1,0 +1,46 @@
+{
+  "_description": "Golden fixture for travel vlog detection eval. Synthetic frame data representing a 75-second travel montage featuring scenic landscapes, a tourist landmark, and candid travel moments — typical of a destination travel creator.",
+  "_templateHint": "travel",
+  "_expected": {
+    "minClips": 2,
+    "maxClips": 7,
+    "minTotalDurationSec": 15,
+    "maxTotalDurationSec": 60,
+    "acceptableThemes": ["travel", "adventure", "cinematic", "lifestyle"],
+    "requiredPlanFields": ["musicPrompt", "sfx", "voiceover", "intro", "outro"]
+  },
+  "frames": [
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 0,  "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 5,  "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 10, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 15, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 20, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 25, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 30, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 35, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 40, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 45, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 50, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 55, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 60, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 65, "base64": "" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "sourceFileName": "italy-trip.mp4", "timestamp": 70, "base64": "" }
+  ],
+  "scores": [
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 0,  "score": 0.55, "label": "arriving at airport — generic footage" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 5,  "score": 0.82, "label": "first vista — colosseum establishing shot", "narrativeRole": "HOOK" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 10, "score": 0.90, "label": "golden hour over Rome rooftops", "narrativeRole": "HERO" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 15, "score": 0.45, "label": "walking through narrow alley" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 20, "score": 0.35, "label": "ordering food — mundane" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 25, "score": 0.78, "label": "trevi fountain crowd — energetic", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 30, "score": 0.88, "label": "jumping in front of fountain — reaction shot", "narrativeRole": "REACTION" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 35, "score": 0.40, "label": "gelato shop interior" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 40, "score": 0.60, "label": "boat on the Tiber — moderate interest" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 45, "score": 0.92, "label": "Vatican dome aerial — stunning", "narrativeRole": "HERO" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 50, "score": 0.72, "label": "busy piazza — vibrant atmosphere", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 55, "score": 0.30, "label": "hotel room morning — boring" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 60, "score": 0.85, "label": "departure — final sunset from train window", "narrativeRole": "CLOSER" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 65, "score": 0.25, "label": "airport again — wrap-up" },
+    { "sourceFileId": "travel-001", "sourceType": "video", "timestamp": 70, "score": 0.20, "label": "landing at home — low interest" }
+  ]
+}
