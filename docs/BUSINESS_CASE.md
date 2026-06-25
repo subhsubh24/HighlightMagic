@@ -3,6 +3,29 @@
 Living document. Updated each loop run as tracks land and real data replaces estimates.
 **Inputs: cited, never invented. All assumptions stated explicitly.**
 
+## Mandate — MAXIMIZE revenue ($100K/yr is the FLOOR, not the target)
+Do NOT settle once the base case clears $100K/yr. Build toward the OPTIMISTIC scenario by pushing
+each revenue lever to its DEFENSIBLE maximum — every number still honest + researched (the
+anti-gaming rule holds absolutely: never inflate price/users/assumptions to make a number look
+bigger; pricing must match the real paywall/StoreKit config). Treat each lever as first-class,
+value-bar-clearing work and document its upside here:
+- **Pricing & tiers** — good-better-best: a higher Pro tier, annual plans at a discount, consumable
+  credit packs for extra exports; priced to real value + benchmarks.
+- **Conversion** — optimize the free→paid moment: paywall at the finished-highlight, onboarding,
+  trial, shrink time-to-first-export.
+- **Retention & LTV** — reduce churn, lengthen lifetime: re-engagement push, save/share loops,
+  reasons to keep making highlights.
+- **Expansion revenue** — add-ons, extra-export credit packs, higher-tier/creator plans, referrals.
+- **Margin** — drive per-export API COGS (Claude/ElevenLabs/AtlasCloud) DOWN; for HighlightMagic this
+  is a PRIMARY revenue lever — lower COGS widens the freemium margin and makes growth spend affordable.
+- **Reach** — defensible acquisition: ASO, organic/social (the output is inherently shareable),
+  content/SEO.
+Document each lever's upside; build the best-return ones. CONVERGENCE: maximize WITHIN the
+submission-readiness goal — the best monetization+growth MACHINE buildable PRE-launch, not an excuse
+to run forever. STOP and hand off when product + marketing are 100% and this case shows a strong,
+maximized, credible path (floor ≥$100K). Continuous optimization with real post-launch
+conversion/retention data is the owner's job after launch.
+
 ---
 
 ## 1. What the Business Is
