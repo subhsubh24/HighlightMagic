@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-25 (Run 11).
+be executed. Last updated: 2026-06-25 (Run 12).
 
 ---
 
@@ -30,17 +30,14 @@ routes built in PRs #53, #55, #56).
 
 ### 0b. Vercel KV provisioning for durable quota store
 
-`web/src/lib/entitlement.ts` uses `InMemoryQuotaStore` — a simple in-memory store that resets
-on every Vercel serverless function cold start. This means free quota is not durable across
-requests in production. To fix:
+**CODE COMPLETE** (PR #66, Run 12): `web/src/lib/kv-quota-store.ts` — `VercelKVQuotaStore` using
+`@vercel/kv` is shipped. `getQuotaStore()` automatically uses it when `KV_REST_API_URL` +
+`KV_REST_API_TOKEN` are present; falls back to `InMemoryQuotaStore` otherwise.
 
+**What the owner must do**:
 1. In Vercel dashboard → Storage, create a **KV (Upstash Redis)** store and link it to the project.
-2. This sets `KV_URL`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_REST_API_READ_ONLY_TOKEN`
-   in Vercel env automatically.
-3. The factory will implement the KV adapter for `QuotaStore` once the store is provisioned.
-
-**What the owner must do**: provision Vercel KV (or Upstash Redis) and link it to the project.
-The factory will write the code adapter.
+2. This sets `KV_REST_API_URL` + `KV_REST_API_TOKEN` in Vercel env automatically.
+3. No code change needed — the KV store activates immediately once the env vars are set.
 
 ### 0c. App Store Server API for Pro verification
 
@@ -222,7 +219,7 @@ Once the app is live:
 | # | Action | Phase | Unblocked when |
 |---|---|---|---|
 | 0a | iOS service-layer API key removal | 0 | Factory doing this incrementally |
-| 0b | Provision Vercel KV (Upstash Redis) + link to project | 0 | Now — factory writes adapter once provisioned |
+| 0b | Provision Vercel KV (Upstash Redis) + link to project | 0 | Code done (#66) — owner provisions KV in Vercel dashboard |
 | 0c | App Store shared secret in Vercel env | 0 | After App Store Connect record (Step 3) |
 | 1 | Set live API keys in Vercel | 1 | Now |
 | 2 | Connect waitlist email provider | 1 | Now (PR #42 merged) |
