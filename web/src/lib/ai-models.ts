@@ -12,8 +12,12 @@
 /** Frame scoring: cheapest capable vision tier. */
 export const CLAUDE_FRAME_SCORER = "claude-haiku-4-5-20251001";
 
-/** Tape planning: uses extended thinking — needs a stronger reasoning model. */
-export const CLAUDE_PLANNER = "claude-opus-4-8";
+/** Tape planning: extended thinking with adaptive effort.
+ * Switched from claude-opus-4-8 → claude-sonnet-4-6 (2026-06-25, B4).
+ * Sonnet 4.6 supports the same adaptive-thinking API at ~80% lower cost.
+ * See docs/MODEL_COSTS.md decision log for rationale.
+ */
+export const CLAUDE_PLANNER = "claude-sonnet-4-6";
 
 /** Tape validation: cheap structured-output Haiku call. */
 export const CLAUDE_VALIDATOR = "claude-haiku-4-5-20251001";
@@ -34,7 +38,8 @@ export const ELEVENLABS_VOICE_CLONE_MODEL = "eleven_flash_v2_5";
  */
 export const MODEL_PRICES_USD_PER_MILLION: Record<string, { input: number; output: number }> = {
   [CLAUDE_FRAME_SCORER]: { input: 0.80, output: 4.00 },
-  [CLAUDE_PLANNER]: { input: 15.0, output: 75.0 },
+  // Sonnet 4.6: $3/$15 per M tokens (source: platform.claude.com, fetched 2026-06-25)
+  [CLAUDE_PLANNER]: { input: 3.0, output: 15.0 },
 };
 
 /** Returns the estimated USD cost for a single API call, or 0 if the model is unknown. */
