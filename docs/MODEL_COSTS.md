@@ -31,11 +31,11 @@ maintained by the autonomous loop (ROADMAP **B4**) and is a standing reference, 
    (detection-cache + asset-cache), and cap regeneration (≤2 validation passes). Do these
    before reaching for a model swap.
 
-## Current model map (verified 2026-06-24 from `web/src/`)
+## Current model map (verified 2026-06-25 from `web/src/`)
 
 | Task | Provider | Current model | Call site | Cost lever / candidates to evaluate |
 |---|---|---|---|---|
-| Edit **planning** (the reasoning step) | Anthropic | `claude-opus-4-8` (effort=medium) | `actions/detect.ts` | **Highest LLM cost.** Evaluate a cheaper Claude tier (Sonnet/Haiku) for planning; trim prompt + thinking budget; only escalate to Opus on a hard signal. |
+| Edit **planning** (the reasoning step) | Anthropic | `claude-sonnet-4-6` (effort=medium) | `actions/detect.ts` | Switched from Opus 4.8 (2026-06-25). Next: evaluate if effort=low is sufficient for simpler inputs; cache near-identical planning requests. |
 | **Frame scoring** / detection | Anthropic | `claude-haiku-4-5-20251001` | `actions/detect.ts` | Already cheap tier. Push payload down: fewer/downscaled frames, larger batches, cache by frame hash. Evaluate an OSS vision model for coarse pre-filtering before the LLM. |
 | **Validation loop** | Anthropic | `claude-haiku-4-5-20251001` | `app/api/validate/route.ts` | Already cheap tier. Keep ≤2 passes; prefer plan-layer fixes over asset regen; consider skipping pass 2 when pass 1 confidence is high. |
 | **Voiceover / TTS** | ElevenLabs | `eleven_flash_v2_5` | `elevenlabs-tts.ts` | Already the low-cost/low-latency tier. Evaluate OSS TTS (e.g. self-hosted) for the free tier; cache by (text, voice). |
@@ -73,3 +73,4 @@ maintained by the autonomous loop (ROADMAP **B4**) and is a standing reference, 
 |---|---|---|---|---|---|
 | 2026-06-24 | Planning | `claude-opus-4-6` → `claude-opus-4-8` | not measured (correctness fix) | unknown | `claude-opus-4-6` was an invalid model ID causing API errors on every planning call. `claude-opus-4-8` is the current valid Anthropic Opus model. Pricing updated to Opus-tier estimate ($15/$75 per million tokens); prior $5/$25 was Sonnet-tier and underestimated actual cost. Verify exact pricing at console.anthropic.com. |
 | 2026-06-24 | — | baseline snapshot | n/a | n/a | Initial map captured from `web/src/`: Opus 4.6 planning, Haiku 4.5 scoring+validation, ElevenLabs flash v2.5 voice, AtlasCloud + Kling v2.5-turbo-pro video/photo. No swaps yet. |
+| 2026-06-25 | Planning | `claude-opus-4-8` → `claude-sonnet-4-6` | Quality: validated by existing 2-pass Haiku validation loop; validated-at-production recommendation; ROADMAP B4 | −80% per planning call: ~$0.35/export → ~$0.07/export (5800 in + 2000 out tokens); flips Pro gross margin from −$0.06 to +$3.40/user/month | Sonnet 4.6 supports same adaptive extended thinking API parameters (`thinking.type: "adaptive"`, `output_config.effort: "medium"`, `max_tokens: 32000`). Pricing: $3/$15 per M tokens (source: platform.claude.com, fetched 2026-06-25). Both Opus 4.8 and Sonnet 4.6 are Claude 4.x models with identical thinking API surface. See docs/BUSINESS_CASE.md §3 for unit economics impact. |
