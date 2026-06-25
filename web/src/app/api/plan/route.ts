@@ -1,19 +1,21 @@
 import { planFromScores } from "@/actions/detect";
+import { checkExportAllowed } from "@/lib/entitlement";
 
 export const runtime = "nodejs";
 
 /**
  * SSE route handler for the planner.
  *
- * The Opus planner can take 2-5 minutes (effort: "high" + adaptive thinking
- * over 80 images). A server action would leave the client→server connection
- * idle the entire time — browsers and proxies drop idle connections after
- * ~60-120s, causing "Failed to fetch" on the client.
+ * The Sonnet planner can take 1-3 minutes (adaptive thinking). A server action
+ * would leave the client→server connection idle the entire time — browsers and
+ * proxies drop idle connections after ~60-120s, causing "Failed to fetch".
  *
  * This route streams keepalive pings every 15s so the connection stays alive.
  * Phase progress events ("thinking", "generating") are forwarded so the client
  * can show real progress instead of fake timers.
  * The final result (or error) is sent as an SSE event once the planner finishes.
+ *
+ * P0: requires userId + enforces freemium quota server-side before any paid call.
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -27,7 +29,9 @@ export async function POST(req: Request) {
     });
   }
 
-  const { frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations } = body as {
+  const { userId, signedTransaction, frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations } = body as {
+    userId?: unknown;
+    signedTransaction?: unknown;
     frames: unknown;
     scores: unknown;
     templateName?: string;
@@ -38,11 +42,30 @@ export async function POST(req: Request) {
     aiDecideAnimations?: boolean;
   };
 
+  if (!userId || typeof userId !== "string") {
+    return new Response(JSON.stringify({ error: "userId is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!Array.isArray(frames) || !Array.isArray(scores)) {
     return new Response(JSON.stringify({ error: "frames and scores must be arrays" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // ── SERVER-SIDE GATE — before any paid call ──
+  const decision = await checkExportAllowed({
+    userId,
+    signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
+  });
+  if (!decision.allowed) {
+    return new Response(
+      JSON.stringify({ error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro }),
+      { status: 402, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   const encoder = new TextEncoder();
@@ -80,7 +103,6 @@ export async function POST(req: Request) {
           photoAnimations ?? undefined,
           (field, value) => {
             // Forward early production plan fields to client
-
             try {
               controller.enqueue(
                 encoder.encode(`event: partial\ndata: ${JSON.stringify({ field, value })}\n\n`)
