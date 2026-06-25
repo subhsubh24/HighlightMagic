@@ -40,3 +40,8 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
+- PR #45: B4 Switch planner Opus 4.8 → Sonnet 4.6 (−80% planning COGS; fixes unit economics) — auto-merge armed (Run 10)
+- PR #46: E2 Add docs/brand-kit.md (color system, typography, logo spec, voice & tone, social assets) — auto-merge armed (Run 10)
+- PR #47: E3 Add docs/aso-package.md (full App Store Optimization package) — auto-merge armed (Run 10)
+- PR #48: E4 Add docs/content-calendar.md + docs/content/post-batch-1.md (8-week calendar + 12 post scripts) — auto-merge armed (Run 10)
+- PR #49: E5 Add web/src/lib/analytics.ts + wire 4 landing page conversion events — auto-merge armed (Run 10)

@@ -62,12 +62,12 @@ pays only for the web backend calls.
 
 | Cost item | Model / service | Rough estimate | Notes |
 |---|---|---|---|
-| **Tape planning** | `claude-opus-4-8` (extended thinking, effort=medium) | **$0.25–$0.60** | **Dominant COGS line.** Input ~5800 tokens + ~5000–10000 thinking tokens. Needs to be verified against actual Vercel logs. |
+| **Tape planning** | ~~`claude-opus-4-8`~~ → `claude-sonnet-4-6` (PR #45, auto-merge pending) | **~$0.07** (Sonnet) vs $0.25–0.60 (Opus) | **Dominant COGS line.** B4 switch cuts this ~80%. Verify against Vercel logs after live traffic. |
 | **Tape validation** | `claude-haiku-4-5` (2 passes) | ~$0.01 | Cheap; not a concern |
-| **Music gen** | ElevenLabs music endpoint | ~$0.05–$0.20 | Per clip; depends on duration + ElevenLabs plan tier |
-| **SFX gen** | ElevenLabs SFX (3 clips/export avg) | ~$0.03–$0.10 | Per second of audio |
-| **TTS / voiceover** | ElevenLabs `eleven_flash_v2_5` | ~$0.01–$0.05 | Per segment |
-| **Photo animation** | AtlasCloud / Kling (optional) | ~$0.20–$0.80 | Only fires for photo projects; highly variable |
+| **Music gen** | ElevenLabs music endpoint | ~$0.05–0.20 | Per clip; depends on duration + ElevenLabs plan tier |
+| **SFX gen** | ElevenLabs SFX (3 clips/export avg) | ~$0.03–0.10 | Per second of audio |
+| **TTS / voiceover** | ElevenLabs `eleven_flash_v2_5` | ~$0.01–0.05 | Per segment |
+| **Photo animation** | AtlasCloud / Kling (optional) | ~$0.20–0.80 | Only fires for photo projects; highly variable |
 | **iOS frame scoring** | `claude-haiku-4-5` (BYOK) | $0 to business | User pays |
 
 > ⚠️ **Estimates only.** The owner must verify actual per-export costs by reading Vercel
@@ -77,40 +77,39 @@ pays only for the web backend calls.
 
 | Scenario | Planning | Audio | Total |
 |---|---|---|---|
-| Optimistic (Sonnet planner, light audio) | $0.03–$0.05 | $0.05 | **~$0.10** |
-| Base (Opus planner, typical audio) | $0.35 | $0.12 | **~$0.47** |
+| **Post-B4 (Sonnet planner, typical audio)** | **$0.07** | $0.12 | **~$0.19** |
+| Pre-B4 base (Opus planner, typical audio) | $0.35 | $0.12 | **~$0.47** |
 | Pessimistic (Opus + heavy regen + photo) | $0.55 | $0.35 | **~$0.90** |
 
-### Unit economics at $9.99/month Pro, base COGS case
+### Unit economics at $9.99/month Pro
 
+#### Before B4 (Opus planner) — was broken
 | Metric | Value |
 |---|---|
 | Monthly revenue per Pro user | $9.99 |
-| Apple App Store cut (30%) | −$3.00 |
+| Apple App Store cut (30%) | −3.00 |
 | Net revenue per Pro user | $6.99 |
-| COGS — 15 exports/month × $0.47 | −$7.05 |
-| **Gross margin per Pro user** | **−$0.06 (NEGATIVE ⚠️)** |
+| COGS — 15 exports/month × $0.47 | −7.05 |
+| **Gross margin per Pro user** | **−0.06 (NEGATIVE ⚠️)** |
 
-**At base COGS, the current Opus planner makes the Pro tier unprofitable.**
+#### After B4 (Sonnet planner) — PR #45 in auto-merge queue
+| Metric | Value |
+|---|---|
+| Monthly revenue per Pro user | $9.99 |
+| Apple App Store cut (30%) | −3.00 |
+| Net revenue per Pro user | $6.99 |
+| COGS — 15 exports/month × $0.19 | −2.85 |
+| **Gross margin per Pro user** | **+$4.14 (~59% gross margin) ✅** |
 
-### The fix: B4 — switch planner to Sonnet
-
-If we switch `claude-opus-4-8` → `claude-sonnet-4-6` for planning (B4 item):
-- Estimated planning cost: $3/$15 per M tokens × 5800 input + 2000 output ≈ **$0.047/export**
-- Total COGS (audio, no photo): **~$0.17–0.22/export**
-- At 15 exports/month: COGS = $2.55–$3.30
-- Net revenue: $6.99 − $3.00 = **$3.69–4.44 gross margin per Pro user (53–63%)**
-- This makes the business viable ✅
-
-> **Action required (B4)**: Benchmark `claude-sonnet-4-6` for planning quality vs Opus.
-> If quality holds, flip the model map. This is the single highest-leverage cost change.
+> **Status (2026-06-25)**: PR #45 is in the auto-merge queue. Once merged, the unit economics
+> are viable. Verify actual Vercel + ElevenLabs costs after first week of live traffic.
 
 ### Levers ranked by impact
 
-1. **Switch planner from Opus to Sonnet** (B4) — cuts COGS by ~75%
+1. **Switch planner from Opus to Sonnet** (B4, PR #45) — cuts COGS by ~75%; most important
 2. **Cap Pro exports at 50/month** — bounds worst-case COGS, still generous vs $9.99/mo competitors
 3. **Raise Pro price to $12.99 or $14.99/month** — mid-market for AI creator tools; still below CapCut Pro
-4. **Cache planning outputs** — identical or near-identical frame sequences shouldn't replanning
+4. **Cache planning outputs** — identical or near-identical frame sequences shouldn't re-plan
 5. **Add a usage-based add-on tier** (e.g., extra 50-export pack for $4.99) — captures heavy users without killing margin
 
 ---
@@ -175,15 +174,15 @@ To reach $100K ARR:
 - Requires: viral content moment, featured by App Store, or small paid acquisition budget
 
 **Target/expected scenario: Base.** The base case is achievable with the content engine
-(Track E4) and strong ASO (E3). The optimistic scenario requires one growth channel that
-isn't purely organic — a feature in an App Store editorial, a viral demo, or $1–2K/month
-in targeted ads.
+(Track E4, docs in PR #48) and strong ASO (E3, docs in PR #47). The optimistic scenario requires
+one growth channel that isn't purely organic — a feature in an App Store editorial, a viral
+demo, or $1–2K/month in targeted ads.
 
 ---
 
 ## 6. Does the Base Case Clear $100K/year?
 
-**Honest answer: Not in Year 1, and not without the B4 cost fix.**
+**Honest answer: Not in Year 1. Requires B4 cost fix + growth execution.**
 
 - Year 1 (base): ~$3,400 cumulative — well short.
 - Year 3 (base): ~$67K cumulative; ~$50K ARR — approaching but below $100K ARR.
@@ -191,25 +190,21 @@ in targeted ads.
 
 **The $100K/year bar is achievable, but it requires:**
 1. ✅ Ship the app and iterate toward App Store quality (Tracks A–D)
-2. 🔴 **Fix unit economics (B4)**: switch planner from Opus to Sonnet — without this, the business loses money on every Pro export above ~8/month
+2. 🟡 **Fix unit economics (B4, PR #45)**: switch planner from Opus to Sonnet — without this, the business loses money on every Pro export above ~8/month. PR #45 is in auto-merge queue.
 3. 🔴 **Grow to 834+ Pro subscribers**: requires real marketing execution (Track E), not just building
 4. ⚠️ **Consider price increase to $14.99**: shortens the timeline to $100K ARR by ~8 months (base case)
-
-**If unit economics are not fixed (B4 stays unresolved) AND Pro price stays at $9.99**, the
-business will run negative gross margin on Pro users at average usage levels. Revenue without
-profit is not a $100K business. Fix B4 first.
 
 ---
 
 ## 7. Go-to-Market (Track E linkage)
 
-| Channel | Owner-buildable by loop | Revenue impact | ROADMAP item |
-|---|---|---|---|
-| Landing page + waitlist | ✅ Built (PR #42) | Captures early adopter email list; direct launch day conversions | E1 |
-| Brand kit | Loop builds assets | Consistent presence across platforms | E2 |
-| ASO copy + keyword strategy | Loop builds copy | Primary discovery channel for iOS (no paid ads needed) | E3 |
-| Content calendar (TikTok/Reels/Shorts demos) | Loop builds drafts | Viral potential; ~60% of TikTok users discover apps through content | E4 |
-| Analytics + conversion funnel | Loop builds instrumentation | Measures real free→paid conversion; feeds back into this model | E5 |
+| Channel | Owner-buildable by loop | Revenue impact | ROADMAP item | Status |
+|---|---|---|---|---|
+| Landing page + waitlist | ✅ Built (PR #42) | Captures early adopter email list; direct launch day conversions | E1 | ✅ MERGED |
+| Brand kit | ✅ Built (PR #46) | Consistent presence across platforms | E2 | 🟡 Auto-merge pending |
+| ASO copy + keyword strategy | ✅ Built (PR #47) | Primary discovery channel for iOS (no paid ads needed) | E3 | 🟡 Auto-merge pending |
+| Content calendar (TikTok/Reels/Shorts demos) | ✅ Built (PR #48) | Viral potential; ~60% of TikTok users discover apps through content | E4 | 🟡 Auto-merge pending |
+| Analytics + conversion funnel | ✅ Built (PR #49) | Measures real free→paid conversion; feeds back into this model | E5 | 🟡 Auto-merge pending |
 
 **Owner-funded/published** (see REMAINING_STEPS.md):
 - Run paid UA on TikTok or Meta (suggested budget: $500–1,500/mo once launched, scale on ROI)
@@ -223,8 +218,8 @@ profit is not a $100K business. Fix B4 first.
 | Item | Status | Notes |
 |---|---|---|
 | Revenue model | Documented | $9.99/mo Pro; 3% conversion base case |
-| Unit economics | 🔴 NEGATIVE at current Opus planner | Fix: switch to Sonnet (B4) |
-| $100K ARR path | Achievable by ~Month 40 (base) | Requires growth execution + B4 fix |
+| Unit economics | 🟡 Fix in PR #45 (auto-merge pending) | Post-merge: ~59% gross margin (~$4.14/Pro user/month) |
+| $100K ARR path | Achievable by ~Month 40 (base) | Requires growth execution + B4 merge |
 | Worst-case scenario | $100K ARR unreachable without B4 | If COGS remains $0.47/export at 15 exports/mo |
 | Recommended price | $14.99/month | Shortens $100K runway, still below market mid |
 | Key levers | B4 cost fix, price raise, Track E content | All documented and actionable |
@@ -233,15 +228,16 @@ profit is not a $100K business. Fix B4 first.
 > HighlightMagic can reach $100K/year ARR in ~3–3.5 years from launch via organic growth (ASO
 > + content demos) with ~834 Pro subscribers at $9.99/month or ~556 at $14.99/month. The path
 > is credible but not automatic — it requires: (1) fixing per-export unit economics by switching
-> the planner from claude-opus-4-8 to claude-sonnet (B4), which cuts COGS from ~$0.47 to ~$0.20
-> per export and flips gross margin from negative to 50%+; (2) executing the content+ASO engine
-> (Track E) to grow MAU at 10%/month organically; and (3) considering a $14.99 price point to
-> close the timeline to 2–2.5 years. The conservative case reaches $100K ARR by Year 5 with no
-> paid acquisition. The optimistic case (viral content + small paid UA) reaches it by Year 2.
-> The unit economics are viable post-B4 — the biggest risk is growth, not margin.
+> the planner from claude-opus-4-8 to claude-sonnet-4-6 (B4, PR #45), which cuts COGS from
+> ~$0.47 to ~$0.19 per export and delivers ~59% gross margin; (2) executing the content+ASO
+> engine (Track E, PRs #46–49 all in auto-merge queue as of Run 10) to grow MAU at 10%/month
+> organically; and (3) considering a $14.99 price point to close the timeline to 2–2.5 years.
+> The conservative case reaches $100K ARR by Year 5 with no paid acquisition. The optimistic
+> case (viral content + small paid UA) reaches it by Year 2. The unit economics are viable
+> post-B4 — the biggest risk is growth, not margin.
 
 ---
 
-*Last updated: 2026-06-24 (Run 9). Sources cited inline above. Inputs to be updated as real
+*Last updated: 2026-06-25 (Run 10). Sources cited inline above. Inputs to be updated as real
 data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing
 — both change frequently.*
