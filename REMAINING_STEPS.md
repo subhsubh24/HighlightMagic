@@ -4,7 +4,53 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-24 (Run 9).
+be executed. Last updated: 2026-06-25 (Run 11).
+
+---
+
+## Phase 0 — Loop-deferred items (factory work not yet complete)
+
+These items the autonomous loop CAN do but has not yet finished. They're listed here so the
+owner knows the current state and can optionally unblock them faster.
+
+### 0a. iOS service-layer API key removal
+
+`ClaudeVisionService.swift`, `TapeValidationService.swift`, `AIEffectRecommendationService.swift`,
+and `CloudScoringService.swift` still call `api.anthropic.com` directly using an embedded/Keychain
+API key. This must be removed for the business-paid model to be complete (P0).
+
+The factory cannot compile-verify Swift on Linux, so this is being done conservatively (one file
+per PR). The SettingsView BYOK UI has already been removed (PR #57). The service-layer removal
+will follow in subsequent runs.
+
+**What the owner can do to unblock**: none required — the factory will handle this incrementally.
+However, if you want to accelerate: after removing each service's direct Anthropic calls, the iOS
+app will route through the web/ backend instead (via the existing `/api/score` proxy and other
+routes built in PRs #53, #55, #56).
+
+### 0b. Vercel KV provisioning for durable quota store
+
+`web/src/lib/entitlement.ts` uses `InMemoryQuotaStore` — a simple in-memory store that resets
+on every Vercel serverless function cold start. This means free quota is not durable across
+requests in production. To fix:
+
+1. In Vercel dashboard → Storage, create a **KV (Upstash Redis)** store and link it to the project.
+2. This sets `KV_URL`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_REST_API_READ_ONLY_TOKEN`
+   in Vercel env automatically.
+3. The factory will implement the KV adapter for `QuotaStore` once the store is provisioned.
+
+**What the owner must do**: provision Vercel KV (or Upstash Redis) and link it to the project.
+The factory will write the code adapter.
+
+### 0c. App Store Server API for Pro verification
+
+`verifyProEntitlement()` in `web/src/lib/entitlement.ts` currently returns `false` (secure
+default) until the App Store shared secret is configured.
+
+1. In App Store Connect → your app → In-App Purchases → App-Specific Shared Secret, generate a
+   shared secret.
+2. Add `APP_STORE_SHARED_SECRET=<secret>` to Vercel env.
+3. The factory can wire the receipt verification call once the secret is in place.
 
 ---
 
@@ -175,6 +221,9 @@ Once the app is live:
 
 | # | Action | Phase | Unblocked when |
 |---|---|---|---|
+| 0a | iOS service-layer API key removal | 0 | Factory doing this incrementally |
+| 0b | Provision Vercel KV (Upstash Redis) + link to project | 0 | Now — factory writes adapter once provisioned |
+| 0c | App Store shared secret in Vercel env | 0 | After App Store Connect record (Step 3) |
 | 1 | Set live API keys in Vercel | 1 | Now |
 | 2 | Connect waitlist email provider | 1 | Now (PR #42 merged) |
 | 3 | Apple Dev enrollment + App Store Connect record | 2 | Now |
@@ -186,5 +235,6 @@ Once the app is live:
 | 9 | App Store submission | 5 | After Step 8 passes |
 | 10 | Fund content + ad accounts | 6 | After app is live (Step 9) |
 
-Nothing in this list could have been done by the autonomous loop — all items require Apple
+Phase 0 items are factory-buildable but partially deferred (iOS Swift compile verification is not
+possible on Linux; KV provisioning requires owner action). All Phase 1–6 items require Apple
 Developer credentials, live billing accounts, a physical Mac with Xcode, or funded ad accounts.
