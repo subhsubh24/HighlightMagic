@@ -25,6 +25,20 @@ funnel/CAC × COGS), with assumptions stated. A credible, defensible path — no
 **Don't waste the owner's time:** a quiet, coherent, bar-clearing run is success; padding,
 churn, or declaring done before the bar is met is failure.
 
+## Progress format contract (checkboxes are the SINGLE SOURCE OF TRUTH)
+Every Track item (A–F, P0, Evals) AND every Definition-of-Done item MUST be a markdown
+checkbox (`- [ ]` open / `- [x]` done) — never recorded only as prose. Tick a box ONLY under
+the DONE GUARD below (merged + artifacts verified-present + gate re-run green), IN ADDITION to
+any PR-reference annotation (e.g. `*(#42)*`) — the annotation is supplementary, the checkbox is
+authoritative. An external dashboard reads BUILD progress from the Track checkboxes and
+READINESS from the Definition-of-Done checkboxes; prose-only or PR-only notes are INVISIBLE to
+it, so progress not reflected in a checkbox does not count.
+- ONE-TIME RECONCILE (do on the next run): convert any non-checkbox Track or Definition-of-Done
+  item into a checkbox; tick every item whose artifacts are verified-present on `main` with a
+  green gate (per the DONE GUARD); and UN-tick any box not actually satisfied. Then proceed normally.
+- ONGOING: keep the checkboxes in sync with reality in EVERY bookkeeping run — tick on real
+  completion, un-tick on regression. Never leave a box stale.
+
 ## P0 — Cost & entitlement architecture (load-bearing; revenue + cost boundary)
 The iOS app historically called paid APIs DIRECTLY and StoreKit entitlement is CLIENT-ONLY.
 For a freemium business that pays the API bill, that lets an extracted key or modified
@@ -127,18 +141,19 @@ Not vibes — math, with cited inputs. It must contain:
       normal CI doesn't spend) that runs real detection and asserts quality; grow over time.
 
 ## Definition of Done (STOP gate — BOTH halves at 100%)
-Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL hold, CI-verified:
-  1. PRODUCT: Tracks A–D + P0 complete; `web` and `ios` checks green; evals pass; per-export
-     COGS within a viable margin (B4 / docs/MODEL_COSTS.md).
-  2. MARKETING/GROWTH: Track E complete and staged (landing+waitlist, brand, ASO, content,
-     analytics/funnel built).
-  3. BUSINESS CASE: docs/BUSINESS_CASE.md presents a credible, benchmark-grounded BASE-case
-     path to ≥$100K/year (or, if the base case falls short, names the specific levers AND
-     they've been built so a credible scenario clears it); unit economics are gross-margin-
-     positive; the GTM (F6) is documented. The final `FACTORY: 100%` issue must include the
-     one-paragraph "here's the math on why this can realistically make $100K/yr — and here
-     are the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
-  4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
+Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL of these checkboxes
+are ticked under the DONE GUARD, CI-verified:
+- [ ] DOD1. PRODUCT: Tracks A–D + P0 complete; `web` and `ios` checks green; evals pass; per-export
+      COGS within a viable margin (B4 / docs/MODEL_COSTS.md).
+- [ ] DOD2. MARKETING/GROWTH: Track E complete and staged (landing+waitlist, brand, ASO, content,
+      analytics/funnel built).
+- [ ] DOD3. BUSINESS CASE: docs/BUSINESS_CASE.md presents a credible, benchmark-grounded BASE-case
+      path to ≥$100K/year (or, if the base case falls short, names the specific levers AND
+      they've been built so a credible scenario clears it); unit economics are gross-margin-
+      positive; the GTM (F6) is documented. The final `FACTORY: 100%` issue must include the
+      one-paragraph "here's the math on why this can realistically make $100K/yr — and here
+      are the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
+- [ ] DOD4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 If any box is open, advance the lowest incomplete item. Do not declare done early.
 
 ## DONE GUARD (a box counts as done ONLY with verified artifacts — never self-assessment)
