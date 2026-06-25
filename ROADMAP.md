@@ -162,6 +162,20 @@ Not vibes — math, with cited inputs. It must contain:
       COGS DOWN — a PRIMARY lever for HighlightMagic, since lower COGS widens the freemium margin
       and funds growth); REACH (ASO, organic/social since the output is shareable, content/SEO).
       Build the best-return ones. Maximize WITHIN convergence — see the CONVERGENCE note in Vision.
+- [ ] F9. **KEEP IT LIVING — recompute, don't write-once**: docs/BUSINESS_CASE.md must IMPROVE over
+      time, not be written once and left to rot.
+      - RE-COMPUTE the model whenever any of these change: pricing/tiers, a revenue lever ships
+        (conversion, retention, expansion), per-user COGS, or new evidence/benchmarks.
+      - Building more FEATURES does NOT change the number and is NOT a reason to revise it — only
+        levers, pricing, margin, reach, and real data move it. "Improving the business case" means
+        recomputing when those move, not when feature count grows.
+      - ANCHOR the model to the ACTUAL paywall / billing config (Stripe/RevenueCat/StoreKit product
+        IDs + prices). If the doc's prices ever diverge from the real product config, that drift is
+        a BUG — fix it and recompute.
+      - Stamp each revision with a 'last recomputed' date + a one-line changelog of what moved and why.
+      - POST-LAUNCH (owner activity): re-ground every assumption on the REAL conversion/retention/CPI
+        data from the analytics you built — that's when it goes from a researched projection to a
+        data-backed forecast.
 
 ## Track G — World-class quality, validation & evals
 How quality is continuously re-validated IN DEPTH — enforced gates on every change + complete
