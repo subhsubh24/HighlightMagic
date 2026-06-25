@@ -44,6 +44,19 @@ it, so progress not reflected in a checkbox does not count.
 - ONGOING: keep the checkboxes in sync with reality in EVERY bookkeeping run — tick on real
   completion, un-tick on regression. Never leave a box stale.
 
+## Living artifacts (operating principle)
+Every artifact the loop produces — README, ARCHITECTURE, docs/BUSINESS_CASE.md, marketing copy,
+store-listing/ASO, privacy/data-safety docs, the pre-submission checklist, the loop-memory file,
+IMPROVEMENT_LOG, PENDING_OPS, REMAINING_STEPS, ROADMAP — is LIVING. When the thing it describes
+changes (code, pricing, positioning, data flows, architecture), UPDATE the artifact in the SAME
+work so it never contradicts the current product. A doc that contradicts reality is a BUG (and a
+store-review / trust risk); fixing it CLEARS the value bar.
+Avoid BOTH failure modes equally: (a) STALE — write-once docs that drift out of date;
+(b) CHURN — rewriting things for their own sake. The rule is CONSISTENCY WITH REALITY, not constant
+rewriting. Do NOT churn STABLE ANCHORS just to look busy — the Vision/goal, the guard rules (DONE
+GUARD, API COST CONTRACT, anti-gaming, privacy/security bar), and the protected guard/CI tests are
+intentionally stable ratchets; change them only on a real, justified shift.
+
 ## P0 — Cost & entitlement architecture (HIGHEST PRIORITY — do first)
 The iOS app historically called paid APIs DIRECTLY (embedded/Keychain key in ClaudeVisionService
 etc.) and StoreKit entitlement is CLIENT-ONLY. For a freemium business that pays the API bill,
