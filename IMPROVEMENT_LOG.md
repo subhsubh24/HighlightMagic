@@ -5,6 +5,20 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #58 | Evals: add golden fixture + env-gated detection quality eval | G3 (partial) | 2026-06-25 |
+| #57 | P0 (iOS): remove BYOK API-key input from SettingsView | P0 | 2026-06-25 |
+| #56 | P0: add entitlement gate to /api/plan (Sonnet planner route) | P0/B3 | 2026-06-25 |
+| #55 | P0: add entitlement gate to /api/sfx, /api/voiceover, /api/music routes | P0/B3 | 2026-06-25 |
+| #54 | ROADMAP: add Track G (world-class quality, validation & evals) + DoD gate | meta | 2026-06-25 |
+| #53 | P0: server-side entitlement gate + iOS frame-scoring proxy (business-paid) | P0/B3 | 2026-06-25 |
+| #52 | P0 DECISION: BUSINESS-PAID (not BYOK) — correct the factory's wrong guess | P0/meta | 2026-06-25 |
+| #51 | ROADMAP: add Progress format contract; make Definition-of-Done items checkboxes | meta | 2026-06-25 |
+| #50 | meta(Run 10): housekeeping — loop state, improvement log, business case update | meta | 2026-06-25 |
+| #49 | E5: Add Plausible analytics module + wire landing page conversion events | E5 | 2026-06-25 |
+| #48 | E4: Add content calendar + 12 post scripts (8-week launch plan) | E4 | 2026-06-25 |
+| #47 | E3: Add App Store Optimization package (name, keywords, description, screenshots) | E3 | 2026-06-25 |
+| #46 | E2: Add brand kit guide — colors, type, voice, logo & social assets spec | E2 | 2026-06-25 |
+| #45 | B4: Switch planner from Opus 4.8 → Sonnet 4.6 (−80% COGS per export) | B4 | 2026-06-25 |
 | #42 | Add E1 marketing landing page at /landing + /api/waitlist email capture endpoint | E1 | 2026-06-24 |
 | #37 | Fix A3: replace 8 URL force-unwraps in ElevenLabsService with guard-let | A3 | 2026-06-24 |
 | #36 | Fix A3: missing introCardEnabled/outroCardEnabled in AppState; remove force-unwraps | A3 | 2026-06-24 |
@@ -40,8 +54,3 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
-- PR #45: B4 Switch planner Opus 4.8 → Sonnet 4.6 (−80% planning COGS; fixes unit economics) — auto-merge armed (Run 10)
-- PR #46: E2 Add docs/brand-kit.md (color system, typography, logo spec, voice & tone, social assets) — auto-merge armed (Run 10)
-- PR #47: E3 Add docs/aso-package.md (full App Store Optimization package) — auto-merge armed (Run 10)
-- PR #48: E4 Add docs/content-calendar.md + docs/content/post-batch-1.md (8-week calendar + 12 post scripts) — auto-merge armed (Run 10)
-- PR #49: E5 Add web/src/lib/analytics.ts + wire 4 landing page conversion events — auto-merge armed (Run 10)

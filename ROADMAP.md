@@ -82,7 +82,7 @@ that lets an extracted key or modified client run up cost and bypass the free li
       *(cost metering #17; frame cap #19; model IDs centralized #11; planner/validator
       pricing #25/#26/#28 — COMPLETE)*
 - [ ] B3. Server-side freemium enforcement + entitlement (ties to P0).
-- [ ] B4. Cost-optimized model selection (multimodal COGS is the margin — docs/MODEL_COSTS.md).
+- [x] B4. Cost-optimized model selection (multimodal COGS is the margin — docs/MODEL_COSTS.md).
       RESEARCH cheaper hosted AND open-source/self-hostable models per paid task; benchmark
       quality-vs-cost; route each task to the cheapest model that clears its quality bar;
       config-driven model map; dated decision log. DONE when the map + benchmark + log exist
@@ -106,20 +106,25 @@ that lets an extracted key or modified client run up cost and bypass the free li
 - [x] D4. Stability pass: no crashes; sensible permissions; no debug/placeholder content. *(#22)*
 
 ## Track E — Marketing engine + growth (build to 100%; publishing gated on funded accounts)
-- [ ] E1. Conversion-focused **landing page + waitlist** on web/ (hero, demo/preview, value
+- [x] E1. Conversion-focused **landing page + waitlist** on web/ (hero, demo/preview, value
       props, pricing, FAQ, email capture wired to a store the owner can later connect).
-- [ ] E2. **Brand kit**: name treatment, color/type system, logo/app-icon usage, voice/tone,
+      *(landing page + /api/waitlist #42)*
+- [x] E2. **Brand kit**: name treatment, color/type system, logo/app-icon usage, voice/tone,
       social avatar/banner, OG/share images — as real assets + a brand guide doc.
-- [ ] E3. **ASO package**: title/subtitle/keyword variants, description, promo text,
+      *(docs/brand-kit.md #46)*
+- [x] E3. **ASO package**: title/subtitle/keyword variants, description, promo text,
       screenshot captions + a screenshot/preview shotlist — grounded in category research.
-- [ ] E4. **Content + owned-channel engine**: a batch of post drafts (TikTok/Reels/Shorts/X),
+      *(docs/aso-package.md #47)*
+- [x] E4. **Content + owned-channel engine**: a batch of post drafts (TikTok/Reels/Shorts/X),
       hooks, captions, a posting calendar, and short-form video concept scripts. BUILD +
       STAGE only — never auto-publish; publishing/ads are owner steps on funded accounts.
-- [ ] E5. **Analytics + funnel**: privacy-respecting web analytics + event taxonomy
+      *(docs/content-calendar.md + docs/content/post-batch-1.md #48)*
+- [x] E5. **Analytics + funnel**: privacy-respecting web analytics + event taxonomy
       (visit → waitlist → install → activate → export → Pro), conversion instrumentation,
       and a simple dashboard. No fake numbers — measure the real funnel once live. These
       real numbers feed back into docs/BUSINESS_CASE.md (Track F) over time, so the estimate
       improves from data instead of staying a launch-day guess.
+      *(web/src/lib/analytics.ts + landing page events #49)*
 
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
