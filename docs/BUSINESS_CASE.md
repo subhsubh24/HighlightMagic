@@ -1,7 +1,30 @@
+```yaml
+# BUSINESS_CASE_SUMMARY (machine-readable; keep in sync with the analysis below)
+currency: USD
+arr_year1:        # year-1 run-rate ARR (month-12 MRR x 12), per scenario — derived from the model below
+  conservative: 2040
+  base: 5160
+  optimistic: 33460
+planning_case: base
+floor_usd: 100000
+floor_met_year1: false   # year-1 base run-rate ($5,160) is far below the $100K floor
+time_to_floor: "base: ~year 3.5 (~month 42; ARR reaches ~$89,900 then crosses $100K shortly after); optimistic: ~year 2 (month 22-24, at $14.99); conservative: ~year 5-6"
+as_of: 2026-06-25
+```
+
 # HighlightMagic — Business Case
 
 Living document. Updated each loop run as tracks land and real data replaces estimates.
 **Inputs: cited, never invented. All assumptions stated explicitly.**
+
+> **Floor not met in year 1 — levers are the priority (maximize mandate, Track F8).** The base case
+> only crosses the $100K ARR floor at ~year 3.5; year-1 run-rate ARR is ~$5,160. To pull base
+> year-1 above $100K (or pull the timeline in dramatically), the highest-return levers for
+> HighlightMagic are, in order: (a) **per-export API COGS reduction** (Claude/ElevenLabs/AtlasCloud)
+> — margin is the crux; (b) **pricing/tiers** (annual, export-credit packs, a higher/creator tier;
+> $14.99 already shortens the timeline ~42→~28 months); (c) **free→paid conversion**. Build the
+> high-return ones and RECOMPUTE this summary block when they ship. Every number honest/researched —
+> anti-gaming holds.
 
 ## Mandate — MAXIMIZE revenue ($100K/yr is the FLOOR, not the target)
 Do NOT settle once the base case clears $100K/yr. Build toward the OPTIMISTIC scenario by pushing
