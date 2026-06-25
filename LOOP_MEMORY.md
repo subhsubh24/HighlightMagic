@@ -37,17 +37,19 @@ Read every run BEFORE selecting work.
 - PR #15 added SwiftPM test target; PR #16 attempts destination fix but is broken/off-limits.
 - `ios` job fails pre-existingly — DO NOT attempt to fix CI destination (requires editing `.github/` — BLAST RADIUS).
 
-**P0 (cost + entitlement architecture) — BYOK model confirmed**
-- iOS app calls `api.anthropic.com` directly via `ClaudeVisionService` (BYOK model confirmed)
-- The BYOK model is intentional — users provide their own API keys
-- Free quota is enforced client-side only (UserDefaults) — bypassable by reinstall
-- Server-side quota (B3) requires BOTH Vercel KV AND an auth layer before it is meaningful
+**P0 (cost + entitlement architecture) — BUSINESS-PAID (owner-decided 2026-06-25)**
+- CORRECTION: the earlier "BYOK model confirmed" conclusion was a WRONG guess. Owner decided
+  BUSINESS-PAID. The business pays all API bills, so P0's business-paid routing MUST be built.
+- Route ALL paid calls (Anthropic/ElevenLabs/AtlasCloud) through `web/`; REMOVE the iOS
+  embedded/Keychain key path (ClaudeVisionService etc.); keys server-side only.
+- Free quota (5/mo + watermark) + Pro entitlement enforced SERVER-SIDE before any paid call.
+- COGS is now fully business-borne — redo docs/BUSINESS_CASE.md margin under business-paid.
 
-**B3 (server-side quota) — BLOCKED: needs auth layer + Vercel KV**
-- Any `/api/quota/*` endpoint is trivially bypassable without server-verified identity
-- Requires an auth provider (Clerk, Supabase Auth, or similar) before quota routes make sense
-- After auth is added: re-use `quota.ts` library from the closed PR #29 branch
-- Owner must also provision Vercel KV (see PENDING_OPS.md)
+**B3 (server-side quota/entitlement) — UNBLOCKED by the business-paid decision; now required**
+- Server-verified identity is needed (App Store Server API receipt/transaction verification, or
+  an auth provider) so quota/entitlement can't be bypassed; provision the store (e.g. Vercel KV).
+- Re-use the `quota.ts` library from the closed PR #29 branch once identity is in place.
+- Owner-only bits (store API credentials, KV provisioning) go in PENDING_OPS.md/REMAINING_STEPS.md.
 
 **B4 (model cost optimization) — IN PR #45 (auto-merge pending)**
 - Switched `CLAUDE_PLANNER` from `claude-opus-4-8` to `claude-sonnet-4-6`
@@ -56,7 +58,7 @@ Read every run BEFORE selecting work.
 - Once merged: B4 is substantively complete; tick ROADMAP box next run
 
 ### ROADMAP box status (verified against git + PRs as of 2026-06-25 Run 10)
-- [ ] P0 — BYOK model confirmed; P0 "business-paid routing" bullets don't apply; B3 still needed
+- [ ] P0 — BUSINESS-PAID decided (owner 2026-06-25); build server-side routing + entitlement + metering; supersedes the prior BYOK note
 - [x] A1 — iOS CI green via SwiftPM (#15); destination issue minor; treat as done
 - [ ] A2 — substantially done in PRs #1–#8 (needs verification pass)
 - [ ] A3 — partial: fatalError (#13), StoreKit concurrency (#20), baseAddress! (#23), model ID + blocking-read (#26), AppState props + AtlasCloud/ElevenLabs force-unwraps (#36), ElevenLabsService URL force-unwraps (#37); iOS codebase now quite clean; sendability audit may be largely complete
@@ -100,7 +102,7 @@ Read every run BEFORE selecting work.
 - Do not fix "On-device AI" claim in web HTML metadata — done in #32
 - Do not re-add frame downscaling (480p JPEG 0.6 already in frame-extractor.ts)
 - Do not re-cap validation loop (already at 2 passes in DetectingStep.tsx)
-- Do not create a new BYOK Settings UI — the app already uses BYOK
+- BUSINESS-PAID model (owner-decided 2026-06-25): do NOT build BYOK Settings/onboarding UI; instead REMOVE the iOS embedded/Keychain key path and route paid calls through the backend (P0)
 - Do not create B3 quota endpoints without first adding an auth layer
 - Do not re-create the landing page at /landing — done in PR #42
 - Do not re-create /api/waitlist endpoint — done in PR #42

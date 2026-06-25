@@ -3,6 +3,13 @@
 Living document. Updated each loop run as tracks land and real data replaces estimates.
 **Inputs: cited, never invented. All assumptions stated explicitly.**
 
+> ⚠️ CORRECTION (owner-decided 2026-06-25): the model is **BUSINESS-PAID**, NOT BYOK. An earlier
+> version assumed users bring their own Anthropic key and that iOS frame scoring was user-borne —
+> that is WRONG and UNDERSTATED COGS. EVERY paid call (Anthropic detection + planning + validation,
+> ElevenLabs, AtlasCloud) is business-borne. All COGS / unit-economics / margin sections below MUST
+> be re-derived under business-paid at the (now lower) gross margin, and the ≥$100K/yr path
+> re-checked. Do not present BYOK numbers as current.
+
 ---
 
 ## 1. What the Business Is
@@ -11,8 +18,7 @@ HighlightMagic is a freemium iOS app + web backend:
 - **App**: Swift 6 / iOS 18, distributed through the App Store
 - **Backend**: Next.js on Vercel (AI orchestration, audio/video generation)
 - **Pricing model**: 5 free exports/month → Pro at $9.99/month (unlimited exports, no watermark)
-- **BYOK**: Users supply their own Anthropic API key for AI highlight detection (reduces per-export COGS)
-- **Business-paid APIs**: ElevenLabs (music/SFX/TTS), AtlasCloud (photo animation, video gen), Claude for web-side planning + validation
+- **Business-paid APIs (ALL of them)**: Anthropic (detection + planning + validation), ElevenLabs (music/SFX/TTS), AtlasCloud (photo/video gen). Every paid call is a business COGS line — there is NO user-borne portion.
 
 ---
 

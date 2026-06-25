@@ -39,17 +39,23 @@ it, so progress not reflected in a checkbox does not count.
 - ONGOING: keep the checkboxes in sync with reality in EVERY bookkeeping run — tick on real
   completion, un-tick on regression. Never leave a box stale.
 
-## P0 — Cost & entitlement architecture (load-bearing; revenue + cost boundary)
-The iOS app historically called paid APIs DIRECTLY and StoreKit entitlement is CLIENT-ONLY.
-For a freemium business that pays the API bill, that lets an extracted key or modified
-client run up cost and bypass the free limit. Enforce the model:
-- [ ] Confirm intended model (business-paid vs bring-your-own-key). If business-paid:
-- [ ] Route ALL paid API calls (Claude/ElevenLabs/AtlasCloud) through the `web/` backend;
-      remove embedded keys from the iOS app; keys live server-side only.
-- [ ] Enforce the free quota (5 exports/user/month) + Pro entitlement SERVER-SIDE before
-      any paid call (App Store Server API / signed-transaction verification).
+## P0 — Cost & entitlement architecture (HIGHEST PRIORITY — do first)
+The iOS app historically called paid APIs DIRECTLY (embedded/Keychain key in ClaudeVisionService
+etc.) and StoreKit entitlement is CLIENT-ONLY. For a freemium business that pays the API bill,
+that lets an extracted key or modified client run up cost and bypass the free limit. Fix it:
+- [x] MODEL DECIDED (owner, 2026-06-25): **BUSINESS-PAID**, NOT bring-your-own-key. This SUPERSEDES
+      every prior "BYOK" assumption anywhere in the repo (loop-memory/PENDING_OPS/BUSINESS_CASE) —
+      correct all BYOK references; the business-paid routing bullets below DO apply and MUST be built.
+- [ ] Route ALL paid API calls (Anthropic/ElevenLabs/AtlasCloud) through the `web/` backend;
+      REMOVE the embedded/Keychain API-key path from the iOS app (ClaudeVisionService etc.);
+      keys live SERVER-SIDE only.
+- [ ] Enforce the free quota (5 free exports/mo + watermark) + Pro entitlement SERVER-SIDE,
+      authoritatively, BEFORE any paid call (App Store Server API / signed-transaction
+      verification), so a tampered client cannot run up the bill or bypass the limit.
 - [ ] Meter + log per-export API cost; cap regeneration (plan.md: <=2 validation passes);
       verify/extend the existing detection-cache + asset-cache.
+- [ ] Redo docs/BUSINESS_CASE.md COGS under BUSINESS-PAID: ALL of Claude detection + ElevenLabs +
+      AtlasCloud are business-borne now (the prior BYOK split understated COGS — re-derive the margin).
 
 ## Track A — iOS app (complete + polish to App-Store quality)
 - [x] A1. iOS CI green (`xcodebuild build test`) and promoted to a REQUIRED check.

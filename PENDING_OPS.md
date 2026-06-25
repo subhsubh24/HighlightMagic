@@ -46,14 +46,19 @@ from the verified session.
 4. Call `quota/check` at the start of the detection pipeline; call `quota/increment` on
    successful export; return HTTP 402 if limit is exceeded for free users
 
-## P0 — iOS API Keys (BYOK model confirmed)
+## P0 — API keys + entitlement (BUSINESS-PAID model, owner-decided 2026-06-25)
 
-The app is confirmed BYOK (bring-your-own-key). Users configure their own Anthropic API key
-in Settings > AI Settings. The implementation is already functionally correct.
+CORRECTION: the prior "BYOK confirmed" note here was wrong. The model is BUSINESS-PAID — the
+business holds all API keys server-side and pays the bills. The factory must REMOVE the iOS
+embedded/Keychain key path and route all paid calls through `web/`, with server-side quota +
+Pro-entitlement enforcement before any paid call.
 
-Remaining owner action: add a clear onboarding screen explaining BYOK and where to get an
-API key (console.anthropic.com). The factory will add a Settings UI entry point in a future
-run; the onboarding copy needs owner review before it ships.
+Owner-only actions (the factory cannot do these):
+- Set live `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ATLASCLOUD_API_KEY` in Vercel env (server-side only).
+- Provision the server-side quota/identity store (e.g. Vercel KV) the factory wires up.
+- Set up App Store Server API credentials (key ID / issuer ID / .p8) for server-side
+  receipt/transaction verification of Pro entitlement.
+- Set the Anthropic Console hard spend cap (cost backstop).
 
 ## iOS App Signing & Provisioning
 
