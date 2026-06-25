@@ -24,11 +24,12 @@ if (process.env.EVAL_MODE !== "1") {
 }
 
 import path from "path";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { planFromScores, type ScoredFrame, type DetectionResult } from "../actions/detect";
 
 interface EvalFixture {
   _description: string;
+  _templateHint?: string;
   _expected: {
     minClips: number;
     maxClips: number;
@@ -82,7 +83,7 @@ async function runFixture(fixturePath: string): Promise<EvalResult> {
     result = await planFromScores(
       fixture.frames,
       fixture.scores,
-      "sports", // template hint
+      fixture._templateHint ?? undefined,
       undefined, // userFeedback
       undefined, // creativeDirection
       undefined, // disabledFeatures
@@ -171,7 +172,10 @@ async function main() {
   console.log(`      ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "set ✓" : "MISSING ✗"}\n`);
 
   const fixturesDir = path.join(__dirname, "fixtures");
-  const fixtures = [path.join(fixturesDir, "sports-highlight.json")];
+  const fixtures = readdirSync(fixturesDir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .map((f) => path.join(fixturesDir, f));
 
   const results: EvalResult[] = [];
   for (const fixture of fixtures) {
