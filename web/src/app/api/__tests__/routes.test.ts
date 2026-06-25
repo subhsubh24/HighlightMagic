@@ -32,6 +32,16 @@ vi.mock("@/lib/sfx-library", () => ({
   lookupSfxLibrary: vi.fn(() => null),
   cacheSfxResult: vi.fn(),
 }));
+vi.mock("@/lib/elevenlabs-music", () => ({
+  generateMusic: vi.fn(),
+}));
+// Default: quota OK. Individual tests can override with mockResolvedValueOnce.
+vi.mock("@/lib/entitlement", () => ({
+  checkExportAllowed: vi.fn().mockResolvedValue({
+    allowed: true, isPro: false, remaining: 4, limit: 5, used: 1,
+  }),
+  consumeExport: vi.fn().mockResolvedValue(2),
+}));
 
 // ── Helper to create a mock Request ──
 
@@ -48,9 +58,17 @@ function jsonRequest(body: unknown, headers?: Record<string, string>): Request {
 describe("POST /api/sfx", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/sfx/route");
+    const res = await POST(jsonRequest({ prompt: "whoosh", durationMs: 2000 }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
   it("returns 400 when prompt is missing", async () => {
     const { POST } = await import("@/app/api/sfx/route");
-    const res = await POST(jsonRequest({ durationMs: 2000 }));
+    const res = await POST(jsonRequest({ userId: "test-user", durationMs: 2000 }));
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain("prompt");
@@ -58,8 +76,21 @@ describe("POST /api/sfx", () => {
 
   it("returns 400 when prompt is too long", async () => {
     const { POST } = await import("@/app/api/sfx/route");
-    const res = await POST(jsonRequest({ prompt: "x".repeat(501) }));
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "x".repeat(501) }));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/sfx/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "whoosh" }));
+    expect(res.status).toBe(402);
+    const data = await res.json();
+    expect(data.upgrade).toBe(true);
   });
 
   it("returns completed result on success", async () => {
@@ -71,7 +102,7 @@ describe("POST /api/sfx", () => {
     });
 
     const { POST } = await import("@/app/api/sfx/route");
-    const res = await POST(jsonRequest({ prompt: "whoosh" }));
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "whoosh" }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.status).toBe("completed");
@@ -86,7 +117,7 @@ describe("POST /api/sfx", () => {
     });
 
     const { POST } = await import("@/app/api/sfx/route");
-    const res = await POST(jsonRequest({ prompt: "boom" }));
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "boom" }));
     expect(res.status).toBe(502);
   });
 });
@@ -96,16 +127,35 @@ describe("POST /api/sfx", () => {
 describe("POST /api/voiceover", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/voiceover/route");
+    const res = await POST(jsonRequest({ text: "Nice shot!" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
   it("returns 400 when text is missing", async () => {
     const { POST } = await import("@/app/api/voiceover/route");
-    const res = await POST(jsonRequest({}));
+    const res = await POST(jsonRequest({ userId: "test-user" }));
     expect(res.status).toBe(400);
   });
 
   it("returns 400 when text is too long", async () => {
     const { POST } = await import("@/app/api/voiceover/route");
-    const res = await POST(jsonRequest({ text: "x".repeat(1001) }));
+    const res = await POST(jsonRequest({ userId: "test-user", text: "x".repeat(1001) }));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/voiceover/route");
+    const res = await POST(jsonRequest({ userId: "test-user", text: "Nice shot!" }));
+    expect(res.status).toBe(402);
   });
 
   it("returns completed result", async () => {
@@ -117,7 +167,55 @@ describe("POST /api/voiceover", () => {
     });
 
     const { POST } = await import("@/app/api/voiceover/route");
-    const res = await POST(jsonRequest({ text: "What a play!", voiceCharacter: "male-broadcaster-hype" }));
+    const res = await POST(jsonRequest({ userId: "test-user", text: "What a play!", voiceCharacter: "male-broadcaster-hype" }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.status).toBe("completed");
+  });
+});
+
+// ── Music Route ──
+
+describe("POST /api/music/submit", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/music/submit/route");
+    const res = await POST(jsonRequest({ prompt: "epic sports anthem" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
+  it("returns 400 when prompt is missing", async () => {
+    const { POST } = await import("@/app/api/music/submit/route");
+    const res = await POST(jsonRequest({ userId: "test-user" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("prompt");
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/music/submit/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "epic sports anthem" }));
+    expect(res.status).toBe(402);
+  });
+
+  it("returns completed result on success", async () => {
+    const { generateMusic } = await import("@/lib/elevenlabs-music");
+    (generateMusic as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      status: "completed",
+      audioUrl: "data:audio/mpeg;base64,abc",
+      duration: 15,
+    });
+
+    const { POST } = await import("@/app/api/music/submit/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "epic sports anthem" }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.status).toBe("completed");
