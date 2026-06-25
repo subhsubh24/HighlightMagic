@@ -6,8 +6,6 @@ struct SettingsView: View {
     @State private var accountService = UserAccountService.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
     @State private var showDeleteConfirmation = false
-    @State private var showAPIKeyInput = false
-    @State private var apiKeyInput = ""
 
     var body: some View {
         ZStack {
@@ -81,12 +79,14 @@ struct SettingsView: View {
                     Text("Projects")
                 }
 
-                // AI Configuration
+                // AI Processing
                 Section {
-                    Button {
-                        showAPIKeyInput = true
-                    } label: {
-                        Label("Claude Vision API Key", systemImage: "key")
+                    HStack {
+                        Label("AI Processing", systemImage: "cpu")
+                        Spacer()
+                        Text("Cloud")
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
                     }
 
                     HStack {
@@ -99,7 +99,9 @@ struct SettingsView: View {
                             )
                     }
                 } header: {
-                    Text("AI Settings")
+                    Text("AI")
+                } footer: {
+                    Text("AI highlight detection and editing run on our secure servers. No setup required.")
                 }
 
                 // Export settings
@@ -189,22 +191,6 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently delete all your saved projects and reset your account. This action cannot be undone.")
-        }
-        .alert("Claude Vision API Key", isPresented: $showAPIKeyInput) {
-            TextField("sk-ant-...", text: $apiKeyInput)
-                .textContentType(.password)
-            Button("Save") {
-                ClaudeVisionService.configureAPIKey(apiKeyInput)
-                apiKeyInput = ""
-            }
-            Button("Remove Key", role: .destructive) {
-                ClaudeVisionService.removeAPIKey()
-            }
-            Button("Cancel", role: .cancel) {
-                apiKeyInput = ""
-            }
-        } message: {
-            Text("Enter your Anthropic API key to enable advanced AI refinement for highlight detection.")
         }
     }
 
