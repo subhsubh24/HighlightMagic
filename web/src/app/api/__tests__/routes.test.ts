@@ -239,12 +239,31 @@ describe("POST /api/intro", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/intro/route");
+    const res = await POST(jsonRequest({ prompt: "Epic intro card" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/intro/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "Epic intro card" }));
+    expect(res.status).toBe(402);
+  });
+
   it("returns prediction ID on success", async () => {
     const { submitTextToVideo } = await import("@/lib/atlascloud");
     (submitTextToVideo as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_intro_123");
 
     const { POST } = await import("@/app/api/intro/route");
-    const res = await POST(jsonRequest({ prompt: "Epic intro card", duration: 5 }));
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "Epic intro card", duration: 5 }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.predictionId).toBe("pred_intro_123");
@@ -262,12 +281,31 @@ describe("POST /api/thumbnail", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/thumbnail/route");
+    const res = await POST(jsonRequest({ imageData: "data:image/jpeg;base64,abc" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/thumbnail/route");
+    const res = await POST(jsonRequest({ userId: "test-user", imageData: "data:image/jpeg;base64,abc" }));
+    expect(res.status).toBe(402);
+  });
+
   it("returns prediction ID on success", async () => {
     const { submitBackgroundRemoval } = await import("@/lib/atlascloud");
     (submitBackgroundRemoval as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_thumb_456");
 
     const { POST } = await import("@/app/api/thumbnail/route");
-    const res = await POST(jsonRequest({ imageData: "data:image/jpeg;base64,abc" }));
+    const res = await POST(jsonRequest({ userId: "test-user", imageData: "data:image/jpeg;base64,abc" }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.predictionId).toBe("pred_thumb_456");
@@ -285,12 +323,31 @@ describe("POST /api/upscale", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/upscale/route");
+    const res = await POST(jsonRequest({ imageData: "data:image/jpeg;base64,abc" }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/upscale/route");
+    const res = await POST(jsonRequest({ userId: "test-user", imageData: "data:image/jpeg;base64,abc" }));
+    expect(res.status).toBe(402);
+  });
+
   it("returns prediction ID on success", async () => {
     const { submitImageUpscale } = await import("@/lib/atlascloud");
     (submitImageUpscale as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_up_789");
 
     const { POST } = await import("@/app/api/upscale/route");
-    const res = await POST(jsonRequest({ imageData: "data:image/jpeg;base64,abc" }));
+    const res = await POST(jsonRequest({ userId: "test-user", imageData: "data:image/jpeg;base64,abc" }));
     const data = await res.json();
     expect(data.predictionId).toBe("pred_up_789");
   });
@@ -313,12 +370,39 @@ describe("POST /api/talking-head", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when userId is missing", async () => {
+    const { POST } = await import("@/app/api/talking-head/route");
+    const res = await POST(jsonRequest({
+      imageData: "data:image/jpeg;base64,abc",
+      audioData: "data:audio/mp3;base64,xyz",
+    }));
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain("userId");
+  });
+
+  it("returns 402 when quota is exceeded", async () => {
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      allowed: false, isPro: false, remaining: 0, limit: 5, used: 5,
+      reason: "free monthly limit reached",
+    });
+    const { POST } = await import("@/app/api/talking-head/route");
+    const res = await POST(jsonRequest({
+      userId: "test-user",
+      imageData: "data:image/jpeg;base64,abc",
+      audioData: "data:audio/mp3;base64,xyz",
+    }));
+    expect(res.status).toBe(402);
+  });
+
   it("returns prediction ID on success", async () => {
     const { submitLipSync } = await import("@/lib/atlascloud");
     (submitLipSync as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_th_202");
 
     const { POST } = await import("@/app/api/talking-head/route");
     const res = await POST(jsonRequest({
+      userId: "test-user",
       imageData: "data:image/jpeg;base64,abc",
       audioData: "data:audio/mp3;base64,xyz",
       duration: 7,

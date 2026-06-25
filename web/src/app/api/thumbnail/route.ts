@@ -1,4 +1,5 @@
 import { submitBackgroundRemoval } from "@/lib/atlascloud";
+import { checkExportAllowed } from "@/lib/entitlement";
 
 export const runtime = "nodejs";
 
@@ -17,10 +18,24 @@ export async function POST(req: Request) {
       return Response.json({ error: "Request body too large" }, { status: 413 });
     }
 
-    const { imageData } = await req.json();
+    const { userId, signedTransaction, imageData } = await req.json();
 
+    if (!userId || typeof userId !== "string") {
+      return Response.json({ error: "userId is required" }, { status: 400 });
+    }
     if (!imageData || typeof imageData !== "string") {
       return Response.json({ error: "imageData is required" }, { status: 400 });
+    }
+
+    const decision = await checkExportAllowed({
+      userId,
+      signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
+    });
+    if (!decision.allowed) {
+      return Response.json(
+        { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
+        { status: 402 }
+      );
     }
 
     const predictionId = await submitBackgroundRemoval(imageData);
