@@ -1,0 +1,51 @@
+{
+  "_description": "Golden fixture for sports highlight detection eval. Synthetic frame data representing a 90-second basketball game clip with clear highlight moments at known timestamps.",
+  "_expected": {
+    "minClips": 2,
+    "maxClips": 8,
+    "minTotalDurationSec": 20,
+    "maxTotalDurationSec": 90,
+    "acceptableThemes": ["sports", "fitness", "cinematic"],
+    "requiredPlanFields": ["musicPrompt", "sfx", "voiceover", "intro", "outro"]
+  },
+  "frames": [
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 0, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 5, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 10, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 15, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 20, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 25, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 30, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 35, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 40, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 45, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 50, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 55, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 60, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 65, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 70, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 75, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 80, "base64": "" },
+    { "sourceFileId": "video-001", "sourceType": "video", "sourceFileName": "basketball-game.mp4", "timestamp": 85, "base64": "" }
+  ],
+  "scores": [
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 0,  "score": 0.3, "label": "game start - quiet" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 5,  "score": 0.4, "label": "dribbling" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 10, "score": 0.85, "label": "fast break - high energy", "narrativeRole": "HOOK" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 15, "score": 0.92, "label": "slam dunk attempt", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 20, "score": 0.88, "label": "crowd reaction", "narrativeRole": "REACTION" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 25, "score": 0.35, "label": "timeout" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 30, "score": 0.45, "label": "coaching huddle" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 35, "score": 0.5,  "label": "free throw setup" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 40, "score": 0.75, "label": "three-pointer shot", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 45, "score": 0.8,  "label": "defensive block" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 50, "score": 0.3,  "label": "inbound play" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 55, "score": 0.4,  "label": "ball movement" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 60, "score": 0.9,  "label": "alley-oop", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 65, "score": 0.95, "label": "game-winning shot", "narrativeRole": "CLOSER" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 70, "score": 0.88, "label": "celebration" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 75, "score": 0.3,  "label": "post-game" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 80, "score": 0.25, "label": "locker room" },
+    { "sourceFileId": "video-001", "sourceType": "video", "timestamp": 85, "score": 0.2,  "label": "wrap-up" }
+  ]
+}
