@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-25 (Run 12).
+be executed. Last updated: 2026-06-25 (Run 13).
 
 ---
 
@@ -19,9 +19,13 @@ owner knows the current state and can optionally unblock them faster.
 and `CloudScoringService.swift` still call `api.anthropic.com` directly using an embedded/Keychain
 API key. This must be removed for the business-paid model to be complete (P0).
 
+**Run 13 progress**: `Sources/Utilities/BackendConfig.swift` added (PR #75) — canonical URL resolver
+with env var (DEBUG-only) → Info.plist → production HTTPS fallback. This is the prerequisite that
+the service-layer key removal PRs will use to route calls through the web backend.
+
 The factory cannot compile-verify Swift on Linux, so this is being done conservatively (one file
-per PR). The SettingsView BYOK UI has already been removed (PR #57). The service-layer removal
-will follow in subsequent runs.
+per PR). The SettingsView BYOK UI has already been removed (PR #57). Service-layer removal is the
+next factory priority.
 
 **What the owner can do to unblock**: none required — the factory will handle this incrementally.
 However, if you want to accelerate: after removing each service's direct Anthropic calls, the iOS

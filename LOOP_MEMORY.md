@@ -4,7 +4,40 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-25 (Run 12)
+## Last run: 2026-06-25 (Run 13)
+
+### What was shipped (pending merge this run)
+
+- **PR #72** (G2): 14 unit tests for `VercelKVQuotaStore` + `isKVConfigured()` in `kv-quota-store.test.ts`. Covers all env-var combinations, null→0 fallback, key format, cross-user/cross-period isolation. Two reviewers: APPROVE.
+- **PR #73** (G2): 24 tests for 4 routes from PR #61 with zero prior coverage (`/api/outro`, `/api/style-transfer`, `/api/voice-clone`, `/api/animate/submit`). Tests validation ordering, quota 402, content-length 413, duration/strength clamping. Voice-clone uses FormData. Two reviewers: APPROVE.
+- **PR #74** (G3): Adds `travel-vlog-highlight.json` eval fixture (15 frames, Rome travel vlog, 6 high-score moments with HOOK/HERO/REACTION/RHYTHM/HERO/CLOSER narrative arc). Updates `detect.eval.ts` to auto-discover fixtures via `readdirSync` + per-fixture `_templateHint`. Two reviewers: APPROVE.
+- **PR #75** (P0): Adds `Sources/Utilities/BackendConfig.swift` — canonical iOS backend URL resolver. Env var gated to `#if DEBUG`; HTTPS-only scheme enforcement; Info.plist as intended staging override. Prerequisite for iOS service-layer key removal. Two reviewers: APPROVE (after Reviewer A's HTTPS/DEBUG hardening feedback addressed).
+
+### Housekeeping produced this run
+- This file (LOOP_MEMORY.md): Run 13 state
+- IMPROVEMENT_LOG.md: PRs #61-68 updated from "pending" to "2026-06-25"; #68-71 added; #72-75 added as pending merge
+
+### What NOT to re-do (additions for Run 13)
+- Do not re-add kv-quota-store.test.ts — done in PR #72 (Run 13)
+- Do not re-add pr61-routes.test.ts — done in PR #73 (Run 13)
+- Do not re-add travel-vlog-highlight.json fixture — done in PR #74 (Run 13)
+- Do not re-modify detect.eval.ts for auto-discovery or per-fixture templateHint — done in PR #74 (Run 13)
+- Do not re-create Sources/Utilities/BackendConfig.swift — done in PR #75 (Run 13)
+
+### ROADMAP box status changes this run
+- G2: PRs #72+#73 add 38 more tests (kv-quota-store + pr61 route coverage). Frame-extractor.ts and audio-mux.ts remain 0 tests.
+- G3: PR #74 adds travel fixture + auto-discovery. Sports + travel fixtures now covered. Still needed: music/SFX/voiceover quality evals, scheduled eval run.
+- P0: PR #75 adds BackendConfig.swift prerequisite for iOS key removal. iOS service-layer key removal still pending (next priority).
+
+### Next priorities (updated Run 13)
+1. **P0 iOS service-layer key removal** — `ClaudeVisionService.swift` + `TapeValidationService.swift` + `AIEffectRecommendationService.swift` + `CloudScoringService.swift` still call `api.anthropic.com` directly. Now that `BackendConfig.swift` exists (PR #75), replace calls with `URLSession` to the web backend. One file per PR; conservative.
+2. **G2 coverage expansion** — `frame-extractor.ts` (523 LOC, 0 tests) + `audio-mux.ts` (308 LOC, 0 tests) are the highest-value uncovered files. Browser-dependent; need jsdom/mock strategy.
+3. **G3 eval completion** — add music/SFX/voiceover quality eval fixtures; wire a scheduled eval run (GitHub Actions cron gated on `EVAL_MODE=1`).
+4. **A3 sendability audit** — remaining force-unwraps + Swift 6 concurrency issues in Sources/.
+
+---
+
+## Previous run: 2026-06-25 (Run 12)
 
 ### DEEP AUDIT — 2026-06-25 (Run 12)
 Full read-only codebase sweep performed. Findings by lens:
