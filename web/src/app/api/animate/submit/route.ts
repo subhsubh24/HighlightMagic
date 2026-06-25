@@ -1,4 +1,5 @@
 import { submitPhotoAnimation } from "@/lib/kling";
+import { checkExportAllowed } from "@/lib/entitlement";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,6 +13,7 @@ const MAX_BODY_SIZE = 20 * 1024 * 1024;
  * Uses a route handler instead of a server action to avoid React Flight
  * serialization limits — large base64 data URIs (multi-MB photos) exceed
  * the maximum array nesting depth in React 19's Flight protocol.
+ * P0: requires userId + enforces freemium quota server-side before any paid call.
  */
 export async function POST(req: Request) {
   try {
@@ -22,7 +24,23 @@ export async function POST(req: Request) {
       return Response.json({ error: "Request body too large" }, { status: 413 });
     }
 
-    const { imageData, prompt, duration } = await req.json();
+    const { userId, signedTransaction, imageData, prompt, duration } = await req.json();
+
+    if (!userId || typeof userId !== "string") {
+      console.warn("[animate/submit] Rejected: missing or invalid userId");
+      return Response.json({ error: "userId is required" }, { status: 400 });
+    }
+
+    const decision = await checkExportAllowed({
+      userId,
+      signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
+    });
+    if (!decision.allowed) {
+      return Response.json(
+        { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
+        { status: 402 }
+      );
+    }
 
     if (!imageData || typeof imageData !== "string") {
       console.warn("[animate/submit] Rejected: missing or invalid imageData");
