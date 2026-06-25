@@ -5,13 +5,21 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #67 | test(G2): add route tests for /api/validate and /api/waitlist (12 tests) | G2 | pending #67 |
-| #66 | feat(B3): add Vercel KV-backed quota store; wire into getQuotaStore() | B3 | pending #66 |
-| #65 | test(G2): add coverage for post-processing pure functions (28 tests) | G2 | pending #65 |
-| #64 | test(G2): add coverage for ai-models cost estimation (17 tests) | G2 | pending #64 |
-| #63 | test(G2): add Vitest coverage thresholds (lines/functions/branches ≥60/60/50%) | G2 | pending #63 |
-| #62 | security: patch Vitest CRITICAL CVE + Vite HIGH CVEs via npm audit fix | security | pending #62 |
-| #61 | P0: add entitlement gate to all 8 remaining ungated paid API routes | P0/B3 | pending #61 |
+| #75 | feat(ios): P0 — BackendConfig URL resolver (prerequisite for key removal) | P0 | pending #75 |
+| #74 | feat(evals): G3 — travel fixture + auto-discover eval fixtures | G3 | pending #74 |
+| #73 | test(web): G2 — PR #61 route tests (24 tests, 4 routes) | G2 | pending #73 |
+| #72 | test(web): G2 — VercelKVQuotaStore unit tests (14 tests) | G2 | pending #72 |
+| #71 | BUSINESS_CASE: add machine-readable BUSINESS_CASE_SUMMARY block + floor flag | F1/meta | 2026-06-25 |
+| #70 | ROADMAP: add LIVING ARTIFACTS operating principle | meta | 2026-06-25 |
+| #69 | ROADMAP F9: make docs/BUSINESS_CASE.md a TRULY LIVING artifact (recompute, don't rot) | F1/meta | 2026-06-25 |
+| #68 | meta(Run 12): housekeeping — deep audit record, LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-25 |
+| #67 | test(G2): add route tests for /api/validate and /api/waitlist (12 tests) | G2 | 2026-06-25 |
+| #66 | feat(B3): add Vercel KV-backed quota store; wire into getQuotaStore() | B3 | 2026-06-25 |
+| #65 | test(G2): add coverage for post-processing pure functions (28 tests) | G2 | 2026-06-25 |
+| #64 | test(G2): add coverage for ai-models cost estimation (17 tests) | G2 | 2026-06-25 |
+| #63 | test(G2): add Vitest coverage thresholds (lines/functions/branches ≥60/60/50%) | G2 | 2026-06-25 |
+| #62 | security: patch Vitest CRITICAL CVE + Vite HIGH CVEs via npm audit fix | security | 2026-06-25 |
+| #61 | P0: add entitlement gate to all 8 remaining ungated paid API routes | P0/B3 | 2026-06-25 |
 | #58 | Evals: add golden fixture + env-gated detection quality eval | G3 (partial) | 2026-06-25 |
 | #57 | P0 (iOS): remove BYOK API-key input from SettingsView | P0 | 2026-06-25 |
 | #56 | P0: add entitlement gate to /api/plan (Sonnet planner route) | P0/B3 | 2026-06-25 |
