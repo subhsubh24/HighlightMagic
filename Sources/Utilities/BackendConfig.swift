@@ -8,24 +8,33 @@ import Foundation
 /// to a corresponding route at `BackendConfig.baseURL`.
 ///
 /// Priority order for the URL:
-/// 1. `HIGHLIGHT_MAGIC_BACKEND_URL` env var (useful in Simulator/dev without
-///    recompiling — `Edit Scheme → Run → Environment Variables`).
-/// 2. `HIGHLIGHT_MAGIC_BACKEND_URL` in Info.plist (overridable per build
-///    configuration via xcconfig; set to staging URL for TestFlight builds).
-/// 3. Production hardcoded fallback — safe, always resolves.
+/// 1. (DEBUG only) `HIGHLIGHT_MAGIC_BACKEND_URL` env var — set via
+///    Edit Scheme → Run → Environment Variables in Xcode (Simulator only).
+///    Env vars are not available in a production iOS process; this branch is
+///    compiled out of release builds.
+/// 2. `HIGHLIGHT_MAGIC_BACKEND_URL` in Info.plist — the intended override
+///    mechanism for CI / staging builds. Set via xcconfig per build configuration.
+/// 3. Production hardcoded fallback — always HTTPS, always resolves.
+///
+/// Only HTTPS URLs are accepted. A misconfigured http:// value silently falls
+/// through to the next candidate, preventing accidental cleartext token exposure.
 enum BackendConfig {
     /// Base URL of the Next.js web backend. Never nil — falls back to production.
     static let baseURL: URL = {
-        let candidates: [String?] = [
-            ProcessInfo.processInfo.environment["HIGHLIGHT_MAGIC_BACKEND_URL"],
+        var candidates: [String?] = [
             Bundle.main.object(forInfoDictionaryKey: "HIGHLIGHT_MAGIC_BACKEND_URL") as? String,
             "https://highlightmagic.app",
         ]
+        #if DEBUG
+        candidates.insert(ProcessInfo.processInfo.environment["HIGHLIGHT_MAGIC_BACKEND_URL"], at: 0)
+        #endif
         for candidate in candidates {
-            guard let raw = candidate, !raw.isEmpty, let url = URL(string: raw) else { continue }
+            guard let raw = candidate, !raw.isEmpty,
+                  let url = URL(string: raw),
+                  url.scheme == "https" else { continue }
             return url
         }
-        // Unreachable: the hardcoded fallback always parses.
+        // Unreachable: the hardcoded fallback is always a valid HTTPS URL.
         return URL(string: "https://highlightmagic.app")!
     }()
 
