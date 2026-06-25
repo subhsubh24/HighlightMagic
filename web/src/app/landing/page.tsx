@@ -14,6 +14,7 @@ import {
   Download,
 } from "lucide-react";
 import { IOS_APP_STORE_URL } from "@/lib/constants";
+import { trackEvent } from "@/lib/analytics";
 
 // ── Waitlist form ──────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         setErrorMsg(data.error ?? "Something went wrong.");
         setStatus("error");
       } else {
+        trackEvent("waitlist_signup");
         setStatus("success");
       }
     } catch {
@@ -228,7 +230,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   return (
     <div className="border-b border-white/8 last:border-b-0">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => { setOpen(!open); if (!open) trackEvent("faq_open", { question: q.slice(0, 60) }); }}
         className="flex w-full items-start justify-between gap-4 py-5 text-left"
         aria-expanded={open}
       >
@@ -271,6 +273,7 @@ function Nav() {
           href={IOS_APP_STORE_URL}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => trackEvent("cta_click", { source: "nav" })}
           className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
         >
           Get the App
@@ -456,6 +459,7 @@ export default function LandingPage() {
                     href={plan.ctaHref}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackEvent("cta_click", { source: "pricing" })}
                     className={`block rounded-2xl py-3 text-center text-sm font-semibold transition-all ${
                       plan.highlight
                         ? "btn-primary"
@@ -467,6 +471,7 @@ export default function LandingPage() {
                 ) : (
                   <a
                     href="#waitlist-bottom"
+                    onClick={() => trackEvent("cta_click", { source: "pricing" })}
                     className={`block rounded-2xl py-3 text-center text-sm font-semibold transition-all ${
                       plan.highlight
                         ? "btn-primary"
