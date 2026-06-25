@@ -12,6 +12,7 @@
  * Pro: unlimited — but ONLY when verified server-side (never from a client-supplied flag).
  */
 import { FREE_EXPORT_LIMIT } from "./constants";
+import { isKVConfigured, VercelKVQuotaStore } from "./kv-quota-store";
 
 /** Current monthly period key in UTC, e.g. "2026-06". Quotas reset per calendar month. */
 export function currentPeriodKey(date: Date = new Date()): string {
@@ -55,12 +56,14 @@ export class InMemoryQuotaStore implements QuotaStore {
 
 let defaultStore: QuotaStore | null = null;
 /**
- * The configured quota store. TODO(P0): return a KV-backed store when the KV connection env
- * is present (owner-provisioned — see .env.example); falls back to in-memory otherwise so
- * the gate still functions locally and in tests.
+ * Returns the configured quota store. Uses Vercel KV when KV_REST_API_URL and
+ * KV_REST_API_TOKEN are set (owner-provisioned via Vercel KV integration); falls back to
+ * in-memory otherwise so the gate functions locally and in tests without any KV setup.
  */
 export function getQuotaStore(): QuotaStore {
-  if (!defaultStore) defaultStore = new InMemoryQuotaStore();
+  if (!defaultStore) {
+    defaultStore = isKVConfigured() ? new VercelKVQuotaStore() : new InMemoryQuotaStore();
+  }
   return defaultStore;
 }
 
