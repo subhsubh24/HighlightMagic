@@ -8,14 +8,19 @@ VERIFY current state yourself each run — this reflects a snapshot and the repo
 Make HighlightMagic a **100% complete business**, not just a shippable app. "Done" requires
 BOTH of these at 100%, independently verified:
   1. **PRODUCT** — a freemium iOS app (Swift 6 / iOS 18 + Next.js backend on Vercel) that is
-     genuinely **App-Store-acceptable** (would pass review) and reliably monetized.
+     genuinely **App-Store-acceptable** (would pass review), world-class in quality, and whose
+     **monetization is OPTIMIZED to MAXIMIZE revenue — ≥$100K/yr is the FLOOR, not the target.**
   2. **MARKETING + GROWTH** — a real, built marketing engine: landing/waitlist site, brand,
      ASO, content/owned-channel assets, analytics, and a funnel — everything buildable
      without the owner's live accounts.
 It is NOT done until a **documented, benchmark-grounded revenue model (docs/BUSINESS_CASE.md)** shows a
-**defensible path to ~$100K/year**, AND a complete **REMAINING_STEPS.md** lists — IN ORDER —
-only the things the OWNER must do that the loop physically cannot (billing, signing,
-submission, funding accounts). Anything the loop CAN build, it builds.
+**REVENUE-MAXIMIZED, defensible path that clears ≥$100K/yr as the FLOOR** (monetization levers built
+and pushed toward the OPTIMISTIC scenario — do NOT settle at the floor), AND a complete
+**REMAINING_STEPS.md** lists — IN ORDER — only the things the OWNER must do that the loop physically
+cannot (billing, signing, submission, funding accounts). Anything the loop CAN build, it builds.
+CONVERGENCE: maximize WITHIN the submission-readiness goal — build the best monetization+growth
+MACHINE buildable pre-launch, then STOP and hand off (this does NOT mean running forever; continuous
+post-launch optimization with real conversion/retention data is the owner's job).
 
 **FULL AUTONOMY:** create whatever advances this — new files, web pages, marketing assets,
 backend code, internal tools/dashboards, evals, docs. Do not wait for permission.
@@ -146,6 +151,17 @@ Not vibes — math, with cited inputs. It must contain:
       must fund/launch to hit the model.
 - [ ] F7. **Living feedback**: once E5 analytics is live, fold REAL funnel numbers back into
       the model so the projection converges on reality.
+- [ ] F8. **MAXIMIZE revenue ($100K is the FLOOR, not the target)**: do NOT settle once the base
+      case clears $100K — build toward the OPTIMISTIC scenario by pushing each revenue lever to its
+      DEFENSIBLE maximum (every number honest + researched — anti-gaming holds absolutely), each
+      lever first-class value-bar-clearing work, with its upside documented in docs/BUSINESS_CASE.md:
+      PRICING & TIERS (good-better-best, annual at a discount, consumable export-credit packs);
+      CONVERSION (free→paid moment — paywall at the finished highlight, onboarding, trial, faster
+      time-to-first-export); RETENTION & LTV (cut churn; re-engagement push, save/share loops);
+      EXPANSION (add-ons, credit packs, creator/higher tier, referrals); MARGIN (drive per-export
+      COGS DOWN — a PRIMARY lever for HighlightMagic, since lower COGS widens the freemium margin
+      and funds growth); REACH (ASO, organic/social since the output is shareable, content/SEO).
+      Build the best-return ones. Maximize WITHIN convergence — see the CONVERGENCE note in Vision.
 
 ## Track G — World-class quality, validation & evals
 How quality is continuously re-validated IN DEPTH — enforced gates on every change + complete
@@ -177,12 +193,13 @@ are ticked under the DONE GUARD, CI-verified:
       COGS within a viable margin (B4 / docs/MODEL_COSTS.md).
 - [ ] DOD2. MARKETING/GROWTH: Track E complete and staged (landing+waitlist, brand, ASO, content,
       analytics/funnel built).
-- [ ] DOD3. BUSINESS CASE: docs/BUSINESS_CASE.md presents a credible, benchmark-grounded BASE-case
-      path to ≥$100K/year (or, if the base case falls short, names the specific levers AND
-      they've been built so a credible scenario clears it); unit economics are gross-margin-
-      positive; the GTM (F6) is documented. The final `FACTORY: 100%` issue must include the
-      one-paragraph "here's the math on why this can realistically make $100K/yr — and here
-      are the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
+- [ ] DOD3. BUSINESS CASE (revenue-MAXIMIZED): docs/BUSINESS_CASE.md presents a credible,
+      benchmark-grounded path that clears ≥$100K/year as the FLOOR AND is revenue-MAXIMIZED — the
+      maximization levers (F8) are built + documented and the ceiling is pushed toward the
+      OPTIMISTIC scenario (not stopped at the floor); unit economics are gross-margin-positive; the
+      GTM (F6) is documented. The final `FACTORY: 100%` issue must include the one-paragraph "here's
+      the math on why this can realistically make ≥$100K/yr (and how we maximized it) — and here are
+      the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
 - [ ] DOD4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 - [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
       the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
