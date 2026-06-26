@@ -4,7 +4,39 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-26 (Run 14)
+## Last run: 2026-06-26 (Run 15)
+
+### What was shipped (pending merge this run)
+
+- **PR #83** (P0, auto-merge pending): `ClaudeVisionService.swift` rewritten — removed ~285 LOC (apiKey chain, endpoint, rate-limit state, all HTTP methods). `isAvailable` always returns `false` (disabled; the service's `scoreHighlights` path is now unused since `CloudScoringService` routes through `/api/ios-score`). `extractBalancedJSON` static helper retained (used by TapeValidationService).
+- **PR #84** (P0, auto-merge pending): `TapeValidationService.swift` rewritten (-198 LOC) — removed apiKey chain, `callHaikuValidation`, `buildValidationPrompt`, `buildTapeDescription`. New `callBackendValidation()` POSTs clips + plan + clip frames to `/api/ios-validate`. `isAvailable` always `true` (backend always available). Adds `web/src/app/api/ios-validate/route.ts`: Haiku validation proxy, fail-open (`{passed:true}` on any error), no quota consumption (sub-step of scoring).
+- **PR #85** (P0, auto-merge pending): `AIEffectRecommendationService.swift` rewritten (-1,075 LOC, 1919→844 lines) — removed apiKey chain, SSE Opus planner, 700-line system prompt, `parseOpusPlannerResponse`, `callTapePlannerOpus`, `consumeSSEStream`. New `callBackendPlan()` POSTs iOS-format frames + scores to `/api/ios-plan` (300s timeout). `parsePlanResult()` reuses all clip-boundary validation and production plan parsing logic. `recommendEffects` and `planTapeEffects` simplified to pure heuristic fallbacks. Adds `web/src/app/api/ios-plan/route.ts`: Opus planner proxy via `planFromScores`, enforces `checkExportAllowed`, no `consumeExport` (quota consumed at `/api/ios-score`).
+
+### Housekeeping produced this run
+- This file (LOOP_MEMORY.md): Run 15 state
+- IMPROVEMENT_LOG.md: #79-81 updated from "pending" → "2026-06-26"; #83-85 added as pending merge
+- REMAINING_STEPS.md: 0a updated — all 4 iOS services now done (PRs #80, #83, #84, #85)
+
+### What NOT to re-do (additions for Run 15)
+- Do not re-rewrite ClaudeVisionService.swift to remove apiKey — done in PR #83 (Run 15)
+- Do not re-create /api/ios-validate endpoint — done in PR #84 (Run 15)
+- Do not re-rewrite TapeValidationService.swift to route through backend — done in PR #84 (Run 15)
+- Do not re-create /api/ios-plan endpoint — done in PR #85 (Run 15)
+- Do not re-rewrite AIEffectRecommendationService.swift to route through backend — done in PR #85 (Run 15)
+
+### ROADMAP box status changes this run
+- **P0**: iOS service-layer key removal COMPLETE (all 4 services: CloudScoringService #80, ClaudeVisionService #83, TapeValidationService #84, AIEffectRecommendationService #85). Remaining P0: consumeExport gap investigation; App Store Server API verification (owner must configure).
+
+### Next priorities (updated Run 15)
+1. **G2 coverage expansion** — identify next highest-value uncovered files after frame-extractor + audio-mux. Run coverage report post-merge to find gaps above 60% threshold.
+2. **G3 eval expansion** — add eval fixtures for gaming/esports content type; wire scheduled eval run (GitHub Actions cron, `EVAL_MODE=1`).
+3. **consumeExport gap investigation** — `/api/plan`, `/api/sfx`, `/api/voiceover` call `checkExportAllowed` but NOT `consumeExport`. Design intent is that planning/generation are sub-steps of the scored export — confirm and document, or fix if genuinely broken.
+4. **A3 sendability audit** — scan remaining Swift services for force-unwraps and Swift 6 concurrency issues.
+5. **P0 App Store Server API** — `verifyProEntitlement()` returns `false` (secure default); owner must configure `APP_STORE_SHARED_SECRET`.
+
+---
+
+## Previous run: 2026-06-26 (Run 14)
 
 ### What was shipped (pending merge this run)
 
