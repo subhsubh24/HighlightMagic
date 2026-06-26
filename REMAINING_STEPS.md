@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-25 (Run 13).
+be executed. Last updated: 2026-06-26 (Run 14).
 
 ---
 
@@ -15,22 +15,22 @@ owner knows the current state and can optionally unblock them faster.
 
 ### 0a. iOS service-layer API key removal
 
-`ClaudeVisionService.swift`, `TapeValidationService.swift`, `AIEffectRecommendationService.swift`,
-and `CloudScoringService.swift` still call `api.anthropic.com` directly using an embedded/Keychain
-API key. This must be removed for the business-paid model to be complete (P0).
+~~`CloudScoringService.swift`~~ — **DONE** (PR #80, Run 14): rewritten to POST annotated frames
+to `/api/ios-score`; embedded API key removed; `isAvailable` always returns `true`.
 
-**Run 13 progress**: `Sources/Utilities/BackendConfig.swift` added (PR #75) — canonical URL resolver
-with env var (DEBUG-only) → Info.plist → production HTTPS fallback. This is the prerequisite that
-the service-layer key removal PRs will use to route calls through the web backend.
+`ClaudeVisionService.swift`, `TapeValidationService.swift`, and `AIEffectRecommendationService.swift`
+still call `api.anthropic.com` directly using an embedded/Keychain API key.
+
+**Run 14 progress**:
+- `BackendConfig.swift` (PR #75) — canonical URL resolver, already merged.
+- `/api/ios-score` endpoint (PR #79) — Haiku frame scoring proxy with quota gate, already merged.
+- `CloudScoringService.swift` (PR #80) — key removal complete.
+- Remaining: `TapeValidationService.swift`, `AIEffectRecommendationService.swift`, `ClaudeVisionService.swift`.
 
 The factory cannot compile-verify Swift on Linux, so this is being done conservatively (one file
-per PR). The SettingsView BYOK UI has already been removed (PR #57). Service-layer removal is the
-next factory priority.
+per PR). Each remaining service needs either a backend proxy endpoint or a safe fallback/no-op.
 
 **What the owner can do to unblock**: none required — the factory will handle this incrementally.
-However, if you want to accelerate: after removing each service's direct Anthropic calls, the iOS
-app will route through the web/ backend instead (via the existing `/api/score` proxy and other
-routes built in PRs #53, #55, #56).
 
 ### 0b. Vercel KV provisioning for durable quota store
 

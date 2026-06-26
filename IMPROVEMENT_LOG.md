@@ -5,10 +5,16 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #75 | feat(ios): P0 — BackendConfig URL resolver (prerequisite for key removal) | P0 | pending #75 |
-| #74 | feat(evals): G3 — travel fixture + auto-discover eval fixtures | G3 | pending #74 |
-| #73 | test(web): G2 — PR #61 route tests (24 tests, 4 routes) | G2 | pending #73 |
-| #72 | test(web): G2 — VercelKVQuotaStore unit tests (14 tests) | G2 | pending #72 |
+| #81 | feat(G3): add cooking-highlight eval fixture for detect.eval.ts auto-discovery | G3 | pending #81 |
+| #80 | feat(P0): remove embedded Anthropic key from iOS; route frame scoring through /api/ios-score | P0 | pending #80 |
+| #79 | feat(P0): add /api/ios-score — iOS Haiku scoring proxy, removes embedded API key | P0 | pending #79 |
+| #78 | test(G2): extract mergeDuckSegments from audio-mux + 12 Vitest tests | G2 | 2026-06-26 |
+| #77 | test(G2): export pure functions from frame-extractor + 29 Vitest tests | G2 | 2026-06-26 |
+| #76 | meta(Run 13): housekeeping — IMPROVEMENT_LOG, LOOP_MEMORY, REMAINING_STEPS | meta | 2026-06-25 |
+| #75 | feat(ios): P0 — BackendConfig URL resolver (prerequisite for key removal) | P0 | 2026-06-25 |
+| #74 | feat(evals): G3 — travel fixture + auto-discover eval fixtures | G3 | 2026-06-25 |
+| #73 | test(web): G2 — PR #61 route tests (24 tests, 4 routes) | G2 | 2026-06-25 |
+| #72 | test(web): G2 — VercelKVQuotaStore unit tests (14 tests) | G2 | 2026-06-25 |
 | #71 | BUSINESS_CASE: add machine-readable BUSINESS_CASE_SUMMARY block + floor flag | F1/meta | 2026-06-25 |
 | #70 | ROADMAP: add LIVING ARTIFACTS operating principle | meta | 2026-06-25 |
 | #69 | ROADMAP F9: make docs/BUSINESS_CASE.md a TRULY LIVING artifact (recompute, don't rot) | F1/meta | 2026-06-25 |
