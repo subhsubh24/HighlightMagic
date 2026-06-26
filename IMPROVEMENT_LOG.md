@@ -5,9 +5,16 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #85 | feat(P0): remove embedded API key from AIEffectRecommendationService; add /api/ios-plan backend | P0 | pending #85 |
+| #91 | meta(Run 16): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | pending #91 |
+| #90 | test(G2): add route tests for /api/ios-score (6 tests) | G2 | 2026-06-26 |
+| #89 | feat(G3): add gaming/esports highlight detection fixture | G3 | 2026-06-26 |
+| #88 | feat(security): optional userId quota gate for /api/validate | security/P0 | pending #88 |
+| #87 | fix(ios): remove force-unwrap in ConfettiView; align fallback subscription prices | A3/C2 | 2026-06-26 |
+| #86 | meta(Run 15): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-26 |
+| #85 | feat(P0): remove embedded API key from AIEffectRecommendationService; add /api/ios-plan backend | P0 | 2026-06-26 |
 | #84 | feat(P0): remove embedded Anthropic key from TapeValidationService; add /api/ios-validate backend | P0 | pending #84 |
-| #83 | feat(P0): remove embedded Anthropic key from ClaudeVisionService (disable direct calls) | P0 | pending #83 |
+| #83 | feat(P0): remove embedded Anthropic key from ClaudeVisionService (disable direct calls) | P0 | 2026-06-26 |
+| #82 | meta(Run 14): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-26 |
 | #81 | feat(G3): add cooking-highlight eval fixture for detect.eval.ts auto-discovery | G3 | 2026-06-26 |
 | #80 | feat(P0): remove embedded Anthropic key from iOS; route frame scoring through /api/ios-score | P0 | 2026-06-26 |
 | #79 | feat(P0): add /api/ios-score — iOS Haiku scoring proxy, removes embedded API key | P0 | 2026-06-26 |
@@ -78,3 +85,6 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
+- PR #84: P0 ios-validate backend (re-triggered Run 16) — pending CI merge
+- PR #88: security/P0 validate quota gate — pending CI merge
+- PR #91: meta Run 16 housekeeping — pending CI merge
