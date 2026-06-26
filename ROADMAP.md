@@ -57,6 +57,25 @@ rewriting. Do NOT churn STABLE ANCHORS just to look busy — the Vision/goal, th
 GUARD, API COST CONTRACT, anti-gaming, privacy/security bar), and the protected guard/CI tests are
 intentionally stable ratchets; change them only on a real, justified shift.
 
+## Design taste standard (anti-generic AI frontend — STANDING; read every run)
+FINAL STANDARD: **simplicity without blandness; functionality without visual clutter.** Applies to
+BOTH the iOS app (SwiftUI) AND the web/marketing surfaces. Reviewer B enforces it on every UI change;
+the deep-audit design lens applies it (Track A5 + Track G4 reference it).
+- **THE DESIGNER QUESTION** (the test): for every UI decision ask — "would an experienced product
+  designer INTENTIONALLY make this decision?" REJECT any UI diff that can't answer a confident YES.
+- **AVOID BY DEFAULT (generated-looking slop):** cookie-cutter SaaS layouts; default Tailwind/shadcn
+  looks; card spam; random/uneven spacing; decorative gradients with no purpose; emoji-as-icons;
+  generic startup patterns (hero + 3 feature cards + CTA cliché). These are the smell of an
+  AI-generated frontend — do not ship them.
+- **GENERATE BETTER (target):** an intentional type scale + clear hierarchy; a restrained palette
+  used with purpose; a deliberate spacing rhythm; real iconography (SF Symbols on iOS; one coherent
+  icon set on web — never emoji); motion/interaction that serves meaning; a distinctive but coherent
+  visual voice that fits HighlightMagic (energetic, creator / short-video). Designed, not defaulted.
+- **TASTE-AUDIT HOOK (recurring):** the periodic deep-audit design lens hunts the LIVE UI for
+  generated-looking surfaces (per the avoid list) and ranks fixes by DESIGN IMPACT — most-seen /
+  first-impression surfaces first (onboarding, paywall, landing page, export/share). Turn top
+  findings into value-bar-clearing work; do NOT churn already-intentional UI for its own sake.
+
 ## P0 — Cost & entitlement architecture (HIGHEST PRIORITY — do first)
 The iOS app historically called paid APIs DIRECTLY (embedded/Keychain key in ClaudeVisionService
 etc.) and StoreKit entitlement is CLIENT-ONLY. For a freemium business that pays the API bill,
