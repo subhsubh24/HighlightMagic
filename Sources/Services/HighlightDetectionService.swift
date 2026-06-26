@@ -101,11 +101,13 @@ actor HighlightDetectionService {
         }
         progressHandler(0.05)
 
-        // Phase 2: Score all frames with Haiku (5-75%)
+        // Phase 2: Score all frames via backend /api/ios-score (5-75%)
+        let userId = await MainActor.run { UserAccountService.shared.userID }
         let scoredFrames = try await CloudScoringService.shared.scoreFrames(
             asset: asset,
             audioFeatures: audioFeatures,
-            templateName: prompt.isEmpty ? nil : prompt
+            templateName: prompt.isEmpty ? nil : prompt,
+            userId: userId
         ) { phase in
             progressHandler(0.05 + phase * 0.70)
         }
