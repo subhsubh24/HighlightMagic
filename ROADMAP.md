@@ -314,8 +314,10 @@ Each item: what to do, where, and what in the repo it maps to. Nothing the loop 
 ## Guardrails
 Live secrets/signing/billing are human-applied (PENDING_OPS.md + REMAINING_STEPS.md); never
 auto-publish marketing or run prod migrations; never edit .claude/ or .github/; ground all
-marketing/revenue claims in real research; coherence over volume; the value bar never drops
-to hit a count.
+marketing/revenue claims in real research. Coherence is over CHURN, not fewer-for-its-own-sake:
+the VALUE BAR is the ONLY limiter on how many changes ship in a run — ship ALL that genuinely
+clear it (maximize scope), ZERO that don't. Never pad to hit a count; never artificially stop at
+1–2 when more genuine, file-disjoint work exists. Avoid BOTH padding and artificial scarcity.
 
 ## Human Core (only the owner can do — summary; see REMAINING_STEPS.md for the ordered list)
 Apple Developer account + signing + App Store Connect; StoreKit live products; TestFlight;

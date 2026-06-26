@@ -52,10 +52,26 @@ if grep -rniE 'TODO|FIXME|not implemented|placeholder|\bstub\b' \
   fail "stub/TODO/placeholder marker on a critical path — 'code exists' is not 'it works'."
 fi
 ok "no stub markers on critical paths"
-# Business-case machine-readable summary block must exist (gate 2 checks it matches body + billing).
-grep -q 'BUSINESS_CASE_SUMMARY' docs/BUSINESS_CASE.md \
-  || fail "machine-readable BUSINESS_CASE_SUMMARY block missing."
-ok "business-case summary block present"
+# Business-case machine-readable summary block must exist AND parse with a real YAML parser
+# (a block that doesn't parse must never ship — the dashboard degrades to "unparseable -> link").
+BCS="$(awk '/^```yaml/{f=1;next} /^```/{if(f)exit} f' docs/BUSINESS_CASE.md)"
+[ -n "$BCS" ] || fail "BUSINESS_CASE_SUMMARY \`\`\`yaml block missing from docs/BUSINESS_CASE.md."
+BCS_TMP="$(mktemp)"; printf '%s\n' "$BCS" > "$BCS_TMP"
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  python3 - "$BCS_TMP" <<'PY' || { rm -f "$BCS_TMP"; fail "BUSINESS_CASE_SUMMARY does not parse as YAML, or arr_year1.base is missing."; }
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+assert isinstance(d, dict), "summary block is not a YAML mapping"
+assert d.get("arr_year1", {}).get("base") is not None, "arr_year1.base missing"
+PY
+elif [ -f web/node_modules/js-yaml/package.json ]; then
+  node -e 'const y=require("./web/node_modules/js-yaml"),fs=require("fs");const d=y.load(fs.readFileSync(process.argv[1],"utf8"));if(!d||typeof d!=="object"||d.arr_year1==null||d.arr_year1.base==null)process.exit(1);' "$BCS_TMP" \
+    || { rm -f "$BCS_TMP"; fail "BUSINESS_CASE_SUMMARY does not parse as YAML, or arr_year1.base is missing."; }
+else
+  rm -f "$BCS_TMP"; fail "no YAML parser available (need python3+PyYAML or web js-yaml) to verify the summary block."
+fi
+rm -f "$BCS_TMP"
+ok "BUSINESS_CASE_SUMMARY parses (real YAML); arr_year1.base present"
 
 echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."

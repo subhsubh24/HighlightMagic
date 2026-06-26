@@ -4,6 +4,18 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Owner reconciliation — 2026-06-26 (prompt/ROADMAP consistency audit)
+Resolved stale wording so the routine + ROADMAP agree on ONE volume rule: **coherence is over
+CHURN, not fewer-for-its-own-sake; the VALUE BAR is the only limiter on how many changes ship —
+ship ALL that clear it, ZERO that don't; never pad, never artificially stop at 1–2.** Replaced the
+old "coherence over volume / prefer fewer" phrasing in ROADMAP Guardrails and the routine STEP 2.
+Audited both end-to-end for other contradictions — cadence (every 6h ✓), subagent caps (~8 scouts +
+2 reviewers + ≥3 readiness auditors, ceiling ~50 ✓), evidence-based done vs DONE GUARD (✓), the
+readiness gate requiring BOTH preflight + ≥3 adversarial auditors with pasted evidence (✓), and
+model tiers (scouts/scan = Haiku; reviewers + readiness auditors = Sonnet, never downgraded ✓) — no
+further conflicts found. Also: scripts/preflight.sh now parses the BUSINESS_CASE_SUMMARY block with a
+real YAML parser (fails if missing/unparseable or arr_year1.base absent).
+
 ## Last run: 2026-06-26 (Run 16)
 
 ### What was shipped (pending merge this run)
