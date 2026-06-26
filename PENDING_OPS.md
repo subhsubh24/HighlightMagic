@@ -3,6 +3,52 @@
 Items the factory cannot perform (signing, live keys, store setup, publishing).
 The owner must apply these before shipping to the App Store.
 
+The factory dashboard reads the fenced OWNER_ACTIONS block below (same cross-project shape as
+AptDesignerAI / GroceryManager). Keep it valid, parseable YAML; the prose sections that follow are
+the detailed how-to for each item.
+
+```yaml
+OWNER_ACTIONS:
+  project: HighlightMagic
+  as_of: 2026-06-26
+  items:
+    - id: spend-caps
+      title: Set HARD daily API spend caps + alerts in every provider dashboard
+      priority: urgent
+      status: open
+      why: The backend is live on Vercel and calls paid APIs (Anthropic, ElevenLabs, AtlasCloud); a single export fires multiple expensive calls, so an abuse spike or runaway loop can run up cost. A spend cap is the only hard backstop a code-level ceiling cannot replace.
+      how: Set hard daily/monthly caps + 50%-of-cap alerts in console.anthropic.com, elevenlabs.io billing, and the AtlasCloud dashboard. Regenerate any key ever suspected exposed.
+      blocks: launch-safety
+    - id: connect-channels
+      title: Connect + authorize marketing channels to switch the Growth Agent into execute mode
+      priority: high
+      status: open
+      why: The Growth Agent stays in honest prepare-only mode until the owner connects their own authorized channels.
+      how: Connect your own accounts/keys to the deployed app's growth settings (server-side). The agent never holds live secrets; the deployed app sends.
+      blocks: growth-execution
+    - id: vercel-env-keys
+      title: Set the three backend API keys as Vercel environment variables
+      priority: high
+      status: open
+      why: All paid AI calls are routed server-side through web/; without these keys every detection/generation path fails.
+      how: In the Vercel dashboard for the web/ deployment set ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, and ATLASCLOUD_API_KEY (server-side only, never in the iOS app).
+      blocks: backend-functionality
+    - id: server-quota-infra
+      title: Provision the auth layer + Vercel KV for authoritative server-side quota (B3)
+      priority: high
+      status: open
+      why: Free-tier enforcement is currently client-side in the iOS app and can be bypassed by reinstalling; the server must derive userId from a verified session, not a caller-supplied flag.
+      how: Add an auth provider (Clerk or Supabase) + Vercel KV (KV_REST_API_URL / KV_REST_API_TOKEN), then wire the quota check/increment routes to the verified session. See the B3 section below.
+      blocks: server-side-quota
+    - id: storekit-products
+      title: Create live StoreKit products + configure iOS signing in App Store Connect
+      priority: normal
+      status: open
+      why: Pro entitlement and revenue depend on real subscription products and a signed build.
+      how: Create pro.monthly and pro.yearly subscriptions in App Store Connect, set up the distribution certificate/provisioning profile, and set DEVELOPMENT_TEAM. See the StoreKit / signing sections below.
+      blocks: revenue
+```
+
 ## 🚨 URGENT — DO NOW (the backend is live on Vercel and calls PAID APIs)
 A code-level spend ceiling (Track H7) CANNOT override a provider that itself has no cap. Set HARD
 DAILY SPEND CAPS + 50%-of-cap ALERTS in EACH provider dashboard immediately:

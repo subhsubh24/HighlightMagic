@@ -291,6 +291,14 @@ If any box is open, advance the lowest incomplete item. Do not declare done earl
 boxes [x], the ready issue may open ONLY after the READINESS AUDIT GATE below passes BOTH of its
 gates (mechanical preflight exits 0 + ≥3 independent adversarial auditors find no real gap).
 
+## DASHBOARD FEEDS (three sibling machine-readable blocks, kept in sync + parseable)
+The owner's factory dashboard reads three fenced YAML blocks; keep all three valid (preflight fails
+on any malformed one) and honest (real data / null only): (1) BUSINESS_CASE_SUMMARY in
+docs/BUSINESS_CASE.md; (2) GROWTH_STATUS in docs/growth/GROWTH_STATUS.md (owned + updated every run
+by the Growth Agent; phase-aware pre_launch->launching->post_launch); (3) OWNER_ACTIONS in
+PENDING_OPS.md. All three use the SAME cross-project shape across AptDesignerAI / HighlightMagic /
+GroceryManager.
+
 ## DONE GUARD (a box counts as done ONLY with verified artifacts — never self-assessment)
 Before ticking ANY checkbox in this file (or recording any item complete in IMPROVEMENT_LOG/
 loop-memory), ALL THREE must hold IN THE SAME RUN. A box ticked without them is a FALSE
