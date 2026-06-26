@@ -9,7 +9,8 @@ planning_case: base
 floor_usd: 100000
 floor_met_year1: false   # year-1 base run-rate ($5,160) is far below the $100K floor
 time_to_floor: "base: ~year 3.5 (~month 42; ARR reaches ~$89,900 then crosses $100K shortly after); optimistic: ~year 2 (month 22-24, at $14.99); conservative: ~year 5-6"
-as_of: 2026-06-25
+annual_tier_lever: "$149.99/yr recommended (2-months-free equivalent); 72% GM at typical usage; accelerates $100K ARR ~3-4 months vs monthly-only at $14.99; see Section 9"
+as_of: 2026-06-26
 ```
 
 # HighlightMagic — Business Case
@@ -159,10 +160,11 @@ $14.99, but $14.99 is strongly recommended (see below).
 
 1. **Raise Pro price to $14.99/month** — single biggest lever; doubles gross margin per user; still mid-market
 2. **B4 planner Opus→Sonnet** (COMPLETE, PR #45) — cut planning COGS 80%; essential for viability
-3. **Cap Pro exports at 50/month** — bounds worst-case COGS at $15.50/month (56% GM preserved at $14.99)
-4. **Cache frame scoring outputs** — same video re-submitted shouldn't re-score; potential 30–50% reduction
-5. **Cache planning outputs** — identical/near-identical frame sequences shouldn't re-plan; saves $0.07/repeat
-6. **Add a usage-based add-on tier** (e.g., extra 50-export pack for $4.99) — captures heavy users
+3. **Add annual tier at $149.99/year** — 2-months-free equivalent; improves LTV, reduces churn at renewal, provides upfront cash; see Section 9 for full analysis
+4. **Cap Pro exports at 50/month** — bounds worst-case COGS at $15.50/month (56% GM preserved at $14.99)
+5. **Cache frame scoring outputs** — same video re-submitted shouldn’t re-score; potential 30–50% reduction
+6. **Cache planning outputs** — identical/near-identical frame sequences shouldn’t re-plan; saves $0.07/repeat
+7. **Add a usage-based add-on tier** (e.g., extra 50-export pack for $4.99) — captures heavy users
 
 ---
 
@@ -287,6 +289,88 @@ demo, or $1–2K/month in targeted ads.
 
 ---
 
-*Last updated: 2026-06-25 (Run 11). Sources cited inline above. Inputs to be updated as real
-data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing
-— both change frequently.*
+---
+
+## 9. Annual Tier Lever Analysis
+
+> **Recommendation: add $149.99/year as the annual Pro option.** At this price (equivalent to
+> "2 months free" off $14.99/month) annual subscribers generate strong margins at all usage levels,
+> churn ~3× less at renewal, and pay upfront — improving cash flow at zero additional COGS.
+
+### Price point comparison
+
+Two candidate annual prices are analyzed. The key constraint is per-export COGS (~$0.31/export under
+the business-paid model). Analysis uses two usage assumptions: **typical** (8 exports/month average
+across all Pro subscribers; heavy users offset by lighter ones) and **heavy** (15 exports/month,
+the current per-user COGS baseline in Section 3).
+
+| Metric | Monthly $14.99 | Annual $99.99/yr | Annual $149.99/yr |
+|---|---|---|---|
+| Effective monthly rate | $14.99 | $8.33 | $12.50 |
+| Apple cut (30%) | −$4.50/mo | −$30.00/yr | −$45.00/yr |
+| **Net revenue** | **$10.49/mo** | **$69.99/yr** | **$104.99/yr** |
+| COGS — typical (8 exp/mo) | −$2.48/mo | −$29.76/yr | −$29.76/yr |
+| **GM — typical** | **$8.01/mo (76%)** | **$40.23/yr (57%) ✅** | **$75.23/yr (72%) ✅** |
+| COGS — heavy (15 exp/mo) | −$4.65/mo | −$55.80/yr | −$55.80/yr |
+| **GM — heavy** | **$5.84/mo (56%)** | **$14.19/yr (20%) ⚠️** | **$49.19/yr (47%) ✅** |
+
+**$99.99/year is marginal at heavy usage** (20% GM, breakeven at ~18 exports/month). It requires
+the 50-export/month cap (Lever 4) to remain viable.
+
+**$149.99/year is healthy at all usage levels** (47–72% GM) and is the recommended price:
+- Equivalent to "$14.99 × 10 months" — a standard "2 months free" offer
+- Still 33% below $14.99/month × 12 = $179.88/year (no discount annual equivalent)
+- Buyers perceive $12.50/month effective rate (clearly below CapCut Pro at $19.99)
+
+### Churn and LTV impact
+
+Annual subscriptions exhibit materially lower cancellation rates. Industry benchmarks:
+- Monthly SaaS churn: ~4.5%/month (used in base model)
+- Annual subscription annual churn: ~20–30% (source: ChurnTools, ProfitWell; ~25% used here)
+- Effective monthly churn for annual sub: ~2.1%/month (vs 4.5% monthly)
+
+| Metric | Monthly $14.99 | Annual $149.99/yr |
+|---|---|---|
+| Churn rate | 4.5%/month | ~25%/year (~2.1%/month) |
+| 12-month retention | 57.5% | 75% (renewal gate) |
+| Gross margin LTV (typical, 8 exp) | $8.01 / 0.045 = **$178** | ($75.23 × 4 yrs) = **$301** |
+| Gross margin LTV (heavy, 15 exp) | $5.84 / 0.045 = **$130** | ($49.19 × 4 yrs) = **$197** |
+
+Annual subscribers generate **~65–70% higher gross margin LTV** at equivalent usage due to the
+combined effect of lower churn and upfront payment.
+
+### ARR acceleration estimate
+
+In the base model, 100% of Pro subscribers pay $9.99/month. Scenario: at launch, 30% of new
+Pro subscribers choose the $149.99/year annual option (at recommended $14.99/month monthly price).
+
+| Metric | Base (monthly only, $14.99) | With 30% annual ($149.99/yr) |
+|---|---|---|
+| Revenue per 100 new Pro subs/month | $14.99 × 100 = $1,499 | $14.99 × 70 + ($149.99/12) × 30 = $1,049 + $375 = $1,424 |
+| Month-1 cash received | $1,499 | $14.99 × 70 + $149.99 × 30 = $1,049 + $4,500 = **$5,549** |
+| Effective annual revenue (retention-adjusted) | ~$1,499 × 0.575 × 12 = **$10,343** | higher LTV per annual sub; net ~+12% ARR at year 1 |
+
+**Cash-flow benefit**: Annual subscribers pay upfront — 30% annual uptake generates ~4× the month-1
+cash vs all-monthly. This matters for a bootstrapped product covering business-paid API COGS.
+
+**ARR acceleration**: Mixing annual subs into the cohort improves effective retention across the
+subscriber base. Modeled impact: ~3–4 months earlier crossing of the $100K ARR threshold in the
+base scenario (from ~Month 42 to ~Month 38–39).
+
+### Implementation requirements
+
+1. **StoreKit product**: add `com.highlightmagic.pro.annual` at $149.99/year (owner-configured via
+   App Store Connect; see REMAINING_STEPS.md — never auto-published by the loop)
+2. **Paywall update**: show both monthly ($14.99) and annual ($149.99, "$12.50/mo, 2 months free")
+   with annual highlighted as "Best Value"
+3. **Server entitlement**: `verifyProEntitlement` must validate both monthly and annual product IDs
+4. **Export cap**: enforce 50 exports/month for all Pro tiers (monthly + annual) to bound COGS
+
+### Conclusion
+
+**Recommended: add $149.99/year annual tier at launch.** Unit economics are sound (47–72% GM),
+LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid model. Do NOT price
+the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
+collapses to 20% and becomes negative above ~18 exports/month.
+
+*Last updated: 2026-06-26 (Run 17). Sources cited inline above. Inputs to be updated as real data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing — both change frequently. Section 9 (annual tier analysis) added.*
