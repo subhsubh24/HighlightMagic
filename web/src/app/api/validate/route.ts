@@ -1,3 +1,5 @@
+import { checkExportAllowed } from "@/lib/entitlement";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -14,6 +16,7 @@ export async function POST(req: Request) {
     }
 
     const {
+      userId,
       clips, plan, contentSummary, assetStatuses, clipFrames,
       // Extended context for richer validation
       sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
@@ -22,6 +25,17 @@ export async function POST(req: Request) {
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
+    }
+
+    // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
+    if (userId && typeof userId === "string") {
+      const decision = await checkExportAllowed({ userId, signedTransaction: null });
+      if (!decision.allowed) {
+        return Response.json(
+          { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
+          { status: 402 }
+        );
+      }
     }
 
     const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;
