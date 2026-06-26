@@ -24,7 +24,7 @@ struct ConfettiView: View {
         .onAppear {
             particles = (0..<40).map { _ in
                 ConfettiParticle(
-                    color: colors.randomElement()!,
+                    color: colors.randomElement() ?? colors[0],
                     size: CGFloat.random(in: 4...10),
                     x: CGFloat.random(in: -180...180),
                     startY: CGFloat.random(in: -20...0),
