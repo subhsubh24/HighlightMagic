@@ -37,8 +37,11 @@ ok "StoreKit purchase/entitlement call present"
 grep -q 'checkExportAllowed' web/src/app/api/score/route.ts \
   || fail "paid proxy /api/score does not enforce the server-side entitlement gate."
 ok "server-side entitlement gate enforced before the paid call"
-# Core highlight/export path must be present.
-grep -rqE 'func exportClip|class ExportService|actor ExportService' Sources/ \
+# Core product flow must be present: detection entrypoint + export path.
+grep -rqE 'func detectHighlights' Sources/ \
+  || fail "core detection path (HighlightDetectionService.detectHighlights) missing."
+ok "core detection path present"
+grep -rqE 'func exportClip|actor ExportService|class ExportService' Sources/ \
   || fail "core export path (ExportService.exportClip) missing."
 ok "core highlight/export path present"
 # No stub/placeholder markers on critical paths (intentional secure-default TODO(P0) excepted).
