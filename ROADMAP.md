@@ -232,6 +232,38 @@ this quality track is G.
       review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
       findings (security, crashes, runaway API cost, data loss) for done.
 
+## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
+RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,
+ElevenLabs, AtlasCloud) and has PUBLIC forms is a wallet-drain + abuse target. STANDING standard —
+the deep-audit security lens re-checks it each cycle, Reviewer A REJECTS regressions, and the
+preflight verifies the critical ones (H1, H2, H7).
+- [ ] H1. RATE LIMITING on EVERY paid-API / expensive / auth endpoint (not case-by-case): a sane
+      baseline (~100 req/min/IP public, ~1000/min authenticated), STRICTER on anything hitting
+      Anthropic/ElevenLabs/AtlasCloud or auth. Reviewer A REJECTS any new expensive/auth route
+      without rate limiting. #1 SECURITY ITEM: a single export fires multiple expensive generation
+      calls, so an unthrottled detect/generate/export endpoint is the fastest possible drain — tie
+      it to the server-side freemium quota (enforce the 5-free-exports limit BEFORE any paid call,
+      lib/entitlement.ts).
+- [ ] H2. SERVER-SIDE VALIDATION on every write/expensive call (client validation is UX, not
+      security): re-validate types/lengths/shape server-side; reject malformed/oversized input; bound
+      video size + duration BEFORE any paid call.
+- [ ] H3. ERROR-MESSAGE HYGIENE: generic user-facing errors; full context logged SERVER-SIDE only;
+      never leak schema/table/column names, stack traces, or query logic; no enumeration via error
+      differences.
+- [ ] H4. AUTH FAILURE-CASE hardening + tests (if accounts exist): lockout/backoff on repeated wrong
+      passwords; password-reset does NOT reveal whether an email exists; email-verification link
+      idempotent (double-click safe); signup with an existing email does NOT leak it's registered.
+      A test per case.
+- [ ] H5. CAPTCHA / bot protection on public forms (waitlist, signup, any unauth POST) — e.g.
+      Cloudflare Turnstile — so day-one bot floods can't spam or drain.
+- [ ] H6. CORS locked down (allowlist prod + localhost, block the rest) + sane security headers
+      (CSP/HSTS/X-Content-Type-Options, etc.); align to OWASP basics. (Web backend that holds the keys.)
+- [ ] H7. API SPEND CEILING: a code-level usage cap / circuit-breaker per user/day on paid-API calls
+      in the backend, AND record in PENDING_OPS.md the human-only step to set HARD daily caps +
+      50%-of-cap alerts in the Anthropic/ElevenLabs/AtlasCloud dashboards (the loop cannot set those).
+SECRETS stay server-side (never in the iOS app); if exposure is ever suspected, record a PENDING_OPS
+handoff to regenerate the key immediately.
+
 ## Definition of Done (STOP gate — BOTH halves at 100%)
 Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL of these checkboxes
 are ticked under the DONE GUARD, CI-verified:
@@ -250,6 +282,11 @@ are ticked under the DONE GUARD, CI-verified:
 - [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
       the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
       latest deep audit (G5) is clean of CRITICAL findings.
+- [ ] DOD6. SECURITY & ABUSE HARDENING: Track H complete — rate limiting on every paid/expensive/auth
+      endpoint tied to the freemium quota (H1), server-side validation + input bounds (H2), error-
+      message hygiene (H3), auth failure-case hardening + tests (H4), CAPTCHA on public forms (H5),
+      CORS + security headers (H6), and a code-level API spend ceiling (H7) — with the owner-only
+      dashboard hard-caps/alerts recorded in REMAINING_STEPS.md/PENDING_OPS.md.
 If any box is open, advance the lowest incomplete item. Do not declare done early. Even with all
 boxes [x], the ready issue may open ONLY after the READINESS AUDIT GATE below passes BOTH of its
 gates (mechanical preflight exits 0 + ≥3 independent adversarial auditors find no real gap).

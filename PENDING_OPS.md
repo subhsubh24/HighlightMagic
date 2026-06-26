@@ -3,6 +3,16 @@
 Items the factory cannot perform (signing, live keys, store setup, publishing).
 The owner must apply these before shipping to the App Store.
 
+## 🚨 URGENT — DO NOW (the backend is live on Vercel and calls PAID APIs)
+A code-level spend ceiling (Track H7) CANNOT override a provider that itself has no cap. Set HARD
+DAILY SPEND CAPS + 50%-of-cap ALERTS in EACH provider dashboard immediately:
+- **Anthropic** — console.anthropic.com → Billing/Limits: hard monthly+daily cap + usage alert.
+- **ElevenLabs** — elevenlabs.io account/billing: usage cap + alert (or a metered-plan ceiling).
+- **AtlasCloud** — provider dashboard: spend cap + alert.
+Rationale: a single export fires multiple expensive generation calls; an unthrottled/abused public
+endpoint is the fastest possible wallet drain. If any key is ever suspected exposed, regenerate it
+immediately (and note it here).
+
 ## Backend API Keys (Vercel Environment Variables)
 
 Set these in the Vercel dashboard for the `web/` deployment:
