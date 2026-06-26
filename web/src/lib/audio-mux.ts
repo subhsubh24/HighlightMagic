@@ -59,7 +59,33 @@ export interface ScheduledAudioLayer {
 
 /** Default ducking ratio — when voiceover plays, music drops to this fraction of its normal volume.
  * Slightly off-round so the fallback path doesn't produce "algorithm feel." */
-const DEFAULT_MUSIC_DUCK_RATIO = 0.28;
+export const DEFAULT_MUSIC_DUCK_RATIO = 0.28;
+
+/** A segment of time during which the music gain is ducked. */
+export interface DuckSegment {
+  startTime: number;
+  endTime: number;
+  ratio: number;
+}
+
+/**
+ * Sort and merge overlapping duck segments, keeping the strongest (lowest) ratio.
+ * Adjacent segments within 0.5s are merged to avoid choppy gain automation.
+ */
+export function mergeDuckSegments(segments: DuckSegment[]): DuckSegment[] {
+  const sorted = [...segments].sort((a, b) => a.startTime - b.startTime);
+  const merged: DuckSegment[] = [];
+  for (const seg of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && seg.startTime <= last.endTime + 0.5) {
+      last.endTime = Math.max(last.endTime, seg.endTime);
+      last.ratio = Math.min(last.ratio, seg.ratio); // stronger duck wins
+    } else {
+      merged.push({ ...seg });
+    }
+  }
+  return merged;
+}
 
 /**
  * Create a persistent audio pipeline for the render session.
@@ -192,18 +218,7 @@ export async function createAudioPipeline(
     }
 
     if (duckSegments.length > 0) {
-      // Sort and merge overlapping segments, keeping the strongest duck ratio
-      const sorted = [...duckSegments].sort((a, b) => a.startTime - b.startTime);
-      const merged: { startTime: number; endTime: number; ratio: number }[] = [];
-      for (const seg of sorted) {
-        const last = merged[merged.length - 1];
-        if (last && seg.startTime <= last.endTime + 0.5) {
-          last.endTime = Math.max(last.endTime, seg.endTime);
-          last.ratio = Math.min(last.ratio, seg.ratio); // stronger duck wins
-        } else {
-          merged.push({ ...seg });
-        }
-      }
+      const merged = mergeDuckSegments(duckSegments);
 
       for (const seg of merged) {
         const duckedVolume = musicVolume * seg.ratio;
