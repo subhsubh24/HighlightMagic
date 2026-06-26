@@ -4,7 +4,54 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-26 (Run 15)
+## Last run: 2026-06-26 (Run 16)
+
+### What was shipped (pending merge this run)
+
+- **PR #84** (P0, auto-merge pending — re-triggered): `TapeValidationService.swift` + `/api/ios-validate` from Run 15. Re-triggered this run by pushing a fresh commit after the auto-merge window had closed. Final P0 service-layer key removal step still pending CI.
+- **PR #87** (A3/C2, MERGED 2026-06-26): Two iOS fixes — (1) `ConfettiView.swift`: replaced `colors.randomElement()!` force-unwrap with `?? colors[0]` nil-coalescing (the array is never empty, but nil-coalescing is the correct Swift idiom); (2) `SubscriptionProduct.swift`: updated fallback display prices from `$4.99/mo` / `$39.99/yr` to `$9.99/mo` / `$79.99/yr` to align with `docs/BUSINESS_CASE.md` target pricing. StoreKit live prices always take precedence over these fallbacks.
+- **PR #88** (security/P0, auto-merge pending): `/api/validate/route.ts` — added optional `userId` quota gate. If `userId` is present and quota is exceeded, returns 402 before any Haiku API call. Anonymous callers (no `userId`) proceed unchanged — fail-open behavior preserved. New `validate-route.test.ts` with 2 focused tests: 402 when quota exceeded (fetch spy confirms no API call made); pass-through (200) when userId absent.
+- **PR #89** (G3, MERGED 2026-06-26): `web/src/evals/fixtures/gaming-highlight.json` — 17 frames, 68-second FPS gameplay montage. 4th auto-discovered eval fixture; exercises gaming/esports content type not covered by sports/travel/cooking. Scores 0.28–0.94 with clear HOOK/HERO/RHYTHM/CLOSER/REACTION narrative arc.
+- **PR #90** (G2, MERGED 2026-06-26): `web/src/app/api/__tests__/ios-score-route.test.ts` — 6 tests for `/api/ios-score` (previously 0 coverage on 360 LOC). Tests cover: 400 missing userId, 400 empty frames, 400 missing jpegBase64, 402 quota exceeded (fetch never called), 502 missing API key, 200 success with `remaining` decremented by 1.
+
+### Deep audit performed this run (2026-06-26)
+
+Full codebase sweep. Key findings:
+- **Security gap found and fixed**: `/api/validate` had NO quota gate — anonymous callers could burn Haiku credits indefinitely. Fixed in PR #88 (optional gate: present userId → check quota; absent → fail-open).
+- **consumeExport gap CONFIRMED INTENTIONAL**: `/api/plan`, `/api/sfx`, `/api/voiceover` call `checkExportAllowed` but NOT `consumeExport`. Design intent confirmed: quota consumed once per export at `/api/ios-score` (iOS) or `/api/score` (web). These are pipeline sub-steps of a single scored export. Do NOT add `consumeExport` to these routes.
+- **G2 coverage gap**: `/api/ios-score` (360 LOC, 0 tests) — fixed in PR #90.
+- **G3 coverage gap**: gaming/esports content type missing from eval fixtures — fixed in PR #89.
+- **A3 iOS**: ConfettiView force-unwrap + stale subscription prices — fixed in PR #87.
+- **New G2 gap identified**: `/api/ios-validate` and `/api/ios-plan` (added Run 15, each ~150+ LOC) have 0 tests.
+
+### Housekeeping produced this run
+- This file (LOOP_MEMORY.md): Run 16 state
+- IMPROVEMENT_LOG.md: #83/#85 marked merged 2026-06-26; #86/#82 back-filled (were missing); #87/#89/#90 added merged; #88/#84/#91 added as pending
+- REMAINING_STEPS.md: "Last updated" updated to Run 16
+
+### What NOT to re-do (additions for Run 16)
+- Do not add validate-route.test.ts — done in PR #88 (Run 16)
+- Do not add optional userId gate to /api/validate — done in PR #88 (Run 16)
+- Do not add gaming-highlight.json eval fixture — done in PR #89 (Run 16)
+- Do not add ios-score-route.test.ts — done in PR #90 (Run 16)
+- Do not re-fix ConfettiView.swift randomElement() force-unwrap — done in PR #87 (Run 16)
+- Do not re-align SubscriptionProduct.swift fallback prices — done in PR #87 (Run 16)
+- Do not add consumeExport to /api/plan, /api/sfx, /api/voiceover — INTENTIONAL design; quota consumed at /api/ios-score and /api/score only
+
+### ROADMAP box status changes this run
+- **G2**: PR #90 adds 6 tests for `/api/ios-score`. New gap: `/api/ios-validate` + `/api/ios-plan` (0 tests each).
+- **G3**: PR #89 adds 4th eval fixture (gaming/esports). 4 fixtures now auto-discovered: sports, travel, cooking, gaming.
+- **security / P0**: `/api/validate` now optional-quota-gated (PR #88).
+
+### Next priorities (updated Run 16)
+1. **G2 coverage** — `/api/ios-validate` and `/api/ios-plan` (Run 15 routes, 0 tests each). Follow the ios-score-route.test.ts pattern: real InMemoryQuotaStore, `vi.spyOn(globalThis, "fetch")`, unique userIds per test to avoid quota state pollution.
+2. **A3 sendability audit** — scan remaining Swift `Sources/` for force-unwraps and Swift 6 concurrency issues; `Sources/Services/` is the highest-risk directory.
+3. **G3 eval scheduling** — wire a scheduled eval run (GitHub Actions cron, `EVAL_MODE=1` + real keys). 4 fixtures auto-discovered; scheduling requires editing `.github/` — BLAST RADIUS, owner action or dedicated session.
+4. **P0 App Store Server API** — `verifyProEntitlement()` in `entitlement.ts` returns `false` (secure default); owner must configure `APP_STORE_SHARED_SECRET`.
+
+---
+
+## Previous run: 2026-06-26 (Run 15)
 
 ### What was shipped (pending merge this run)
 
