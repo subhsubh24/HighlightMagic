@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-26 (Run 14).
+be executed. Last updated: 2026-06-26 (Run 15).
 
 ---
 
@@ -15,22 +15,16 @@ owner knows the current state and can optionally unblock them faster.
 
 ### 0a. iOS service-layer API key removal
 
-~~`CloudScoringService.swift`~~ — **DONE** (PR #80, Run 14): rewritten to POST annotated frames
-to `/api/ios-score`; embedded API key removed; `isAvailable` always returns `true`.
+**COMPLETE** (Run 15): All 4 iOS services have been rewritten. No Anthropic API key remains embedded in the iOS binary or Keychain.
 
-`ClaudeVisionService.swift`, `TapeValidationService.swift`, and `AIEffectRecommendationService.swift`
-still call `api.anthropic.com` directly using an embedded/Keychain API key.
+- ~~`CloudScoringService.swift`~~ — **DONE** (PR #80, Run 14): routes through `/api/ios-score`.
+- ~~`ClaudeVisionService.swift`~~ — **DONE** (PR #83, Run 15): `isAvailable` returns `false`; `scoreHighlights` disabled (superseded by `CloudScoringService`).
+- ~~`TapeValidationService.swift`~~ — **DONE** (PR #84, Run 15): routes through `/api/ios-validate`.
+- ~~`AIEffectRecommendationService.swift`~~ — **DONE** (PR #85, Run 15): routes through `/api/ios-plan`.
 
-**Run 14 progress**:
-- `BackendConfig.swift` (PR #75) — canonical URL resolver, already merged.
-- `/api/ios-score` endpoint (PR #79) — Haiku frame scoring proxy with quota gate, already merged.
-- `CloudScoringService.swift` (PR #80) — key removal complete.
-- Remaining: `TapeValidationService.swift`, `AIEffectRecommendationService.swift`, `ClaudeVisionService.swift`.
+Supporting backend endpoints: `/api/ios-score` (#79), `/api/ios-validate` (#84), `/api/ios-plan` (#85). All gated by `checkExportAllowed`.
 
-The factory cannot compile-verify Swift on Linux, so this is being done conservatively (one file
-per PR). Each remaining service needs either a backend proxy endpoint or a safe fallback/no-op.
-
-**What the owner can do to unblock**: none required — the factory will handle this incrementally.
+**What the owner can do to unblock**: nothing — complete.
 
 ### 0b. Vercel KV provisioning for durable quota store
 
@@ -222,7 +216,7 @@ Once the app is live:
 
 | # | Action | Phase | Unblocked when |
 |---|---|---|---|
-| 0a | iOS service-layer API key removal | 0 | Factory doing this incrementally |
+| ~~0a~~ | ~~iOS service-layer API key removal~~ | 0 | **COMPLETE** (PRs #80, #83, #84, #85) |
 | 0b | Provision Vercel KV (Upstash Redis) + link to project | 0 | Code done (#66) — owner provisions KV in Vercel dashboard |
 | 0c | App Store shared secret in Vercel env | 0 | After App Store Connect record (Step 3) |
 | 1 | Set live API keys in Vercel | 1 | Now |

@@ -5,9 +5,12 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #81 | feat(G3): add cooking-highlight eval fixture for detect.eval.ts auto-discovery | G3 | pending #81 |
-| #80 | feat(P0): remove embedded Anthropic key from iOS; route frame scoring through /api/ios-score | P0 | pending #80 |
-| #79 | feat(P0): add /api/ios-score — iOS Haiku scoring proxy, removes embedded API key | P0 | pending #79 |
+| #85 | feat(P0): remove embedded API key from AIEffectRecommendationService; add /api/ios-plan backend | P0 | pending #85 |
+| #84 | feat(P0): remove embedded Anthropic key from TapeValidationService; add /api/ios-validate backend | P0 | pending #84 |
+| #83 | feat(P0): remove embedded Anthropic key from ClaudeVisionService (disable direct calls) | P0 | pending #83 |
+| #81 | feat(G3): add cooking-highlight eval fixture for detect.eval.ts auto-discovery | G3 | 2026-06-26 |
+| #80 | feat(P0): remove embedded Anthropic key from iOS; route frame scoring through /api/ios-score | P0 | 2026-06-26 |
+| #79 | feat(P0): add /api/ios-score — iOS Haiku scoring proxy, removes embedded API key | P0 | 2026-06-26 |
 | #78 | test(G2): extract mergeDuckSegments from audio-mux + 12 Vitest tests | G2 | 2026-06-26 |
 | #77 | test(G2): export pure functions from frame-extractor + 29 Vitest tests | G2 | 2026-06-26 |
 | #76 | meta(Run 13): housekeeping — IMPROVEMENT_LOG, LOOP_MEMORY, REMAINING_STEPS | meta | 2026-06-25 |
