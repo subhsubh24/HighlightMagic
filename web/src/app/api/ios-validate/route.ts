@@ -1,8 +1,9 @@
+import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const CLAUDE_VALIDATOR = "claude-haiku-4-5-20251001";
 
 interface ClipInput {
   captionText: string;
@@ -154,7 +155,6 @@ export async function POST(req: Request) {
     outro
   );
 
-  // Build user content (text description + optional frames)
   const userContent: object[] = [{ type: "text", text: description }];
   if (hasFrames) {
     userContent.push({
@@ -198,7 +198,6 @@ export async function POST(req: Request) {
     const textBlock = json.content?.find((b) => b.type === "text");
     const text = textBlock?.text ?? "";
 
-    // Extract JSON from Haiku response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return Response.json({ passed: true, issues: [], fixes: {} });
