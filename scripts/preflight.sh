@@ -80,6 +80,41 @@ fi
 rm -f "$BCS_TMP"
 ok "BUSINESS_CASE_SUMMARY parses (real YAML); arr_year1.base present"
 
+# Dashboard feeds — GROWTH_STATUS must parse (the factory dashboard reads it).
+# NOTE: the regex captures the WHOLE fenced ```yaml block (not just the first line), so a
+# valid file passes; an unparseable/missing block fails.
+if python3 - "$ROOT/docs/growth/GROWTH_STATUS.md" <<'PY'
+import sys, re, yaml
+try: txt = open(sys.argv[1]).read()
+except OSError: print("GROWTH_STATUS.md missing"); sys.exit(1)
+m = re.search(r"```ya?ml\s*\n(.*?GROWTH_STATUS.*?)\n```", txt, re.S)
+if not m: print("no GROWTH_STATUS block"); sys.exit(1)
+try: d = (yaml.safe_load(m.group(1)) or {}).get("GROWTH_STATUS") or {}
+except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
+if d.get("phase") not in ("pre_launch","launching","post_launch"): print("bad phase"); sys.exit(1)
+if not isinstance(d.get("funnel"), dict): print("missing funnel"); sys.exit(1)
+print("ok", d["phase"])
+PY
+then ok "GROWTH_STATUS: valid, parseable YAML block"
+else fail "GROWTH_STATUS: missing or UNPARSEABLE"; fi
+
+# Dashboard feeds — OWNER_ACTIONS must parse.
+if python3 - "$ROOT/PENDING_OPS.md" <<'PY'
+import sys, re, yaml
+txt = open(sys.argv[1]).read()
+m = re.search(r"```ya?ml\s*\n(.*?OWNER_ACTIONS.*?)\n```", txt, re.S)
+if not m: print("no OWNER_ACTIONS block"); sys.exit(1)
+try: d = (yaml.safe_load(m.group(1)) or {}).get("OWNER_ACTIONS") or {}
+except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
+if not isinstance(d.get("items"), list): print("items must be a list"); sys.exit(1)
+for it in d["items"]:
+    if it.get("status") not in ("open","in_progress","done"): print("bad status", it.get("id")); sys.exit(1)
+    if it.get("priority") not in ("urgent","high","normal"): print("bad priority", it.get("id")); sys.exit(1)
+print("ok", len(d["items"]))
+PY
+then ok "OWNER_ACTIONS: valid, parseable YAML block"
+else fail "OWNER_ACTIONS: missing or UNPARSEABLE"; fi
+
 echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
 ok "web build + tests green"
