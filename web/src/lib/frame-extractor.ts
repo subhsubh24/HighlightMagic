@@ -12,9 +12,9 @@ const ADAPTIVE_DENSITY_S = 0.25;  // 4fps in interest regions
 /** Audio pre-scan resolution for finding onset peaks. */
 const AUDIO_PRESCAN_INTERVAL_S = 0.1; // 10Hz — 100ms resolution
 /** Minimum onset value to qualify as an interest point (after normalization). */
-const ONSET_PEAK_THRESHOLD = 0.45;
+export const ONSET_PEAK_THRESHOLD = 0.45;
 /** Minimum pixel difference ratio to qualify as a visual scene change. */
-const SCENE_CHANGE_THRESHOLD = 0.12;
+export const SCENE_CHANGE_THRESHOLD = 0.12;
 /** Target max height for extracted frames — 480p balances quality with API cost.
  * Well within Claude Vision's sweet spot (200px–1568px per edge). */
 const FRAME_TARGET_HEIGHT = 480;
@@ -40,7 +40,7 @@ export interface ExtractedFrame {
  * Returns a Map of timestamp → normalized energy (0.0-1.0).
  * Fails gracefully (returns empty map) if audio can't be decoded.
  */
-interface AudioAnalysis {
+export interface AudioAnalysis {
   energy: Map<number, number>;  // RMS energy per timestamp (0-1)
   onset: Map<number, number>;   // energy delta per timestamp (0-1) — transient/beat detection
   spectral: Map<number, { bass: number; mid: number; treble: number }>; // frequency band ratios
@@ -50,7 +50,7 @@ interface AudioAnalysis {
  * Goertzel algorithm: compute energy at a single frequency bin in O(N).
  * Much faster than FFT when you only need a handful of frequencies.
  */
-function goertzelEnergy(samples: Float32Array, sampleRate: number, targetFreq: number): number {
+export function goertzelEnergy(samples: Float32Array, sampleRate: number, targetFreq: number): number {
   const N = samples.length;
   const k = Math.round(targetFreq * N / sampleRate);
   if (k <= 0 || k >= N / 2) return 0;
@@ -69,7 +69,7 @@ function goertzelEnergy(samples: Float32Array, sampleRate: number, targetFreq: n
  * Returns proportion of energy in bass (20-300 Hz), mid/voice (300-2000 Hz), treble (2000-8000 Hz).
  * Used to help AI distinguish speech vs music vs silence.
  */
-function computeSpectralBands(
+export function computeSpectralBands(
   mixedData: Float32Array,
   sampleRate: number,
   centerSample: number,
@@ -104,7 +104,7 @@ function computeSpectralBands(
 }
 
 /** Decoded audio data shared between prescan and full analysis to avoid double fetch+decode. */
-interface DecodedAudio {
+export interface DecodedAudio {
   mixedData: Float32Array;
   sampleRate: number;
   length: number;
@@ -149,7 +149,7 @@ async function decodeVideoAudio(videoUrl: string): Promise<DecodedAudio | null> 
   }
 }
 
-function extractAudioAnalysisFromBuffer(
+export function extractAudioAnalysisFromBuffer(
   decoded: DecodedAudio,
   timestamps: number[]
 ): AudioAnalysis {
@@ -204,7 +204,7 @@ function extractAudioAnalysisFromBuffer(
   return { energy: energyMap, onset: onsetMap, spectral: spectralMap };
 }
 
-function prescanAudioOnsetsFromBuffer(
+export function prescanAudioOnsetsFromBuffer(
   decoded: DecodedAudio,
   duration: number
 ): number[] {
@@ -246,7 +246,7 @@ function prescanAudioOnsetsFromBuffer(
  * Returns 0-1 ratio (0 = identical, 1 = completely different).
  * Downsampled for speed — checks every 16th pixel.
  */
-function frameDifference(a: ImageData, b: ImageData): number {
+export function frameDifference(a: ImageData, b: ImageData): number {
   const data1 = a.data;
   const data2 = b.data;
   const len = Math.min(data1.length, data2.length);
