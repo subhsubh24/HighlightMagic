@@ -231,7 +231,9 @@ are ticked under the DONE GUARD, CI-verified:
 - [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
       the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
       latest deep audit (G5) is clean of CRITICAL findings.
-If any box is open, advance the lowest incomplete item. Do not declare done early.
+If any box is open, advance the lowest incomplete item. Do not declare done early. Even with all
+boxes [x], the ready issue may open ONLY after the READINESS AUDIT GATE below passes BOTH of its
+gates (mechanical preflight exits 0 + ≥3 independent adversarial auditors find no real gap).
 
 ## DONE GUARD (a box counts as done ONLY with verified artifacts — never self-assessment)
 Before ticking ANY checkbox in this file (or recording any item complete in IMPROVEMENT_LOG/
@@ -248,10 +250,54 @@ completion and a FAILURE — it wastes the owner's time worse than leaving it op
   3. **GATE RE-RUN GREEN** — re-run the relevant gate to GREEN this run, do not trust a prior
      run or a self-assessment: web → `cd web && npm ci && npm run build && npm test`; iOS →
      the `ios` CI check on the merge commit; evals → actually run the eval.
-When unsure whether an artifact truly exists or works, treat the item as NOT done. The SAME
-standard gates the final Definition of Done: do NOT declare 100% / open the `FACTORY: 100%`
-issue unless every track's artifacts are verified-present on `main` AND both `web` + `ios`
-gates are green in that run, AND docs/BUSINESS_CASE.md actually contains the cited model.
+When unsure whether an artifact truly exists or works, treat the item as NOT done. EVIDENCE-BASED
+DONE — never self-certification: a SPEC where the bar needs a BUILT/RENDERED thing is NOT done (a
+working paywall = an actual checkout/charge call, NOT a stub; rendered assets = committed image
+files). NEVER mass-tick boxes. If a previously-ticked box can't be proven, UN-TICK it and fix it;
+reviewers reject any box ticked without proof.
+
+## READINESS AUDIT GATE (two independent gates; no self-certification)
+The loop ticks its own DoD boxes AND would certify its own readiness — so "ready for submission"
+requires TWO independent gates it cannot talk its way past. BOTH must pass IN THE SAME RUN before
+the `FACTORY: 100%` issue may open:
+
+GATE 1 — MECHANICAL PRE-FLIGHT (`scripts/preflight.sh`, un-gameable backstop). Must exit 0; it:
+- FAILS while ANY Definition-of-Done checkbox (DOD1–DOD5) is unchecked;
+- re-runs the full gate THIS run (web: `npm ci && build && test`; asserts the required `ios` check is
+  green on main — the loop can't xcodebuild on Linux);
+- asserts every required artifact exists on disk; and
+- mechanically verifies the CRITICAL paths are WIRED not stubbed — the StoreKit checkout/charge call
+  exists, the server-side entitlement gate is enforced before the paid call, the core highlight/
+  export path is present, and there are no stub/TODO/placeholder markers on those paths.
+  "Code exists" must NOT pass as "it works." Keep preflight current as the product evolves.
+
+GATE 2 — ADVERSARIAL READINESS AUDIT (independent; maker ≠ checker). When the loop believes the DoD
+is complete, BEFORE opening the issue spawn ≥3 FRESH auditor subagents (run on the STRONG model, not
+the cheap scouting tier — adversarial judgment is where you don't cut cost; NONE of them did the
+building), each told: "The loop claims HighlightMagic is submission-ready. PROVE IT IS NOT. Default
+to NOT-READY unless you genuinely cannot find a single real gap. Be adversarial." Divide coverage so
+every DoD gate is independently re-verified, at minimum:
+- FUNCTIONAL REALITY — exercise the critical journeys end to end (signup → paywall → checkout →
+  entitlement unlock, AND the core import → detect → edit → export → share flow). Any stub / TODO /
+  placeholder / dead path on a critical path = NOT ready.
+- BUSINESS-CASE HONESTY — median inputs sourced + defensible; NO lever's adoption % chosen merely to
+  clear the floor; the BUSINESS_CASE_SUMMARY block matches the body AND the real billing config.
+- ARTIFACT REALITY — every ticked box's artifact genuinely exists AND functions; every doc matches
+  current code; no contradiction.
+- STORE ACCEPTANCE (re-audit vs CURRENT Apple guidelines), SECURITY (no client-trusted entitlement,
+  no leaked secrets, server-side quota authoritative), QUALITY gates (lint/coverage/evals/E2E),
+  MARKETING completeness.
+A box stays [x] ONLY if an independent auditor CONFIRMS it. If ANY auditor finds a real gap → UN-TICK
+that box, queue the fix, and DO NOT open the issue this run — keep building.
+
+DECLARATION RULE: open `FACTORY: 100% — ready for submission + launch` ONLY when BOTH gates pass —
+preflight exits 0 AND all ≥3 adversarial auditors independently fail to find any real gap — and PASTE
+both the preflight output AND the readiness-audit findings (who verified what) into the issue as
+evidence. NEVER open it on self-assessment, while any DoD box is unchecked, or while any proof is
+missing. CONVERGENCE STILL HOLDS: this makes "ready" harder, not impossible — it still STOPS and
+hands off when genuinely done. If, after building all defensible revenue levers, the honest median
+still cannot reach the $100K floor, open an FYI issue to the owner with the gap + options rather than
+faking convergence OR looping forever.
 
 ## REMAINING_STEPS.md (owner-only, IN ORDER — maintained by the loop)
 Maintain a top-level `REMAINING_STEPS.md` listing, in the exact order the owner should do them,
