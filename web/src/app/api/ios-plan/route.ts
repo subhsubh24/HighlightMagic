@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       typeof creativeDirection === "string" && creativeDirection ? creativeDirection : undefined
     );
 
-    console.log(`[ios-plan] userId=${userId} frames=${typedFrames.length} scores=${typedScores.length} clips=${(result as Record<string, unknown[]>)?.clips?.length ?? "?"}`);
+    console.log(`[ios-plan] userId=${userId} frames=${typedFrames.length} scores=${typedScores.length} clips=${(result as unknown as Record<string, unknown[]>)?.clips?.length ?? "?"}`);
 
     return Response.json(result);
   } catch (err) {
