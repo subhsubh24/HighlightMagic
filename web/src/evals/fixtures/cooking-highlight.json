@@ -1,0 +1,53 @@
+{
+  "_description": "Golden fixture for cooking / food content highlight detection eval. Synthetic frame data representing a 75-second recipe video (pasta from scratch) with clear highlight moments at known timestamps — prep, key technique, dramatic reveal, and satisfying close.",
+  "_expected": {
+    "minClips": 2,
+    "maxClips": 7,
+    "minTotalDurationSec": 15,
+    "maxTotalDurationSec": 75,
+    "acceptableThemes": ["cooking", "food", "lifestyle", "cinematic"],
+    "requiredPlanFields": ["musicPrompt", "sfx", "voiceover", "intro", "outro"]
+  },
+  "frames": [
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 0,  "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 4,  "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 8,  "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 12, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 16, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 20, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 24, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 28, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 32, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 36, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 40, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 44, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 48, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 52, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 56, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 60, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 64, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 68, "base64": "" },
+    { "sourceFileId": "video-002", "sourceType": "video", "sourceFileName": "pasta-recipe.mp4", "timestamp": 72, "base64": "" }
+  ],
+  "scores": [
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 0,  "score": 0.55, "label": "chef intro — workspace reveal", "narrativeRole": "HOOK" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 4,  "score": 0.35, "label": "ingredient lineup on counter" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 8,  "score": 0.42, "label": "measuring flour close-up" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 12, "score": 0.48, "label": "cracking eggs into well" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 16, "score": 0.72, "label": "kneading dough — hands in motion", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 20, "score": 0.38, "label": "dough resting under cloth" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 24, "score": 0.65, "label": "pasta machine rolling — sheet emerging" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 28, "score": 0.78, "label": "tagliatelle cut and fanned out", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 32, "score": 0.44, "label": "pot of water coming to boil" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 36, "score": 0.5,  "label": "sauté garlic in olive oil" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 40, "score": 0.82, "label": "pasta dropped into boiling water — steam burst", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 44, "score": 0.88, "label": "sauce toss — pasta lifted in pan", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 48, "score": 0.6,  "label": "parmesan grated in slow motion" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 52, "score": 0.45, "label": "plating begins — twirl with tongs" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 56, "score": 0.93, "label": "finished dish reveal — full plate hero shot", "narrativeRole": "CLOSER" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 60, "score": 0.85, "label": "fork first bite — golden steam rising", "narrativeRole": "REACTION" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 64, "score": 0.55, "label": "chef smile to camera" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 68, "score": 0.32, "label": "recipe card lower-third overlay" },
+    { "sourceFileId": "video-002", "sourceType": "video", "timestamp": 72, "score": 0.28, "label": "fade to black — end card" }
+  ]
+}
