@@ -1,0 +1,49 @@
+{
+  "_description": "Golden fixture for gaming / esports content highlight detection eval. Synthetic frame data representing a 68-second FPS gameplay montage with clear highlight moments at known timestamps — opening pose, first kill, clutch setup, multi-kill, MVP reveal, and reaction close.",
+  "_expected": {
+    "minClips": 3,
+    "maxClips": 8,
+    "minTotalDurationSec": 15,
+    "maxTotalDurationSec": 68,
+    "acceptableThemes": ["gaming", "esports", "action", "lifestyle"],
+    "requiredPlanFields": ["musicPrompt", "sfx", "voiceover", "intro", "outro"]
+  },
+  "frames": [
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 0,  "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 4,  "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 8,  "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 12, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 16, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 20, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 24, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 28, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 32, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 36, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 40, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 44, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 48, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 52, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 56, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 60, "base64": "" },
+    { "sourceFileId": "video-003", "sourceType": "video", "sourceFileName": "fps-montage.mp4", "timestamp": 64, "base64": "" }
+  ],
+  "scores": [
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 0,  "score": 0.60, "label": "player intro pose — weapon drawn, camera holding on face under arena lights", "narrativeRole": "HOOK" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 4,  "score": 0.32, "label": "map-select overlay — static scoreboard, no action" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 8,  "score": 0.45, "label": "navigating narrow corridor, rifle raised, tense approach" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 12, "score": 0.55, "label": "spotting enemy silhouette through doorway — crosshair on target, rising anticipation" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 16, "score": 0.82, "label": "headshot elimination — skull icon flash, kill-feed entry mid-frame at peak action", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 20, "score": 0.38, "label": "teammate voice-comm reaction, screen with comms overlay" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 24, "score": 0.72, "label": "clutch 1v3 setup — crouching behind cover, two enemies visible on minimap", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 28, "score": 0.87, "label": "triple-kill spray — crosshair dancing across three targets, kill-feed lighting up", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 32, "score": 0.40, "label": "reloading animation, scanning corners — transitional breathing room" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 36, "score": 0.48, "label": "flashbang burst — screen whiteout fading to chaotic push" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 40, "score": 0.78, "label": "no-scope sniper long-range kill — bullet-travel arc visible, enemy drops at distance", "narrativeRole": "RHYTHM" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 44, "score": 0.91, "label": "ace round completion — full kill-feed column, team chat erupting, end-round banner", "narrativeRole": "HERO" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 48, "score": 0.58, "label": "teammates celebrating in text chat, victory emotes mid-screen" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 52, "score": 0.42, "label": "respawn loading screen — map thumbnail, fade transition" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 56, "score": 0.94, "label": "MVP podium screen — player stats highlighted in gold, rank-up badge animating in", "narrativeRole": "CLOSER" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 60, "score": 0.83, "label": "genuine face-cam reaction — mouth open, eyes wide, chair recoil captured at reveal", "narrativeRole": "REACTION" },
+    { "sourceFileId": "video-003", "sourceType": "video", "timestamp": 64, "score": 0.28, "label": "game logo outro with social handle lower-third — fade to black" }
+  ]
+}
