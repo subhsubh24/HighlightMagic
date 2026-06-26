@@ -4,7 +4,45 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Last run: 2026-06-25 (Run 13)
+## Last run: 2026-06-26 (Run 14)
+
+### What was shipped (pending merge this run)
+
+- **PR #77** (G2, MERGED): 29 Vitest tests for `frame-extractor.ts` (523 LOC, previously 0 tests). Exported 5 pure math functions + 2 interfaces + 2 constants. Tests cover Goertzel energy, spectral bands, audio analysis extraction, onset prescan, and frameDifference.
+- **PR #78** (G2, MERGED): 12 Vitest tests for `audio-mux.ts` (308 LOC, previously 0 tests). Extracted `mergeDuckSegments()` + `DuckSegment` interface from inline block; tests cover all merge behaviours (overlap, gap, ratio priority, immutability).
+- **PR #79** (P0, auto-merge pending): New `POST /api/ios-score` backend endpoint. iOS frames → Haiku scoring server-side via business-held API key. Full 8-dimension virality prompt; batch size 35; 4-retry backoff; z-score normalization; `consumeExport()` called after scoring (fixes consumeExport gap). Quota gated via `checkExportAllowed`.
+- **PR #80** (P0, auto-merge pending): `CloudScoringService.swift` completely rewritten — removed ~350 LOC of direct Anthropic calls. `isAvailable` always returns `true`. `scoreFrames()` now accepts `userId: String` and POSTs annotated frames to `BackendConfig.url(for: "/api/ios-score")`. 3-retry backoff; HTTP 402 triggers fallback. `HighlightDetectionService.swift` updated to pass `userId` via `await MainActor.run { UserAccountService.shared.userID }`.
+- **PR #81** (G3, auto-merge pending): `cooking-highlight.json` eval fixture (19 frames, 75-second pasta recipe, all 5 narrative roles). Auto-discovered by `detect.eval.ts`. Exercises food/lifestyle content type not covered by sports or travel fixtures.
+
+### Housekeeping produced this run
+- This file (LOOP_MEMORY.md): Run 14 state
+- IMPROVEMENT_LOG.md: PRs #72-75 updated from "pending" → "2026-06-25"; #76 added (merged 2026-06-25); #77-78 added (merged 2026-06-26); #79-81 added (pending merge)
+- REMAINING_STEPS.md: 0a updated — `CloudScoringService.swift` key removal done (PR #80); 3 iOS services still pending
+
+### What NOT to re-do (additions for Run 14)
+- Do not re-export pure functions from frame-extractor.ts — done in PR #77 (Run 14)
+- Do not re-add frame-extractor.test.ts — done in PR #77 (Run 14)
+- Do not re-export `mergeDuckSegments` / `DuckSegment` / `DEFAULT_MUSIC_DUCK_RATIO` from audio-mux.ts — done in PR #78 (Run 14)
+- Do not re-add audio-mux.test.ts — done in PR #78 (Run 14)
+- Do not re-create /api/ios-score endpoint — done in PR #79 (Run 14)
+- Do not re-rewrite CloudScoringService.swift to route through backend — done in PR #80 (Run 14)
+- Do not re-add cooking-highlight.json eval fixture — done in PR #81 (Run 14)
+
+### ROADMAP box status changes this run
+- G2: PRs #77 + #78 add 41 more tests; frame-extractor.ts and audio-mux.ts both now covered. Coverage threshold still requires full suite pass — need to confirm post-merge.
+- P0: PR #79 adds server-side Haiku frame scoring endpoint with consumeExport fix. PR #80 removes embedded Anthropic key from `CloudScoringService.swift`. Still pending: `TapeValidationService.swift`, `AIEffectRecommendationService.swift`, `ClaudeVisionService.swift`.
+- G3: PR #81 adds 3rd eval fixture (cooking). 3 fixtures now auto-discovered. Still needed: music/SFX/voiceover quality evals, scheduled eval run.
+
+### Next priorities (updated Run 14)
+1. **P0 iOS remaining key removal** — `TapeValidationService.swift`, `AIEffectRecommendationService.swift`, `ClaudeVisionService.swift` still call `api.anthropic.com` directly. Each needs a backend proxy endpoint (or safe no-op removal). `BackendConfig.swift` (PR #75) is the URL resolver prerequisite — already merged.
+2. **consumeExport gap** — `/api/sfx`, `/api/voiceover`, `/api/plan` call `checkExportAllowed` but NOT `consumeExport` after the paid call. Investigate whether sub-operations are counted at score level or if this is a genuine bug.
+3. **A3 sendability audit** — remaining force-unwraps and Swift 6 concurrency issues in `Sources/`; `ClaudeVisionService.swift` and `TapeValidationService.swift` may have outstanding issues.
+4. **G2 coverage expansion** — confirm coverage thresholds pass post-merge of #77/#78; identify next uncovered files.
+5. **G3 eval scheduling** — wire a scheduled eval run (GitHub Actions cron, `EVAL_MODE=1` + real API keys).
+
+---
+
+## Previous run: 2026-06-25 (Run 13)
 
 ### What was shipped (pending merge this run)
 
