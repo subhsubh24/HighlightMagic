@@ -37,6 +37,13 @@ ok "StoreKit purchase/entitlement call present"
 grep -q 'checkExportAllowed' web/src/app/api/score/route.ts \
   || fail "paid proxy /api/score does not enforce the server-side entitlement gate."
 ok "server-side entitlement gate enforced before the paid call"
+# Track H security: rate limiting (H1) + code-level spend ceiling (H7) on the paid path.
+grep -rqiE 'ratelimit|rate.?limit' web/src/app/api/score/route.ts web/src/lib 2>/dev/null \
+  || fail "no rate limiting on the paid proxy / shared lib (Track H1) — unthrottled paid endpoint is a wallet drain."
+ok "rate limiting present on the paid path (H1)"
+grep -rqiE 'spend.?ceiling|spend.?cap|circuit.?break|daily.?cap|usage.?cap' web/src/lib web/src/app/api 2>/dev/null \
+  || fail "no code-level API spend ceiling / circuit-breaker (Track H7)."
+ok "code-level API spend ceiling present (H7)"
 # Core product flow must be present: detection entrypoint + export path.
 grep -rqE 'func detectHighlights' Sources/ \
   || fail "core detection path (HighlightDetectionService.detectHighlights) missing."
