@@ -37,7 +37,7 @@ enum AppStoreMetadata {
     • Smart AI detection
     • All 8 style templates
 
-    HIGHLIGHT MAGIC PRO ($4.99/mo or $39.99/yr — save 33%):
+    HIGHLIGHT MAGIC PRO ($14.99/mo or $149.99/yr — save 17%):
     • Unlimited exports
     • No watermark
     • 14+ premium music tracks
@@ -132,7 +132,7 @@ enum AppStoreMetadata {
     AI is used solely to identify and rank existing video frames by highlight potential.
 
     SUBSCRIPTION:
-    - Auto-renewable subscriptions: pro.monthly ($4.99/mo), pro.yearly ($39.99/yr).
+    - Auto-renewable subscriptions: pro.monthly ($14.99/mo), pro.yearly ($149.99/yr).
     - Subscription management and cancellation handled by iOS system Settings.
     - Restore Purchases available on paywall and Settings screens.
     - Privacy Policy and Terms of Use links on paywall screen per Guideline 3.1.2.

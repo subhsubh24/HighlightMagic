@@ -72,8 +72,16 @@ struct FreemiumTests {
 
     @Test("Yearly plan shows savings")
     func testYearlySavings() {
-        #expect(SubscriptionProduct.yearly.savingsLabel != nil)
+        // Assert the exact value so a future price change that forgets to recompute the
+        // savings percentage (e.g. reverting to "Save 33%") fails CI instead of passing green.
+        #expect(SubscriptionProduct.yearly.savingsLabel == "Save 17%")
         #expect(SubscriptionProduct.monthly.savingsLabel == nil)
+    }
+
+    @Test("Fallback display prices match the business-case price")
+    func testFallbackPrices() {
+        #expect(SubscriptionProduct.monthly.price == "$14.99/mo")
+        #expect(SubscriptionProduct.yearly.price == "$149.99/yr")
     }
 }
 

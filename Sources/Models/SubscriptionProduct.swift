@@ -16,15 +16,15 @@ enum SubscriptionProduct: String, CaseIterable {
     /// before StoreKit product data loads or if the fetch fails.
     var price: String {
         switch self {
-        case .monthly: "$9.99/mo"
-        case .yearly: "$79.99/yr"
+        case .monthly: "$14.99/mo"
+        case .yearly: "$149.99/yr"
         }
     }
 
     var savingsLabel: String? {
         switch self {
         case .monthly: nil
-        case .yearly: "Save 33%"
+        case .yearly: "Save 17%"
         }
     }
 }
