@@ -141,6 +141,9 @@ actor AIEffectRecommendationService {
         if let name = template?.name, !name.isEmpty { body["templateName"] = name }
         if !userPrompt.isEmpty { body["userFeedback"] = userPrompt }
         if !creativeDirection.isEmpty { body["creativeDirection"] = creativeDirection }
+        // Attach the StoreKit signed transaction so the backend can verify Pro server-side (P0/C1).
+        let signedTransaction = await MainActor.run { UserAccountService.shared.proSignedTransaction }
+        if let jws = signedTransaction { body["signedTransaction"] = jws }
 
         let url = BackendConfig.url(for: "/api/ios-plan")
         var request = URLRequest(url: url)

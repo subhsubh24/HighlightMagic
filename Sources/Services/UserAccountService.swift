@@ -9,6 +9,9 @@ final class UserAccountService {
     var userID: String
     var savedProjects: [SavedProject] = []
     var isProUser: Bool = false
+    /// StoreKit 2 signed transaction (JWS) for the active Pro entitlement, or nil for free users.
+    /// Attached to backend requests so the server can verify Pro authoritatively (see ROADMAP P0/C1).
+    var proSignedTransaction: String?
 
     private let iCloudStore = NSUbiquitousKeyValueStore.default
     private let projectsDirectory: URL
@@ -154,6 +157,10 @@ final class UserAccountService {
         let newID = UUID().uuidString
         KeychainHelper.save(key: "user_anonymous_id", value: newID)
         userID = newID
+
+        // Drop the cached Pro signed transaction so the deleted account's JWS can never be sent
+        // under the new anonymous identity. StoreKit re-populates it on the next entitlement sync.
+        proSignedTransaction = nil
     }
 
     private func startObservingCloudChanges() {
