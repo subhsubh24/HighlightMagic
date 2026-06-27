@@ -59,8 +59,9 @@ cannot fetch (apple.com is blocked from the build egress), so the owner supplies
 3. (Optional, recommended) Add `APP_STORE_BUNDLE_ID=<your bundle id>` to harden the check so only
    transactions for this app are accepted.
 
-NOTE (loop follow-up, not owner): the iOS client must attach `Transaction.jwsRepresentation` to its
-backend requests for this gate to receive input — tracked as the next iOS task in LOOP_MEMORY.
+DONE (loop, #114): the iOS client now attaches its StoreKit signed transaction
+(`result.jwsRepresentation`) to the entitlement-gated backend calls (ios-score, ios-plan), so the
+gate receives input. The only remaining step is owner-supplied — set `APP_STORE_ROOT_CA_PEM` above.
 
 ---
 

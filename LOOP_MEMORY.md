@@ -35,30 +35,31 @@ real YAML parser (fails if missing/unparseable or arr_year1.base absent).
   videoUrl mapping, error hygiene); folded ElevenLabs music/sfx ceiling-clamp + NaN + empty-response
   cases into the EXISTING elevenlabs.test.ts (the per-file new test files were redundant — coverage
   already lived in elevenlabs.test.ts; scout missed it).
-- **#113** (meta, this PR): housekeeping.
+- **#113** (meta, MERGED): housekeeping (fixed stale APP_STORE/product-id docs; ticked H2).
+- **#114** (P0/C1, MERGED): iOS send-side — `UserAccountService.proSignedTransaction`, captured in
+  `StoreKitService.updatePurchaseStatus` from `result.jwsRepresentation` (NOTE: the JWS is on the
+  StoreKit `VerificationResult`, NOT on the decoded `Transaction` — the first attempt used
+  `transaction.jwsRepresentation` and the `ios` check failed to compile; fixed). CloudScoringService
+  (/api/ios-score) + AIEffectRecommendationService (/api/ios-plan) attach `signedTransaction` via the
+  proven `await MainActor.run { UserAccountService.shared.* }` pattern. Reviewer caught a stale-JWS-
+  on-account-deletion bug → cleared in deleteAllData(). ios CI green on main.
+- **#115** (meta, this PR): post-#114 — tick P0 server-side-entitlement bullet + C1.
 
 ### ROADMAP box changes this run
 - **H2** → **[x]** (input bounds on every paid route, before the paid call; verified).
-- **P0 bullet 2** + **C1**: server-side JWS verification IMPLEMENTED (#110) but boxes STAY OPEN —
-  the gate receives no input until the iOS client attaches `Transaction.jwsRepresentation`, and the
-  owner must set `APP_STORE_ROOT_CA_PEM`. Both reviewers explicitly required these stay open. NOT a
-  false-done — annotated honestly.
+- **P0 bullet 2** (server-side free-quota + Pro entitlement before any paid call) → **[x]** and
+  **C1** → **[x]**: both halves now merged + verified (server JWS verification #110 with 21 tests;
+  iOS sends the signed transaction #114 with ios CI green). Ticked on the SAME basis as P0 bullet 1
+  (code complete + wired end-to-end; ACTIVATION owner-gated on `APP_STORE_ROOT_CA_PEM`, recorded in
+  REMAINING_STEPS 0c — until set, verifyProEntitlement denies by secure default). The Run-20
+  reviewers' condition ("stay open until the iOS send-side ships + is verified") is now satisfied.
 
-### CRITICAL next priority (Run 20 → 21): iOS send-side for entitlement (completes P0/C1)
-The server gate is correct but DEAD until iOS sends the JWS. Implement (one coherent iOS PR;
-conservative, can't compile-verify on Linux → abandon if `ios` fails twice):
-1. `UserAccountService.swift`: add `var proSignedTransaction: String?` (@MainActor, Sendable).
-2. `StoreKitService.swift` `updatePurchaseStatus()`: for the verified, unrevoked Pro entitlement,
-   capture `transaction.jwsRepresentation` and set `UserAccountService.shared.proSignedTransaction`
-   (StoreKitService is @MainActor → MainActor, no await needed).
-3. Thread `signedTransaction: String?` as a parameter (mirroring how `userId` already flows
-   View → HighlightDetectionService → CloudScoringService.scoreFrames) and include it in the POST
-   body of the backend-calling services (CloudScoringService → /api/ios-score, AIEffect… →
-   /api/ios-plan, TapeValidationService → /api/ios-validate). PREFER param-threading from a MainActor
-   caller over cross-actor `await UserAccountService.shared...` inside the actors (lower Swift-6
-   strict-concurrency risk). Verify userId's existing flow first and copy it exactly.
+### What NOT to re-do (Run 20, post-#114)
+- Do not re-add the iOS send-side / proSignedTransaction — done #114. The JWS comes from
+  `result.jwsRepresentation` (VerificationResult), NOT `transaction.jwsRepresentation` (doesn't exist).
+- Do not re-tick/re-annotate P0 bullet 2 / C1 — done #115.
 
-### Other next priorities
+### Other next priorities (Run 21)
 - **H4** auth failure-cases: confirm scope (userId-based, no passwords) — likely N/A; document/close
   with rationale, or implement if accounts get added.
 - **G2** coverage: next 0-test files (check render route, kling.ts, atlascloud.ts helpers).

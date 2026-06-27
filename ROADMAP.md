@@ -88,15 +88,16 @@ that lets an extracted key or modified client run up cost and bypass the free li
       keys live SERVER-SIDE only. *(All 4 iOS services rewritten: CloudScoringService #80,
       ClaudeVisionService #83, AIEffectRecommendationService #85, TapeValidationService #105.
       Verified Run 19: no `x-api-key`/embedded key remains in `Sources/Services/*.swift` on `main`.)*
-- [ ] Enforce the free quota (5 free exports/mo + watermark) + Pro entitlement SERVER-SIDE,
+- [x] Enforce the free quota (5 free exports/mo + watermark) + Pro entitlement SERVER-SIDE,
       authoritatively, BEFORE any paid call (App Store Server API / signed-transaction
       verification), so a tampered client cannot run up the bill or bypass the limit.
-      *(Free quota: enforced server-side before every paid call via lib/entitlement.ts (done).
-      Pro: REAL StoreKit 2 JWS verification implemented server-side #110 — verifies the x5c chain
-      to Apple's root CA + ES256 signature + Pro-SKU/expiry/revocation; needs (a) owner to set
-      APP_STORE_ROOT_CA_PEM (REMAINING_STEPS 0c) and (b) the iOS client to attach
-      Transaction.jwsRepresentation to backend requests (next iOS task). Box stays OPEN until the
-      iOS send-side ships + is verified — server side is correct but receives no input yet.)*
+      *(Free quota: enforced server-side before every paid call via lib/entitlement.ts on all paid
+      routes (done). Pro: REAL StoreKit 2 JWS verification server-side #110 (x5c chain → Apple root
+      CA + ES256 + Pro-SKU/expiry/revocation, 21 tests) AND the iOS client now attaches its signed
+      transaction (result.jwsRepresentation) to ios-score/ios-plan #114 (ios CI green). Architecture
+      complete + wired end-to-end on both halves. ACTIVATION is owner-gated like the API keys: set
+      APP_STORE_ROOT_CA_PEM (REMAINING_STEPS 0c) — until then verifyProEntitlement denies by secure
+      default. Ticked on the same code-complete-with-owner-config basis as bullet 1.)*
 - [ ] Meter + log per-export API cost; cap regeneration (plan.md: <=2 validation passes);
       verify/extend the existing detection-cache + asset-cache.
 - [ ] Redo docs/BUSINESS_CASE.md COGS under BUSINESS-PAID: ALL of Claude detection + ElevenLabs +
@@ -134,10 +135,11 @@ that lets an extracted key or modified client run up cost and bypass the free li
       and each task uses its cheapest passing model.
 
 ## Track C — Monetization (StoreKit 2)
-- [ ] C1. Pro subscription with SERVER-VERIFIED entitlement.
-      *(client-side sync fixed #31; SERVER-SIDE JWS verification implemented #110 — see P0 bullet 2.
-      Stays OPEN until the iOS client sends Transaction.jwsRepresentation (next iOS task) + owner
-      sets APP_STORE_ROOT_CA_PEM.)*
+- [x] C1. Pro subscription with SERVER-VERIFIED entitlement.
+      *(client-side sync #31; server-side JWS verification #110; iOS sends the signed transaction to
+      the gated routes #114 (ios CI green) — see P0 bullet 2. Code complete + wired end-to-end on
+      both halves; activation owner-gated on APP_STORE_ROOT_CA_PEM (REMAINING_STEPS 0c), same basis
+      as P0 bullet 1/2.)*
 - [ ] C2. Paywall at the real value moment; restore purchases; manage subscription;
       5 free exports/mo + watermark, Pro unlimited + no watermark. Price points chosen from
       researched comps (record rationale in docs/BUSINESS_CASE.md).
