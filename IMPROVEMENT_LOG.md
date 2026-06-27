@@ -5,6 +5,10 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #103 | meta(Run 18): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | pending #103 |
+| #102 | feat(H6): security headers — HSTS, X-Content-Type-Options, X-Frame-Options, CORS; consolidate from vercel.json | H6 | pending #102 |
+| #101 | feat(H): rate limiting (H1), spend ceiling (H7), CAPTCHA (H5), validate quota gate, error hygiene (H3) | H1/H3/H5/H7 | pending #101 |
+| #100 | feat(P0): rescue ios-validate — remove embedded API key from TapeValidationService; add /api/ios-validate backend | P0 | pending #100 |
 | #91 | meta(Run 16): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | pending #91 |
 | #90 | test(G2): add route tests for /api/ios-score (6 tests) | G2 | 2026-06-26 |
 | #89 | feat(G3): add gaming/esports highlight detection fixture | G3 | 2026-06-26 |
@@ -85,6 +89,11 @@ Format: newest first. Only MERGED changes appear here.
 
 ## Pending (open PRs — not yet logged; add to table above once merged)
 - PR #16: A1 iOS CI destination fix — DO NOT MERGE (edits .github/ + Swift syntax bug; needs owner close)
-- PR #84: P0 ios-validate backend (re-triggered Run 16) — pending CI merge
-- PR #88: security/P0 validate quota gate — pending CI merge
+- PR #84: CLOSED Run 18 (replaced by PR #100)
+- PR #88: CLOSED Run 18 (logic incorporated into PR #101)
 - PR #91: meta Run 16 housekeeping — pending CI merge
+- PR #97: CLOSED Run 18 (stale; replaced by PR #103)
+- PR #100: P0 ios-validate rescue (Run 18) — pending CI merge
+- PR #101: Track H security hardening (Run 18) — pending CI merge
+- PR #102: H6 security headers (Run 18) — pending CI merge
+- PR #103: meta Run 18 housekeeping — pending CI merge
