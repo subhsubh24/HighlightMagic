@@ -52,6 +52,24 @@ UNBUILT = a GAP that blocks ready. The high-ROI levers must be BUILT, not just l
   "arr < floor → reject": the model clears the floor on a multi-year path (base ~year 3.5), so year-1
   ARR is correctly < $100K and a raw-number gate would block readiness forever. STRENGTH = Gate 2.
 
+## BUILDS ≠ WORKS — runtime functional reality (standing; 2026-06-27)
+LESSON: the loop validated that the app BUILDS (compiles + unit tests), NOT that it WORKS for a real
+user. A green build can still be functionally broken (signup → dead screen; export that never yields
+a file; paywall that charges but never unlocks Pro; nav target 404). BUILD-BUT-BROKEN = a FAIL, equal
+to a red test. FIX shipped: ROADMAP "BUILDS ≠ WORKS" standing standard + expanded Track G4 (real
+functional E2E suite) + Gate-2 FUNCTIONAL REALITY now means an ACTUAL RUN asserting the OUTCOME +
+preflight asserts the suite/inventory exist + PENDING_OPS un-runnable checklist + this lesson.
+- BUILD G4 TO THESE CANONICAL ANCHORS (so the gate and the build agree — preflight checks them):
+  web functional E2E at `web/e2e/` with `web/playwright.config.ts` and a `test:e2e` script in
+  web/package.json (wired into CI); route/flow + screen inventory at `docs/qa/FUNCTIONAL_INVENTORY.md`.
+  iOS: XCUITest core journey where an app-host run is available + XCTest integration; device-only /
+  sandbox gaps go on PENDING_OPS, never assumed.
+- OUTCOME-ASSERTING means the user-visible RESULT is checked: a real 1080×1920 .mp4 on disk; sandbox
+  purchase → watermark gone + limit lifted; home shows real content not a spinner; every nav resolves.
+- "FUNCTIONAL REALITY (an ACTUAL RUN)" is now a standing DEEP-AUDIT lens; at readiness, any critical
+  journey lacking an outcome-asserting runtime test = NOT ready. NOTE: this file is the canonical
+  loop memory (LOOP_MEMORY.md at root); do NOT create docs/loop-memory.md.
+
 ## Last run: 2026-06-27 (Run 20)
 
 ### What shipped this run (all MERGED to main — verified)
