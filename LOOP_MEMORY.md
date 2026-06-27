@@ -16,6 +16,21 @@ model tiers (scouts/scan = Haiku; reviewers + readiness auditors = Sonnet, never
 further conflicts found. Also: scripts/preflight.sh now parses the BUSINESS_CASE_SUMMARY block with a
 real YAML parser (fails if missing/unparseable or arr_year1.base absent).
 
+## Anti-drift guard — 2026-06-27 (engine_pct / engine_built PINNED TO CODE)
+LESSON (from the sister product): the loop flipped `engine_built: false → true` ~6h BEFORE the
+growth-execution engine existed, by conflating STAGED marketing content (E1/E4) with the LIVE
+execution engine (E6). A hollow `true` misleads the dashboard + Growth Agent into thinking they can
+move to execute mode. FIX shipped here: `scripts/preflight.sh` now COMPUTES `engine_pct` (0–100)
+from how many E6 anchor files physically exist, REJECTS any declared `engine_pct` that differs, and
+enforces `engine_built == (engine_pct == 100)`. So both flags are derived from reality, never a vibe.
+- The engine = 5 pieces, each pinned to ONE anchor file — **E6 MUST create them at EXACTLY these
+  paths** (else engine_pct can never reach 100): `web/src/app/api/waitlist/confirm/route.ts` (E6a),
+  `web/src/lib/email/index.ts` (E6b), `web/src/lib/social/queue.ts` (E6c),
+  `web/src/lib/growth/metrics.ts` (E6d), `docs/growth/CONNECT.md` (E6e, already exists → 20%).
+- Do NOT hand-edit `engine_pct`/`engine_built` in GROWTH_STATUS — run preflight and set them to the
+  COMPUTED value. Do NOT add a `docs/loop-memory.md` (this file, `LOOP_MEMORY.md`, is the canonical
+  loop memory). If you change the engine's anchor-file set, update the `ANCHORS` list in preflight.
+
 ## Last run: 2026-06-27 (Run 20)
 
 ### What shipped this run (all MERGED to main — verified)

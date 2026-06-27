@@ -80,12 +80,18 @@ fi
 rm -f "$BCS_TMP"
 ok "BUSINESS_CASE_SUMMARY parses (real YAML); arr_year1.base present"
 
-# Dashboard feeds — GROWTH_STATUS must parse (the factory dashboard reads it).
+# Dashboard feeds — GROWTH_STATUS must parse (the factory dashboard reads it) AND its
+# growth-execution-engine flags must be PINNED TO REAL CODE, never hand-set ahead of the engine.
 # NOTE: the regex captures the WHOLE fenced ```yaml block (not just the first line), so a
 # valid file passes; an unparseable/missing block fails.
-if python3 - "$ROOT/docs/growth/GROWTH_STATUS.md" <<'PY'
-import sys, re, yaml
-try: txt = open(sys.argv[1]).read()
+# ANTI-DRIFT (lesson from the sister product, which flipped engine_built:true ~6h before the
+# engine existed by conflating staged content with the live engine): engine_pct is COMPUTED here
+# from which E6 anchor files physically exist on disk; the YAML must MATCH the computed value, and
+# engine_built must equal (engine_pct == 100). A hollow `true` is therefore impossible.
+if python3 - "$ROOT/docs/growth/GROWTH_STATUS.md" "$ROOT" <<'PY'
+import sys, re, yaml, os
+gs_path, root = sys.argv[1], sys.argv[2]
+try: txt = open(gs_path).read()
 except OSError: print("GROWTH_STATUS.md missing"); sys.exit(1)
 m = re.search(r"```ya?ml\s*\n(.*?GROWTH_STATUS.*?)\n```", txt, re.S)
 if not m: print("no GROWTH_STATUS block"); sys.exit(1)
@@ -93,10 +99,31 @@ try: d = (yaml.safe_load(m.group(1)) or {}).get("GROWTH_STATUS") or {}
 except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
 if d.get("phase") not in ("pre_launch","launching","post_launch"): print("bad phase"); sys.exit(1)
 if not isinstance(d.get("funnel"), dict): print("missing funnel"); sys.exit(1)
-print("ok", d["phase"])
+# The growth-execution engine (ROADMAP Track E / E6) = a FIXED set of pieces, each pinned to ONE
+# anchor file in web/ (or the owner runbook). Keep this list in sync with what E6 actually builds.
+ANCHORS = [
+    "web/src/app/api/waitlist/confirm/route.ts",  # 1. waitlist confirm / double-opt-in (E6a)
+    "web/src/lib/email/index.ts",                 # 2. email-send provider abstraction   (E6b)
+    "web/src/lib/social/queue.ts",                # 3. social publishing queue           (E6c)
+    "web/src/lib/growth/metrics.ts",              # 4. growth-metrics read API           (E6d)
+    "docs/growth/CONNECT.md",                     # 5. owner connect runbook             (E6e)
+]
+shipped = sum(1 for p in ANCHORS if os.path.exists(os.path.join(root, p)))
+computed = round(shipped / len(ANCHORS) * 100)
+declared = d.get("engine_pct")
+if not isinstance(declared, int) or isinstance(declared, bool):
+    print("engine_pct must be an integer 0-100 (computed from real anchor files)"); sys.exit(1)
+if declared != computed:
+    print(f"engine_pct DRIFT: declared={declared} but computed={computed} ({shipped}/{len(ANCHORS)} anchor files on disk)"); sys.exit(1)
+built = d.get("engine_built")
+if not isinstance(built, bool):
+    print("engine_built must be a boolean"); sys.exit(1)
+if built != (computed == 100):
+    print(f"engine_built must == (engine_pct==100): engine_built={built} engine_pct={computed}"); sys.exit(1)
+print(f"ok phase={d['phase']} engine_pct={computed} engine_built={built}")
 PY
-then ok "GROWTH_STATUS: valid, parseable YAML block"
-else fail "GROWTH_STATUS: missing or UNPARSEABLE"; fi
+then ok "GROWTH_STATUS: valid; engine_pct/engine_built pinned to real anchor files"
+else fail "GROWTH_STATUS: invalid, UNPARSEABLE, or engine flags drifted from real code"; fi
 
 # Dashboard feeds — OWNER_ACTIONS must parse.
 if python3 - "$ROOT/PENDING_OPS.md" <<'PY'
