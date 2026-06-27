@@ -79,7 +79,9 @@ final class StoreKitService {
             if transaction.revocationDate == nil {
                 purchased.insert(transaction.productID)
                 // Capture the signed transaction for an active Pro product so the backend can
-                // verify the entitlement server-side (never trust a client flag).
+                // verify the entitlement server-side (never trust a client flag). If the user
+                // holds more than one Pro product, any active one proves entitlement equally —
+                // the backend grants Pro on any valid Pro SKU.
                 if productIDs.contains(transaction.productID) {
                     proJWS = transaction.jwsRepresentation
                 }

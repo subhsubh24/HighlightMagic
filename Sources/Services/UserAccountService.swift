@@ -157,6 +157,10 @@ final class UserAccountService {
         let newID = UUID().uuidString
         KeychainHelper.save(key: "user_anonymous_id", value: newID)
         userID = newID
+
+        // Drop the cached Pro signed transaction so the deleted account's JWS can never be sent
+        // under the new anonymous identity. StoreKit re-populates it on the next entitlement sync.
+        proSignedTransaction = nil
     }
 
     private func startObservingCloudChanges() {
