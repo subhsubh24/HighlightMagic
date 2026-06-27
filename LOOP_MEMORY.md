@@ -31,6 +31,27 @@ enforces `engine_built == (engine_pct == 100)`. So both flags are derived from r
   COMPUTED value. Do NOT add a `docs/loop-memory.md` (this file, `LOOP_MEMORY.md`, is the canonical
   loop memory). If you change the engine's anchor-file set, update the `ANCHORS` list in preflight.
 
+## Weak-business-case loop-back — 2026-06-27 (readiness gate, not just honesty)
+LESSON: the readiness audit could re-open building on a correctness/HONESTY gap, but an honest-yet-
+WEAK business case could slip through to "ready." FIX shipped: ROADMAP Gate 2 now has a
+**BUSINESS-CASE STRENGTH & lever-completeness** lens beside HONESTY — (a) below-floor honest case on
+the modeled path = REJECT; (b) any specific, buildable, value-bar-clearing lever that's named-but-
+UNBUILT = a GAP that blocks ready. The high-ROI levers must be BUILT, not just listed.
+- A weak case RE-OPENS BUILDING (WEAK-CASE LOOP-BACK): turn strength findings into ROADMAP build work
+  (Track E/F/P0), re-enter build mode, re-attempt readiness only once MATERIALLY STRONGER. Each
+  "ready" attempt must come back stronger, never the same case re-submitted.
+- BOUNDED: trigger is always a SPECIFIC buildable item the audit NAMES — never "the number could be
+  higher." Once the floor is cleared and no value-bar-clearing revenue work remains → converge + hand
+  off. FYI-and-stop is now LAST RESORT ONLY (real market ceiling = everything defensible built and it
+  still can't pencil), NOT unbuilt work. DOD3 updated to match.
+- Lever weighting for HighlightMagic: higher Pro/annual tier (annual $149.99/yr already analyzed in
+  BUSINESS_CASE §9); free-export→paywall conversion moment (5-free limit hit, watermark-removal value,
+  time-to-first-shareable-highlight); retention/share loops; per-export COGS reduction (cheaper
+  detection/model tier + caching — margin gates profit); ASO/reach.
+- preflight stays MECHANICAL only (block parses + arr_year1.base present). Do NOT add a numeric
+  "arr < floor → reject": the model clears the floor on a multi-year path (base ~year 3.5), so year-1
+  ARR is correctly < $100K and a raw-number gate would block readiness forever. STRENGTH = Gate 2.
+
 ## Last run: 2026-06-27 (Run 20)
 
 ### What shipped this run (all MERGED to main — verified)

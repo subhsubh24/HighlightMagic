@@ -61,6 +61,13 @@ fi
 ok "no stub markers on critical paths"
 # Business-case machine-readable summary block must exist AND parse with a real YAML parser
 # (a block that doesn't parse must never ship — the dashboard degrades to "unparseable -> link").
+# SCOPE NOTE: this is the MECHANICAL floor only (block exists + parses + arr_year1.base present).
+# Business-case STRENGTH — whether the honest case clears the $100K floor on the modeled path and
+# whether every high-ROI lever is actually BUILT (not just listed) — is a JUDGMENT call enforced by
+# the Gate-2 adversarial auditors (see ROADMAP "BUSINESS-CASE STRENGTH & lever-completeness" +
+# WEAK-CASE LOOP-BACK), NOT here. Do NOT add a numeric "reject if arr_year1 < floor" check: the model
+# clears the floor on a multi-year path (base ~year 3.5), so year-1 ARR is correctly below $100K and a
+# raw-number gate would block readiness forever. A weak case re-opens building via Gate 2, not preflight.
 BCS="$(awk '/^```yaml/{f=1;next} /^```/{if(f)exit} f' docs/BUSINESS_CASE.md)"
 [ -n "$BCS" ] || fail "BUSINESS_CASE_SUMMARY \`\`\`yaml block missing from docs/BUSINESS_CASE.md."
 BCS_TMP="$(mktemp)"; printf '%s\n' "$BCS" > "$BCS_TMP"
