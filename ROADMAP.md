@@ -325,7 +325,10 @@ are ticked under the DONE GUARD, CI-verified:
       OPTIMISTIC scenario (not stopped at the floor); unit economics are gross-margin-positive; the
       GTM (F6) is documented. The final `FACTORY: 100%` issue must include the one-paragraph "here's
       the math on why this can realistically make ≥$100K/yr (and how we maximized it) — and here are
-      the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers).
+      the levers" summary, drawn from docs/BUSINESS_CASE.md (no invented numbers). NOT DONE if the
+      honest case is below the floor on the modeled path, OR a high-ROI lever (per the Gate-2
+      BUSINESS-CASE STRENGTH lens) is named-but-unbuilt — that RE-OPENS building (WEAK-CASE LOOP-BACK),
+      it does not pass as "ready."
 - [ ] DOD4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 - [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
       the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
@@ -394,6 +397,17 @@ every DoD gate is independently re-verified, at minimum:
   placeholder / dead path on a critical path = NOT ready.
 - BUSINESS-CASE HONESTY — median inputs sourced + defensible; NO lever's adoption % chosen merely to
   clear the floor; the BUSINESS_CASE_SUMMARY block matches the body AND the real billing config.
+- BUSINESS-CASE STRENGTH & lever-completeness — honesty is necessary but NOT sufficient; a weak case
+  must not slip through. (a) If the honest median (planning_case) cannot clear the $100K floor on the
+  modeled path, readiness is REJECTED outright. (b) Even at/above the floor, if an auditor can name a
+  SPECIFIC, buildable, value-bar-clearing revenue lever / feature / architecture change that is NOT
+  YET BUILT and would materially strengthen the case, that is a GAP that blocks "ready" — the high-ROI
+  levers must be actually BUILT, not merely listed in docs/BUSINESS_CASE.md. Weight levers to this
+  stack: a higher-value Pro tier / annual plan; the free-export-quota → paywall CONVERSION moment
+  (the 5-free limit hit, watermark-removal value, time-to-first-shareable-highlight); retention /
+  re-engagement + share loops; per-export COGS reduction (cheaper detection/model tier, caching —
+  margin gates how much ARR is profit); and reach (ASO, content). A named gap here RE-OPENS building
+  (see the WEAK-CASE LOOP-BACK below) — it does NOT fail silently and it does NOT just open an FYI.
 - ARTIFACT REALITY — every ticked box's artifact genuinely exists AND functions; every doc matches
   current code; no contradiction.
 - STORE ACCEPTANCE (re-audit vs CURRENT Apple guidelines), SECURITY (no client-trusted entitlement,
@@ -407,9 +421,21 @@ preflight exits 0 AND all ≥3 adversarial auditors independently fail to find a
 both the preflight output AND the readiness-audit findings (who verified what) into the issue as
 evidence. NEVER open it on self-assessment, while any DoD box is unchecked, or while any proof is
 missing. CONVERGENCE STILL HOLDS: this makes "ready" harder, not impossible — it still STOPS and
-hands off when genuinely done. If, after building all defensible revenue levers, the honest median
-still cannot reach the $100K floor, open an FYI issue to the owner with the gap + options rather than
-faking convergence OR looping forever.
+hands off when genuinely done.
+
+WEAK-CASE LOOP-BACK (a too-weak honest case RE-OPENS building — it does NOT open the ready issue and
+does NOT just open an FYI-and-stop): if the business case is honest but below the $100K floor on the
+modeled path, OR a Gate-2 auditor names a specific buildable value-bar-clearing lever that would
+materially strengthen it, turn those strength findings into ROADMAP build work (Track E/F/P0 items),
+RE-ENTER BUILD MODE, build them through the normal review + gates path, and re-attempt readiness ONLY
+once the case is MATERIALLY STRONGER. Iterate until the honest case clears the floor WITH the high-ROI
+levers built — each "ready" attempt must come back with a stronger case, never the same one
+re-submitted. BOUNDED (no runaway): the trigger to keep building is ALWAYS a specific, buildable,
+value-bar-clearing item the audit can NAME — never the open-ended "the number could always be higher."
+Once the floor is honestly cleared AND no value-bar-clearing revenue work remains, the loop CONVERGES
+and hands off (squeezing the optimistic ceiling further with real post-launch data is the owner's job).
+The FYI-issue-and-stop path is now the genuine LAST RESORT ONLY — a real market-ceiling limit
+(everything defensible is built and it still cannot pencil), NOT unbuilt work.
 
 ## REMAINING_STEPS.md (owner-only, IN ORDER — maintained by the loop)
 Maintain a top-level `REMAINING_STEPS.md` listing, in the exact order the owner should do them,
