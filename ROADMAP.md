@@ -76,6 +76,28 @@ the deep-audit design lens applies it (Track A5 + Track G4 reference it).
   first-impression surfaces first (onboarding, paywall, landing page, export/share). Turn top
   findings into value-bar-clearing work; do NOT churn already-intentional UI for its own sake.
 
+## BUILDS ≠ WORKS standard (runtime functional reality — STANDING; read every run)
+A green build + passing unit tests does NOT mean the app WORKS. A flow that compiles and unit-tests
+clean can still be functionally broken for a real user — signup landing on a dead screen; an export
+that never produces a file; a paywall that charges but never unlocks Pro; a nav target that 404s.
+**BUILD-BUT-BROKEN IS A FAIL — release-blocking, equal to a red test.**
+- **Validate AS A USER, AT RUNTIME, asserting the INTENDED OUTCOME** — never an HTTP 200, never "the
+  handler exists," never "it rendered." The test passes only if the user-visible RESULT is correct:
+  the export yields a real 1080×1920 `.mp4` on disk; after a sandbox purchase the watermark is gone
+  AND the export limit is lifted; the home screen shows real content (not a stuck spinner / empty /
+  error state); every nav target resolves.
+- **Every page and every flow** is covered by an outcome-asserting RUNTIME test against a running
+  app/backend with a SEEDED test env (built in Track G4). Keep a route/flow + screen INVENTORY
+  (docs/qa/FUNCTIONAL_INVENTORY.md) so coverage is provably complete — a journey with no
+  outcome-asserting runtime test is treated as BROKEN.
+- **Enforced continuously:** the functional suite is wired into CI (a broken flow BLOCKS merge);
+  "FUNCTIONAL REALITY (an ACTUAL RUN)" is a standing DEEP-AUDIT lens; and at the readiness gate,
+  build-but-broken OR any critical journey lacking an outcome-asserting runtime test = NOT ready
+  (enforced by both preflight Gate 1 and the Gate-2 FUNCTIONAL REALITY auditor).
+- **Honest about the un-runnable:** real payment capture, App Store sandbox edge cases, device-only
+  behavior, and email/push deliverability that cannot run headlessly go on the human checklist
+  (PENDING_OPS.md) — NEVER assumed working.
+
 ## P0 — Cost & entitlement architecture (HIGHEST PRIORITY — do first)
 The iOS app historically called paid APIs DIRECTLY (embedded/Keychain key in ClaudeVisionService
 etc.) and StoreKit entitlement is CLIENT-ONLY. For a freemium business that pays the API bill,
@@ -265,10 +287,19 @@ this quality track is G.
       correctness) against a GROWING gold set of real video fixtures, gated behind an env flag
       (e.g. `RUN_EVALS=1`) so normal CI doesn't spend; wire a SCHEDULED eval run so AI-output
       quality regressions are caught. Live eval API spend is approved.
-- [ ] G4. E2E + accessibility + visual + performance gates — XCUITest (iOS) for the core
-      journey (import → detect → edit → export → share) + Playwright (web); automated a11y
-      checks on key surfaces; visual checks on the design-bar screens; a performance/stability
-      budget (no jank/crashes on the core path; export within a time budget).
+- [ ] G4. FUNCTIONAL E2E suite (BUILDS ≠ WORKS) + a11y + visual + perf gates — a REAL end-to-end
+      functional suite that RUNS every journey as a user against a running app/backend with a SEEDED
+      test env and asserts the intended user-visible OUTCOME (not an HTTP status, not "the handler
+      exists"): signup/login → working home; import/capture → detect → editor → 1080×1920 export
+      PRODUCING A REAL output file → share; paywall → purchase (StoreKit/RevenueCat SANDBOX) → Pro
+      entitlement ACTUALLY unlocks (watermark gone + unlimited); free-quota enforcement; EVERY nav
+      target resolves; real empty/loading/error states. Web/backend: Playwright + API E2E
+      (`web/e2e/`, `web/playwright.config.ts`, `npm run test:e2e`). iOS: XCUITest for the core
+      journey where an app-host run is available + XCTest integration for logic; device-only / sandbox
+      gaps go on PENDING_OPS (never assumed working). Keep a route/flow + screen INVENTORY
+      (docs/qa/FUNCTIONAL_INVENTORY.md) so coverage is provably complete. WIRED INTO CI so a broken
+      flow BLOCKS merge. PLUS automated a11y on key surfaces, visual checks on the design-bar screens,
+      and a perf/stability budget (no jank/crashes on the core path; export within a time budget).
 - [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff
       review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
       findings (security, crashes, runaway API cost, data loss) for done.
@@ -332,7 +363,9 @@ are ticked under the DONE GUARD, CI-verified:
 - [ ] DOD4. HANDOFF: complete docs, and **REMAINING_STEPS.md** lists — IN ORDER — only owner-only steps.
 - [ ] DOD5. QUALITY: Track G complete — lint enforced + clean (G1), coverage floors met (G2),
       the eval suite is complete + scheduled (G3), E2E/a11y/visual/perf gates green (G4), and the
-      latest deep audit (G5) is clean of CRITICAL findings.
+      latest deep audit (G5) is clean of CRITICAL findings. Per the BUILDS ≠ WORKS standard, G4 is a
+      REAL outcome-asserting functional suite — EVERY journey RUN as a user against a seeded env;
+      build-but-broken, or any critical journey lacking an outcome-asserting runtime test, is NOT done.
 - [ ] DOD6. SECURITY & ABUSE HARDENING: Track H complete — rate limiting on every paid/expensive/auth
       endpoint tied to the freemium quota (H1), server-side validation + input bounds (H2), error-
       message hygiene (H3), auth failure-case hardening + tests (H4), CAPTCHA on public forms (H5),
@@ -380,7 +413,10 @@ GATE 1 — MECHANICAL PRE-FLIGHT (`scripts/preflight.sh`, un-gameable backstop).
 - FAILS while ANY Definition-of-Done checkbox (DOD1–DOD5) is unchecked;
 - re-runs the full gate THIS run (web: `npm ci && build && test`; asserts the required `ios` check is
   green on main — the loop can't xcodebuild on Linux);
-- asserts every required artifact exists on disk; and
+- asserts every required artifact exists on disk;
+- asserts the FUNCTIONAL E2E suite + the route/flow inventory EXIST and the runnable (web/backend)
+  functional suite PASSES — a critical journey with no outcome-asserting runtime test, or a failing
+  one, FAILS the gate (BUILDS ≠ WORKS); and
 - mechanically verifies the CRITICAL paths are WIRED not stubbed — the StoreKit checkout/charge call
   exists, the server-side entitlement gate is enforced before the paid call, the core highlight/
   export path is present, and there are no stub/TODO/placeholder markers on those paths.
@@ -392,9 +428,13 @@ the cheap scouting tier — adversarial judgment is where you don't cut cost; NO
 building), each told: "The loop claims HighlightMagic is submission-ready. PROVE IT IS NOT. Default
 to NOT-READY unless you genuinely cannot find a single real gap. Be adversarial." Divide coverage so
 every DoD gate is independently re-verified, at minimum:
-- FUNCTIONAL REALITY — exercise the critical journeys end to end (signup → paywall → checkout →
-  entitlement unlock, AND the core import → detect → edit → export → share flow). Any stub / TODO /
-  placeholder / dead path on a critical path = NOT ready.
+- FUNCTIONAL REALITY (an ACTUAL RUN, not "it builds") — independently RUN the critical journeys end
+  to end against a running app/backend and ASSERT the intended user-visible OUTCOME: signup/login →
+  working home; paywall → sandbox purchase → Pro ACTUALLY unlocks (watermark gone + limit lifted);
+  import → detect → edit → 1080×1920 export PRODUCING A REAL output file → share; free-quota
+  enforcement; every nav target resolves; real empty/loading/error states. BUILD-BUT-BROKEN, any
+  stub / TODO / placeholder / dead path on a critical path, OR any critical journey lacking an
+  outcome-asserting runtime test (Track G4) = NOT ready (per the BUILDS ≠ WORKS standard).
 - BUSINESS-CASE HONESTY — median inputs sourced + defensible; NO lever's adoption % chosen merely to
   clear the floor; the BUSINESS_CASE_SUMMARY block matches the body AND the real billing config.
 - BUSINESS-CASE STRENGTH & lever-completeness — honesty is necessary but NOT sufficient; a weak case

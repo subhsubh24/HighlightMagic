@@ -51,6 +51,19 @@ ok "core detection path present"
 grep -rqE 'func exportClip|actor ExportService|class ExportService' Sources/ \
   || fail "core export path (ExportService.exportClip) missing."
 ok "core highlight/export path present"
+# BUILDS != WORKS: the functional E2E suite + route/flow inventory must EXIST and be wired into CI
+# (a journey with no outcome-asserting runtime test is treated as BROKEN). The runnable web/backend
+# suite executes in CI; preflight asserts the harness + inventory are present so readiness can never
+# pass build-but-broken. Device-only/sandbox gaps live on the PENDING_OPS human checklist.
+{ [ -f web/playwright.config.ts ] || [ -d web/e2e ]; } \
+  || fail "no web functional E2E harness (web/playwright.config.ts or web/e2e/) — BUILDS != WORKS gate (G4)."
+ok "web functional E2E harness present"
+grep -q '"test:e2e"' web/package.json \
+  || fail "web/package.json has no test:e2e script — functional suite not wired into CI (G4)."
+ok "web test:e2e script wired"
+[ -f docs/qa/FUNCTIONAL_INVENTORY.md ] \
+  || fail "missing docs/qa/FUNCTIONAL_INVENTORY.md (route/flow + screen inventory — coverage not provable)."
+ok "functional route/flow + screen inventory present"
 # No stub/placeholder markers on critical paths (intentional secure-default TODO(P0) excepted).
 if grep -rniE 'TODO|FIXME|not implemented|placeholder|\bstub\b' \
      Sources/Services/ClipGenerationService.swift \

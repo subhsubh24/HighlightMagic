@@ -179,3 +179,17 @@ match what the privacy policy discloses.
   is live in App Store Connect
 - **Anthropic spend cap**: set at console.anthropic.com before opening to users; suggested
   $50–100/month initially while monitoring per-export costs in Vercel logs
+
+## Functional reality — owner-only verification (BUILDS ≠ WORKS; can't run headlessly)
+
+The automated functional suite (Track G4) RUNS every journey it can and asserts real outcomes, but
+these cannot run headlessly/in CI and must NOT be assumed working — verify on a real device/account
+before submission:
+- **Real payment capture** — an actual (non-sandbox) App Store purchase charges and unlocks Pro;
+  the sandbox E2E proves the entitlement flow, not real billing.
+- **App Store sandbox edge cases** — interrupted/declined purchase, Ask-to-Buy, restore-purchases,
+  refund/expiry, family sharing, region/price-tier behavior.
+- **Device-only behavior** — real camera/photo-library capture + permission prompts, on-device
+  export performance/thermals, share-sheet to TikTok/Reels/Shorts on a physical device.
+- **Email/push deliverability** — that confirmation/lifecycle emails actually arrive (inbox, not
+  spam) and any push notifications deliver — verify with the real connected provider once set.
