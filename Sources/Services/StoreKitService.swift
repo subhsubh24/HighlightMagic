@@ -71,19 +71,26 @@ final class StoreKitService {
 
     func updatePurchaseStatus() async {
         var purchased: Set<String> = []
+        var proJWS: String? = nil
 
         for await result in Transaction.currentEntitlements {
             guard let transaction = try? checkVerified(result) else { continue }
 
             if transaction.revocationDate == nil {
                 purchased.insert(transaction.productID)
+                // Capture the signed transaction for an active Pro product so the backend can
+                // verify the entitlement server-side (never trust a client flag).
+                if productIDs.contains(transaction.productID) {
+                    proJWS = transaction.jwsRepresentation
+                }
             }
         }
 
         purchasedProductIDs = purchased
         isProUser = !purchased.isEmpty
 
-        // Propagate Pro status to services that gate features on it
+        // Propagate Pro status + the signed transaction to services that gate features on it
+        UserAccountService.shared.proSignedTransaction = proJWS
         UserAccountService.shared.updateProStatus(isProUser)
     }
 

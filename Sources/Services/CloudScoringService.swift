@@ -124,6 +124,9 @@ actor CloudScoringService {
 
         var body: [String: Any] = ["userId": userId, "frames": framePayload]
         if let name = templateName { body["templateName"] = name }
+        // Attach the StoreKit signed transaction so the backend can verify Pro server-side (P0/C1).
+        let signedTransaction = await MainActor.run { UserAccountService.shared.proSignedTransaction }
+        if let jws = signedTransaction { body["signedTransaction"] = jws }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

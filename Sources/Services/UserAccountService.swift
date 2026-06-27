@@ -9,6 +9,9 @@ final class UserAccountService {
     var userID: String
     var savedProjects: [SavedProject] = []
     var isProUser: Bool = false
+    /// StoreKit 2 signed transaction (JWS) for the active Pro entitlement, or nil for free users.
+    /// Attached to backend requests so the server can verify Pro authoritatively (see ROADMAP P0/C1).
+    var proSignedTransaction: String?
 
     private let iCloudStore = NSUbiquitousKeyValueStore.default
     private let projectsDirectory: URL
