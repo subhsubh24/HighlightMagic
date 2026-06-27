@@ -1073,7 +1073,7 @@ export default function ExportStep() {
             className="btn-primary flex items-center gap-2"
           >
             <Crown className="h-5 w-5" />
-            Upgrade to Pro — $4.99/mo
+            Upgrade to Pro — $14.99/mo
           </a>
           <button
             onClick={() => dispatch({ type: "SET_STEP", step: "editor" })}

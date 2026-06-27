@@ -158,11 +158,24 @@ const FEATURES = [
   },
 ];
 
-const PRICING = [
+type PricingPlan = {
+  name: string;
+  price: string;
+  period: string;
+  annualNote: string | null;
+  description: string;
+  highlight: boolean;
+  features: string[];
+  cta: string;
+  ctaHref: string | null;
+};
+
+const PRICING: PricingPlan[] = [
   {
     name: "Free",
     price: "$0",
     period: "forever",
+    annualNote: null,
     description: "Perfect for trying out HighlightMagic.",
     highlight: false,
     features: [
@@ -178,8 +191,9 @@ const PRICING = [
   },
   {
     name: "Pro",
-    price: "$9.99",
+    price: "$14.99",
     period: "/ month",
+    annualNote: "or $149.99/year — 2 months free",
     description: "For creators who publish consistently.",
     highlight: true,
     features: [
@@ -211,7 +225,7 @@ const FAQ = [
   },
   {
     q: "Is it really free?",
-    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. The Pro subscription ($9.99/month) removes the watermark and gives you unlimited exports.",
+    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. The Pro subscription ($14.99/month, or $149.99/year) removes the watermark and gives you unlimited exports.",
   },
   {
     q: "When is the app available?",
@@ -443,6 +457,9 @@ export default function LandingPage() {
                   <span className="text-4xl font-black">{plan.price}</span>
                   <span className="mb-1 text-[var(--text-secondary)]">{plan.period}</span>
                 </div>
+                {plan.annualNote && (
+                  <p className="mb-1 text-xs font-medium text-[var(--text-secondary)]">{plan.annualNote}</p>
+                )}
                 <p className="mb-6 text-sm text-[var(--text-secondary)]">{plan.description}</p>
 
                 <ul className="mb-8 flex-1 space-y-3">
