@@ -45,6 +45,14 @@ export async function POST(req: Request) {
     }
     // H2: bound each frame's base64 image so a single oversized frame can't inflate the bill.
     if (anyFrameOverLimit(clipFrames, "base64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
+    // H2: sfxTracks + voiceoverSegments are each serialized into the Haiku prompt; an oversized
+    // array inflates paid token cost unbounded, so cap both at MAX_FILES.
+    if (Array.isArray(sfxTracks) && sfxTracks.length > MAX_FILES) {
+      return Response.json({ error: "too many sfx tracks" }, { status: 400 });
+    }
+    if (Array.isArray(voiceoverSegments) && voiceoverSegments.length > MAX_FILES) {
+      return Response.json({ error: "too many voiceover segments" }, { status: 400 });
+    }
 
     // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
     if (userId && typeof userId === "string") {

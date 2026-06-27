@@ -3,6 +3,7 @@ import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { MAX_FILES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,13 @@ export async function POST(req: Request) {
     return tooLargeResponse();
   }
 
+  // H2: cap the photoAnimations array — each entry's animationInstructions is serialized into
+  // the planner prompt, so an oversized array inflates paid token cost unbounded. A real
+  // project has at most MAX_FILES photos.
+  if (Array.isArray(photoAnimations) && photoAnimations.length > MAX_FILES) {
+    return tooLargeResponse();
+  }
+
   // ── SERVER-SIDE GATE — before any paid call ──
   const decision = await checkExportAllowed({
     userId,
@@ -135,11 +143,13 @@ export async function POST(req: Request) {
         );
       } catch (err) {
         clearInterval(keepalive);
-        const message = err instanceof Error ? err.message : String(err);
+        // H3: log full detail server-side; stream a generic message so upstream planner/
+        // provider error details never reach the client.
+        console.error("[Plan API] planner error:", err instanceof Error ? err.message : String(err));
         try {
           controller.enqueue(
             encoder.encode(
-              `event: error\ndata: ${JSON.stringify({ message })}\n\n`
+              `event: error\ndata: ${JSON.stringify({ message: "Planning failed. Please try again." })}\n\n`
             )
           );
         } catch {

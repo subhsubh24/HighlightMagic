@@ -74,8 +74,10 @@ export async function POST(req: Request) {
     console.log(`[animate/submit] Success: predictionId=${predictionId}`);
     return Response.json({ predictionId });
   } catch (err) {
+    // H3: log full context server-side only; return a generic message so upstream
+    // provider/library error details never leak to the client.
     const message = err instanceof Error ? err.message : String(err);
     console.error("[animate/submit] Error:", message);
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json({ error: "Animation submission failed. Please try again." }, { status: 500 });
   }
 }
