@@ -23,11 +23,11 @@ export default function TermsPage() {
             TikTok, Instagram Reels, and YouTube Shorts.
           </p>
           <p className="mt-2">
-            The web application processes video on our servers via third-party AI providers
-            (Anthropic, ElevenLabs, AtlasCloud). The iOS app uses a bring-your-own-key (BYOK)
-            model: you provide your own Anthropic API key in Settings, and AI analysis is performed
-            via your API account. No frames or video data are stored by Highlight Magic beyond the
-            duration of your session.
+            Both the web application and the iOS app process your video on our servers via
+            third-party AI providers (Anthropic, ElevenLabs, AtlasCloud). Highlight Magic operates
+            and pays for this AI processing on your behalf &mdash; you do not supply or pay for any
+            API keys. No frames or video data are stored by Highlight Magic beyond the duration of
+            your session.
           </p>
         </section>
 
@@ -79,12 +79,13 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-white">6. Third-Party API Keys (iOS)</h2>
+          <h2 className="text-lg font-semibold text-white">6. AI Processing</h2>
           <p>
-            The iOS app uses a bring-your-own-key model. When you provide an Anthropic API key,
-            you are subject to Anthropic&apos;s terms of service and are solely responsible for
-            any costs incurred on your account. Highlight Magic does not charge for third-party
-            API usage; those costs accrue directly to your API account.
+            All AI processing &mdash; on both web and iOS &mdash; runs on Highlight Magic&apos;s
+            servers using API keys that we hold and pay for. You are never asked to provide an
+            Anthropic, ElevenLabs, or AtlasCloud API key, and you incur no third-party API charges.
+            Your usage is governed solely by your Free or Pro plan (Section 3). We may apply
+            reasonable rate and usage limits to keep the Service available and prevent abuse.
           </p>
         </section>
 
