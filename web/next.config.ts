@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// CORS origin: configurable via env so preview deployments work alongside production.
+const appOrigin = process.env.NEXT_PUBLIC_APP_URL ?? "https://highlightmagic.app";
+
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
@@ -29,17 +32,9 @@ const nextConfig: NextConfig = {
     {
       source: "/api/(.*)",
       headers: [
-        { key: "Access-Control-Allow-Origin", value: "https://highlightmagic.app" },
+        { key: "Access-Control-Allow-Origin", value: appOrigin },
         { key: "Access-Control-Allow-Methods", value: "GET, POST, OPTIONS" },
         { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
-      ],
-    },
-    // PWA service worker cache headers
-    {
-      source: "/sw.js",
-      headers: [
-        { key: "Cache-Control", value: "no-cache" },
-        { key: "Service-Worker-Allowed", value: "/" },
       ],
     },
   ],
