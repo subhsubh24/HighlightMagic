@@ -174,6 +174,23 @@ that lets an extracted key or modified client run up cost and bypass the free li
       quality-vs-cost; route each task to the cheapest model that clears its quality bar;
       config-driven model map; dated decision log. DONE when the map + benchmark + log exist
       and each task uses its cheapest passing model.
+- [ ] B5. PERIODIC MODEL COST/QUALITY RE-BENCHMARK (STANDING — keeps B2/B4 honest; recurring, NOT
+      one-and-done). B4 is a point-in-time pick; models + prices change, so the cheapest-capable
+      choice is re-evaluated on a cadence: **MONTHLY**, AND immediately ON-SIGNAL when WebSearch finds
+      a new/cheaper model or a price change. Per TASK (frame scorer, planner, validator, TTS, video —
+      each has its own quality bar; all centralized in `web/src/lib/ai-models.ts`). METHOD =
+      docs/MODEL_BENCH_PLAYBOOK.md: trial a cheaper CANDIDATE behind the registry, then VALIDATE on
+      BOTH axes — (1) QUALITY via the G3 eval suite (`RUN_EVALS=1`) against the gold set PLUS the G4
+      functional journey suite (the FLOW must still work with the candidate's real responses — parsing,
+      no crashes), and (2) COST via real per-export COGS (docs/MODEL_COSTS.md). **ADOPT-ON-GATES
+      (AUTONOMOUS):** swap the model id iff eval-quality holds within the floor AND COGS drops a
+      meaningful margin AND the functional suite stays green — through the normal 2-reviewer + CI +
+      eval gate (one-line, reversible). REJECT + record the dated decision otherwise. Pricing is
+      REAL/cited — NEVER invent a price, and NEVER downgrade past the quality floor to hit a COGS
+      number (anti-gaming, Reviewer B rejects). Recompute docs/BUSINESS_CASE.md unit economics on any
+      adopted change. CO-REQUISITE: the eval gold set (G3) must be strong enough to CATCH a quality
+      regression — a thin eval rubber-stamps a worse model, so expand evals alongside.
+      *(standing; updates ai-models.ts + docs/MODEL_COSTS.md + the decision log on adopt)*
 
 ## Track C — Monetization (StoreKit 2)
 - [x] C1. Pro subscription with SERVER-VERIFIED entitlement.
