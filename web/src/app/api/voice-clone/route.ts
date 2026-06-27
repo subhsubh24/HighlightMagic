@@ -1,6 +1,8 @@
 import { createVoiceClone } from "@/lib/elevenlabs-voice-clone";
 import { checkExportAllowed } from "@/lib/entitlement";
 
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 
 /** Max voice sample size: 10 MB */
@@ -13,6 +15,11 @@ const MAX_BODY_SIZE = 10 * 1024 * 1024;
  * P0: requires userId + enforces freemium quota server-side before any paid call.
  */
 export async function POST(req: Request) {
+  // H1: per-IP rate limit — this route triggers a paid API call, so throttle
+  // request floods even before the quota gate (Track H1).
+  const rl = checkRateLimit(`voice-clone:${getClientIP(req)}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   try {
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {

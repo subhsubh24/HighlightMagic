@@ -1,5 +1,7 @@
 import { isolateInstrumental } from "@/lib/elevenlabs-stems";
 
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
@@ -12,6 +14,13 @@ export const maxDuration = 120;
 const MAX_DATA_URI_LENGTH = 15 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  // H1: per-IP rate limit — this route triggers a paid ElevenLabs call. Stem separation
+  // is an export sub-step whose quota is enforced upstream at /api/score (the web caller
+  // sends no userId), so this route has no per-call quota gate of its own; the per-IP
+  // throttle is its primary abuse brake (Track H1).
+  const rl = checkRateLimit(`stems:${getClientIP(req)}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   try {
     const { musicDataUri } = await req.json();
 
