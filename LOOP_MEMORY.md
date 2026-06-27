@@ -16,7 +16,68 @@ model tiers (scouts/scan = Haiku; reviewers + readiness auditors = Sonnet, never
 further conflicts found. Also: scripts/preflight.sh now parses the BUSINESS_CASE_SUMMARY block with a
 real YAML parser (fails if missing/unparseable or arr_year1.base absent).
 
-## Last run: 2026-06-27 (Run 19)
+## Last run: 2026-06-27 (Run 20)
+
+### What shipped this run (all MERGED to main — verified)
+- **#110** (P0/C1, MERGED): REAL server-side App Store JWS entitlement verification. New
+  `web/src/lib/app-store-jws.ts` verifies the StoreKit 2 signed transaction — x5c cert chain to a
+  trusted Apple root CA + ES256 (ieee-p1363) signature + cert validity windows; `entitlement.ts`
+  then confirms Pro-SKU/expiry/revocation/bundle. Replaces the stub that always returned false. No
+  Apple secret needed (root CA is public, owner sets `APP_STORE_ROOT_CA_PEM`; deny is the secure
+  default). 21 tests over a generated EC P-256 chain. Reviewer A caught 2 fail-open defects
+  (absent bundleId / absent expiresDate) — both hardened + tested before merge.
+- **#111** (H2, MERGED): shared `web/src/lib/input-bounds.ts` + per-field size caps BEFORE the paid
+  call on score/ios-score/validate/ios-validate (per-frame base64), plan/ios-plan (planner text),
+  talking-head/style-transfer/animate-submit/upscale/thumbnail (media blobs) + score prompt.
+  Generic 413 (H3 hygiene). Content-Length pre-guards on style-transfer/talking-head. → **H2 ticked.**
+- **#112** (G2, MERGED): tests for the two genuinely-untested routes proxy-video (SSRF allowlist
+  incl. the endsWith lookalike branch) + animate/check (predictionId sanitisation, outputUrl→
+  videoUrl mapping, error hygiene); folded ElevenLabs music/sfx ceiling-clamp + NaN + empty-response
+  cases into the EXISTING elevenlabs.test.ts (the per-file new test files were redundant — coverage
+  already lived in elevenlabs.test.ts; scout missed it).
+- **#113** (meta, this PR): housekeeping.
+
+### ROADMAP box changes this run
+- **H2** → **[x]** (input bounds on every paid route, before the paid call; verified).
+- **P0 bullet 2** + **C1**: server-side JWS verification IMPLEMENTED (#110) but boxes STAY OPEN —
+  the gate receives no input until the iOS client attaches `Transaction.jwsRepresentation`, and the
+  owner must set `APP_STORE_ROOT_CA_PEM`. Both reviewers explicitly required these stay open. NOT a
+  false-done — annotated honestly.
+
+### CRITICAL next priority (Run 20 → 21): iOS send-side for entitlement (completes P0/C1)
+The server gate is correct but DEAD until iOS sends the JWS. Implement (one coherent iOS PR;
+conservative, can't compile-verify on Linux → abandon if `ios` fails twice):
+1. `UserAccountService.swift`: add `var proSignedTransaction: String?` (@MainActor, Sendable).
+2. `StoreKitService.swift` `updatePurchaseStatus()`: for the verified, unrevoked Pro entitlement,
+   capture `transaction.jwsRepresentation` and set `UserAccountService.shared.proSignedTransaction`
+   (StoreKitService is @MainActor → MainActor, no await needed).
+3. Thread `signedTransaction: String?` as a parameter (mirroring how `userId` already flows
+   View → HighlightDetectionService → CloudScoringService.scoreFrames) and include it in the POST
+   body of the backend-calling services (CloudScoringService → /api/ios-score, AIEffect… →
+   /api/ios-plan, TapeValidationService → /api/ios-validate). PREFER param-threading from a MainActor
+   caller over cross-actor `await UserAccountService.shared...` inside the actors (lower Swift-6
+   strict-concurrency risk). Verify userId's existing flow first and copy it exactly.
+
+### Other next priorities
+- **H4** auth failure-cases: confirm scope (userId-based, no passwords) — likely N/A; document/close
+  with rationale, or implement if accounts get added.
+- **G2** coverage: next 0-test files (check render route, kling.ts, atlascloud.ts helpers).
+- **B4/MODEL_COSTS** + **BUSINESS_CASE** COGS: recompute only if a lever/price/COGS changed (none did).
+- **DOD/preflight**: still fails (many DoD boxes open) — expected; not near done.
+
+### What NOT to re-do (Run 20)
+- Do not re-implement verifyProEntitlement / app-store-jws.ts — done #110. Real JWS verification,
+  not a stub. (apple.com is BLOCKED from build egress — can't fetch Apple's root CA; it's owner-set
+  via APP_STORE_ROOT_CA_PEM. Don't try to bundle it from apple.com.)
+- Do not re-add input-bounds.ts or the per-field caps on the paid routes — done #111.
+- Do not create per-file elevenlabs-*.test.ts — coverage is in elevenlabs.test.ts (#112 added the
+  ceiling/NaN/empty cases there).
+- Do not re-add proxy-video / animate-check route tests — done #112.
+- Do not "fix" REMAINING_STEPS APP_STORE_SHARED_SECRET / pro_monthly_999 again — corrected #113.
+
+---
+
+## Previous run: 2026-06-27 (Run 19)
 
 ### DEEP AUDIT — 2026-06-27 (Run 19) — security/abuse + artifact-freshness lens
 Focused audit (last full deep audit was Run 16). Findings, highest-severity first:
