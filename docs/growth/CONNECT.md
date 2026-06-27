@@ -9,28 +9,40 @@ The Growth Agent NEVER holds live secrets. The deployed `web/` backend sends; yo
 Until a channel's credentials are present in Vercel env, that channel stays in DRY-RUN mode
 and GROWTH_STATUS shows `awaiting_connect: true`.
 
+> **Engine status (E6 built — 2026-06-27):** the execution plumbing is LIVE in `web/` —
+> waitlist capture + double-opt-in (`/api/waitlist` → `/api/waitlist/confirm`), the email
+> provider abstraction (`web/src/lib/email/`), the social publishing queue
+> (`web/src/lib/social/queue.ts`), and the analytics-pull read-API (`/api/growth/stats`,
+> consuming `web/src/lib/growth/metrics.ts`). Everything is dry-run-safe and no-ops until
+> you set the env vars below — **no further product-loop build work is needed to go live**,
+> just connect creds and redeploy.
+
 ---
 
 ## Overview: what each channel unlocks
 
 | Channel | What it enables | Required env var(s) |
 |---|---|---|
-| **Email (Resend)** | Welcome, nurture, launch, activation, conversion, win-back emails fire | `RESEND_API_KEY`, `RESEND_AUDIENCE_ID` |
+| **Email (Resend)** | Transactional confirm/welcome emails fire automatically; lifecycle broadcasts ready to wire | `RESEND_API_KEY` (required); `RESEND_AUDIENCE_ID` (optional — only for the nurture/broadcast sequences) |
 | **CAPTCHA (Cloudflare Turnstile)** | Bot protection on the public waitlist form | `TURNSTILE_SECRET_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` |
 | **Waitlist datastore (Vercel KV)** | Signups saved permanently (not just logged) | auto-set by Vercel after provisioning |
 | **Analytics pull (E6d)** | GROWTH_STATUS gets real funnel numbers each run | `GROWTH_AGENT_SECRET` + E6d backend build |
 | **Backend AI (Anthropic/ElevenLabs/AtlasCloud)** | All AI detection and generation in production | `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ATLASCLOUD_API_KEY` |
 | **App Store + StoreKit** | Pro subscriptions work in production; revenue | Apple Developer account + App Store Connect |
 
-Social posting (X, Instagram, TikTok) requires E6c (publishing queue build) first — that is a product loop task, not yet built.
+Social posting (X, Instagram, TikTok, Reddit): the publishing queue (E6c) is built and
+dry-run-safe (`web/src/lib/social/queue.ts`) — it accepts drafts and refuses to post until a
+channel's API credentials are set. A live per-channel poster is wired when you connect that
+channel's keys (`X_API_BEARER_TOKEN`, `INSTAGRAM_ACCESS_TOKEN`, `TIKTOK_ACCESS_TOKEN`,
+`REDDIT_ACCESS_TOKEN`).
 
 ---
 
 ## Step 1 — Email: Resend (highest ROI, do first)
 
 Resend is recommended: free tier (100 emails/day), clean API, native Next.js support. The
-waitlist route (`web/src/app/api/waitlist/route.ts`) has a TODO comment showing exactly where
-to wire it.
+email provider abstraction (`web/src/lib/email/`) already speaks Resend — setting
+`RESEND_API_KEY` flips it out of dry-run automatically; no code change required.
 
 ### Setup
 1. Create a free account at resend.com
@@ -38,19 +50,20 @@ to wire it.
    - Resend dashboard → Domains → Add Domain → enter `highlightmagic.app`
    - Add the DNS records Resend provides (2 TXT records + 1 MX record) to your domain registrar
    - Click Verify — takes ~5 minutes to propagate
-3. Create an Audience:
-   - Resend dashboard → Audiences → Create Audience
-   - Name it "HighlightMagic Waitlist"
-   - Copy the Audience ID (you'll need it next)
-4. Create an API key:
+3. Create an API key:
    - Resend dashboard → API Keys → Create Key → name it "highlightmagic-production" → Full Access
    - Copy the key immediately (shown only once)
-5. Set env vars in Vercel:
+4. Set env vars in Vercel:
    - Vercel dashboard → your web/ project → Settings → Environment Variables
-   - Add `RESEND_API_KEY` = (key from step 4)
-   - Add `RESEND_AUDIENCE_ID` = (audience ID from step 3)
+   - Add `RESEND_API_KEY` = (key from step 3) — this alone enables the transactional
+     confirm/welcome emails the waitlist sends.
    - Set environment: Production (and Preview if you want)
-6. Redeploy: Vercel → Deployments → Redeploy (env vars only take effect on new deploys)
+5. Redeploy: Vercel → Deployments → Redeploy (env vars only take effect on new deploys)
+
+> **Optional — nurture/broadcast sequences:** to also run the lifecycle drafts in
+> `docs/growth/email-sequences.md` as Resend Broadcasts/Automations, create an Audience
+> (Resend → Audiences → Create Audience) and set `RESEND_AUDIENCE_ID`. The transactional
+> double-opt-in flow does NOT require it.
 
 ### Test
 ```
@@ -60,13 +73,11 @@ curl -X POST https://your-project.vercel.app/api/waitlist \
 ```
 Should return `{"ok":true}`. Check Resend Audience — contact should appear.
 
-### Tell the product loop
-Once env vars are set, open a GitHub issue:
-> "E6b: wire Resend to waitlist route — RESEND_API_KEY and RESEND_AUDIENCE_ID are set in Vercel.
-> Update web/src/app/api/waitlist/route.ts to call Resend Audiences API instead of console.log."
-
-The email sequence drafts are in `docs/growth/email-sequences.md` — wire them as Resend
-Broadcasts (emails 1A–2A) and Automations (emails 3A–5A).
+### That's it — no build needed
+Once `RESEND_API_KEY` is set and you redeploy, the waitlist route sends a double-opt-in
+confirmation email on every signup automatically (E6b is built). The email sequence drafts
+are in `docs/growth/email-sequences.md` — wire them as Resend Broadcasts (emails 1A–2A) and
+Automations (emails 3A–5A) against the audience your confirmed signups land in.
 
 ---
 
@@ -104,11 +115,11 @@ them permanently and is the prerequisite for server-side quota (B3) and analytic
 3. Vercel automatically sets `KV_REST_API_URL` and `KV_REST_API_TOKEN` as env vars
 4. Redeploy
 
-### Tell the product loop
-> "Vercel KV is provisioned. Please update /api/waitlist to write each signup to KV
-> (key pattern: `waitlist:emails` as a Redis Set; member: email). Also implement E6d:
-> /api/growth/stats (GET, protected by GROWTH_AGENT_SECRET) returning waitlist_signups count
-> from KV."
+### That's it — no build needed
+Once Vercel KV is provisioned and you redeploy, `/api/waitlist` persists each signup to KV
+automatically (`waitlist:emails` set + per-token pending keys; E6a is built) and
+`/api/growth/stats` (E6d, protected by `GROWTH_AGENT_SECRET`) returns the real signup +
+confirmation counts. Set `GROWTH_AGENT_SECRET` so the Growth Agent can read them.
 
 Also set `GROWTH_AGENT_SECRET` in Vercel to any random 32-character string — the Growth Agent
 will use it to call /api/growth/stats and pull real funnel numbers each run.
@@ -164,7 +175,9 @@ After connecting Resend + KV and having the product loop wire E6a + E6b:
    - `email.list_size: [real number]`
    - `waitlist_signups_total: [real number]`
 
-If GROWTH_STATUS still shows 0 after connecting, the product loop needs to build E6a (KV write) and E6d (stats API). Open a GitHub issue as described in Step 3.
+If GROWTH_STATUS still shows 0 after connecting, double-check that `KV_REST_API_URL` /
+`KV_REST_API_TOKEN` and `GROWTH_AGENT_SECRET` are set in the **Production** environment and
+that you redeployed — E6a (KV write) and E6d (stats API) are already built and live.
 
 ---
 
