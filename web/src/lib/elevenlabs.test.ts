@@ -136,6 +136,36 @@ describe("ElevenLabs Music", () => {
     expect(body.music_length_ms).toBe(3_000);
   });
 
+  it("clamps an over-long duration down to the 300s ceiling (cost control)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+    });
+    const { generateMusic } = await import("./elevenlabs-music");
+    await generateMusic("epic build", 999_999_999);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).music_length_ms).toBe(300_000);
+  });
+
+  it("falls back to the default length for a non-finite duration", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+    });
+    const { generateMusic } = await import("./elevenlabs-music");
+    await generateMusic("ambient", Number.NaN);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).music_length_ms).toBe(60_000);
+  });
+
+  it("fails gracefully on an empty audio response", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+    const { generateMusic } = await import("./elevenlabs-music");
+    const result = await generateMusic("lofi", 30_000);
+    expect(result.status).toBe("failed");
+  });
+
   it("handles bad_prompt rejection", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -193,6 +223,26 @@ describe("ElevenLabs SFX", () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.duration_seconds).toBe(0.5);
+  });
+
+  it("clamps an over-long SFX duration to the 10s ceiling (cost control)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+    });
+    const { generateSoundEffect } = await import("./elevenlabs-sfx");
+    await generateSoundEffect("whoosh", 999_999);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).duration_seconds).toBe(10);
+  });
+
+  it("falls back to the default for a non-finite SFX duration", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+    });
+    const { generateSoundEffect } = await import("./elevenlabs-sfx");
+    await generateSoundEffect("tick", Number.NaN);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).duration_seconds).toBe(2);
   });
 
   it("generates a batch of SFX in parallel", async () => {

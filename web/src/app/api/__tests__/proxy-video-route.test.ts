@@ -49,11 +49,13 @@ describe("GET /api/proxy-video", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(body);
   });
 
-  it("allows a subdomain of an allowlisted host", async () => {
+  it("allows a subdomain of an allowlisted host via the endsWith branch", async () => {
+    // klingai.com is allowlisted but `video.klingai.com` is not an exact entry, so this
+    // exercises the `hostname.endsWith(".klingai.com")` path (not the exact-match path).
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(new Uint8Array([9]), { status: 200, headers: { "content-type": "video/mp4" } }),
     );
-    const res = await GET(get("https://pbxt.replicate.delivery/out.mp4"));
+    const res = await GET(get("https://video.klingai.com/out.mp4"));
     expect(res.status).toBe(200);
   });
 

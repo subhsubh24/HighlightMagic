@@ -47,7 +47,8 @@ describe("POST /api/animate/check", () => {
     const res = await POST(req({ predictionId: "abc123" }));
     const body = await res.json();
     expect(body.status).toBe("processing");
-    expect(body.videoUrl).toBeUndefined();
+    // No url yet: the key is omitted from the serialized payload (not null).
+    expect("videoUrl" in body).toBe(false);
   });
 
   it("500s with a generic message when the upstream check throws (error hygiene)", async () => {
