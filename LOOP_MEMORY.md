@@ -150,6 +150,22 @@ Store — a classic ticked-box-not-backed-by-artifact / BUILDS ≠ WORKS gap.
   real (next.config.ts + vercel.json). Don't ship hollow ExportOptions/fastlane templates with no
   project — that's the same builds-but-doesn't-work smell; stage them with the app target (A6).
 
+## Periodic model cost/quality re-benchmark (standing; 2026-06-27)
+LESSON: API cost ≈ COGS ≈ margin, and B2/B4 ("cheapest capable model") are POINT-IN-TIME — they go
+stale as models/prices change. FIX: ROADMAP B5 (STANDING) + docs/MODEL_BENCH_PLAYBOOK.md.
+- CADENCE: MONTHLY + on-signal (WebSearch finds a new/cheaper model or price change). NOT every cycle
+  — evals cost real API spend (RUN_EVALS=1).
+- METHOD per task (registry = web/src/lib/ai-models.ts: CLAUDE_FRAME_SCORER/PLANNER/VALIDATOR,
+  ELEVENLABS_TTS, Kling): trial a cheaper candidate (one-line) → VALIDATE on BOTH axes, QUALITY FIRST
+  (G3 evals vs gold set within the quality floor) + FLOW (G4 functional suite green with the real
+  responses) + COST (per-export COGS delta).
+- POLICY = ADOPT-ON-GATES (autonomous, owner-chosen 2026-06-27): swap iff quality-held AND COGS-down
+  AND functional green, through the normal 2-reviewer + CI + eval gate; else revert + record. One-line,
+  reversible. Recompute BUSINESS_CASE unit economics on adopt.
+- ANTI-GAMING: real/cited prices only; NEVER downgrade past the quality floor to hit a COGS number;
+  "it still runs" ≠ quality. CO-REQUISITE: a thin G3 eval set rubber-stamps a worse model — expand
+  evals alongside so a regression is actually caught.
+
 ## Last run: 2026-06-27 (Run 21)
 
 Scout-driven run (last full DEEP AUDIT was Run 19, within ~24h — targeted scouts instead). Shipped
