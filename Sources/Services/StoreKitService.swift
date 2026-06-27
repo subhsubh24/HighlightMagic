@@ -81,9 +81,10 @@ final class StoreKitService {
                 // Capture the signed transaction for an active Pro product so the backend can
                 // verify the entitlement server-side (never trust a client flag). If the user
                 // holds more than one Pro product, any active one proves entitlement equally —
-                // the backend grants Pro on any valid Pro SKU.
+                // the backend grants Pro on any valid Pro SKU. The JWS lives on the
+                // VerificationResult (`result`), not on the decoded Transaction.
                 if productIDs.contains(transaction.productID) {
-                    proJWS = transaction.jwsRepresentation
+                    proJWS = result.jwsRepresentation
                 }
             }
         }
