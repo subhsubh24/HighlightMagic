@@ -1,6 +1,8 @@
 import { submitImageUpscale } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
 
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 
 /** Max request body size: 20 MB (base64-encoded photos). */
@@ -11,6 +13,11 @@ const MAX_BODY_SIZE = 20 * 1024 * 1024;
  * Returns a prediction ID for polling via /api/animate/check (same poll endpoint).
  */
 export async function POST(req: Request) {
+  // H1: per-IP rate limit — this route triggers a paid API call, so throttle
+  // request floods even before the quota gate (Track H1).
+  const rl = checkRateLimit(`upscale:${getClientIP(req)}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   try {
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {

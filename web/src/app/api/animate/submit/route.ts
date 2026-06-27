@@ -1,6 +1,8 @@
 import { submitPhotoAnimation } from "@/lib/kling";
 import { checkExportAllowed } from "@/lib/entitlement";
 
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -16,6 +18,11 @@ const MAX_BODY_SIZE = 20 * 1024 * 1024;
  * P0: requires userId + enforces freemium quota server-side before any paid call.
  */
 export async function POST(req: Request) {
+  // H1: per-IP rate limit — this route triggers a paid API call, so throttle
+  // request floods even before the quota gate (Track H1).
+  const rl = checkRateLimit(`animate-submit:${getClientIP(req)}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   try {
     // Check Content-Length to reject oversized payloads early
     const contentLength = req.headers.get("content-length");
