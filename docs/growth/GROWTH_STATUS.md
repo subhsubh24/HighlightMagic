@@ -28,9 +28,9 @@ GROWTH_STATUS:
   project: HighlightMagic
   as_of: 2026-06-27
   phase: pre_launch              # pre_launch | launching | post_launch
-  engine_built: false            # COMPUTED: == (engine_pct == 100); never hand-set ahead of code
-  engine_pct: 20                 # COMPUTED by preflight from E6 anchor files on disk (1/5: CONNECT.md). DO NOT hand-edit
-  channels_connected: []         # none connected yet
+  engine_built: true             # COMPUTED: == (engine_pct == 100); E6 plumbing shipped in code (#123)
+  engine_pct: 100                # COMPUTED from E6 anchor files on disk (5/5: waitlist/confirm, email, social queue, metrics, CONNECT.md). DO NOT hand-edit
+  channels_connected: []         # none connected yet (engine built in code, not yet live externally)
   awaiting_connect: true         # owner must connect channels before agent executes externally
   funnel:                        # REAL numbers only; 0/null until a connected source reports them
     visitors_7d: 0
@@ -61,7 +61,7 @@ GROWTH_STATUS:
     scheduled_next_7d: 0
     organic_sessions_7d: 0
   learnings:
-    - "E1-E5 all merged (landing, brand, ASO, content, analytics). E6 not started — engine not built."
+    - "E1-E5 merged (landing, brand, ASO, content, analytics); E6 growth-execution plumbing shipped in #123 (waitlist double-opt-in, email/social/metrics) — engine_built in code, dry-run until channels connected."
     - "Email sequences (welcome to win-back) were entirely absent — highest-leverage PREPARE gap; created 2026-06-27."
     - "CONNECT.md (E6e owner runbook) was missing — created 2026-06-27 to give owner a clear path to execute mode."
     - "Free-tier watermark must be stated accurately in all emails: free exports have a watermark; Pro removes it."
