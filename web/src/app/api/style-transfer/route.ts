@@ -2,6 +2,7 @@ import { submitStyleTransfer } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_PROMPT_CHARS, MAX_VIDEO_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 
@@ -18,10 +19,19 @@ export async function POST(req: Request) {
   if (!rl.allowed) return rateLimitResponse(rl);
 
   try {
+    // H2: reject an oversized body before buffering/parsing it (video dominates the payload).
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_VIDEO_B64_CHARS) return tooLargeResponse();
+
     const { userId, signedTransaction, videoData, prompt, strength } = await req.json();
 
     if (!userId || typeof userId !== "string") {
       return Response.json({ error: "userId is required" }, { status: 400 });
+    }
+    // H2: bound the video payload + prompt before anything else (don't consume the quota gate
+    // on an oversized request).
+    if (overStringLimit(videoData, MAX_VIDEO_B64_CHARS) || overStringLimit(prompt, MAX_PROMPT_CHARS)) {
+      return tooLargeResponse();
     }
 
     const decision = await checkExportAllowed({

@@ -2,6 +2,7 @@ import { planFromScores } from "@/actions/detect";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,14 @@ export async function POST(req: Request) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // H2: bound the free-text steering fields fed to the Claude planner (cost scales per token).
+  if (
+    overStringLimit(creativeDirection, MAX_DIRECTION_CHARS) ||
+    overStringLimit(userFeedback, MAX_DIRECTION_CHARS)
+  ) {
+    return tooLargeResponse();
   }
 
   // ── SERVER-SIDE GATE — before any paid call ──

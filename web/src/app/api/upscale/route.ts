@@ -2,6 +2,7 @@ import { submitImageUpscale } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_IMAGE_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-      return Response.json({ error: "Request body too large" }, { status: 413 });
+      return tooLargeResponse();
     }
 
     const { userId, signedTransaction, imageData } = await req.json();
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
     if (!imageData || typeof imageData !== "string") {
       return Response.json({ error: "imageData is required" }, { status: 400 });
     }
+    // H2: field-level image-size bound before the paid upscale job.
+    if (overStringLimit(imageData, MAX_IMAGE_B64_CHARS)) return tooLargeResponse();
 
     const decision = await checkExportAllowed({
       userId,

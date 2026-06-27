@@ -2,6 +2,7 @@ import { CLAUDE_FRAME_SCORER, estimateCostUSD } from "@/lib/ai-models";
 import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
+import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, MAX_PROMPT_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
   if (frames.length === 0 || !frames.every((f) => typeof f?.jpegBase64 === "string" && typeof f?.timeSec === "number")) {
     return Response.json({ error: "frames must be a non-empty array of { timeSec, jpegBase64 }" }, { status: 400 });
   }
+  // H2: bound per-frame payload + the optional free-text prompt — both feed the vision model
+  // and scale token cost.
+  if (anyFrameOverLimit(frames, "jpegBase64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
+  if (overStringLimit(prompt, MAX_PROMPT_CHARS)) return tooLargeResponse();
 
   // ── SERVER-SIDE GATE — before any paid call ──
   const decision = await checkExportAllowed({ userId, signedTransaction });

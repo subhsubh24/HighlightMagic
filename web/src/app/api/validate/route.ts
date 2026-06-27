@@ -2,6 +2,7 @@ import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
+import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -42,6 +43,8 @@ export async function POST(req: Request) {
     if (Array.isArray(clipFrames) && clipFrames.length > MAX_FILES) {
       return Response.json({ error: "too many clip frames" }, { status: 400 });
     }
+    // H2: bound each frame's base64 image so a single oversized frame can't inflate the bill.
+    if (anyFrameOverLimit(clipFrames, "base64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
 
     // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
     if (userId && typeof userId === "string") {
