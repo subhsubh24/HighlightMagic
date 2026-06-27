@@ -20,10 +20,21 @@ export async function POST(req: Request) {
   if (!rl.allowed) return rateLimitResponse(rl);
 
   try {
+    // H2: reject an oversized body before buffering/parsing it (image + audio payloads).
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_IMAGE_B64_CHARS + MAX_AUDIO_B64_CHARS) {
+      return tooLargeResponse();
+    }
+
     const { userId, signedTransaction, imageData, audioData, duration } = await req.json();
 
     if (!userId || typeof userId !== "string") {
       return Response.json({ error: "userId is required" }, { status: 400 });
+    }
+    // H2: bound the media payloads before anything else (don't even consume the quota gate
+    // on an oversized request).
+    if (overStringLimit(imageData, MAX_IMAGE_B64_CHARS) || overStringLimit(audioData, MAX_AUDIO_B64_CHARS)) {
+      return tooLargeResponse();
     }
 
     const decision = await checkExportAllowed({
@@ -42,10 +53,6 @@ export async function POST(req: Request) {
     }
     if (!audioData || typeof audioData !== "string") {
       return Response.json({ error: "audioData is required" }, { status: 400 });
-    }
-    // H2: bound the media payloads before the paid lip-sync job.
-    if (overStringLimit(imageData, MAX_IMAGE_B64_CHARS) || overStringLimit(audioData, MAX_AUDIO_B64_CHARS)) {
-      return tooLargeResponse();
     }
 
     const dur = typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;

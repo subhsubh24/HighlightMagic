@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
       console.warn(`[animate/submit] Rejected: payload too large (${contentLength} bytes)`);
-      return Response.json({ error: "Request body too large" }, { status: 413 });
+      return tooLargeResponse();
     }
 
     const { userId, signedTransaction, imageData, prompt, duration } = await req.json();
@@ -37,6 +37,10 @@ export async function POST(req: Request) {
     if (!userId || typeof userId !== "string") {
       console.warn("[animate/submit] Rejected: missing or invalid userId");
       return Response.json({ error: "userId is required" }, { status: 400 });
+    }
+    // H2: field-level size bounds before the quota gate (complements the body-size cap).
+    if (overStringLimit(prompt, MAX_PROMPT_CHARS) || overStringLimit(imageData, MAX_IMAGE_B64_CHARS)) {
+      return tooLargeResponse();
     }
 
     const decision = await checkExportAllowed({
@@ -57,10 +61,6 @@ export async function POST(req: Request) {
     if (!prompt || typeof prompt !== "string") {
       console.warn("[animate/submit] Rejected: missing or invalid prompt");
       return Response.json({ error: "prompt is required" }, { status: 400 });
-    }
-    // H2: field-level size bounds before the paid Kling job (complements the body-size cap).
-    if (overStringLimit(prompt, MAX_PROMPT_CHARS) || overStringLimit(imageData, MAX_IMAGE_B64_CHARS)) {
-      return tooLargeResponse();
     }
 
     // Validate duration is a number in acceptable range

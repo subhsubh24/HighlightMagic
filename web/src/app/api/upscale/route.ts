@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const contentLength = req.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
-      return Response.json({ error: "Request body too large" }, { status: 413 });
+      return tooLargeResponse();
     }
 
     const { userId, signedTransaction, imageData } = await req.json();

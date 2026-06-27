@@ -11,12 +11,11 @@
  * move and tokenize. base64 ≈ 1.33× the raw byte size, so e.g. 12M chars ≈ ~9MB of image bytes.
  */
 
-/** Free-text generation prompts (SFX / intro-outro / animate / style-transfer). */
+/** Free-text generation prompts on routes that use this shared cap (animate/submit,
+ *  style-transfer, score). SFX/music/intro/outro keep their own stricter inline caps. */
 export const MAX_PROMPT_CHARS = 2_000;
 /** Planner steering text (creativeDirection / userFeedback → Claude planner tokens). */
 export const MAX_DIRECTION_CHARS = 5_000;
-/** Voiceover script — ElevenLabs TTS is billed per character, so this directly bounds spend. */
-export const MAX_TTS_TEXT_CHARS = 5_000;
 /** A single base64 image payload (~9MB of bytes). */
 export const MAX_IMAGE_B64_CHARS = 12_000_000;
 /** A single base64 audio payload (~45MB of bytes). */
