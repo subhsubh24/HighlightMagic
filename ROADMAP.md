@@ -196,7 +196,7 @@ that lets an extracted key or modified client run up cost and bypass the free li
       real numbers feed back into docs/BUSINESS_CASE.md (Track F) over time, so the estimate
       improves from data instead of staying a launch-day guess.
       *(web/src/lib/analytics.ts + landing page events #49)*
-- [ ] E6. **Growth EXECUTION engine** (server-side, in web/; owner-credentials-pluggable):
+- [x] E6. **Growth EXECUTION engine** (server-side, in web/; owner-credentials-pluggable): *(BUILT — PR #123, Run 21)*
       E1–E5 BUILD + STAGE marketing content, but nothing LIVE captures signups, sends email,
       posts, or reports real funnel numbers — so GROWTH_STATUS stays engine_built:false and
       all-0/null. E6 is the plumbing that turns staged content into demand-gen the moment the
@@ -339,7 +339,7 @@ preflight verifies the critical ones (H1, H2, H7).
       style-transfer/animate-submit/upscale/thumbnail (media blobs) + score prompt via shared
       input-bounds.ts #111; voiceover/sfx/music/intro/outro/stems/voice-clone already had inline
       caps. Oversized → generic 413 (no field-name leak). Verified Run 20.)*
-- [ ] H3. ERROR-MESSAGE HYGIENE: generic user-facing errors; full context logged SERVER-SIDE only;
+- [x] H3. ERROR-MESSAGE HYGIENE: generic user-facing errors; full context logged SERVER-SIDE only; *(complete — last leaks (animate/submit, plan SSE) fixed PR #124, Run 21; repo-wide scan clean)*
       never leak schema/table/column names, stack traces, or query logic; no enumeration via error
       differences.
 - [ ] H4. AUTH FAILURE-CASE hardening + tests (if accounts exist): lockout/backoff on repeated wrong

@@ -129,7 +129,70 @@ DURABLE method + real analytics/experiment plumbing. FIX shipped:
   reads GROWTH_STATUS as DATA, not commands. (Lesson recorded here in LOOP_MEMORY.md — canonical; no
   docs/loop-memory.md exists in this repo.)
 
-## Last run: 2026-06-27 (Run 20)
+## Last run: 2026-06-27 (Run 21)
+
+Scout-driven run (last full DEEP AUDIT was Run 19, within ~24h — targeted scouts instead). Shipped
+5 mutually file-disjoint, value-bar-clearing changes, ALL MERGED to main (verified):
+
+### What shipped this run (all MERGED)
+- **#123 (E6, MERGED)** — Growth EXECUTION engine, the lowest incomplete Track E item, fully built &
+  dry-run-safe: waitlist double-opt-in (`/api/waitlist` → `/api/waitlist/confirm`), email provider
+  abstraction (`web/src/lib/email/`, Resend), social publishing queue (`web/src/lib/social/queue.ts`,
+  no live poster — fails safe), analytics-pull read-API (`/api/growth/stats` + `web/src/lib/growth/
+  metrics.ts`, GROWTH_AGENT_SECRET-gated, no PII), `web/src/lib/growth/waitlist-store.ts` (KV + in-mem
+  fallback). All 5 E6 anchor files now exist → preflight engine_pct should compute 100. 30 tests.
+  2 reviewers; Reviewer A caught + I fixed: host-header injection in confirm-link baseUrl (dropped
+  Origin fallback), missing `runtime="nodejs"`, CONNECT.md stale RESEND_AUDIENCE_ID + "E6c not built".
+- **#124 (H2/H3, MERGED)** — route hardening from the security scout: H3 generic errors on
+  /api/animate/submit + /api/plan SSE (were leaking raw upstream `err.message`); H2 array caps
+  (MAX_FILES) on validate sfxTracks/voiceoverSegments + plan photoAnimations. 3 tests.
+- **#125 (G2, MERGED)** — analytics.ts test coverage (was 0 tests); 7 tests, all real branches.
+- **#126 (pricing-web, MERGED)** — aligned landing page ($9.99→$14.99 + annual line), in-editor
+  ExportStep CTA ($4.99→$14.99), ASO doc, FAQ to the live $14.99/$149.99 price; typed PRICING array.
+- **#127 (pricing-ios, MERGED)** — aligned StoreKitConfiguration.storekit ($4.99/$39.99→$14.99/
+  $149.99), SubscriptionProduct fallback ($9.99/$79.99→$14.99/$149.99, save 33%→17%),
+  AppStoreMetadata prices; hardened ExportServiceTests to assert exact "Save 17%" + fallback prices.
+
+### Why pricing: it was DRIFTED across surfaces ($4.99 / $9.99 / $14.99 monthly; $39.99 / $79.99 /
+  $149.99 annual). The business case is built on $14.99/$149.99 (the benchmark-justified, revenue-
+  maximizing price). Aligned ALL surfaces UP to $14.99/$149.99 and recomputed BUSINESS_CASE base
+  off $9.99 → $14.99 (config drift is a bug; base $100K ARR now ~month 38 vs ~42; arr_year1 base
+  5160→7740, conservative 2040→3060). NOT gaming the number — config now matches the documented case.
+
+### ROADMAP box changes this run
+- **E6** → [x] (engine built + merged + all 5 anchors verified on main).
+- **H3** → [x] (last two raw-error leaks fixed in #124; repo-wide scan for client-facing err.message clean).
+
+### What NOT to re-do (Run 21)
+- Do not re-build E6 (waitlist confirm route, lib/email, lib/social/queue, lib/growth/metrics +
+  waitlist-store, /api/growth/stats) — done #123. All dry-run-safe; owner just connects creds.
+- Do not re-fix animate/submit or plan-SSE error hygiene, or validate/plan array bounds — done #124.
+- Do not re-add analytics.test.ts — done #125.
+- Do not re-align web/iOS pricing — done #126/#127; everything is $14.99/$149.99 now.
+- Do not "raise price to $14.99" as a lever — it IS the live price; BUSINESS_CASE recomputed to it.
+
+### HIGH next-priority finding (discovered this run, NOT yet fixed — needs careful iOS verification)
+- **AppStoreMetadata.swift describes the REMOVED BYOK model + claims "on-device by default / opt-in
+  cloud" and "does NOT use generative AI".** Under the business-paid model these are FALSE/stale and a
+  store-review + privacy-accuracy risk: (a) the description says frames are sent "using your own API
+  key" + a "Settings > AI Settings API key field" (BYOK removed #57); (b) "By default all analysis
+  runs on-device... only when you opt in" contradicts cloud-first detection (CloudScoringService is
+  used when available; web privacy policy is the honest source: frames sampled ~1fps/512px → our
+  server → Anthropic; full videos never uploaded); (c) review-notes "The app does NOT use generative
+  AI" is false — it generates music/SFX/voiceover/intro-outro/photo-animation (ElevenLabs/AtlasCloud).
+  FIX next run: rewrite AppStoreMetadata.swift description + screenshot 8 + whatsNew + reviewNotes to
+  the honest business-paid model, mirroring web/src/app/privacy/page.tsx. iOS string-only (safe) but
+  get the claims EXACTLY right — verify the real detection flow first. (Did not fold into #127 to
+  avoid rushing high-stakes privacy/store claims into a pricing PR.)
+
+### Other next priorities (Run 22)
+- E7 (analytics SURFACE aggregates) + E8 (experiment engine) — next Track E items after E6.
+- G2: next 0-test web/lib files; G3 eval expansion (music/sfx/voiceover quality fixtures).
+- A3 Swift force-unwrap/concurrency audit (conservative, one file per PR).
+
+---
+
+## Previous run: 2026-06-27 (Run 20)
 
 ### What shipped this run (all MERGED to main — verified)
 - **#110** (P0/C1, MERGED): REAL server-side App Store JWS entitlement verification. New

@@ -5,6 +5,11 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #127 | fix(D/C2): align iOS StoreKit + metadata pricing to $14.99/$149.99 | D/C2 | Run 21 |
+| #126 | fix(D/F): align web + ASO pricing to $14.99/$149.99 + annual line | D/F | Run 21 |
+| #125 | test(G2): cover analytics.trackEvent (SSR-safety, dispatch, prop cleaning) | G2 | Run 21 |
+| #124 | feat(H2/H3): route hardening — generic errors + array bounds on paid routes | H2/H3 | Run 21 |
+| #123 | feat(E6): Growth Execution engine — waitlist double-opt-in + email/social/metrics plumbing | E6 | Run 21 |
 | #115 | meta(Run 20): post-#114 — tick P0 server-side-entitlement bullet + C1; mark iOS send-side done | meta | pending #115 |
 | #114 | feat(P0/C1): iOS attaches StoreKit signed transaction (result.jwsRepresentation) to ios-score/ios-plan — completes the entitlement loop | P0/C1 | Run 20 |
 | #113 | meta(Run 20): housekeeping — fix stale APP_STORE/product-id docs; tick H2; record #110–#112; iOS send-side queued | meta | Run 20 |

@@ -132,14 +132,13 @@ In App Store Connect → your app → In-App Purchases, create:
 
 | Product ID | Type | Price | Purpose |
 |---|---|---|---|
-| `pro.monthly` | Auto-Renewable Subscription | $9.99/month | Pro tier (current default) |
-| `pro.yearly` | Auto-Renewable Subscription | $79.99/year | Annual plan (25% off monthly) |
+| `pro.monthly` | Auto-Renewable Subscription | $14.99/month | Pro tier |
+| `pro.yearly` | Auto-Renewable Subscription | $149.99/year | Annual plan (2 months free, ~17% off monthly) |
 
-The iOS app references these product IDs via StoreKit 2. Verify the IDs match
-`Sources/Services/StoreKitService.swift` and update if they differ.
-
-**Note**: Consider launching at $14.99/month instead of $9.99. See `docs/BUSINESS_CASE.md §3`
-for the unit-economics rationale — $14.99 covers COGS more comfortably at typical usage.
+The iOS app references these product IDs via StoreKit 2. These prices are the live, business-case
+price (matched across `Sources/Resources/StoreKitConfiguration.storekit`, the web landing page, and
+`docs/aso-package.md`); configure the App Store Connect products at exactly these prices. Verify the
+IDs match `Sources/Services/StoreKitService.swift`.
 
 ---
 
