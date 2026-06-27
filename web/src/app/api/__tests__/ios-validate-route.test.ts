@@ -54,6 +54,22 @@ describe("POST /api/ios-validate", () => {
     expect(body.error).toMatch(/clips/);
   });
 
+  it("400s when clips exceeds MAX_FILES (H2 bound)", async () => {
+    const clips = Array.from({ length: 101 }, () => clip);
+    const res = await POST(req({ userId: "u", clips }, "203.0.113.9"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/too many clips/);
+  });
+
+  it("400s when clipFrames exceeds MAX_FILES (H2 bound)", async () => {
+    const clipFrames = Array.from({ length: 101 }, (_, i) => ({ clipIndex: i, jpegBase64: "x" }));
+    const res = await POST(req({ userId: "u", clips: [clip], clipFrames }, "203.0.113.10"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/too many clip frames/);
+  });
+
   it("passes by default when ANTHROPIC_API_KEY is not set", async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const res = await POST(req({ userId: "u", clips: [clip] }));

@@ -1,5 +1,6 @@
 import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_FILES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -138,6 +139,14 @@ export async function POST(req: Request) {
   }
   if (!Array.isArray(clips) || clips.length === 0) {
     return Response.json({ error: "clips must be a non-empty array" }, { status: 400 });
+  }
+  // H2: bound payload size before the paid Haiku (vision) call. A real reel is well under
+  // MAX_FILES clips; an oversized clips/clipFrames array is malformed or abusive.
+  if (clips.length > MAX_FILES) {
+    return Response.json({ error: "too many clips" }, { status: 400 });
+  }
+  if (Array.isArray(clipFrames) && clipFrames.length > MAX_FILES) {
+    return Response.json({ error: "too many clip frames" }, { status: 400 });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;

@@ -37,6 +37,34 @@ describe("POST /api/validate", () => {
     expect(body.passed).toBe(true);
   });
 
+  it("returns 400 when clips exceeds MAX_FILES (H2 bound)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const clips = Array.from({ length: 101 }, (_, i) => ({ id: `c${i}` }));
+    const req = new Request("http://localhost/api/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.7" },
+      body: JSON.stringify({ clips, plan: {} }),
+    });
+    const res = await validatePOST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/too many clips/);
+  });
+
+  it("returns 400 when clipFrames exceeds MAX_FILES (H2 bound)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const clipFrames = Array.from({ length: 101 }, (_, i) => ({ clipIndex: i, base64: "x" }));
+    const req = new Request("http://localhost/api/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.8" },
+      body: JSON.stringify({ clips: [{ id: "c1" }], clipFrames, plan: {} }),
+    });
+    const res = await validatePOST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/too many clip frames/);
+  });
+
   it("returns passed=true when clips is missing", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     const req = new Request("http://localhost/api/validate", {

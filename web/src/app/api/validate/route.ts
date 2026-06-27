@@ -1,6 +1,7 @@
 import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_FILES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,6 +31,16 @@ export async function POST(req: Request) {
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
+    }
+
+    // H2: bound payload size BEFORE the paid Haiku (vision) call. A real highlight reel is
+    // well under MAX_FILES clips; an oversized clips/clipFrames array is malformed or abusive
+    // (each frame is a base64 image sent to the vision model), so reject it outright.
+    if (clips.length > MAX_FILES) {
+      return Response.json({ error: "too many clips" }, { status: 400 });
+    }
+    if (Array.isArray(clipFrames) && clipFrames.length > MAX_FILES) {
+      return Response.json({ error: "too many clip frames" }, { status: 400 });
     }
 
     // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
