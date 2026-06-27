@@ -11,8 +11,9 @@
  * Free tier: FREE_EXPORT_LIMIT paid generation runs per user per calendar month.
  * Pro: unlimited — but ONLY when verified server-side (never from a client-supplied flag).
  */
-import { FREE_EXPORT_LIMIT } from "./constants";
+import { FREE_EXPORT_LIMIT, PRO_PRODUCT_IDS } from "./constants";
 import { isKVConfigured, VercelKVQuotaStore } from "./kv-quota-store";
+import { loadTrustedRootsFromEnv, verifyAppStoreJWS } from "./app-store-jws";
 
 /** Current monthly period key in UTC, e.g. "2026-06". Quotas reset per calendar month. */
 export function currentPeriodKey(date: Date = new Date()): string {
@@ -70,23 +71,38 @@ export function getQuotaStore(): QuotaStore {
 /**
  * Server-side Pro entitlement check. NEVER trusts a client-supplied "isPro" flag.
  *
- * Verifies an App Store Server API signed transaction (JWS). Until the verification creds
- * are configured (APP_STORE_* env — owner-provisioned, see .env.example) this returns false,
- * the SECURE default: everyone is treated as free-tier and the monthly limit is enforced for
- * all. Real JWS signature verification + transaction decode is the follow-on; it must never
- * be shortcut by trusting the client.
+ * Cryptographically verifies the StoreKit 2 signed transaction (JWS) the client passes up: the
+ * x5c certificate chain must anchor to Apple's trusted root CA and the ES256 signature must be
+ * valid (see app-store-jws.ts), then the decoded transaction must be one of our Pro SKUs, not
+ * expired and not revoked. Apple's PUBLIC root CA is owner-supplied via APP_STORE_ROOT_CA_PEM
+ * (like the API keys — see REMAINING_STEPS.md); with no trusted root configured this returns
+ * false, the SECURE default (everyone free-tier, monthly limit enforced for all). The client
+ * can never shortcut this: forging Pro would require forging Apple's signature.
  */
 export async function verifyProEntitlement(signedTransaction?: string | null): Promise<boolean> {
-  if (!signedTransaction) return false;
-  const configured =
-    !!process.env.APP_STORE_ISSUER_ID &&
-    !!process.env.APP_STORE_KEY_ID &&
-    !!process.env.APP_STORE_PRIVATE_KEY;
-  if (!configured) return false; // secure default until App Store Server verification is wired
-  // TODO(P0): verify the JWS signature against Apple's keys, decode the signed transaction via
-  // the App Store Server API, confirm the productId is the active Pro subscription and that it
-  // is not expired/revoked. Until then, deny — never trust the client.
-  return false;
+  if (!signedTransaction || typeof signedTransaction !== "string") return false;
+
+  const trustedRootDer = loadTrustedRootsFromEnv();
+  if (trustedRootDer.length === 0) return false; // no trusted Apple root configured → deny
+
+  const txn = verifyAppStoreJWS(signedTransaction, { trustedRootDer });
+  if (!txn) return false;
+
+  // The verified transaction must be for one of our Pro subscription products.
+  if (!txn.productId || !(PRO_PRODUCT_IDS as readonly string[]).includes(txn.productId)) {
+    return false;
+  }
+  // If we know our bundle id, it must match — and a transaction that omits it is rejected
+  // (defence-in-depth against a transaction minted for another app).
+  const expectedBundleId = process.env.APP_STORE_BUNDLE_ID;
+  if (expectedBundleId && txn.bundleId !== expectedBundleId) return false;
+  // Our Pro SKUs are auto-renewable subscriptions: a non-expired expiresDate is REQUIRED.
+  // Treat a missing expiresDate as not-entitled rather than as never-expiring.
+  if (typeof txn.expiresDate !== "number" || txn.expiresDate <= Date.now()) return false;
+  // A refunded / revoked purchase grants nothing.
+  if (typeof txn.revocationDate === "number") return false;
+
+  return true;
 }
 
 export interface ExportDecision {
