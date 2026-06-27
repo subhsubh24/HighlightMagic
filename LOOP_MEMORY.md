@@ -193,6 +193,21 @@ overwrite them (it would be grading itself) — it CONSUMES the grade and acts o
 - DO NOT create QUALITY_RUBRIC.md / QUALITY_SCORECARD.md — the auditor bootstraps them; the preflight
   guard will (correctly) fail until it does, which is fine since readiness needs the independent grade.
 
+## Adopted FACTORY_STANDARD.md (shared cross-factory discipline; 2026-06-27)
+Created FACTORY_STANDARD.md at the repo root — the shared, PRODUCT-AGNOSTIC operating standard
+(byte-identical across every factory repo): the loop, two-gate readiness, BUILDS≠WORKS, the
+independent QUALITY_SCORECARD, business-case strength loop-back, growth-data-as-signal, the 3-tier
+model split, value bar, disjoint rule, brakes. Added the "Operating standard (read every run)" pointer
+under the ROADMAP intro + a STABLE-ANCHORS do-not-churn entry.
+- READ-ONLY CONTEXT every run — do NOT rewrite, paraphrase, trim, reorder, or adapt it to HighlightMagic.
+  It is a STABLE ANCHOR; it changes ONLY by a deliberate canonical cross-repo sync, never as loop work.
+- Product-specifics live in ROADMAP.md / VISION.md (which WIN on any specific), never in FACTORY_STANDARD.md.
+- NOTE: VISION.md does not exist in this repo yet; the standard references it as the conventional home
+  for the why/design-bar. Not created here (out of scope); flag if a VISION.md is wanted.
+- This is a consolidation of standards already adopted piecemeal (Opus split, BUILDS≠WORKS, weak-case
+  loop-back, QUALITY_SCORECARD consume, growth-data signal, B5 model re-bench) — no behavior change,
+  just one shared anchor. The detailed product-specific wiring stays in ROADMAP + preflight.
+
 ## Last run: 2026-06-27 (Run 21)
 
 Scout-driven run (last full DEEP AUDIT was Run 19, within ~24h — targeted scouts instead). Shipped

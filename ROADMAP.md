@@ -4,6 +4,8 @@ Convergence anchor for the autonomous loop. Read every run with README.md + plan
 Build toward the Definition of Done, phase by phase, then STOP and hand off.
 VERIFY current state yourself each run — this reflects a snapshot and the repo evolves.
 
+Operating standard (read every run): FACTORY_STANDARD.md is the shared, product-agnostic discipline EVERY factory follows identically — the loop, two-gate readiness, BUILDS≠WORKS, the independent QUALITY_SCORECARD, the business-case strength loop-back, growth-data-as-signal, the model split, the value bar, the disjoint rule, and the brakes. FOLLOW IT. This ROADMAP + VISION.md hold the product-specific details (what to build, the security model, the ship target, the stack) and win on any specific. Identical factories, different products.
+
 ## Vision (the bar — do NOT stop short of it)
 Make HighlightMagic a **100% complete business**, not just a shippable app. "Done" requires
 BOTH of these at 100%, independently verified:
@@ -56,6 +58,9 @@ Avoid BOTH failure modes equally: (a) STALE — write-once docs that drift out o
 rewriting. Do NOT churn STABLE ANCHORS just to look busy — the Vision/goal, the guard rules (DONE
 GUARD, API COST CONTRACT, anti-gaming, privacy/security bar), and the protected guard/CI tests are
 intentionally stable ratchets; change them only on a real, justified shift.
+- FACTORY_STANDARD.md is the shared cross-factory discipline, byte-identical across every factory repo:
+  NEVER edit or paraphrase it to fit this product (product-specifics belong in ROADMAP/VISION); it
+  changes ONLY by a deliberate canonical sync, never as loop work.
 
 ## Design taste standard (anti-generic AI frontend — STANDING; read every run)
 FINAL STANDARD: **simplicity without blandness; functionality without visual clutter.** Applies to
