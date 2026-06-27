@@ -162,6 +162,41 @@ PY
 then ok "OWNER_ACTIONS: valid, parseable YAML block"
 else fail "OWNER_ACTIONS: missing or UNPARSEABLE"; fi
 
+# Quality scorecard — owned by the INDEPENDENT Quality Auditor (maker != checker); the factory only
+# READS/validates it, never authors it. Like the other dashboard feeds: the QUALITY_SCORECARD block
+# must exist + parse, and every grade must be a valid letter grade. A malformed scorecard (or a
+# missing independent grade at readiness) must NOT ship. (The A/A+ ship-critical requirement is the
+# DoD/Gate-2 judgment; here we mechanically guarantee the block is real + grades are well-formed.)
+if python3 - "$ROOT/docs/quality/QUALITY_SCORECARD.md" <<'PY'
+import sys, re, yaml
+try: txt = open(sys.argv[1]).read()
+except OSError: print("QUALITY_SCORECARD.md missing — the independent Quality Auditor must bootstrap it before readiness"); sys.exit(1)
+m = re.search(r"```ya?ml\s*\n(.*?QUALITY_SCORECARD.*?)\n```", txt, re.S)
+if not m: print("no QUALITY_SCORECARD block"); sys.exit(1)
+try: d = yaml.safe_load(m.group(1)) or {}
+except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
+VALID = {"A+", "A", "B", "C", "D", "F", None}
+bad = []
+def grades_in(v):
+    if isinstance(v, dict): return [g for vv in v.values() for g in grades_in(vv)]
+    if isinstance(v, list): return [g for it in v for g in grades_in(it)]
+    return [v]
+def walk(o):
+    if isinstance(o, dict):
+        for k, v in o.items():
+            if isinstance(k, str) and "grade" in k.lower():
+                for x in grades_in(v):
+                    if x not in VALID: bad.append((k, x))
+            else: walk(v)
+    elif isinstance(o, list):
+        for it in o: walk(it)
+walk(d)
+if bad: print("invalid grade(s) (must be A+/A/B/C/D/F/null):", bad[:5]); sys.exit(1)
+print("ok QUALITY_SCORECARD parses; all grades valid")
+PY
+then ok "QUALITY_SCORECARD: valid block; grades in {A+,A,B,C,D,F,null}"
+else fail "QUALITY_SCORECARD: missing, UNPARSEABLE, or contains an invalid grade"; fi
+
 echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
 ok "web build + tests green"
