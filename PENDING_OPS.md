@@ -180,6 +180,23 @@ match what the privacy policy discloses.
 - **Anthropic spend cap**: set at console.anthropic.com before opening to users; suggested
   $50–100/month initially while monitoring per-export costs in Vercel logs
 
+## Functional reality — CI wiring + deployed-env verification (BUILDS ≠ WORKS)
+
+The runtime journey suite exists and RUNS GREEN (`cd web && npm run test:e2e`: Playwright builds +
+`next start`s the app, drives real browser journeys, asserts intended outcomes). Two owner steps the
+loop cannot do (can't edit `.github/`, can't reach prod):
+
+- **Wire the journey suite into CI** (`.github/workflows/ci.yml`) as a job: `cd web && npm ci &&
+  npx playwright install --with-deps chromium && npm run test:e2e`; fail the build on red. No DB to
+  seed (only optional Vercel KV); leave `TURNSTILE_SECRET_KEY` UNSET in CI so captcha fails open and
+  the waitlist/signup journey runs keyless. Consider making it a required check once stable.
+- **Verify on the DEPLOYED URL** (the loop can only run locally): after each deploy, run
+  `BASE_URL=https://<prod-host> npm run test:e2e` (skips the local server, drives prod) to confirm the
+  same journeys pass on Vercel. NOTE: this product's `web/` has **no DB/migration chain** (only
+  optional Vercel KV), so there is no "apply prod migrations" step; the standing config gaps are the
+  unconnected waitlist email provider and unprovisioned Vercel KV (see OWNER_ACTIONS / Marketing).
+  No code break reproduced locally — do not assume one; this item just pins prod === local.
+
 ## Functional reality — owner-only verification (BUILDS ≠ WORKS; can't run headlessly)
 
 The automated functional suite (Track G4) RUNS every journey it can and asserts real outcomes, but

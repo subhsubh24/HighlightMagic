@@ -88,7 +88,7 @@ that never produces a file; a paywall that charges but never unlocks Pro; a nav 
   error state); every nav target resolves.
 - **Every page and every flow** is covered by an outcome-asserting RUNTIME test against a running
   app/backend with a SEEDED test env (built in Track G4). Keep a route/flow + screen INVENTORY
-  (docs/qa/FUNCTIONAL_INVENTORY.md) so coverage is provably complete — a journey with no
+  (web/e2e/ROUTE_INVENTORY.md) so coverage is provably complete — a journey with no
   outcome-asserting runtime test is treated as BROKEN.
 - **Enforced continuously:** the functional suite is wired into CI (a broken flow BLOCKS merge);
   "FUNCTIONAL REALITY (an ACTUAL RUN)" is a standing DEEP-AUDIT lens; and at the readiness gate,
@@ -297,7 +297,7 @@ this quality track is G.
       (`web/e2e/`, `web/playwright.config.ts`, `npm run test:e2e`). iOS: XCUITest for the core
       journey where an app-host run is available + XCTest integration for logic; device-only / sandbox
       gaps go on PENDING_OPS (never assumed working). Keep a route/flow + screen INVENTORY
-      (docs/qa/FUNCTIONAL_INVENTORY.md) so coverage is provably complete. WIRED INTO CI so a broken
+      (web/e2e/ROUTE_INVENTORY.md) so coverage is provably complete. WIRED INTO CI so a broken
       flow BLOCKS merge. PLUS automated a11y on key surfaces, visual checks on the design-bar screens,
       and a perf/stability budget (no jank/crashes on the core path; export within a time budget).
 - [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff

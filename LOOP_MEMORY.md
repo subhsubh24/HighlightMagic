@@ -61,7 +61,7 @@ functional E2E suite) + Gate-2 FUNCTIONAL REALITY now means an ACTUAL RUN assert
 preflight asserts the suite/inventory exist + PENDING_OPS un-runnable checklist + this lesson.
 - BUILD G4 TO THESE CANONICAL ANCHORS (so the gate and the build agree — preflight checks them):
   web functional E2E at `web/e2e/` with `web/playwright.config.ts` and a `test:e2e` script in
-  web/package.json (wired into CI); route/flow + screen inventory at `docs/qa/FUNCTIONAL_INVENTORY.md`.
+  web/package.json (wired into CI); route/flow + screen inventory at `web/e2e/ROUTE_INVENTORY.md`.
   iOS: XCUITest core journey where an app-host run is available + XCTest integration; device-only /
   sandbox gaps go on PENDING_OPS, never assumed.
 - OUTCOME-ASSERTING means the user-visible RESULT is checked: a real 1080×1920 .mp4 on disk; sandbox
@@ -69,6 +69,29 @@ preflight asserts the suite/inventory exist + PENDING_OPS un-runnable checklist 
 - "FUNCTIONAL REALITY (an ACTUAL RUN)" is now a standing DEEP-AUDIT lens; at readiness, any critical
   journey lacking an outcome-asserting runtime test = NOT ready. NOTE: this file is the canonical
   loop memory (LOOP_MEMORY.md at root); do NOT create docs/loop-memory.md.
+
+## BUILDS ≠ WORKS — suite BUILT + RUN-gated (2026-06-27, web)
+Operationalized the standard by REPLICATING THE USER (ran the app in a real browser, did not confirm
+by reading code). Built `web/playwright.config.ts` + `web/e2e/journeys.spec.ts` (outcome-asserting:
+`/` editor "Drop your footage." hero; `/landing` hero + working email input; **waitlist signup → "You're
+on the list!"** success; `/privacy /terms /support /offline` resolve; error-boundary "Something went
+wrong" asserted ABSENT) + `web/e2e/ROUTE_INVENTORY.md` + `test:e2e` script. RAN GREEN locally (7/7).
+preflight section 5 now RUNS the suite and requires `E2E_JOURNEYS_PASSED=1` — a green build alone no
+longer reaches ready.
+- TWO TRAPS this guards against: (1) a CI-only hardcoded browser `executablePath` makes the suite
+  "build but not run" off-CI → config uses Playwright's MANAGED chromium by default (optional
+  `PLAYWRIGHT_CHROMIUM_PATH` override only); (2) a faithful RUN needs a real env → Playwright's
+  webServer does `npm run build && next start` (this product's web/ has NO DB/migration chain, only
+  optional Vercel KV; TURNSTILE unset → captcha fails OPEN so signup runs keyless).
+- HONEST-DIAGNOSIS RULE: a bug that does NOT reproduce on a clean, fully-migrated/seeded env is itself
+  a finding — localize to ENV/MIGRATION/CONFIG drift on the deployed app (record a PENDING_OPS "verify
+  on prod" item; point the suite at it with `BASE_URL=<prod>`), do NOT fabricate a code fix. For THIS
+  product nothing reproduced: there is no web account-signup and the waitlist flow works locally; the
+  real gaps are config (waitlist email provider unconnected; Vercel KV unprovisioned), already owner items.
+- VITEST SAFETY: vitest include is `src/**/*.test.ts`, so `web/e2e/*.spec.ts` is NOT picked up by the
+  unit gate (would otherwise crash on the Playwright import). Keep e2e specs as `.spec.ts` under `e2e/`.
+- Tradeoff vs the prior anchor note: inventory lives at `web/e2e/ROUTE_INVENTORY.md` (not docs/qa/…);
+  preflight + ROADMAP G4 + this file all reference that one path.
 
 ## Last run: 2026-06-27 (Run 20)
 
