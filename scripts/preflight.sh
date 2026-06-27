@@ -61,8 +61,8 @@ ok "web functional E2E harness present"
 grep -q '"test:e2e"' web/package.json \
   || fail "web/package.json has no test:e2e script — functional suite not wired into CI (G4)."
 ok "web test:e2e script wired"
-[ -f docs/qa/FUNCTIONAL_INVENTORY.md ] \
-  || fail "missing docs/qa/FUNCTIONAL_INVENTORY.md (route/flow + screen inventory — coverage not provable)."
+[ -f web/e2e/ROUTE_INVENTORY.md ] \
+  || fail "missing web/e2e/ROUTE_INVENTORY.md (route/flow + screen inventory — coverage not provable)."
 ok "functional route/flow + screen inventory present"
 # No stub/placeholder markers on critical paths (intentional secure-default TODO(P0) excepted).
 if grep -rniE 'TODO|FIXME|not implemented|placeholder|\bstub\b' \
@@ -166,7 +166,22 @@ echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
 ok "web build + tests green"
 
-echo "== 5. iOS required check green on latest main (loop can't run xcodebuild on Linux) =="
+echo "== 5. BUILDS != WORKS — RUN the functional journey suite GREEN this attempt =="
+# A green build alone must NOT reach 'ready'. Actually RUN the real-browser, outcome-asserting
+# journeys against a freshly built+started app (Playwright's webServer builds + `next start`s it;
+# no DB/migration chain in this product's web/, captcha fails open with TURNSTILE_SECRET_KEY unset).
+# preflight FAILS unless the suite exits green and we export E2E_JOURNEYS_PASSED=1.
+E2E_JOURNEYS_PASSED=0
+[ -f web/playwright.config.ts ] || fail "web/playwright.config.ts missing — functional journey suite not present (BUILDS != WORKS)."
+[ -f web/e2e/journeys.spec.ts ] || fail "web/e2e/journeys.spec.ts missing — no outcome-asserting journey suite."
+[ -f web/e2e/ROUTE_INVENTORY.md ] || fail "web/e2e/ROUTE_INVENTORY.md missing — coverage not provable."
+( cd web && npx --yes playwright install --with-deps chromium >/dev/null 2>&1 || npx --yes playwright install chromium >/dev/null 2>&1; npm run test:e2e ) \
+  || fail "functional journey suite did NOT pass (build-but-broken is release-blocking, equal to a red test)."
+E2E_JOURNEYS_PASSED=1
+[ "$E2E_JOURNEYS_PASSED" = "1" ] || fail "E2E_JOURNEYS_PASSED!=1 — readiness requires the journey suite to have RUN GREEN this attempt."
+ok "functional journey suite RAN GREEN this attempt (E2E_JOURNEYS_PASSED=1)"
+
+echo "== 6. iOS required check green on latest main (loop can't run xcodebuild on Linux) =="
 if command -v gh >/dev/null 2>&1; then
   RID="$(gh run list --workflow CI --branch main --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
   if [ -n "${RID:-}" ]; then
