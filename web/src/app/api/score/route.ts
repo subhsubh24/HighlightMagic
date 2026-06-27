@@ -1,5 +1,7 @@
 import { CLAUDE_FRAME_SCORER, estimateCostUSD } from "@/lib/ai-models";
 import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,6 +36,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
+  // Track H1: rate limit per IP
+  const ip = getClientIP(req);
+  const rl = checkRateLimit(`score:${ip}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   const { userId, signedTransaction, prompt } = body;
   const frames = Array.isArray(body.frames) ? body.frames : [];
   if (!userId || typeof userId !== "string") {
@@ -49,6 +56,15 @@ export async function POST(req: Request) {
     return Response.json(
       { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
       { status: 402 },
+    );
+  }
+
+  // Track H7: daily spend ceiling (per-user circuit-breaker, applies to all tiers)
+  const ceiling = checkDailySpendCeiling(userId);
+  if (!ceiling.allowed) {
+    return Response.json(
+      { error: "Daily export limit reached. Please try again tomorrow." },
+      { status: 429 },
     );
   }
 
@@ -127,6 +143,7 @@ export async function POST(req: Request) {
 
   // Paid call succeeded → consume one quota unit (no-op for Pro).
   await consumeExport({ userId, isPro: decision.isPro });
+  recordDailyExport(userId);
 
   return Response.json({
     scores,

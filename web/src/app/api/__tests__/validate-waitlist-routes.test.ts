@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as validatePOST } from "@/app/api/validate/route";
 import { POST as waitlistPOST } from "@/app/api/waitlist/route";
+import { _resetBuckets } from "@/lib/rate-limit";
 
 // ─── /api/validate ─────────────────────────────────────────────────────────────
 
@@ -113,6 +114,10 @@ describe("POST /api/validate", () => {
 // ─── /api/waitlist ─────────────────────────────────────────────────────────────
 
 describe("POST /api/waitlist", () => {
+  beforeEach(() => {
+    _resetBuckets();
+  });
+
   it("returns 400 when email is missing", async () => {
     const req = new Request("http://localhost/api/waitlist", {
       method: "POST",
