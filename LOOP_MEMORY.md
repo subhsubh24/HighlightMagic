@@ -109,6 +109,26 @@ a STEP 0 orienting read of docs/growth/GROWTH_STATUS.md.
   operates channels + experiments + measurement. Business case = shared scoreboard; growth informs
   pricing, factory sets it; neither agent commands the other; the human is the integrator.
 
+## Growth Agent as a data scientist — method versioned, pipes as build items (2026-06-27)
+LESSON: the Growth Agent measured loosely; formalize it as an applied growth data scientist with a
+DURABLE method + real analytics/experiment plumbing. FIX shipped:
+- `docs/growth/ANALYSIS_PLAYBOOK.md` (NEW) — the each-run method: privacy-safe AGGREGATES only (no
+  raw PII/events); diagnose the SINGLE binding constraint; compute significance/CI + say "insufficient
+  data" when N small (has Bash); design falsifiable experiments (run via the engine when built, else
+  record `designed` + flag engine blocker — NEVER fabricate a result); write data-grounded numbers +
+  learnings to GROWTH_STATUS + GROWTH_MEMORY; recommend ONE highest-ROI lever. Analysis only — no new
+  authority to act externally; correlation ≠ causation.
+- ROADMAP Track E: **E7 Analytics SURFACE** (privacy-safe server-computed funnel/cohort/time-series/
+  segment aggregates read-API — what the agent pulls; E6d consumes it) + **E8 Experiment ENGINE**
+  (deterministic sticky variant assignment + lift measurement w/ significance + min-sample gate).
+- GROWTH_STATUS contract now points at the playbook so the agent discovers it.
+- The GROWTH AGENT routine charter (trig_015ZjxSgxD6fowCMGZex5vTt) gets the data-scientist discipline
+  (ORIENT reads the playbook; "act as an applied data scientist… aggregates/significance/insufficient
+  data/recommend the lever"; experiments = falsifiable hypothesis + min N + lift + significance).
+- Role unchanged: Growth Agent INFORMS (data + recommendation); factory OWNS the levers as code and
+  reads GROWTH_STATUS as DATA, not commands. (Lesson recorded here in LOOP_MEMORY.md — canonical; no
+  docs/loop-memory.md exists in this repo.)
+
 ## Last run: 2026-06-27 (Run 20)
 
 ### What shipped this run (all MERGED to main — verified)
