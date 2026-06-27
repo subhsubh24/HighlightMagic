@@ -225,6 +225,19 @@ that lets an extracted key or modified client run up cost and bypass the free li
       creds are present. Builds on Track H (rate limiting/CAPTCHA/validation) for the public
       endpoints.
       *(web/ growth-execution plumbing + docs/growth/CONNECT.md)*
+- [ ] E7. **Analytics SURFACE** (privacy-safe, server-computed aggregates; powers the Growth Agent's
+      data-science method): an internal read-API in web/ that returns ONLY aggregates — funnel-step
+      counts/rates (visitor → waitlist/signup → trial → paid), cohort retention, time-series, and
+      segment rollups — computed server-side from E5 analytics + StoreKit/subscription + the email
+      provider. NEVER exposes raw PII/events. This is what the Growth Agent pulls per
+      docs/growth/ANALYSIS_PLAYBOOK.md (E6d's analytics-pull consumes it). Real data or 0/null;
+      authed/owner-scoped; rate-limited (Track H1). *(web/ analytics aggregate read-API)*
+- [ ] E8. **Experiment ENGINE** (so designed A/B tests actually RUN and return significant results):
+      deterministic, sticky variant assignment (hashed unit id → variant; no raw PII), exposure +
+      conversion logging into the analytics surface (E7), and a LIFT measurement with a significance
+      check + minimum-sample-size gate (report "insufficient data" below N — never call noise a win).
+      The Growth Agent designs falsifiable hypotheses (ANALYSIS_PLAYBOOK); this engine executes them
+      and records winners/losers in GROWTH_STATUS.experiments[]. *(web/ experiment assignment + lift)*
 
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.

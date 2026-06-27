@@ -17,6 +17,11 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
   check). They only rise as the real E6 anchor files land in `web/`.
 - phase advances pre_launch -> launching -> post_launch. Post-launch is the most important window.
 - as_of is stamped every update; a stale as_of is itself a signal.
+- METHOD: each run, follow docs/growth/ANALYSIS_PLAYBOOK.md — act as an applied growth data scientist:
+  privacy-safe AGGREGATES only (no raw PII/events), diagnose the single binding constraint, compute
+  significance/CI and say "insufficient data" when N is small, design experiments (run via the
+  experiment engine when built, else record the designed test + flag the engine as blocker — never
+  fabricate a result), and recommend the highest-ROI lever. Correlation ≠ causation; never invent a metric.
 
 ```yaml
 GROWTH_STATUS:
