@@ -5,7 +5,9 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #113 | meta(Run 20): housekeeping — fix stale APP_STORE/product-id docs; tick H2; record #110–#112; iOS send-side queued | meta | pending #113 |
+| #115 | meta(Run 20): post-#114 — tick P0 server-side-entitlement bullet + C1; mark iOS send-side done | meta | pending #115 |
+| #114 | feat(P0/C1): iOS attaches StoreKit signed transaction (result.jwsRepresentation) to ios-score/ios-plan — completes the entitlement loop | P0/C1 | Run 20 |
+| #113 | meta(Run 20): housekeeping — fix stale APP_STORE/product-id docs; tick H2; record #110–#112; iOS send-side queued | meta | Run 20 |
 | #112 | test(G2): cover proxy-video + animate/check routes; fold ElevenLabs ceiling/NaN/empty cases into elevenlabs.test.ts | G2 | Run 20 |
 | #111 | feat(H2): server-side input-size bounds on paid routes before the provider call (shared input-bounds.ts) | H2 | Run 20 |
 | #110 | feat(P0/C1): real server-side App Store JWS entitlement verification (x5c chain + ES256 + Pro-SKU/expiry/revocation) | P0/C1 | Run 20 |
