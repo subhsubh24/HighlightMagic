@@ -162,6 +162,35 @@ that lets an extracted key or modified client run up cost and bypass the free li
       real numbers feed back into docs/BUSINESS_CASE.md (Track F) over time, so the estimate
       improves from data instead of staying a launch-day guess.
       *(web/src/lib/analytics.ts + landing page events #49)*
+- [ ] E6. **Growth EXECUTION engine** (server-side, in web/; owner-credentials-pluggable):
+      E1–E5 BUILD + STAGE marketing content, but nothing LIVE captures signups, sends email,
+      posts, or reports real funnel numbers — so GROWTH_STATUS stays engine_built:false and
+      all-0/null. E6 is the plumbing that turns staged content into demand-gen the moment the
+      owner connects a channel. REUSE the P0 server-side-keys plumbing (do NOT duplicate it);
+      the daily Growth Agent NEVER holds secrets — the deployed web/ backend does. Until a
+      channel's creds are present, that channel stays in DRY-RUN and GROWTH_STATUS shows
+      awaiting_connect:true. Build, each owner-credentials-pluggable + server-side:
+      - E6a. **Waitlist capture** to a real datastore + double-opt-in (upgrades E1's stub
+        /api/waitlist) so the funnel (visitors → signups) reports real numbers instead of
+        null; add rate-limiting + CAPTCHA on the public signup endpoint (Track H1/H5).
+      - E6b. **Email send** behind ONE provider abstraction (Resend / SendGrid / Mailchimp —
+        keys from env, owner-supplied), wired to the staged email lifecycle so
+        welcome → activation → conversion → win-back can actually fire.
+      - E6c. **Publishing queue**: a server-side queue + provider abstraction for social
+        (X / Instagram / TikTok / Reddit) where the app posts via the owner's connected API
+        keys/OAuth. The Growth Agent writes drafts INTO the queue; the app sends. Starts in
+        dry-run/no-op mode so it is safe before any channel is connected.
+      - E6d. **Analytics pull**: an internal read-API the Growth Agent calls each run to get
+        REAL funnel/conversion/retention numbers (web analytics E5 + StoreKit/subscription +
+        email provider) to populate GROWTH_STATUS — never invented.
+      - E6e. **Growth-settings env contract**: docs/growth/CONNECT.md — the owner's ~20-minute
+        runbook listing exactly which env vars / OAuth connections to set per channel. Live
+        keys/OAuth are HUMAN-APPLIED (record in PENDING_OPS.md); never commit .env.
+      DONE = engine_built flips true in docs/growth/GROWTH_STATUS.md, the funnel reports real
+      (non-null) numbers once a channel is connected, and EVERY path is dry-run-safe until
+      creds are present. Builds on Track H (rate limiting/CAPTCHA/validation) for the public
+      endpoints.
+      *(web/ growth-execution plumbing + docs/growth/CONNECT.md)*
 
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
