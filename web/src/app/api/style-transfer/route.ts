@@ -2,6 +2,7 @@ import { submitStyleTransfer } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_PROMPT_CHARS, MAX_VIDEO_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,10 @@ export async function POST(req: Request) {
     }
     if (!prompt || typeof prompt !== "string") {
       return Response.json({ error: "prompt is required" }, { status: 400 });
+    }
+    // H2: bound the video payload + prompt before the paid style-transfer job.
+    if (overStringLimit(videoData, MAX_VIDEO_B64_CHARS) || overStringLimit(prompt, MAX_PROMPT_CHARS)) {
+      return tooLargeResponse();
     }
 
     const safeStrength = typeof strength === "number"

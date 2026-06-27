@@ -2,6 +2,7 @@ import { submitPhotoAnimation } from "@/lib/kling";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_IMAGE_B64_CHARS, MAX_PROMPT_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
     if (!prompt || typeof prompt !== "string") {
       console.warn("[animate/submit] Rejected: missing or invalid prompt");
       return Response.json({ error: "prompt is required" }, { status: 400 });
+    }
+    // H2: field-level size bounds before the paid Kling job (complements the body-size cap).
+    if (overStringLimit(prompt, MAX_PROMPT_CHARS) || overStringLimit(imageData, MAX_IMAGE_B64_CHARS)) {
+      return tooLargeResponse();
     }
 
     // Validate duration is a number in acceptable range

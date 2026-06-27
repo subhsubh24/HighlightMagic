@@ -1,6 +1,7 @@
 import { planFromScores } from "@/actions/detect";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -61,6 +62,13 @@ export async function POST(req: Request) {
   }
   if (!Array.isArray(scores) || scores.length === 0) {
     return Response.json({ error: "scores must be a non-empty array" }, { status: 400 });
+  }
+  // H2: bound the free-text steering fields fed to the Claude planner (cost scales per token).
+  if (
+    overStringLimit(creativeDirection, MAX_DIRECTION_CHARS) ||
+    overStringLimit(userFeedback, MAX_DIRECTION_CHARS)
+  ) {
+    return tooLargeResponse();
   }
 
   // ── SERVER-SIDE GATE — before any paid call ──

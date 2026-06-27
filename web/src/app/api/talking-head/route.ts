@@ -2,6 +2,7 @@ import { submitLipSync } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { MAX_AUDIO_B64_CHARS, MAX_IMAGE_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -41,6 +42,10 @@ export async function POST(req: Request) {
     }
     if (!audioData || typeof audioData !== "string") {
       return Response.json({ error: "audioData is required" }, { status: 400 });
+    }
+    // H2: bound the media payloads before the paid lip-sync job.
+    if (overStringLimit(imageData, MAX_IMAGE_B64_CHARS) || overStringLimit(audioData, MAX_AUDIO_B64_CHARS)) {
+      return tooLargeResponse();
     }
 
     const dur = typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;

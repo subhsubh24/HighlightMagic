@@ -2,6 +2,7 @@ import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
 import { CLAUDE_FRAME_SCORER } from "@/lib/ai-models";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
+import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -308,6 +309,8 @@ export async function POST(req: Request) {
   if (frames.length > 1000) {
     return Response.json({ error: "frames must be 1000 or fewer" }, { status: 400 });
   }
+  // H2: bound per-frame payload — cost scales with each base64 image sent to the vision model.
+  if (anyFrameOverLimit(frames, "jpegBase64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
 
   // Validate each frame has required fields
   for (let i = 0; i < frames.length; i++) {
