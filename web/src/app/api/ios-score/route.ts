@@ -1,5 +1,7 @@
 import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
 import { CLAUDE_FRAME_SCORER } from "@/lib/ai-models";
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -286,6 +288,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const ip = getClientIP(req);
+  const rl = checkRateLimit(`ios-score:${ip}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   const { userId, signedTransaction, frames, templateName } = body as {
     userId: unknown;
     signedTransaction?: unknown;
@@ -326,6 +332,14 @@ export async function POST(req: Request) {
     );
   }
 
+  const ceiling = checkDailySpendCeiling(userId);
+  if (!ceiling.allowed) {
+    return Response.json(
+      { error: "Daily export limit reached. Please try again tomorrow." },
+      { status: 429 },
+    );
+  }
+
   const systemPrompt = buildScoringSystemPrompt(
     typeof templateName === "string" && templateName ? templateName : undefined
   );
@@ -343,7 +357,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[ios-score] Haiku scoring error:", message);
-    return Response.json({ error: "Scoring failed", detail: message }, { status: 502 });
+    return Response.json({ error: "Scoring failed" }, { status: 502 });
   }
 
   // Z-score normalize across all batches (matches web + iOS pipeline)
@@ -351,6 +365,7 @@ export async function POST(req: Request) {
 
   // Consume quota now that the paid call succeeded
   await consumeExport({ userId, isPro: decision.isPro });
+  recordDailyExport(userId);
 
   const remaining = decision.isPro ? -1 : Math.max(0, decision.remaining - 1);
 

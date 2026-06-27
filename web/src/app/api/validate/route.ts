@@ -1,4 +1,6 @@
 import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+import { checkExportAllowed } from "@/lib/entitlement";
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -10,13 +12,17 @@ export const maxDuration = 60;
  */
 export async function POST(req: Request) {
   try {
+    const ip = getClientIP(req);
+    const rl = checkRateLimit(`validate:${ip}`, PAID_RATE_LIMIT);
+    if (!rl.allowed) return rateLimitResponse(rl);
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
     const {
-      clips, plan, contentSummary, assetStatuses, clipFrames,
+      userId, clips, plan, contentSummary, assetStatuses, clipFrames,
       // Extended context for richer validation
       sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
       viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
@@ -24,6 +30,17 @@ export async function POST(req: Request) {
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
+    }
+
+    // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
+    if (userId && typeof userId === "string") {
+      const decision = await checkExportAllowed({ userId, signedTransaction: null });
+      if (!decision.allowed) {
+        return Response.json(
+          { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
+          { status: 402 },
+        );
+      }
     }
 
     const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;

@@ -1,5 +1,6 @@
 import { planFromScores } from "@/actions/detect";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const ip = getClientIP(req);
+  const rl = checkRateLimit(`ios-plan:${ip}`, PAID_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
 
   const { userId, signedTransaction, frames, scores, templateName, userFeedback, creativeDirection } =
     body as {
@@ -106,6 +111,6 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[ios-plan] planFromScores error:", message);
-    return Response.json({ error: "Planning failed", detail: message }, { status: 502 });
+    return Response.json({ error: "Planning failed" }, { status: 502 });
   }
 }
