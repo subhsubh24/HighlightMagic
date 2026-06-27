@@ -83,9 +83,11 @@ that lets an extracted key or modified client run up cost and bypass the free li
 - [x] MODEL DECIDED (owner, 2026-06-25): **BUSINESS-PAID**, NOT bring-your-own-key. This SUPERSEDES
       every prior "BYOK" assumption anywhere in the repo (loop-memory/PENDING_OPS/BUSINESS_CASE) —
       correct all BYOK references; the business-paid routing bullets below DO apply and MUST be built.
-- [ ] Route ALL paid API calls (Anthropic/ElevenLabs/AtlasCloud) through the `web/` backend;
+- [x] Route ALL paid API calls (Anthropic/ElevenLabs/AtlasCloud) through the `web/` backend;
       REMOVE the embedded/Keychain API-key path from the iOS app (ClaudeVisionService etc.);
-      keys live SERVER-SIDE only.
+      keys live SERVER-SIDE only. *(All 4 iOS services rewritten: CloudScoringService #80,
+      ClaudeVisionService #83, AIEffectRecommendationService #85, TapeValidationService #105.
+      Verified Run 19: no `x-api-key`/embedded key remains in `Sources/Services/*.swift` on `main`.)*
 - [ ] Enforce the free quota (5 free exports/mo + watermark) + Pro entitlement SERVER-SIDE,
       authoritatively, BEFORE any paid call (App Store Server API / signed-transaction
       verification), so a tampered client cannot run up the bill or bypass the limit.
@@ -266,13 +268,15 @@ RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (A
 ElevenLabs, AtlasCloud) and has PUBLIC forms is a wallet-drain + abuse target. STANDING standard —
 the deep-audit security lens re-checks it each cycle, Reviewer A REJECTS regressions, and the
 preflight verifies the critical ones (H1, H2, H7).
-- [ ] H1. RATE LIMITING on EVERY paid-API / expensive / auth endpoint (not case-by-case): a sane
+- [x] H1. RATE LIMITING on EVERY paid-API / expensive / auth endpoint (not case-by-case): a sane
       baseline (~100 req/min/IP public, ~1000/min authenticated), STRICTER on anything hitting
       Anthropic/ElevenLabs/AtlasCloud or auth. Reviewer A REJECTS any new expensive/auth route
       without rate limiting. #1 SECURITY ITEM: a single export fires multiple expensive generation
       calls, so an unthrottled detect/generate/export endpoint is the fastest possible drain — tie
       it to the server-side freemium quota (enforce the 5-free-exports limit BEFORE any paid call,
-      lib/entitlement.ts).
+      lib/entitlement.ts). *(rate-limit.ts + score/validate/ios-score/ios-plan #101; the 13
+      remaining paid/expensive routes #106; ios-validate #105. Verified Run 19: every paid-API
+      route under web/src/app/api imports @/lib/rate-limit.)*
 - [ ] H2. SERVER-SIDE VALIDATION on every write/expensive call (client validation is UX, not
       security): re-validate types/lengths/shape server-side; reject malformed/oversized input; bound
       video size + duration BEFORE any paid call.

@@ -5,18 +5,24 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
-| #103 | meta(Run 18): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | pending #103 |
-| #102 | feat(H6): security headers — HSTS, X-Content-Type-Options, X-Frame-Options, CORS; consolidate from vercel.json | H6 | pending #102 |
-| #101 | feat(H): rate limiting (H1), spend ceiling (H7), CAPTCHA (H5), validate quota gate, error hygiene (H3) | H1/H3/H5/H7 | pending #101 |
-| #100 | feat(P0): rescue ios-validate — remove embedded API key from TapeValidationService; add /api/ios-validate backend | P0 | pending #100 |
-| #91 | meta(Run 16): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | pending #91 |
+| #109 | meta(Run 19): housekeeping — corrects false P0-done claim; LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS, ROADMAP | meta | pending #109 |
+| #108 | feat(H2): bound clips/clipFrames payload (MAX_FILES) before the paid validate calls | H2 | 2026-06-27 |
+| #107 | fix(D): correct stale BYOK claims in Terms — describe the business-paid AI model | D | 2026-06-27 |
+| #106 | feat(H1): rate-limit the 13 remaining paid/expensive backend routes | H1 | 2026-06-27 |
+| #105 | feat(P0/H1): remove LAST embedded Anthropic key from TapeValidationService; add /api/ios-validate (+rate limit) — rescued stuck #100/#84 | P0/H1 | 2026-06-27 |
+| #104 | ROADMAP Track E: add E6 — Growth EXECUTION engine (server-side, in web/) | E6 | 2026-06-27 |
+| #103 | meta(Run 18): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-27 |
+| #102 | feat(H6): security headers — HSTS, X-Content-Type-Options, X-Frame-Options, CORS; consolidate from vercel.json | H6 | 2026-06-27 |
+| #101 | feat(H): rate limiting (H1), spend ceiling (H7), CAPTCHA (H5), validate quota gate, error hygiene (H3) | H1/H3/H5/H7 | 2026-06-27 |
+| #100 | feat(P0): rescue ios-validate (TapeValidationService) | P0 | CLOSED — stuck (stale base + Swift type error); superseded by #105 |
+| #91 | meta(Run 16): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-26 |
 | #90 | test(G2): add route tests for /api/ios-score (6 tests) | G2 | 2026-06-26 |
 | #89 | feat(G3): add gaming/esports highlight detection fixture | G3 | 2026-06-26 |
-| #88 | feat(security): optional userId quota gate for /api/validate | security/P0 | pending #88 |
+| #88 | feat(security): optional userId quota gate for /api/validate | security/P0 | CLOSED — logic folded into #101 |
 | #87 | fix(ios): remove force-unwrap in ConfettiView; align fallback subscription prices | A3/C2 | 2026-06-26 |
 | #86 | meta(Run 15): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-26 |
 | #85 | feat(P0): remove embedded API key from AIEffectRecommendationService; add /api/ios-plan backend | P0 | 2026-06-26 |
-| #84 | feat(P0): remove embedded Anthropic key from TapeValidationService; add /api/ios-validate backend | P0 | pending #84 |
+| #84 | feat(P0): remove embedded Anthropic key from TapeValidationService; add /api/ios-validate backend | P0 | CLOSED — never merged; superseded by #105 (Run 19) |
 | #83 | feat(P0): remove embedded Anthropic key from ClaudeVisionService (disable direct calls) | P0 | 2026-06-26 |
 | #82 | meta(Run 14): housekeeping — LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS | meta | 2026-06-26 |
 | #81 | feat(G3): add cooking-highlight eval fixture for detect.eval.ts auto-discovery | G3 | 2026-06-26 |

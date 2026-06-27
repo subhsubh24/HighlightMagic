@@ -16,6 +16,64 @@ model tiers (scouts/scan = Haiku; reviewers + readiness auditors = Sonnet, never
 further conflicts found. Also: scripts/preflight.sh now parses the BUSINESS_CASE_SUMMARY block with a
 real YAML parser (fails if missing/unparseable or arr_year1.base absent).
 
+## Last run: 2026-06-27 (Run 19)
+
+### DEEP AUDIT — 2026-06-27 (Run 19) — security/abuse + artifact-freshness lens
+Focused audit (last full deep audit was Run 16). Findings, highest-severity first:
+- **CRITICAL — FALSE COMPLETION (P0):** `Sources/Services/TapeValidationService.swift` STILL embedded
+  an Anthropic API key on `main` (Keychain/env/Info.plist chain + direct `x-api-key` call), despite
+  LOOP_MEMORY (Run 15/18) and REMAINING_STEPS recording the removal as DONE. Root cause: PR #84
+  (Run 15) never merged (closed); its rescue **#100** (Run 18) was stuck — stale base + a Swift
+  `URL(string: BackendConfig.url(...))` type error (`.url(for:)` returns `URL`, not `String`) that
+  fails the `ios` check. An extractable key in the shipped binary = wallet-drain. FIXED in **#105**
+  (fixed the type error, rebased, merged; `grep x-api-key Sources/Services/*.swift` now = 0). This is
+  exactly the failure the DONE GUARD exists to catch — verify the artifact ON MAIN, never trust a PR ref.
+- **CRITICAL — H1 gap:** 13 routes calling paid APIs (voiceover, sfx, stems, upscale, thumbnail,
+  talking-head, style-transfer, voice-clone, intro, outro, music/submit) or expensive orchestration
+  (plan, animate/submit) had a quota gate but NO per-IP rate limit. FIXED in **#106** (+ ios-validate
+  in #105). Verified: every paid route now imports `@/lib/rate-limit`.
+- **HIGH — H2 gap:** `/api/validate` + `/api/ios-validate` accepted unbounded `clips`/`clipFrames`
+  (one base64 vision image per clip → unbounded paid payload). FIXED in **#108** (cap at MAX_FILES=100).
+- **MEDIUM — stale public doc (D):** Terms page still described a "bring-your-own-key" iOS model
+  (false under BUSINESS-PAID; BYOK UI removed #57). Trust/store-review risk. FIXED in **#107**.
+- Note: `/api/stems` has no quota gate at all (no userId) — confirmed INTENTIONAL (export sub-step,
+  quota enforced upstream at /api/score; web caller sends no userId). Rate limit is its abuse brake.
+
+### What shipped this run (verify merge state before ticking)
+- **#105** (P0/H1, MERGED): removed the LAST embedded Anthropic key (TapeValidationService); new
+  `/api/ios-validate` route with H1 rate limiting; 8 tests. Rescued stuck #100/#84.
+- **#106** (H1, MERGED): rate-limited the 13 remaining paid/expensive routes; 14 tests.
+- **#107** (D, MERGED): corrected stale BYOK claims in Terms → business-paid model.
+- **#108** (H2, MERGED): bound clips/clipFrames at MAX_FILES on validate + ios-validate; 4 tests.
+- Closed stale PR **#100** (superseded by #105).
+
+### ROADMAP box changes this run
+- **P0** first bullet (route all paid calls through backend / remove embedded iOS key) → **[x]** —
+  all 4 services done, verified 0 embedded keys on `main`.
+- **H1** (rate limiting on every paid/expensive/auth endpoint) → **[x]** — verified every paid route
+  imports rate-limit.
+- H2 advanced (validate input bounds) but left **[ ]** — not every route's input bounds audited yet.
+
+### What NOT to re-do (Run 19)
+- Do not re-remove the TapeValidationService key / re-create /api/ios-validate — done in #105.
+- Do not re-add rate limiting to voiceover/sfx/stems/upscale/thumbnail/talking-head/style-transfer/
+  voice-clone/intro/outro/music-submit/plan/animate-submit — done in #106.
+- Do not add a quota gate to /api/stems — intentionally gated upstream at /api/score (no userId).
+- Do not re-fix the Terms BYOK copy — done in #107.
+- Do not re-add clips/clipFrames bounds to validate or ios-validate — done in #108.
+
+### Next priorities (Run 19 → 20)
+1. **H2 completeness**: audit input bounds (array lengths, string lengths, size/duration) on the
+   remaining write/expensive routes; many have per-field checks but not array-count caps.
+2. **H4 auth failure-cases**: only relevant if accounts exist — currently userId-based, no passwords;
+   confirm scope (may be N/A) and document, or close H4 as not-applicable with rationale.
+3. **G2 coverage**: confirm coverage thresholds pass; find next 0-test files in web/src/lib.
+4. **C1/P0 App Store Server API**: `verifyProEntitlement()` returns false (secure default) until owner
+   sets `APP_STORE_SHARED_SECRET` — owner-gated; integration code can be written against a mock.
+5. **DOD/preflight**: re-run `scripts/preflight.sh` next run now that P0 key-removal + H1 are ticked.
+
+---
+
 ## Last run: 2026-06-27 (Run 18)
 
 ### What was shipped (pending merge this run)

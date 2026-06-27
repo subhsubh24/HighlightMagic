@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-27 (Run 18).
+be executed. Last updated: 2026-06-27 (Run 19).
 
 ---
 
@@ -15,14 +15,20 @@ owner knows the current state and can optionally unblock them faster.
 
 ### 0a. iOS service-layer API key removal
 
-**COMPLETE** (Run 15): All 4 iOS services have been rewritten. No Anthropic API key remains embedded in the iOS binary or Keychain.
+**COMPLETE** (Run 19): All 4 iOS services have been rewritten. No Anthropic API key remains
+embedded in the iOS binary or Keychain. (Verified Run 19: `grep x-api-key Sources/Services/*.swift` = 0.)
 
 - ~~`CloudScoringService.swift`~~ — **DONE** (PR #80, Run 14): routes through `/api/ios-score`.
 - ~~`ClaudeVisionService.swift`~~ — **DONE** (PR #83, Run 15): `isAvailable` returns `false`; `scoreHighlights` disabled (superseded by `CloudScoringService`).
-- ~~`TapeValidationService.swift`~~ — **DONE** (PR #84, Run 15): routes through `/api/ios-validate`.
+- ~~`TapeValidationService.swift`~~ — **DONE** (PR #105, Run 19): routes through `/api/ios-validate`.
+  ⚠️ CORRECTION: prior runs recorded this as done in PR #84 (Run 15), but **#84 never merged**
+  (closed) and its rescue **#100 was stuck** (stale base + a Swift `URL(string:)`/`URL` type
+  error that failed the `ios` check). The embedded key remained on `main` until **#105** (Run 19),
+  which fixed the type error and merged. This is why the DONE GUARD requires verifying the artifact
+  on `main` — not trusting a PR reference.
 - ~~`AIEffectRecommendationService.swift`~~ — **DONE** (PR #85, Run 15): routes through `/api/ios-plan`.
 
-Supporting backend endpoints: `/api/ios-score` (#79), `/api/ios-validate` (#84), `/api/ios-plan` (#85). All gated by `checkExportAllowed`.
+Supporting backend endpoints: `/api/ios-score` (#79), `/api/ios-validate` (#105), `/api/ios-plan` (#85). All gated by `checkExportAllowed`; all paid/expensive routes now rate-limited (#101/#105/#106).
 
 **What the owner can do to unblock**: nothing — complete.
 
