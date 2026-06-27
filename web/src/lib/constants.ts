@@ -6,6 +6,12 @@ export const MAX_FILES = 100; // max clips/photos per project
 export const MAX_TOTAL_DURATION_SECONDS = 1800; // 30 min total across all clips
 export const PHOTO_DISPLAY_DURATION = 3.2; // seconds a photo shows in the final edit — slightly off-round for human feel
 export const FREE_EXPORT_LIMIT = 5;
+
+/**
+ * StoreKit product IDs for the Pro subscription (must match iOS SubscriptionProduct).
+ * Used server-side to confirm a verified App Store transaction actually grants Pro.
+ */
+export const PRO_PRODUCT_IDS = ["pro.monthly", "pro.yearly"] as const;
 export const MAX_CLIP_DURATION = 60;
 export const EXPORT_WIDTH = 1080;
 export const EXPORT_HEIGHT = 1920;
