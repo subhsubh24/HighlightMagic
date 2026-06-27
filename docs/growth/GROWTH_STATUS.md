@@ -16,11 +16,11 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
 ```yaml
 GROWTH_STATUS:
   project: HighlightMagic
-  as_of: 2026-06-26
+  as_of: 2026-06-27
   phase: pre_launch              # pre_launch | launching | post_launch
-  engine_built: false            # is the growth-execution engine live in code?
-  channels_connected: []         # owner-authorized channels actually wired (e.g. [x, instagram, email])
-  awaiting_connect: true         # true => agent only prepares creative; takes NO external action
+  engine_built: false            # E6 not yet built; waitlist stubs to console.log
+  channels_connected: []         # none connected yet
+  awaiting_connect: true         # owner must connect channels before agent executes externally
   funnel:                        # REAL numbers only; 0/null until a connected source reports them
     visitors_7d: 0
     waitlist_signups_total: 0
@@ -49,9 +49,23 @@ GROWTH_STATUS:
     published_7d: 0
     scheduled_next_7d: 0
     organic_sessions_7d: 0
-  learnings: []                  # short, data-grounded bullets: what's working / what's not
-  next_actions: []               # what the agent will do next run
-  owner_blockers: []             # things needing the owner before the agent can execute externally
+  learnings:
+    - "E1-E5 all merged (landing, brand, ASO, content, analytics). E6 not started — engine not built."
+    - "Email sequences (welcome to win-back) were entirely absent — highest-leverage PREPARE gap; created 2026-06-27."
+    - "CONNECT.md (E6e owner runbook) was missing — created 2026-06-27 to give owner a clear path to execute mode."
+    - "Free-tier watermark must be stated accurately in all emails: free exports have a watermark; Pro removes it."
+    - "No channels connected; all funnel metrics correctly 0/null (real data only — none invented)."
+  next_actions:
+    - "If owner connects Resend: queue welcome email to existing waitlist; pull real list_size from Resend Audience."
+    - "If owner provisions Vercel KV: wire /api/waitlist to store signups; pull real waitlist_signups_total."
+    - "If still no connections at Run 2: draft post-batch-2.md (12 more video scripts, new niches)."
+    - "Check if product loop has built E6a (waitlist datastore) or E6b (email send) — flip engine_built if so."
+    - "CIRCUIT BREAKER: if connect-channels still open at Run 3, escalate prominently in report."
+  owner_blockers:
+    - "spend-caps: URGENT — set hard monthly caps in Anthropic + ElevenLabs + AtlasCloud dashboards now"
+    - "connect-channels: connect Resend (email) + Vercel KV per docs/growth/CONNECT.md to unlock execute mode"
+    - "vercel-env-keys: set ANTHROPIC_API_KEY + ELEVENLABS_API_KEY + ATLASCLOUD_API_KEY in Vercel env"
+    - "server-quota-infra: provision auth layer + Vercel KV for server-side quota (PENDING_OPS.md)"
   links:
     in_app_analytics: null
     owner_doc: docs/growth/GROWTH_STATUS.md
