@@ -16,7 +16,48 @@ model tiers (scouts/scan = Haiku; reviewers + readiness auditors = Sonnet, never
 further conflicts found. Also: scripts/preflight.sh now parses the BUSINESS_CASE_SUMMARY block with a
 real YAML parser (fails if missing/unparseable or arr_year1.base absent).
 
-## Last run: 2026-06-26 (Run 16)
+## Last run: 2026-06-27 (Run 18)
+
+### What was shipped (pending merge this run)
+
+- **PR #100** (P0, auto-merge enabled): `TapeValidationService.swift` rescued — removes embedded Anthropic key (3-chain: env/Keychain/Info.plist); routes through new backend `/api/ios-validate`. `isAvailable` always `true`. New `web/src/app/api/ios-validate/route.ts`: Haiku QA pass on assembled iOS tapes; fail-open; does NOT consume quota (sub-step of export gated at `/api/ios-score`). 6 tests in `ios-validate-route.test.ts`. 467 tests pass. Replaces stuck PR #84.
+- **PR #101** (H1/H3/H5/H7, auto-merge enabled): Track H security hardening. New `rate-limit.ts` (sliding-window IP limiter, 10/min paid, 5/min public) + `spend-ceiling.ts` (DAILY_EXPORT_CAP=50, all tiers) + `rate-limit.test.ts` (10 tests) + `spend-ceiling.test.ts` (6 tests). Modified: `/api/score` + `/api/ios-score` (H1 + H7 + recordDailyExport); `/api/ios-plan` + `/api/ios-score` (H3: removed `detail: message` from 502 bodies); `/api/validate` (H1 + optional userId quota gate fail-open); `/api/waitlist` (H1 PUBLIC_RATE_LIMIT + H5 Cloudflare Turnstile, activated by `TURNSTILE_SECRET_KEY`). 477 tests pass. Replaces stuck PR #88.
+- **PR #102** (H6, auto-merge enabled): Security headers via `next.config.ts` (HSTS/1yr/preload, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy on all routes; CORS on `/api/(.*)` reads `NEXT_PUBLIC_APP_URL` env var with production fallback). Consolidated `vercel.json` — removed duplicate `/(.*)`  security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy) that were double-setting. 461 tests pass.
+
+### Stuck PRs closed this run
+- **PR #84** (CLOSED): Superseded by PR #100 (same files, fresh auto-merge timing).
+- **PR #88** (CLOSED): Logic incorporated into PR #101.
+- **PR #97** (CLOSED): Stale Run 17 housekeeping with merge conflicts; replaced by this Run 18 housekeeping.
+
+### What NOT to re-do (additions for Run 18)
+- Do not re-rescue ios-validate — done in PR #100 (Run 18); replaces PR #84
+- Do not re-implement rate limiting (rate-limit.ts) — done in PR #101 (Run 18)
+- Do not re-implement spend ceiling (spend-ceiling.ts) — done in PR #101 (Run 18)
+- Do not re-add Cloudflare Turnstile to /api/waitlist — done in PR #101 (Run 18)
+- Do not re-add userId quota gate to /api/validate — done in PR #101 (Run 18); replaces PR #88
+- Do not re-add security headers to next.config.ts — done in PR #102 (Run 18)
+- Do not re-consolidate vercel.json headers — done in PR #102 (Run 18)
+- Do not re-remove detail:message from ios-score/ios-plan 502 responses — done in PR #101 (Run 18)
+- Do not add rate limiting to /api/ios-validate until PR #101 merges (rate-limit.ts must exist first)
+
+### ROADMAP box status changes this run
+- **H1** (rate limiting): implemented on /api/score, /api/ios-score, /api/ios-plan, /api/validate, /api/waitlist (PR #101). Gap: /api/ios-validate not yet rate-limited (follow-up after #101 merges).
+- **H3** (error hygiene): `detail: message` removed from ios-score + ios-plan 502 responses (PR #101).
+- **H5** (CAPTCHA): Turnstile wired to /api/waitlist, activated by env var (PR #101).
+- **H6** (security headers + CORS): HSTS + 5 other headers + CORS via next.config.ts; vercel.json deduplicated (PR #102).
+- **H7** (spend ceiling): DAILY_EXPORT_CAP=50 implemented on /api/score + /api/ios-score (PR #101).
+- **P0 (TapeValidationService)**: key removed, routes through /api/ios-validate (PR #100). P0 iOS service-layer key removal now COMPLETE (all 4 services: #80 CloudScoringService, #83 ClaudeVisionService, #100 TapeValidationService, #85 AIEffectRecommendationService).
+
+### Next priorities (updated Run 18)
+1. **H1 gap**: Add rate limiting to `/api/ios-validate` (created in PR #100, rate-limit.ts from PR #101 needed first). Wire immediately after #101 merges.
+2. **H2/H4 remaining Track H items**: H2 = server-side input validation beyond what exists; H4 = explicit auth failure test cases. Scope and implement.
+3. **G2 coverage**: `/api/ios-plan` (0 tests, ~150 LOC). Follow ios-score-route.test.ts pattern.
+4. **A3 Swift audit**: Scan remaining `Sources/` for force-unwraps and Swift 6 concurrency issues; highest-risk after service-layer refactor.
+5. **DOD gate**: Run `scripts/preflight.sh` post-merge of #100/#101/#102 to see which DOD boxes are now clearable.
+
+---
+
+## Previous run: 2026-06-26 (Run 16)
 
 ### What was shipped (pending merge this run)
 
