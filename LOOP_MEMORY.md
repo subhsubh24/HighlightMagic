@@ -165,6 +165,16 @@ stale as models/prices change. FIX: ROADMAP B5 (STANDING) + docs/MODEL_BENCH_PLA
 - ANTI-GAMING: real/cited prices only; NEVER downgrade past the quality floor to hit a COGS number;
   "it still runs" ≠ quality. CO-REQUISITE: a thin G3 eval set rubber-stamps a worse model — expand
   evals alongside so a regression is actually caught.
+- EXTENSION (2026-06-27): B5 candidate space is now CREATIVE/CROSS-PROVIDER — not just a cheaper
+  same-model: (a) cheaper same-provider tier, (b) ALTERNATIVE provider/model (esp. other video-gen
+  models/providers for the Kling step — actively search), (c) a cheaper APPROACH for the same user
+  intent (fewer/no calls, different technique, caching). Goal = cheapest that clears the quality bar →
+  margin → hit AND exceed the PROFIT floor. VIDEO-GEN is the priciest + most subjective call: added a
+  G3 VIDEO-GENERATION QUALITY RUBRIC (prompt-adherence / motion-coherence / artifact-free / correct
+  aspect+duration; vision-model-as-judge vs the incumbent on a gold set). EXCEPTION to auto-adopt:
+  until that rubric is built + trusted, a cheaper VIDEO candidate is FLAGGED for human sign-off (FYI
+  with rubric+COGS), NOT auto-swapped; text/LLM tiers with solid evals still auto-adopt. Kling is the
+  biggest margin lever, so this is where the cost search should look hardest.
 
 ## Last run: 2026-06-27 (Run 21)
 

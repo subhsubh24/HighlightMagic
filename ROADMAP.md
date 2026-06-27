@@ -178,8 +178,14 @@ that lets an extracted key or modified client run up cost and bypass the free li
       one-and-done). B4 is a point-in-time pick; models + prices change, so the cheapest-capable
       choice is re-evaluated on a cadence: **MONTHLY**, AND immediately ON-SIGNAL when WebSearch finds
       a new/cheaper model or a price change. Per TASK (frame scorer, planner, validator, TTS, video —
-      each has its own quality bar; all centralized in `web/src/lib/ai-models.ts`). METHOD =
-      docs/MODEL_BENCH_PLAYBOOK.md: trial a cheaper CANDIDATE behind the registry, then VALIDATE on
+      each has its own quality bar; all centralized in `web/src/lib/ai-models.ts`). CANDIDATE SPACE is
+      CREATIVE/FLEXIBLE — not just a cheaper version of the same model: (a) a cheaper model from the
+      SAME provider; (b) an ALTERNATIVE provider/model for that task (e.g. other video-generation
+      models/providers for the Kling step — actively search for them); or (c) a cheaper APPROACH that
+      achieves the SAME user intent (fewer/no generation calls, a different technique, caching/reuse).
+      GOAL: the CHEAPEST option that still clears each task's quality bar — lower COGS raises gross
+      margin, so we HIT AND EXCEED the revenue/PROFIT floor, not just revenue. METHOD =
+      docs/MODEL_BENCH_PLAYBOOK.md: trial each candidate behind the registry, then VALIDATE on
       BOTH axes — (1) QUALITY via the G3 eval suite (`RUN_EVALS=1`) against the gold set PLUS the G4
       functional journey suite (the FLOW must still work with the candidate's real responses — parsing,
       no crashes), and (2) COST via real per-export COGS (docs/MODEL_COSTS.md). **ADOPT-ON-GATES
@@ -189,7 +195,12 @@ that lets an extracted key or modified client run up cost and bypass the free li
       REAL/cited — NEVER invent a price, and NEVER downgrade past the quality floor to hit a COGS
       number (anti-gaming, Reviewer B rejects). Recompute docs/BUSINESS_CASE.md unit economics on any
       adopted change. CO-REQUISITE: the eval gold set (G3) must be strong enough to CATCH a quality
-      regression — a thin eval rubber-stamps a worse model, so expand evals alongside.
+      regression — a thin eval rubber-stamps a worse model, so expand evals alongside. VIDEO-GEN
+      CAVEAT: the video-generation step (Kling intro/outro/photo-animation) is the priciest call AND
+      the most subjective, so it is only AUTO-adoptable once the G3 video-generation quality RUBRIC
+      exists (see docs/MODEL_BENCH_PLAYBOOK.md); until then, a cheaper video model/provider/approach is
+      a FLAGGED candidate for human sign-off (FYI issue with eval-rubric + COGS numbers), NOT an
+      auto-swap — that is the one exception to ADOPT-ON-GATES.
       *(standing; updates ai-models.ts + docs/MODEL_COSTS.md + the decision log on adopt)*
 
 ## Track C — Monetization (StoreKit 2)
@@ -338,10 +349,13 @@ this quality track is G.
 - [ ] G2. Coverage floor — enforce a meaningful test-coverage threshold on web/backend critical
       paths (Vitest `--coverage`) and on iOS logic modules (XCTest); a drop below the floor FAILS.
 - [ ] G3. Detection/generation EVAL coverage COMPLETE — a live eval per CORE PIPELINE STAGE
-      (highlight-detection accuracy, clip selection, music/SFX/voiceover quality, export
-      correctness) against a GROWING gold set of real video fixtures, gated behind an env flag
-      (e.g. `RUN_EVALS=1`) so normal CI doesn't spend; wire a SCHEDULED eval run so AI-output
-      quality regressions are caught. Live eval API spend is approved.
+      (highlight-detection accuracy, clip selection, music/SFX/voiceover quality, VIDEO-GENERATION
+      quality [intro/outro/photo-animation] scored by a RUBRIC, export correctness) against a GROWING
+      gold set of real video fixtures, gated behind an env flag (e.g. `RUN_EVALS=1`) so normal CI
+      doesn't spend; wire a SCHEDULED eval run so AI-output quality regressions are caught. Live eval
+      API spend is approved. The VIDEO-GENERATION quality rubric is what makes the priciest call
+      gate-able for the B5 model re-bench (prompt-adherence, motion/temporal coherence, artifact-free,
+      correct aspect/duration) — see docs/MODEL_BENCH_PLAYBOOK.md.
 - [ ] G4. FUNCTIONAL E2E suite (BUILDS ≠ WORKS) + a11y + visual + perf gates — a REAL end-to-end
       functional suite that RUNS every journey as a user against a running app/backend with a SEEDED
       test env and asserts the intended user-visible OUTCOME (not an HTTP status, not "the handler
