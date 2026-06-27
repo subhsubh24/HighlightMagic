@@ -10,6 +10,11 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
 - The block MUST be valid, parseable YAML — no invalid escapes (write $100K, never \$100K); quote any
   value containing a colon or backtick. preflight fails on a malformed block.
 - Cross-project shape: identical keys across AptDesignerAI / HighlightMagic / GroceryManager.
+- `engine_pct` (0–100) and `engine_built` are PINNED TO CODE, not a vibe: preflight computes
+  `engine_pct` from how many E6 growth-execution-engine anchor files physically exist on disk and
+  REJECTS any declared value that differs, and enforces `engine_built == (engine_pct == 100)`. Do
+  NOT hand-flip them ahead of the code — set them to whatever preflight computes (run preflight to
+  check). They only rise as the real E6 anchor files land in `web/`.
 - phase advances pre_launch -> launching -> post_launch. Post-launch is the most important window.
 - as_of is stamped every update; a stale as_of is itself a signal.
 
@@ -18,7 +23,8 @@ GROWTH_STATUS:
   project: HighlightMagic
   as_of: 2026-06-27
   phase: pre_launch              # pre_launch | launching | post_launch
-  engine_built: false            # E6 not yet built; waitlist stubs to console.log
+  engine_built: false            # COMPUTED: == (engine_pct == 100); never hand-set ahead of code
+  engine_pct: 20                 # COMPUTED by preflight from E6 anchor files on disk (1/5: CONNECT.md). DO NOT hand-edit
   channels_connected: []         # none connected yet
   awaiting_connect: true         # owner must connect channels before agent executes externally
   funnel:                        # REAL numbers only; 0/null until a connected source reports them
