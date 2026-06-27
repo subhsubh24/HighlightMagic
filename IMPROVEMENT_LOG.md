@@ -5,6 +5,10 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #113 | meta(Run 20): housekeeping — fix stale APP_STORE/product-id docs; tick H2; record #110–#112; iOS send-side queued | meta | pending #113 |
+| #112 | test(G2): cover proxy-video + animate/check routes; fold ElevenLabs ceiling/NaN/empty cases into elevenlabs.test.ts | G2 | Run 20 |
+| #111 | feat(H2): server-side input-size bounds on paid routes before the provider call (shared input-bounds.ts) | H2 | Run 20 |
+| #110 | feat(P0/C1): real server-side App Store JWS entitlement verification (x5c chain + ES256 + Pro-SKU/expiry/revocation) | P0/C1 | Run 20 |
 | #109 | meta(Run 19): housekeeping — corrects false P0-done claim; LOOP_MEMORY, IMPROVEMENT_LOG, REMAINING_STEPS, ROADMAP | meta | pending #109 |
 | #108 | feat(H2): bound clips/clipFrames payload (MAX_FILES) before the paid validate calls | H2 | 2026-06-27 |
 | #107 | fix(D): correct stale BYOK claims in Terms — describe the business-paid AI model | D | 2026-06-27 |

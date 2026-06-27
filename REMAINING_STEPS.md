@@ -43,15 +43,24 @@ Supporting backend endpoints: `/api/ios-score` (#79), `/api/ios-validate` (#105)
 2. This sets `KV_REST_API_URL` + `KV_REST_API_TOKEN` in Vercel env automatically.
 3. No code change needed — the KV store activates immediately once the env vars are set.
 
-### 0c. App Store Server API for Pro verification
+### 0c. Apple root CA for Pro entitlement verification
 
-`verifyProEntitlement()` in `web/src/lib/entitlement.ts` currently returns `false` (secure
-default) until the App Store shared secret is configured.
+`verifyProEntitlement()` in `web/src/lib/entitlement.ts` cryptographically verifies the StoreKit 2
+signed transaction (JWS) the app passes up: it checks the `x5c` certificate chain against Apple's
+public root CA, validates the ES256 signature, and confirms the transaction is a Pro SKU, unexpired
+and unrevoked. No Apple *secret* is needed to verify — only Apple's PUBLIC root CA, which the loop
+cannot fetch (apple.com is blocked from the build egress), so the owner supplies it:
 
-1. In App Store Connect → your app → In-App Purchases → App-Specific Shared Secret, generate a
-   shared secret.
-2. Add `APP_STORE_SHARED_SECRET=<secret>` to Vercel env.
-3. The factory can wire the receipt verification call once the secret is in place.
+1. Download **"Apple Root CA - G3"** (`.cer`, DER) from https://www.apple.com/certificateauthority/
+   and convert to PEM: `openssl x509 -inform DER -in AppleRootCA-G3.cer -out AppleRootCA-G3.pem`.
+2. Add it to Vercel env as `APP_STORE_ROOT_CA_PEM` (the full PEM block; may hold several
+   concatenated certs). Until it is set, EVERY user is treated as free-tier and the monthly limit
+   is enforced for all (secure default).
+3. (Optional, recommended) Add `APP_STORE_BUNDLE_ID=<your bundle id>` to harden the check so only
+   transactions for this app are accepted.
+
+NOTE (loop follow-up, not owner): the iOS client must attach `Transaction.jwsRepresentation` to its
+backend requests for this gate to receive input — tracked as the next iOS task in LOOP_MEMORY.
 
 ---
 
@@ -122,8 +131,8 @@ In App Store Connect → your app → In-App Purchases, create:
 
 | Product ID | Type | Price | Purpose |
 |---|---|---|---|
-| `pro_monthly_999` | Auto-Renewable Subscription | $9.99/month | Pro tier (current default) |
-| `pro_yearly_7999` | Auto-Renewable Subscription | $79.99/year | Annual plan (25% off monthly) |
+| `pro.monthly` | Auto-Renewable Subscription | $9.99/month | Pro tier (current default) |
+| `pro.yearly` | Auto-Renewable Subscription | $79.99/year | Annual plan (25% off monthly) |
 
 The iOS app references these product IDs via StoreKit 2. Verify the IDs match
 `Sources/Services/StoreKitService.swift` and update if they differ.
@@ -224,7 +233,7 @@ Once the app is live:
 |---|---|---|---|
 | ~~0a~~ | ~~iOS service-layer API key removal~~ | 0 | **COMPLETE** (PRs #80, #83, #84, #85) |
 | 0b | Provision Vercel KV (Upstash Redis) + link to project | 0 | Code done (#66) — owner provisions KV in Vercel dashboard |
-| 0c | App Store shared secret in Vercel env | 0 | After App Store Connect record (Step 3) |
+| 0c | Apple Root CA - G3 PEM in Vercel env (`APP_STORE_ROOT_CA_PEM`) | 0 | After App Store Connect record (Step 3) |
 | 1 | Set live API keys in Vercel | 1 | Now |
 | 2 | Connect waitlist email provider | 1 | Now (PR #42 merged) |
 | 3 | Apple Dev enrollment + App Store Connect record | 2 | Now |

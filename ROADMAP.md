@@ -91,6 +91,12 @@ that lets an extracted key or modified client run up cost and bypass the free li
 - [ ] Enforce the free quota (5 free exports/mo + watermark) + Pro entitlement SERVER-SIDE,
       authoritatively, BEFORE any paid call (App Store Server API / signed-transaction
       verification), so a tampered client cannot run up the bill or bypass the limit.
+      *(Free quota: enforced server-side before every paid call via lib/entitlement.ts (done).
+      Pro: REAL StoreKit 2 JWS verification implemented server-side #110 — verifies the x5c chain
+      to Apple's root CA + ES256 signature + Pro-SKU/expiry/revocation; needs (a) owner to set
+      APP_STORE_ROOT_CA_PEM (REMAINING_STEPS 0c) and (b) the iOS client to attach
+      Transaction.jwsRepresentation to backend requests (next iOS task). Box stays OPEN until the
+      iOS send-side ships + is verified — server side is correct but receives no input yet.)*
 - [ ] Meter + log per-export API cost; cap regeneration (plan.md: <=2 validation passes);
       verify/extend the existing detection-cache + asset-cache.
 - [ ] Redo docs/BUSINESS_CASE.md COGS under BUSINESS-PAID: ALL of Claude detection + ElevenLabs +
@@ -129,7 +135,9 @@ that lets an extracted key or modified client run up cost and bypass the free li
 
 ## Track C — Monetization (StoreKit 2)
 - [ ] C1. Pro subscription with SERVER-VERIFIED entitlement.
-      *(client-side sync fixed #31; server verification still needed — ties to P0/B3)*
+      *(client-side sync fixed #31; SERVER-SIDE JWS verification implemented #110 — see P0 bullet 2.
+      Stays OPEN until the iOS client sends Transaction.jwsRepresentation (next iOS task) + owner
+      sets APP_STORE_ROOT_CA_PEM.)*
 - [ ] C2. Paywall at the real value moment; restore purchases; manage subscription;
       5 free exports/mo + watermark, Pro unlimited + no watermark. Price points chosen from
       researched comps (record rationale in docs/BUSINESS_CASE.md).
@@ -277,9 +285,14 @@ preflight verifies the critical ones (H1, H2, H7).
       lib/entitlement.ts). *(rate-limit.ts + score/validate/ios-score/ios-plan #101; the 13
       remaining paid/expensive routes #106; ios-validate #105. Verified Run 19: every paid-API
       route under web/src/app/api imports @/lib/rate-limit.)*
-- [ ] H2. SERVER-SIDE VALIDATION on every write/expensive call (client validation is UX, not
+- [x] H2. SERVER-SIDE VALIDATION on every write/expensive call (client validation is UX, not
       security): re-validate types/lengths/shape server-side; reject malformed/oversized input; bound
       video size + duration BEFORE any paid call.
+      *(clips/clipFrames count cap #108; per-field size bounds before the paid call on score/
+      ios-score/validate/ios-validate (per-frame base64), plan/ios-plan (planner text), talking-head/
+      style-transfer/animate-submit/upscale/thumbnail (media blobs) + score prompt via shared
+      input-bounds.ts #111; voiceover/sfx/music/intro/outro/stems/voice-clone already had inline
+      caps. Oversized → generic 413 (no field-name leak). Verified Run 20.)*
 - [ ] H3. ERROR-MESSAGE HYGIENE: generic user-facing errors; full context logged SERVER-SIDE only;
       never leak schema/table/column names, stack traces, or query logic; no enumeration via error
       differences.
