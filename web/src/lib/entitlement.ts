@@ -92,11 +92,13 @@ export async function verifyProEntitlement(signedTransaction?: string | null): P
   if (!txn.productId || !(PRO_PRODUCT_IDS as readonly string[]).includes(txn.productId)) {
     return false;
   }
-  // If we know our bundle id, it must match (defence against a transaction from another app).
+  // If we know our bundle id, it must match — and a transaction that omits it is rejected
+  // (defence-in-depth against a transaction minted for another app).
   const expectedBundleId = process.env.APP_STORE_BUNDLE_ID;
-  if (expectedBundleId && txn.bundleId && txn.bundleId !== expectedBundleId) return false;
-  // Auto-renewable subscriptions must not be expired.
-  if (typeof txn.expiresDate === "number" && txn.expiresDate <= Date.now()) return false;
+  if (expectedBundleId && txn.bundleId !== expectedBundleId) return false;
+  // Our Pro SKUs are auto-renewable subscriptions: a non-expired expiresDate is REQUIRED.
+  // Treat a missing expiresDate as not-entitled rather than as never-expiring.
+  if (typeof txn.expiresDate !== "number" || txn.expiresDate <= Date.now()) return false;
   // A refunded / revoked purchase grants nothing.
   if (typeof txn.revocationDate === "number") return false;
 

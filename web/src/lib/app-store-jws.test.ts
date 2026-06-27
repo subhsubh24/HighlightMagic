@@ -163,6 +163,21 @@ describe("verifyProEntitlement (end-to-end, env-configured trusted root)", () =>
     expect(await verifyProEntitlement(jws)).toBe(false);
   });
 
+  it("denies when a bundleId is configured but the transaction omits it", async () => {
+    process.env.APP_STORE_ROOT_CA_PEM = rootPem(rootDer);
+    process.env.APP_STORE_BUNDLE_ID = "com.highlightmagic.app";
+    const { bundleId: _omit, ...noBundle } = proPayload;
+    void _omit;
+    expect(await verifyProEntitlement(makeJWS(noBundle))).toBe(false);
+  });
+
+  it("denies a Pro SKU that carries no expiresDate (subscriptions must be dated)", async () => {
+    process.env.APP_STORE_ROOT_CA_PEM = rootPem(rootDer);
+    const { expiresDate: _omit, ...noExpiry } = proPayload;
+    void _omit;
+    expect(await verifyProEntitlement(makeJWS(noExpiry))).toBe(false);
+  });
+
   it("never trusts a client-supplied non-JWS string", async () => {
     process.env.APP_STORE_ROOT_CA_PEM = rootPem(rootDer);
     expect(await verifyProEntitlement("client-claims-pro")).toBe(false);
