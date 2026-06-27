@@ -38,3 +38,6 @@ Thumbs.db
 
 # Node modules (from root-level installs)
 node_modules/
+
+# Claude Code internal state
+.claude/
