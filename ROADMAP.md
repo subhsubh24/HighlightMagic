@@ -126,7 +126,11 @@ that lets an extracted key or modified client run up cost and bypass the free li
       AtlasCloud are business-borne now (the prior BYOK split understated COGS — re-derive the margin).
 
 ## Track A — iOS app (complete + polish to App-Store quality)
-- [x] A1. iOS CI green (`xcodebuild build test`) and promoted to a REQUIRED check.
+- [x] A1. iOS CI green (`xcodebuild build test`) and promoted to a REQUIRED check. SCOPE (verified
+      2026-06-27): this is COMPILE + UNIT-TEST green of the SwiftPM **.library** ONLY — it does NOT
+      mean the app can be ARCHIVED/UPLOADED to the App Store (there is no app target / `.xcodeproj` /
+      shared scheme yet). Do NOT read "CI green" as "store-binary-ready" (BUILDS ≠ WORKS). The real
+      archivable release config is the separate, UNCHECKED **A6**.
       *(SwiftPM test target #15; CI destination/Xcode/sim fix + first full compile of the
       app (~50 errors) + 3 test fixes in #16; `ios` promoted to required. The cloud loop
       CANNOT run xcodebuild — iOS changes are gated by the required `ios` check, so make them
@@ -141,6 +145,21 @@ that lets an extracted key or modified client run up cost and bypass the free li
       crashes on the core path.
 - [ ] A5. Design quality bar (intentional, not generated-looking); correct Info.plist
       permission usage strings.
+- [ ] A6. REAL iOS RELEASE BUILD CONFIG — archivable + uploadable, NOT just "compiles." Today
+      Package.swift builds a SwiftPM **.library** with NO app target / `.xcodeproj` / shared scheme,
+      so it CANNOT be archived into a store binary (A1 green ≠ submittable). Make it genuinely
+      release-configurable: an Xcode **app target** (or project) wrapping `Sources/` with a SHARED,
+      ARCHIVABLE scheme; bundle id `com.highlightmagic.app`; marketing version + build number;
+      `Sources/Info.plist` (exists; has NSPhotoLibrary[Add]UsageDescription) BOUND to the app target
+      with every required usage string filled; `HighlightMagic.entitlements`; app icon (AppIcon-1024
+      present) + launch assets wired in; an `ExportOptions.plist` (+ optional fastlane gym/deliver)
+      staged for a release archive. VALIDATE WITHOUT A SIGNED BUILD: `xcodebuild -scheme HighlightMagic
+      -showBuildSettings` / an archive-config check resolves — "it compiles in CI" must NOT pass as
+      "it can be archived + uploaded." The loop runs on Linux (no Xcode) and CANNOT author/verify the
+      project blindly: author + confirm-it-archives on a Mac or the macOS CI runner; the signed archive
+      + upload + submission stay HUMAN-ONLY (PENDING_OPS). DONE = a shared scheme archives to a valid
+      export config on a Mac (signing aside) AND ExportOptions/fastlane are staged.
+      *(UNBACKED today — verified 2026-06-27: .library only; no app target/scheme/ExportOptions/fastlane)*
 
 ## Track B — Backend + API cost (web/, on Vercel)
 - [ ] B1. Generation pipeline reliable (detection -> selection -> music/SFX/voiceover ->
@@ -175,6 +194,12 @@ that lets an extracted key or modified client run up cost and bypass the free li
       preview video need a device/simulator — likely owner, but generate everything spec-able:
       copy, keyword sets, screenshot captions/layout specs, a shotlist.)*
 - [x] D4. Stability pass: no crashes; sensible permissions; no debug/placeholder content. *(#22)*
+- [ ] D5. Release packaging + submission staging: an `ExportOptions.plist` (app-store method) +
+      optional fastlane (gym/deliver) OR the App Store Connect upload path documented; a
+      pre-submission checklist; and RE-VERIFY A1/A6 are backed by a real archive config before any
+      "build-ready/submittable" claim (un-tick on regression). The signed archive + TestFlight + App
+      Store upload/submission are HUMAN-ONLY (PENDING_OPS.md / REMAINING_STEPS.md). The loop NEVER
+      does a signed build or touches signing/secrets. *(staging only)*
 
 ## Track E — Marketing engine + growth (build to 100%; publishing gated on funded accounts)
 - [x] E1. Conversion-focused **landing page + waitlist** on web/ (hero, demo/preview, value
