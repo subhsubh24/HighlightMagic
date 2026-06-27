@@ -129,6 +129,27 @@ DURABLE method + real analytics/experiment plumbing. FIX shipped:
   reads GROWTH_STATUS as DATA, not commands. (Lesson recorded here in LOOP_MEMORY.md — canonical; no
   docs/loop-memory.md exists in this repo.)
 
+## REAL iOS release config — ticked A1 ≠ submittable (2026-06-27)
+LESSON: the loop is checkbox-driven, and A1 ("iOS CI green / build-ready") read as done — but the
+artifact that makes a REAL store binary possible was MISSING. Verified 2026-06-27: Package.swift
+builds a SwiftPM **.library** (compiles + unit tests), with NO app target / `.xcodeproj` / shared
+scheme / ExportOptions.plist / fastlane. A SwiftPM library CANNOT be archived/uploaded to the App
+Store — a classic ticked-box-not-backed-by-artifact / BUILDS ≠ WORKS gap.
+- Did NOT un-tick A1: its literal claim (CI `xcodebuild build test` green + required) IS true. Instead
+  ANNOTATED A1 with scope ("compile+unit-test of the library only; not archivable") and added the
+  separate UNCHECKED items: A6 (archivable app target + shared scheme + Info.plist/entitlements/icon
+  bound + ExportOptions/fastlane; validate via `xcodebuild -showBuildSettings`/archive-config, NOT a
+  signed build) and D5 (release packaging + submission staging; re-verify A1/A6 before any
+  build-ready claim).
+- Present already: `Sources/Info.plist` (has NSPhotoLibrary[Add]UsageDescription), `HighlightMagic.entitlements`,
+  `Sources/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`. Missing: the app target,
+  shared archivable scheme, ExportOptions.plist, fastlane.
+- CONSTRAINT: the loop runs on Linux (no Xcode) — it CANNOT author/verify an .xcodeproj or run a real
+  archive; author + confirm-archives on a Mac / the macOS CI runner. Signed archive + upload + submit
+  are HUMAN-ONLY (PENDING_OPS "iOS Release Build — app target + archive"). web/ prod deploy config IS
+  real (next.config.ts + vercel.json). Don't ship hollow ExportOptions/fastlane templates with no
+  project — that's the same builds-but-doesn't-work smell; stage them with the app target (A6).
+
 ## Last run: 2026-06-27 (Run 21)
 
 Scout-driven run (last full DEEP AUDIT was Run 19, within ~24h — targeted scouts instead). Shipped

@@ -123,6 +123,22 @@ Owner-only actions (the factory cannot do these):
 3. Distribution certificate + provisioning profile in Xcode
 4. `DEVELOPMENT_TEAM` in project.pbxproj updated from `REPLACE_WITH_YOUR_TEAM_ID`
 
+## iOS Release Build — app target + archive (the SwiftPM-library gap) — BLOCKS submission
+
+The iOS code currently builds as a SwiftPM **.library** (compiles + unit-tests green in CI = ROADMAP
+A1) but has **NO archivable app target / `.xcodeproj` / shared scheme**, so it CANNOT yet be archived
+or uploaded to the App Store. "CI green" is NOT "store-binary-ready" (BUILDS ≠ WORKS). On a Mac with
+Xcode (the loop runs on Linux and cannot author/verify this):
+1. Create/confirm an Xcode **app target** (or `.xcodeproj`/workspace) wrapping `Sources/` with a
+   SHARED, ARCHIVABLE scheme; set `DEVELOPMENT_TEAM`, bundle id `com.highlightmagic.app`, marketing
+   version + build number; bind `Sources/Info.plist` + `HighlightMagic.entitlements` + the AppIcon.
+2. Validate WITHOUT a signed build: `xcodebuild -scheme HighlightMagic -showBuildSettings` resolves
+   and the scheme ARCHIVES (signing aside).
+3. Archive → export via `ExportOptions.plist` (or fastlane gym/deliver) → upload to App Store Connect
+   → TestFlight → submit + respond to review.
+These signed steps are HUMAN-ONLY; the loop never touches signing/secrets or `.github/`. (Tracked as
+ROADMAP A6 + D5; the loop stages only what it can verify on Linux.)
+
 ## StoreKit Live Products
 
 Create in App Store Connect → Subscriptions:
