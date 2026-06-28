@@ -1,5 +1,6 @@
 import { submitPhotoAnimation } from "@/lib/kling";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_IMAGE_B64_CHARS, MAX_PROMPT_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
@@ -69,6 +70,11 @@ export async function POST(req: Request) {
     const imagePrefix = imageData.slice(0, 30);
     const imageSize = imageData.length;
     console.log(`[animate/submit] Submitting: prompt="${prompt.slice(0, 80)}...", duration=${dur}s, imageSize=${(imageSize / 1024).toFixed(0)}KB, imagePrefix="${imagePrefix}..."`);
+
+    // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
+    // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
+    const genBlock = enforceGenerationCeiling(userId);
+    if (genBlock) return genBlock;
 
     const predictionId = await submitPhotoAnimation(imageData, prompt, dur);
     console.log(`[animate/submit] Success: predictionId=${predictionId}`);

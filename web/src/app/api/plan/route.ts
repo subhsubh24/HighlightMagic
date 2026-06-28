@@ -1,5 +1,6 @@
 import { planFromScores } from "@/actions/detect";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
@@ -108,6 +109,22 @@ export async function POST(req: Request) {
       }, 15_000);
 
       try {
+        // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
+        // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
+        const genBlock = enforceGenerationCeiling(userId);
+        if (genBlock) {
+          clearInterval(keepalive);
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `event: error\ndata: ${JSON.stringify({ message: "Daily generation limit reached. Please try again tomorrow." })}\n\n`
+              )
+            );
+          } catch { /* ignore */ }
+          if (!closed) { closed = true; try { controller.close(); } catch { /* already closed */ } }
+          return;
+        }
+
         const result = await planFromScores(
           frames,
           scores,

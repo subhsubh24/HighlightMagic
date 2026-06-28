@@ -1,5 +1,6 @@
 import { submitBackgroundRemoval } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_IMAGE_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
@@ -47,6 +48,11 @@ export async function POST(req: Request) {
         { status: 402 }
       );
     }
+
+    // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
+    // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
+    const genBlock = enforceGenerationCeiling(userId);
+    if (genBlock) return genBlock;
 
     const predictionId = await submitBackgroundRemoval(imageData);
     return Response.json({ predictionId });

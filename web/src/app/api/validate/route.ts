@@ -1,5 +1,6 @@
 import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
 import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
@@ -63,6 +64,11 @@ export async function POST(req: Request) {
           { status: 402 },
         );
       }
+      // H7: per-user daily generation ceiling — wallet-drain backstop on the paid Haiku
+      // vision call. Only enforceable when a userId is supplied; anonymous web callers'
+      // brake is the per-IP rate limiter above (same posture as /api/stems).
+      const genBlock = enforceGenerationCeiling(userId);
+      if (genBlock) return genBlock;
     }
 
     const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;

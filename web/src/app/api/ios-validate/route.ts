@@ -1,4 +1,6 @@
 import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
 import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
@@ -122,9 +124,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { userId, clips, contentSummary, musicPrompt, sfx, voiceover, intro, outro, clipFrames } =
+  const { userId, signedTransaction, clips, contentSummary, musicPrompt, sfx, voiceover, intro, outro, clipFrames } =
     body as {
       userId: unknown;
+      signedTransaction?: unknown;
       clips: unknown;
       contentSummary: unknown;
       musicPrompt?: string;
@@ -138,6 +141,18 @@ export async function POST(req: Request) {
   if (!userId || typeof userId !== "string") {
     return Response.json({ error: "userId is required" }, { status: 400 });
   }
+
+  const decision = await checkExportAllowed({
+    userId,
+    signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
+  });
+  if (!decision.allowed) {
+    return Response.json(
+      { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
+      { status: 402 },
+    );
+  }
+
   if (!Array.isArray(clips) || clips.length === 0) {
     return Response.json({ error: "clips must be a non-empty array" }, { status: 400 });
   }
@@ -189,6 +204,11 @@ export async function POST(req: Request) {
       });
     }
   }
+
+  // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
+  // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
+  const genBlock = enforceGenerationCeiling(userId);
+  if (genBlock) return genBlock;
 
   try {
     const response = await fetch(ANTHROPIC_URL, {
