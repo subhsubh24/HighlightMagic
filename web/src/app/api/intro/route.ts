@@ -1,5 +1,6 @@
 import { submitTextToVideo } from "@/lib/atlascloud";
 import { checkExportAllowed } from "@/lib/entitlement";
+import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -47,6 +48,11 @@ export async function POST(req: Request) {
 
     const dur =
       typeof duration === "number" && Number.isFinite(duration) ? Math.max(2, Math.min(10, duration)) : 5;
+
+    // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
+    // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
+    const genBlock = enforceGenerationCeiling(userId);
+    if (genBlock) return genBlock;
 
     const predictionId = await submitTextToVideo(prompt, dur);
     return Response.json({ predictionId });
