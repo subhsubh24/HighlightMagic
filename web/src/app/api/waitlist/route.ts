@@ -53,6 +53,9 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ secret: turnstileSecret, response: token }),
+          // B6 resilience: bound the verify call so a slow/unreachable Turnstile can't hang
+          // the function past its budget (the catch below already fails open).
+          signal: AbortSignal.timeout(5_000),
         });
         const verifyData = await verifyRes.json() as { success: boolean };
         if (!verifyData.success) {
