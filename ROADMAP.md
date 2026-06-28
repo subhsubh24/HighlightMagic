@@ -116,6 +116,19 @@ that never produces a file; a paywall that charges but never unlocks Pro; a nav 
   behavior, and email/push deliverability that cannot run headlessly go on the human checklist
   (PENDING_OPS.md) — NEVER assumed working.
 
+## INCIDENT DIAGNOSIS (builds/deploys but the user hits an error — STANDING; read every run)
+When a runtime failure is reported, follow **docs/autonomous-loop/DEEP_DIAGNOSIS.md** — diagnose by
+OBSERVING the real system (Vercel function logs + replay the journey against the deployed URL +
+inspect KV), not by reading code and theorizing. Separate code vs data vs config with evidence before
+changing anything; prove ONE hypothesis against the live system; find the UNCAUGHT throw; verify the
+fix in the real system (not the build); fix the ROOT cause + add a regression test + make the silent
+trap fail LOUD; peel stacked causes until the real journey works end to end; stay honest. Record each
+incident in LOOP_MEMORY.md. TWO HARD RULES (from real outages): **(a)** every external/LLM/3rd-party
+`fetch` MUST have an explicit timeout (`AbortSignal.timeout`) shorter than the serverless function
+budget — a graceful try/catch is useless if the runtime kills the function first; **(b)** an env var a
+critical path actually requires must FAIL LOUD when missing, never silently default/dry-run into a
+confusing downstream error.
+
 ## P0 — Cost & entitlement architecture (HIGHEST PRIORITY — do first)
 The iOS app historically called paid APIs DIRECTLY (embedded/Keychain key in ClaudeVisionService
 etc.) and StoreKit entitlement is CLIENT-ONLY. For a freemium business that pays the API bill,
@@ -220,6 +233,14 @@ that lets an extracted key or modified client run up cost and bypass the free li
       a FLAGGED candidate for human sign-off (FYI issue with eval-rubric + COGS numbers), NOT an
       auto-swap — that is the one exception to ADOPT-ON-GATES.
       *(standing; updates ai-models.ts + docs/MODEL_COSTS.md + the decision log on adopt)*
+- [ ] B6. RESILIENCE — timeouts on every external call + fail-loud critical env (DEEP_DIAGNOSIS hard
+      rules). Every outbound `fetch` (Anthropic/ElevenLabs/AtlasCloud/Resend/Turnstile/proxy-video)
+      must carry an explicit `AbortSignal.timeout` shorter than the Vercel function budget — a
+      try/catch is useless if the runtime kills the function first. AUDIT 2026-06-28: most provider
+      calls already do, but gaps remain — `web/src/lib/email/index.ts` (Resend), `/api/waitlist`
+      (Turnstile), `/api/validate` lack explicit timeouts; add them. AND: any env var a critical path
+      requires must FAIL LOUD when missing (not silently dry-run/undefined into a confusing error).
+      *(partial — most calls timed; close the named gaps + a critical-env guard)*
 
 ## Track C — Monetization (StoreKit 2)
 - [x] C1. Pro subscription with SERVER-VERIFIED entitlement.
