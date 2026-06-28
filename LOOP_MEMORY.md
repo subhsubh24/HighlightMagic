@@ -4,6 +4,23 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Strategic outreach (Growth Agent; draft-only) — 2026-06-28
+Gave the Growth Agent a curated 1:1 outreach capability: a FEW deeply-personalized emails to
+genuinely strategic targets (press/partners/overlapping creators/newsletter curators) as Gmail
+DRAFTS for the OWNER to review + send. The agent NEVER sends (its Gmail tool is create_draft only) —
+curation, not cold-email at scale. Shipped:
+- docs/growth/OUTREACH.md (NEW): the playbook + 7 HARD RAILS verbatim (draft-only; high-confidence +
+  strategic only [name target + why + anticipated reply or don't draft]; a few/run max, never a
+  blast/scrape; real published contacts only, never invent/scrape PII; honest + opt-out + CAN-SPAM/
+  GDPR; pre-launch links → public waitlist; maker≠checker review). Target types adapted to HM (creator/
+  short-video). Zero drafts in a run = success.
+- ANALYSIS_PLAYBOOK: "Strategic outreach" section + Pointers entry → OUTREACH.md.
+- GROWTH_STATUS: new `outreach` block (drafted_7d, owner_sent_7d, replies_7d, signal: none; 0/null
+  pre-launch; replies OWNER-reported, never fabricated). YAML re-validated.
+- Growth Agent ROUTINE updated: ORIENT reads OUTREACH.md; new (3b) STRATEGIC OUTREACH step (any mode,
+  DRAFT-ONLY); HARD BOUNDARIES reconciled with the ONE drafting exception ("create Gmail DRAFTS for
+  the owner to review+send; still NEVER auto-send"). Model/cron/sources/tools/MCP unchanged.
+
 ## PMF is the leading indicator — interpret metrics continuously (2026-06-28)
 Owner direction: both the factory + Growth Agent should INTERPRET business analytics/metrics
 throughout and let that guide work — revenue follows PRODUCT-MARKET FIT, not the reverse. Shipped:

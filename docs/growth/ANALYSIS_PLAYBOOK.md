@@ -93,8 +93,19 @@ win over launch-day assumptions). Pre-launch = 0/null (no PMF signal yet — say
   pre-set N. Peeking without sequential correction is not significance — wait for N.
 - Always report the N alongside any rate so a reader can judge it.
 
+## Strategic outreach (curated, human-reviewed drafts)
+You MAY also run a FEW 1:1, deeply-personalized outreach emails to genuinely strategic targets
+(press / partners / overlapping creators / newsletter curators) — as Gmail **DRAFTS** for the owner
+to review + send. You NEVER send. This is curation, not cold-email at scale. Follow
+**docs/growth/OUTREACH.md** (hard rails: draft-only; high-confidence + strategic only — name the
+target + why they'd care + the anticipated reply or don't draft; a few/run max, never a blast/scrape;
+real published contacts only; honest + opt-out + CAN-SPAM/GDPR-clean; pre-launch links → the public
+waitlist; maker≠checker review each draft). Track in the GROWTH_STATUS `outreach` block (replies
+owner-reported, never fabricated). Zero drafts in a run is a fine, correct outcome.
+
 ## Pointers
 - Source of truth: `ROADMAP.md` (Track E growth items, "GROWTH DATA → LEVER PRIORITIZATION").
 - Dashboard you own + update: `docs/growth/GROWTH_STATUS.md` (contract points here).
 - Cross-run memory: `docs/growth/GROWTH_MEMORY.md`.
 - Owner connect runbook: `docs/growth/CONNECT.md`.
+- Strategic outreach playbook: `docs/growth/OUTREACH.md`.
