@@ -216,6 +216,18 @@ E2E_JOURNEYS_PASSED=1
 [ "$E2E_JOURNEYS_PASSED" = "1" ] || fail "E2E_JOURNEYS_PASSED!=1 — readiness requires the journey suite to have RUN GREEN this attempt."
 ok "functional journey suite RAN GREEN this attempt (E2E_JOURNEYS_PASSED=1)"
 
+# G6 honest-tick guard (visual verification). If the box is ticked there MUST be a real, committed,
+# non-zero screenshot set — an [x] over an empty/near-empty dir is a fake tick. NO-OP while G6 is [ ]
+# (so it never blocks current runs). Completeness ("every step", mobile+desktop) and the dual-axis
+# vision verdict are enforced by the deep audit + readiness auditors; this just kills the egregious fake-tick.
+if grep -qE '^- \[x\] G6\.' ROADMAP.md; then
+  SHOTS=$(find web/e2e/__screenshots__ -type f -name '*.png' -size +0c 2>/dev/null | wc -l | tr -d ' ')
+  [ "${SHOTS:-0}" -ge 5 ] || fail "G6 visual-verification is ticked [x] but only ${SHOTS:-0} non-zero screenshots in web/e2e/__screenshots__/ (<5) — fake tick. Capture the journey screenshots or un-tick G6."
+  ok "G6 ticked + ${SHOTS} committed non-zero screenshots present"
+else
+  echo "  (G6 visual-verification not yet ticked — screenshot-floor guard skipped)"
+fi
+
 echo "== 6. iOS required check green on latest main (loop can't run xcodebuild on Linux) =="
 if command -v gh >/dev/null 2>&1; then
   RID="$(gh run list --workflow CI --branch main --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
