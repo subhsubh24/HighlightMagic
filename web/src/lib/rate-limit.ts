@@ -33,6 +33,14 @@ const buckets = new Map<string, number[]>();
  * @param config Limit + window duration
  */
 export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+  // TEST-ONLY bypass for the CI functional-journey suite: one CI runner replays the self-seeding
+  // journeys from a SINGLE IP and would trip this per-IP limit. Gated on an env var that PRODUCTION
+  // MUST NEVER set — it is set ONLY in the CI e2e job. If E2E_RATELIMIT_BYPASS is ever present in a
+  // prod/Vercel environment, that is a SECURITY misconfiguration (remove it immediately); never trust
+  // this in real traffic. (Recorded in PENDING_OPS so the owner never sets it in prod.)
+  if (process.env.E2E_RATELIMIT_BYPASS === "1") {
+    return { allowed: true, limit: config.limit, remaining: config.limit, resetAt: Math.ceil((Date.now() + config.windowSec * 1000) / 1000) };
+  }
   const now = Date.now();
   const windowMs = config.windowSec * 1000;
   // Keep only hits within the current window

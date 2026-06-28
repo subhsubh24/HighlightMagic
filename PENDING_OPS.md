@@ -33,6 +33,13 @@ OWNER_ACTIONS:
       why: "Pre-launch, the public must NOT reach the half-baked web app. The gate (ROADMAP D6, web/src/middleware.ts) is ON only when SITE_GATE_PASSWORD is set; the waitlist/landing/legal + /api/* stay open so people can still join the waitlist. EXECUTE-mode marketing is BLOCKED until the gate is up (GROWTH_STATUS.site_gate_up: true)."
       how: "In Vercel env for web/, set SITE_GATE_PASSWORD=deepster (never commit the value), then flip GROWTH_STATUS.site_gate_up to true. At launch (every ship-critical QUALITY_SCORECARD dim A/A+ + readiness passed), UNSET SITE_GATE_PASSWORD to open the app."
       blocks: launch-exposure
+    - id: enforce-ci-gates
+      title: "Apply docs/ci/PROPOSED_CI.md — add the web-e2e job + make web-e2e/web-lint REQUIRED checks"
+      priority: high
+      status: open
+      why: "The functional journey suite + lint are not enforced in CI, so a BUILDS!=WORKS or lint-failing change can still auto-merge. The loop can't edit .github/, so it staged the workflow + required-checks list."
+      how: "With workflow scope: add the web-e2e job from docs/ci/PROPOSED_CI.md to .github/workflows/ci.yml; verify it runs GREEN on a throwaway PR; THEN set branch-protection required_status_checks to include web-e2e + web-lint; close the loop:harness-improvement-proposal issue. NEVER set E2E_RATELIMIT_BYPASS in the Vercel/prod env (it's a test-only rate-limit bypass — CI job only)."
+      blocks: ci-gate-enforcement
     - id: vercel-env-keys
       title: Set the three backend API keys as Vercel environment variables
       priority: high
