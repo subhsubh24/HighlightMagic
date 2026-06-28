@@ -120,6 +120,25 @@ describe("POST /api/validate", () => {
     expect(typeof body.passed).toBe("boolean");
   });
 
+  it("bounds the Anthropic call with an AbortSignal timeout (B6 resilience)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: null,
+      json: async () => ({ content: [{ type: "text", text: '{"passed":true}' }] }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    const req = new Request("http://localhost/api/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clips: [{ id: "c1", startTime: 0, endTime: 5 }], plan: {} }),
+    });
+    await validatePOST(req);
+    expect(mockFetch).toHaveBeenCalled();
+    const init = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("returns passed=true on API error (fail-open behavior)", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
@@ -144,6 +163,8 @@ describe("POST /api/validate", () => {
 describe("POST /api/waitlist", () => {
   beforeEach(() => {
     _resetBuckets();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it("returns 400 when email is missing", async () => {
@@ -212,5 +233,38 @@ describe("POST /api/waitlist", () => {
     });
     const res = await waitlistPOST(req as any);
     expect(res.status).toBe(400);
+  });
+
+  it("requires a CAPTCHA token when Turnstile is configured (H5)", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "ts_secret");
+    const req = new Request("http://localhost/api/waitlist", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.5" },
+      body: JSON.stringify({ email: "captcha@example.com" }), // no cfTurnstileToken
+    });
+    const res = await waitlistPOST(req as any);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/CAPTCHA/i);
+  });
+
+  it("bounds the Turnstile verify call with an AbortSignal timeout (B6 resilience)", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "ts_secret");
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", mockFetch);
+    const req = new Request("http://localhost/api/waitlist", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.6" },
+      body: JSON.stringify({ email: "captcha2@example.com", cfTurnstileToken: "tok_123" }),
+    });
+    const res = await waitlistPOST(req as any);
+    expect(res.status).toBe(200);
+    const verifyCall = mockFetch.mock.calls.find(
+      (c) => typeof c[0] === "string" && (c[0] as string).includes("siteverify")
+    );
+    expect(verifyCall).toBeDefined();
+    expect((verifyCall![1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
   });
 });

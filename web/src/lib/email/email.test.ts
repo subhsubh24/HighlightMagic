@@ -60,6 +60,16 @@ describe("email abstraction (E6b)", () => {
     expect(res.error).toBe("send_failed");
   });
 
+  it("bounds the Resend call with an AbortSignal timeout (B6 resilience)", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "msg_1" }), { status: 200 })
+    );
+    await sendEmail({ to: "a@b.com", subject: "Hi", text: "Body" });
+    const [, init] = fetchSpy.mock.calls[0];
+    expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("never throws on network error — returns ok:false", async () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("boom"));

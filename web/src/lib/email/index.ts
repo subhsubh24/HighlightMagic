@@ -17,6 +17,13 @@
 
 export type EmailProvider = "resend" | "none";
 
+/**
+ * Hard timeout for the outbound provider request (B6 resilience). A try/catch is useless
+ * if the Vercel function is killed first, so every external fetch carries an explicit
+ * AbortSignal.timeout shorter than the function budget. 10s is ample for Resend's API.
+ */
+const EMAIL_SEND_TIMEOUT_MS = 10_000;
+
 export interface SendEmailInput {
   to: string;
   subject: string;
@@ -89,6 +96,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
           text: input.text,
           html: input.html ?? minimalHtml(input.text),
         }),
+        signal: AbortSignal.timeout(EMAIL_SEND_TIMEOUT_MS),
       });
       if (!res.ok) {
         // Log full context server-side; surface nothing sensitive to callers (Track H3).

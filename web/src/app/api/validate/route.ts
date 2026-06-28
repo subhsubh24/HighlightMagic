@@ -227,6 +227,10 @@ If passed is true, fixes should be empty or omitted.`;
         system: fullSystemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
+      // B6 resilience: bound the call (and the streamed read) under the 60s function
+      // budget — a try/catch is useless if Vercel kills the function first. On timeout the
+      // AbortError lands in the catch below, which fails open (passed: true).
+      signal: AbortSignal.timeout(45_000),
     });
 
     if (!response.ok) {
