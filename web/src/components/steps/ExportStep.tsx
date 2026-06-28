@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music } from "lucide-react";
+import { ArrowLeft, Download, Share2, RotateCcw, Crown, Film, Repeat, Music, Sparkles, Check } from "lucide-react";
 import { useApp, canExportFree, getMediaFile } from "@/lib/store";
 import { VIDEO_FILTERS } from "@/lib/filters";
 import {
@@ -1058,26 +1058,62 @@ export default function ExportStep() {
 
       {/* Limit hit phase */}
       {phase === "limit-hit" && (
-        <div className="flex flex-col items-center gap-6 py-12">
-          <Crown className="h-16 w-16 text-yellow-500" />
-          <div className="text-center">
-            <h3 className="text-xl font-bold text-white">Free Exports Used Up</h3>
-            <p className="mt-1 text-[var(--text-secondary)]">
-              You&apos;ve used all {FREE_EXPORT_LIMIT} free exports this month
+        <div className="flex flex-col items-center gap-8 py-12 animate-fade-in-up">
+          {/* Brand icon — gradient sparkle in rounded-square container */}
+          <div
+            className="flex h-20 w-20 items-center justify-center rounded-3xl animate-pulse-glow-subtle"
+            style={{ background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-pink) 100%)" }}
+          >
+            <Sparkles className="h-9 w-9 text-white" />
+          </div>
+
+          {/* Headline + value line */}
+          <div className="text-center max-w-xs">
+            <p className="mb-1 text-xs font-semibold tracking-widest uppercase text-[var(--text-tertiary)]">
+              {FREE_EXPORT_LIMIT}/{FREE_EXPORT_LIMIT} exports used
+            </p>
+            <h3 className="text-2xl font-bold leading-tight">
+              <span className="gradient-text">Go unlimited.</span>
+            </h3>
+            <p className="mt-2 text-[var(--text-secondary)] text-[15px] leading-relaxed">
+              You&apos;ve hit the free tier limit. Upgrade to Pro and keep creating.
             </p>
           </div>
+
+          {/* What Pro unlocks — two honest facts, no invented features */}
+          <div className="glass-card w-full max-w-xs px-5 py-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/20">
+                <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
+              </div>
+              <span className="text-sm text-[var(--text-secondary)]">
+                Unlimited exports — no monthly cap
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/20">
+                <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
+              </div>
+              <span className="text-sm text-[var(--text-secondary)]">
+                Watermark removed from every export
+              </span>
+            </div>
+          </div>
+
+          {/* Primary CTA — behavior/href/handlers unchanged */}
           <a
             href={IOS_APP_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 w-full max-w-xs justify-center"
           >
-            <Crown className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" />
             Upgrade to Pro — $14.99/mo
           </a>
+
           <button
             onClick={() => dispatch({ type: "SET_STEP", step: "editor" })}
-            className="text-sm text-[var(--text-tertiary)] hover:text-white"
+            className="text-sm text-[var(--text-tertiary)] hover:text-white transition-colors"
           >
             Go Back
           </button>
