@@ -29,7 +29,7 @@ LOOP_HEALTH:
     readiness_attempts: 0
     readiness_rejected: 0
     recurring_failures: []
-    harness_proposals_open: 0
+    harness_proposals_open: 1    # "enforce loop gates as required CI checks" — staged docs/ci/PROPOSED_CI.md (owner applies)
   signal: bootstrapping          # bootstrapping | improving | steady | churning | stuck
 ```
 

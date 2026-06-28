@@ -4,6 +4,24 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Enforce loop gates as REQUIRED CI checks (harness proposal #1) — 2026-06-28
+GAP (loop-health): required checks are only `web` (vitest unit) + `ios`; the FUNCTIONAL JOURNEY SUITE
+isn't run in CI at all and lint is non-blocking → a BUILDS≠WORKS or lint-failing change can auto-merge.
+The loop CANNOT edit .github/ (sensitive-file prompt hangs headless runs), so: build what I can + STAGE
+the CI wiring for a workflow-scope human.
+- Prerequisite already in place: web/e2e Playwright journey suite (7/7), web/e2e/ROUTE_INVENTORY.md,
+  `npm run lint` at ZERO. Verified green this run.
+- web/src/lib/rate-limit.ts: added a TEST-ONLY bypass `E2E_RATELIMIT_BYPASS==="1"` (gotcha b — one CI
+  runner replays self-seeding journeys from one IP → trips the per-IP limit). LOUD comment + PENDING_OPS:
+  PROD/Vercel must NEVER set it (security bypass). Gotcha a (next-auth AUTH_TRUST_HOST) = N/A here (no web auth).
+- docs/ci/PROPOSED_CI.md (NEW): exact `web-e2e` job (install→playwright→`npm run test:e2e` which
+  build+starts the app; E2E_RATELIMIT_BYPASS=1; TURNSTILE unset=fail-open; no DB to migrate) + the
+  branch-protection required_status_checks list (web, ios, web-e2e, web-lint) + VERIFY-GREEN-BEFORE-REQUIRED.
+- Opened ONE `loop: harness improvement proposal` issue (the META channel; the loop can't change its own
+  CI). LOOP_HEALTH.harness_proposals_open=1; PENDING_OPS OWNER_ACTIONS `enforce-ci-gates` added.
+- OWNER applies (workflow scope): add the job, verify web-e2e GREEN on a throwaway PR, THEN mark
+  web-e2e + web-lint required, then close the issue. Never make a red/flaky check required (would block the loop).
+
 ## ⚠️ STALE-NOTE CORRECTION (2026-06-28): ignore the old "iOS CI timing trick"
 A later "Known blockers / recurring issues" entry says the `ios` CI "consistently fails for ALL
 branches" and describes racing `enable_pr_auto_merge` before it fails. **That is STALE — disregard it.**
