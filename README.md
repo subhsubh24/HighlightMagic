@@ -2,41 +2,90 @@
 
 [![CI](https://github.com/subhsubh24/HighlightMagic/actions/workflows/ci.yml/badge.svg)](https://github.com/subhsubh24/HighlightMagic/actions/workflows/ci.yml)
 
-A freemium iOS app that turns raw personal videos into share-ready short highlights automatically.
+A freemium iOS app that turns raw personal videos into share-ready short vertical highlights —
+import footage, AI finds the best moments, edit, and export a 1080×1920 clip for TikTok / Reels /
+Shorts. **Status: pre-launch** (join the waitlist on the marketing site; the app ships via the
+App Store / TestFlight).
 
-## Features
+## How it works
 
-- **Smart Video Analysis**: On-device AI using Vision framework (motion, face, scene detection) to find the best moments
-- **Prompt-Guided Detection**: Optional text prompts to focus on specific highlight types
-- **Clip Editor**: Trim, add captions, choose filters, pick background music
-- **Vertical Export**: Optimized 1080x1920 MP4 output for TikTok/Reels/Shorts
-- **Share Sheet**: Direct sharing to social platforms
-- **Freemium Model**: 5 free exports/month with watermark; Pro subscription removes limits
+`import / capture → detect highlights → edit (trim, captions, filters, music/SFX/voiceover) → 1080×1920 export → share`
+
+## Two components
+
+| Component | Stack | Role |
+|---|---|---|
+| **iOS app** (repo root) | Swift 6 · iOS 18 · SwiftUI/MVVM · AVFoundation · StoreKit 2 | The product the user installs |
+| **`web/`** | Next.js (App Router) on Vercel | The API-cost-bearing **backend** (all paid AI calls) **+** the marketing/waitlist site |
+
+## AI is server-side (business-paid model)
+
+Paid AI runs **on the backend**, not on the device, and the business holds the keys — the iOS app
+routes calls through `web/` and ships with **no embedded API keys**:
+
+- **Highlight detection** — server-side Claude Haiku frame scoring via `/api/score` (with an
+  on-device Vision/CoreML fallback).
+- **Planning / effects** — Claude Sonnet planner.
+- **Audio** — ElevenLabs (music / SFX / voiceover / voice clone).
+- **Photo→video / intro-outro** — AtlasCloud (Kling).
+
+The free quota and Pro entitlement are enforced **server-side, before any paid call** (StoreKit 2
+signed-transaction / App Store Server API verification — never trusting a client flag), behind rate
+limiting and a code-level spend ceiling. Model choices are cost-optimized and periodically
+re-benchmarked (cheapest model that still clears each task's quality bar).
+
+## Pricing
+
+- **Free** — 5 exports / month, with a watermark.
+- **Pro** — **$14.99/mo** or **$149.99/yr** — removes the watermark and the export limit.
 
 ## Requirements
 
-- iOS 18.0+
-- Xcode 16.0+
-- Swift 6.0
+- **iOS:** iOS 18.0+, Xcode 16+, Swift 6 (builds as a SwiftPM package; an archivable app target for
+  store submission is tracked but not yet built).
+- **web/:** Node 20+. Backend env (server-side only): `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`,
+  `ATLASCLOUD_API_KEY` (see `PENDING_OPS.md`).
 
-## Architecture
-
-- **SwiftUI + MVVM** with `@Observable` macro
-- **Swift 6 strict concurrency** with actors for all services
-- **AVFoundation** for video composition and export
-- **Vision framework** for on-device highlight detection
-- **StoreKit 2** for subscription management
-
-## Project Structure
+## Project structure
 
 ```
-Sources/
-  App/           - App entry point and global state
-  Models/        - Data models (VideoItem, HighlightSegment, EditedClip, etc.)
-  Views/
-    Screens/     - Full-screen views (Home, Editor, Export, Paywall, etc.)
-    Components/  - Reusable UI components
-  Services/      - Business logic (detection, export, thumbnails, StoreKit)
-  Utilities/     - Constants, theme, extensions
-  Resources/     - Asset catalog, StoreKit config
+Sources/                 iOS app (SwiftPM target "HighlightMagic")
+  App/ Models/ Views/ Services/ Utilities/ Resources/
+Tests/HighlightMagicTests/   iOS unit/integration tests
+web/                     Next.js backend + marketing site
+  src/app/               routes: / (editor), /landing, /privacy, /terms, /support, /offline
+  src/app/api/           backend (paid-AI proxy, waitlist, entitlement, …)
+  src/lib/               entitlement, ai-models, rate-limit, analytics, …
+  e2e/                   Playwright outcome-asserting journey suite (+ screenshots)
+docs/                    BUSINESS_CASE, MODEL_COSTS, growth/, quality/, qa/
+ROADMAP.md · VISION.md · FACTORY_STANDARD.md · PENDING_OPS.md · REMAINING_STEPS.md
 ```
+
+## Build & test
+
+```bash
+# web (the required `web` CI gate)
+cd web && npm ci && npm run build && npm test      # build + Vitest unit tests
+npm run test:e2e                                   # Playwright functional journey suite (real browser)
+
+# iOS — verified by the required `ios` CI check (xcodebuild build + test on macOS)
+swift build && swift test                          # package-level build/tests
+```
+
+Both `web` and `ios` are **required** CI checks on `main` (auto-merge + squash). `scripts/preflight.sh`
+is the mechanical readiness gate.
+
+## Pre-launch site gate
+
+When `SITE_GATE_PASSWORD` is set, the deployed web app is password-protected, but the marketing
+surfaces (`/landing`, legal pages) and the waitlist API stay public so people can still sign up.
+Unset it at launch to open the app.
+
+## How this repo is built
+
+HighlightMagic is developed by an autonomous build loop that follows `FACTORY_STANDARD.md` (shared
+operating discipline) + `ROADMAP.md` (what to build, the Definition of Done). Quality is enforced by
+CI, two independent reviewers per change, an outcome-asserting functional suite ("builds ≠ works"),
+an independent quality grade, and a two-gate readiness check — never self-certified. Owner-only steps
+(signing, live keys, App Store submission, provider spend caps) are tracked in `PENDING_OPS.md` /
+`REMAINING_STEPS.md`.
