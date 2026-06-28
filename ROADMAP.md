@@ -49,7 +49,7 @@ it, so progress not reflected in a checkbox does not count.
 ## Living artifacts (operating principle)
 Every artifact the loop produces — README, ARCHITECTURE, docs/BUSINESS_CASE.md, marketing copy,
 store-listing/ASO, privacy/data-safety docs, the pre-submission checklist, the loop-memory file,
-IMPROVEMENT_LOG, PENDING_OPS, REMAINING_STEPS, ROADMAP — is LIVING. When the thing it describes
+IMPROVEMENT_LOG, PENDING_OPS, REMAINING_STEPS, docs/autonomous-loop/LOOP_HEALTH.md, ROADMAP — is LIVING. When the thing it describes
 changes (code, pricing, positioning, data flows, architecture), UPDATE the artifact in the SAME
 work so it never contradicts the current product. A doc that contradicts reality is a BUG (and a
 store-review / trust risk); fixing it CLEARS the value bar.
@@ -61,6 +61,12 @@ intentionally stable ratchets; change them only on a real, justified shift.
 - FACTORY_STANDARD.md is the shared cross-factory discipline, byte-identical across every factory repo:
   NEVER edit or paraphrase it to fit this product (product-specifics belong in ROADMAP/VISION); it
   changes ONLY by a deliberate canonical sync, never as loop work.
+- LOOP HEALTH (FACTORY_STANDARD §10b): every bookkeeping run, update docs/autonomous-loop/LOOP_HEALTH.md
+  with REAL counts (shipped vs. abandoned, verify/review failures, circuit-breaker trips, rolling
+  reverts + readiness attempts/rejections); CLASSIFY every abandoned change with a reason so the loop
+  never re-attempts the same dead-end; a `churning` or `stuck` signal → open ONE `loop: harness
+  improvement proposal` issue (the only channel to improve the loop's own rules). Observability, NOT a
+  ship gate; honest counts only.
 
 ## Design taste standard (anti-generic AI frontend — STANDING; read every run)
 FINAL STANDARD: **simplicity without blandness; functionality without visual clutter.** Applies to
