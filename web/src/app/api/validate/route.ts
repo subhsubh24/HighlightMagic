@@ -1,4 +1,4 @@
-import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
@@ -239,7 +239,13 @@ If passed is true, fixes should be empty or omitted.`;
     }
 
     // Collect streamed text from SSE events
-    const text = await collectStreamedText(response);
+    const { text, inputTokens, outputTokens } = await collectStreamedText(response);
+
+    // P0: meter per-export API cost on the validation call (was previously unmetered).
+    console.log(
+      `[CostMeter] api/validate: model=${CLAUDE_VALIDATOR}, in=${inputTokens}, out=${outputTokens}, ` +
+        `est=$${estimateCostUSD(CLAUDE_VALIDATOR, inputTokens, outputTokens).toFixed(4)}`
+    );
 
     // Extract JSON from response
     const jsonStr = extractJSON(text);
@@ -585,13 +591,19 @@ function buildTapeDescription(
  * Collect all text from an Anthropic streaming response.
  * Reads SSE events and concatenates content_block_delta text deltas.
  */
-async function collectStreamedText(response: Response): Promise<string> {
+async function collectStreamedText(
+  response: Response
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const reader = response.body?.getReader();
-  if (!reader) return "";
+  if (!reader) return { text: "", inputTokens: 0, outputTokens: 0 };
 
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
+  // Token usage arrives in the SSE stream: input on message_start, cumulative
+  // output on each message_delta. Capture both so the call can be metered (P0).
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -613,6 +625,10 @@ async function collectStreamedText(response: Response): Promise<string> {
         const event = JSON.parse(data);
         if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
           text += event.delta.text;
+        } else if (event.type === "message_start") {
+          inputTokens = event.message?.usage?.input_tokens ?? inputTokens;
+        } else if (event.type === "message_delta") {
+          outputTokens = event.usage?.output_tokens ?? outputTokens;
         }
       } catch {
         // Skip malformed JSON lines
@@ -620,7 +636,7 @@ async function collectStreamedText(response: Response): Promise<string> {
     }
   }
 
-  return text;
+  return { text, inputTokens, outputTokens };
 }
 
 /**

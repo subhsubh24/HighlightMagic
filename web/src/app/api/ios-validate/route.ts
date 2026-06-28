@@ -1,4 +1,4 @@
-import { CLAUDE_VALIDATOR } from "@/lib/ai-models";
+import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
@@ -232,9 +232,20 @@ export async function POST(req: Request) {
       return Response.json({ passed: true, issues: [], fixes: {} });
     }
 
-    const json = (await response.json()) as { content?: Array<{ type: string; text?: string }> };
+    const json = (await response.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
     const textBlock = json.content?.find((b) => b.type === "text");
     const text = textBlock?.text ?? "";
+
+    // P0: meter per-export API cost on the validation call (was previously unmetered).
+    const inTok = json.usage?.input_tokens ?? 0;
+    const outTok = json.usage?.output_tokens ?? 0;
+    console.log(
+      `[CostMeter] ios-validate: model=${CLAUDE_VALIDATOR}, in=${inTok}, out=${outTok}, ` +
+        `est=$${estimateCostUSD(CLAUDE_VALIDATOR, inTok, outTok).toFixed(4)}`
+    );
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
