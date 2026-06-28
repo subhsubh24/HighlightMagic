@@ -4,6 +4,29 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Visual verification is DUAL-AXIS (functional + design) — 2026-06-28
+A screen can pass every DOM assertion while visibly showing the WRONG/EMPTY/placeholder result, a
+stuck spinner, broken image, stale data, or a dead-end — AND separately while looking blank/broken/
+unstyled/"vibe-coded". The screenshot+judge harness must catch BOTH. Shipped (repo-only):
+- FACTORY_STANDARD §6: REPLACED the "SEE WHAT THE USER SEES" paragraph (verbatim canonical sync) —
+  capture a screenshot at every page AND every key STEP of every journey + key state, at mobile +
+  desktop widths; the deep audit (§10) + readiness gate (§7) JUDGE each on TWO axes: (1) FUNCTIONAL
+  REALITY (does it VISIBLY show the intended outcome / the real produced artifact, not a placeholder/
+  wrong/empty result) and (2) DESIGN (on-brand, not slop). FAIL on EITHER = release-blocking.
+- ROADMAP G6 DoD sharpened to BOTH axes: (1) ARTIFACTS — non-zero screenshot for every route/state +
+  every journey STEP at mobile+desktop, INCLUDING the core-product OUTPUT (rendered highlight/exported
+  1080×1920 frame/share preview), never 0-byte; (2) DUAL-AXIS VISION VERDICT recorded per-screenshot
+  (functional + design) in loop-memory (deep audit) + the readiness-issue evidence (gate) — capture-
+  and-forget does NOT satisfy it.
+- scripts/preflight.sh: G6 honest-tick guard — if G6 is [x] but web/e2e/__screenshots__/ has <5
+  non-zero pngs → FAIL; NO-OP while [ ] (won't block current runs). Verified: bash -n ok; G6 unticked
+  → skipped; 7 screenshots already committed.
+- ORDER: build the capture/vision code only AFTER the G4 functional suite (capture rides on it);
+  spec + gate hardened now, code when the item is reached; the guard keeps the tick honest.
+- Cross-factory: §6 is a canonical sync (byte-identical) — broadcast to GroceryManager/JobScraper;
+  LLM-Quant SKIP (no UI; its "see what you built" = the backtest/paper artifact, already gated by
+  reproduce-deterministically).
+
 ## Strategic outreach (Growth Agent; draft-only) — 2026-06-28
 Gave the Growth Agent a curated 1:1 outreach capability: a FEW deeply-personalized emails to
 genuinely strategic targets (press/partners/overlapping creators/newsletter curators) as Gmail

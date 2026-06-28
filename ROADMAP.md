@@ -447,16 +447,28 @@ this quality track is G.
       - **iOS:** SwiftUI component/snapshot tests (e.g. swift-snapshot-testing) for the key
         screens/states. NOTE: the loop runs on Linux (no Xcode) so iOS snapshots are authored/run on a
         Mac or the macOS `ios` CI job, not locally.
-      - **judge them:** the deep-audit design/taste lens (G5) + the Gate-2 functional-reality lens
-        (READINESS AUDIT GATE) VISUALLY review each screenshot (vision-capable model — actually LOOK)
-        vs the Design taste standard / VISION bar. A blank/broken/overlapping/unstyled/off-brand page
-        is a release-blocking FAIL even if its DOM assertions pass. BOUNDED: capture in the suite,
-        judge at deep-audit + readiness — not a vision pass on every micro-change.
-      *(Run 22 PARTIAL: web HALF DONE — the G4 journey suite now captures + commits a full-page
-      screenshot of every asserted page/state into web/e2e/__screenshots__/ (#139), paths anchored to
-      the spec dir; orchestrator visually reviewed the landing capture (tasteful, on-brand). STILL
-      OPEN: iOS SwiftUI snapshot tests (Mac/CI-only) + folding the screenshot review formally into the
-      G5/Gate-2 lenses each cycle. Leave unchecked until the iOS half + standing review wiring land.)*
+      DoD is DUAL-AXIS (functional AND design), built AFTER the G4 functional suite (capture rides ON it):
+      - **(1) ARTIFACTS** — a real, committed, NON-ZERO screenshot for EVERY route/state AND every key
+        journey STEP in the route/flow inventory, captured BY the journey suite at MOBILE + DESKTOP
+        widths (never placeholders / 0-byte). web: Playwright `page.screenshot()` into
+        `web/e2e/__screenshots__/` (capture enabled in the Playwright config); iOS: committed SwiftUI
+        snapshot images (swift-snapshot-testing, Mac/CI-only). CRUCIALLY, screenshot the core-product
+        OUTPUT — the ACTUAL produced artifact (the rendered highlight / exported 1080×1920 frame / share
+        preview) — so the judge sees whether the real deliverable looks correct, not just that a page
+        loaded.
+      - **(2) DUAL-AXIS VISION VERDICT** — the deep-audit lens (G5) AND the readiness gate (Gate-2)
+        actually OPEN each image on the vision-capable model and RECORD a per-screenshot verdict on BOTH
+        axes: FUNCTIONAL (intended-outcome-visible / wrong / empty / placeholder / broken / dead-end) AND
+        DESIGN (pass / blank / broken / overlapping / unstyled / off-brand) — in the loop-memory file for
+        the deep audit, and in the readiness-issue evidence for the gate. A FAIL on EITHER axis is
+        release-blocking even if DOM assertions pass. Capture-and-forget (screenshots with no recorded
+        verdict) does NOT satisfy this item. BOUNDED: capture in the suite; JUDGE at deep-audit +
+        readiness — not a vision pass on every micro-change.
+      *(Run 22 PARTIAL: web capture HALF DONE — the G4 suite commits a full-page screenshot of every
+      asserted page/state into web/e2e/__screenshots__/ (#139). STILL OPEN: per-journey-STEP captures +
+      mobile+desktop widths + the core-product OUTPUT screenshot; iOS SwiftUI snapshots (Mac/CI); and a
+      RECORDED dual-axis (functional+design) verdict folded into the G5/Gate-2 lenses each cycle. Leave
+      unchecked until artifacts + a recorded dual-axis verdict both land.)*
 - [ ] G7. SIDE-EFFECT ROUND-TRIP (verify the EFFECT, not the message; FACTORY_STANDARD §6 "SIDE-EFFECT
       INTEGRITY"). DOM/screenshot assertions can't see a side-effect, so extend the G4 journey suite to
       prove every side-effecting flow's EFFECT in test/sandbox: (a) EMAIL round-trip — stand up an
