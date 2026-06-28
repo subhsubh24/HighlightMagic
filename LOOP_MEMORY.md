@@ -4,6 +4,43 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 23 — 2026-06-28 — B6 resilience (timeouts) + handoff hardening
+Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran a targeted
+~5-scout sweep). Shipped ONE coherent, fully-verifiable change; the rest of the scout candidates
+proved already-done, owner-gated, or unverifiable-here — disciplined NOT to pad.
+- **SHIPPED #149 (B6, merged):** closed the three named serverless fetch-timeout gaps —
+  `/api/validate` Anthropic stream `AbortSignal.timeout(45_000)` (< 60s maxDuration), `lib/email`
+  Resend `10_000`, `/api/waitlist` Turnstile `5_000`. Each has a test asserting `init.signal
+  instanceof AbortSignal`; added a previously-uncovered H5 case (waitlist requires a token when
+  `TURNSTILE_SECRET_KEY` is set). Both reviewers APPROVE. B6 → [x] (all serverless provider fetches
+  now timed; critical-env fail-loud already holds; validate's fail-OPEN on missing key is by design
+  — validation is a non-blocking quality gate, not a promised side-effect).
+- **HANDOFF GAP FOUND + recorded (REMAINING_STEPS 2b):** server-side Turnstile verification exists,
+  but the landing `WaitlistForm` has NO client widget, so it sends no `cfTurnstileToken`. ⚠️ Setting
+  `TURNSTILE_SECRET_KEY` today would 400 every real signup (a gate on an unbuilt loop). Documented the
+  correct sequence: wire the widget FIRST, then set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + the secret
+  TOGETHER. The H5 CLIENT widget remains the open half of H5 (next-run candidate — but unverifiable in
+  this Linux/no-Cloudflare-key sandbox without component-test infra; ship it only with a real
+  jsdom+token test or treat as owner-staged).
+- **Scout claims corrected (do NOT redo):**
+  - G2 ElevenLabs coverage is DONE — `web/src/lib/elevenlabs.test.ts` already covers ALL SIX modules
+    (tts/music/sfx/voice-clone/scribe/stems) via dynamic imports. Do NOT add dedicated
+    `elevenlabs-*.test.ts` files (duplicate; same reason #140 was abandoned). Real G2 gaps remain
+    `frame-extractor.ts` + `audio-mux.ts` BROWSER functions only — need a global jsdom env (broad
+    blast radius; deferred).
+  - LLM per-export cost metering is DONE — `/api/score` logs `[CostMeter]` and `actions/detect.ts`
+    logs it for scorer/planner/validator (the real LLM call sites). Thin route wrappers (plan/ios-*)
+    delegate to detect.ts, so they ARE metered. ElevenLabs/AtlasCloud asset routes log no $-estimate
+    (flat-rate, not token-metered) — judged BELOW the value bar (H7 already counts+caps generations
+    per user, so spend is bounded+observable via the generation counter).
+  - Server-side asset-cache wiring is NOT a clean win — in-memory cache is unreliable across
+    serverless cold starts (needs Vercel KV, owner-gated). The existing client-session early-start
+    cache (DetectingStep) is the right layer.
+  - Validation regen is a single non-blocking pass (bounded); user-`Regenerate` is backstopped by H7
+    daily generation ceiling + rate limit — no uncapped loop. No fix needed.
+  - H6 (CORS allowlist + security headers in `next.config.ts`) is DONE (CSP is the one optional
+    add; low-risk omission, not blocking). H5 server-half DONE. H1/H2/H3/H7 DONE.
+
 ## DECISION COROLLARY — no gate on an unbuilt loop (2026-06-28)
 Incident pattern (from a sibling): signup gated on email verification ("check your email") while no
 email pipeline was wired → every new user dead-ended. The bug under the bug was a DECISION: a hard

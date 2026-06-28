@@ -5,6 +5,7 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #149 | fix(B6): bound the last untimed external fetches (validate/email/Turnstile) + H5 CAPTCHA-required test | B6 | Run 23 |
 | #137 | feat(H7): per-user daily generation ceiling on all paid sub-call routes + gate /api/ios-validate | H7 | Run 22 |
 | #138 | fix(D): correct App Store metadata to honest business-paid model (no BYOK, cloud-first, uses gen-AI) | D | Run 22 |
 | #139 | feat(G4/G6): capture + commit journey screenshots (see what the user sees) | G4/G6 | Run 22 |
