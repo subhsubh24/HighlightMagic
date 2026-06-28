@@ -4,6 +4,18 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## FACTORY_STANDARD canonical sync — §6b Design taste (2026-06-28)
+Synced FACTORY_STANDARD.md to the new canonical: inserted §6b "Design taste — ELIMINATE generic-AI
+frontend" verbatim between §6 (BUILDS ≠ WORKS) and §7 (Readiness), byte-identical across factories.
+THE DESIGNER QUESTION as a kill-switch on every UI change; avoid-by-default slop list; generate-better
+targets; audit lenses; FINAL STANDARD (simplicity without blandness); ENFORCED via Reviewer B + the
+§10 deep-audit design lens (judges the §6 screenshots) + the §7 readiness visual review — a "vibe-coded"
+surface is a release-blocking FAIL. Product brand/voice/tokens stay in VISION.md (not in this file).
+Still a STABLE ANCHOR — changes only by canonical sync, never loop work. (HighlightMagic HAS user-facing
+surfaces, so it fully applies — not N/A like LLM-Quant.) NOTE: ROADMAP already had a product-level
+"Design taste standard" section; §6b is the shared cross-factory version — keep both consistent, don't
+churn either.
+
 ## Pre-launch SITE GATE + marketing maturity gate (2026-06-28)
 Market autonomously but NEVER before ready, and NEVER expose the half-baked app. Shipped:
 - web/src/middleware.ts (ROADMAP D6): env-driven Basic-Auth gate, ON only when SITE_GATE_PASSWORD is
