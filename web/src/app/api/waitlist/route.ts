@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIP, PUBLIC_RATE_LIMIT } from "@/lib/rate-limit";
 import { addPendingSignup } from "@/lib/growth/waitlist-store";
-import { sendEmail, buildConfirmationEmail } from "@/lib/email";
+import { sendEmail, buildConfirmationEmail, isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -67,11 +67,24 @@ export async function POST(req: NextRequest) {
     const confirmToken = await addPendingSignup(email);
     const confirmUrl = `${baseUrl(req)}/api/waitlist/confirm?token=${confirmToken}`;
     const { subject, text } = buildConfirmationEmail(confirmUrl);
-    // Awaited so serverless doesn't kill the request early; sendEmail never throws and
-    // fails-open in dry-run.
-    await sendEmail({ to: email, subject, text });
+    // SIDE-EFFECT INTEGRITY (FACTORY_STANDARD §6): the success we report must be causally downstream
+    // of the email actually leaving the system. sendEmail never throws; it returns { ok, dryRun }.
+    const sendResult = await sendEmail({ to: email, subject, text });
 
-    return NextResponse.json({ ok: true });
+    // NO FAKE SUCCESS: if a real provider is configured but the send FAILED, do NOT claim success —
+    // that would leave the user a silent dead-end (told they're on the list, with no confirmation
+    // email to act on). Fail honestly so the UI shows an error and they can retry.
+    if (isEmailConfigured() && !sendResult.ok) {
+      return NextResponse.json(
+        { error: "We couldn't send your confirmation email. Please try again in a moment." },
+        { status: 502 }
+      );
+    }
+
+    // Tell the UI whether a confirmation email ACTUALLY went out so the copy can be honest: only
+    // promise "check your email to confirm" when a real provider dispatched it. Dry-run / unconfigured
+    // (pre-launch, no provider) => false: the signup is kept, but we do NOT claim an email was sent.
+    return NextResponse.json({ ok: true, confirmationEmailSent: sendResult.ok && !sendResult.dryRun });
   } catch {
     return NextResponse.json({ error: "Server error. Please try again." }, { status: 500 });
   }
