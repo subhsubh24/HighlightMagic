@@ -151,10 +151,17 @@ that lets an extracted key or modified client run up cost and bypass the free li
       complete + wired end-to-end on both halves. ACTIVATION is owner-gated like the API keys: set
       APP_STORE_ROOT_CA_PEM (REMAINING_STEPS 0c) — until then verifyProEntitlement denies by secure
       default. Ticked on the same code-complete-with-owner-config basis as bullet 1.)*
-- [ ] Meter + log per-export API cost; cap regeneration (plan.md: <=2 validation passes);
-      verify/extend the existing detection-cache + asset-cache.
-- [ ] Redo docs/BUSINESS_CASE.md COGS under BUSINESS-PAID: ALL of Claude detection + ElevenLabs +
+- [x] Meter + log per-export API cost; cap regeneration (plan.md: <=2 validation passes);
+      verify/extend the existing detection-cache + asset-cache. *(Metering now on EVERY paid LLM
+      call site: scorer/planner/in-process validate already logged [CostMeter] (actions/detect.ts,
+      /api/score); the last two — /api/validate (streaming) + /api/ios-validate — now log it too
+      (#151, Run 24). Regen cap = 2 validation passes (DetectingStep.tsx loop `pass < 2`). Caches
+      verified present: detection-cache.ts (frames+scores) + asset-cache.ts (24h LRU localStorage).)*
+- [x] Redo docs/BUSINESS_CASE.md COGS under BUSINESS-PAID: ALL of Claude detection + ElevenLabs +
       AtlasCloud are business-borne now (the prior BYOK split understated COGS — re-derive the margin).
+      *(Done: docs/BUSINESS_CASE.md §3 re-derives per-export COGS under business-paid — frame scoring
+      ~$0.12 + planning ~$0.07 (Sonnet, B4) + validation ~$0.01 + audio ~$0.12 = ~$0.31/export, ALL
+      business-borne; margin table at $14.99 corrected. Living doc continues under F9.)*
 
 ## Track A — iOS app (complete + polish to App-Store quality)
 - [x] A1. iOS CI green (`xcodebuild build test`) and promoted to a REQUIRED check. SCOPE (verified

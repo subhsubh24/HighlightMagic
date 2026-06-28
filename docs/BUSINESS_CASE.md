@@ -241,7 +241,7 @@ demo, or $1–2K/month in targeted ads.
 
 **Honest answer: Not in Year 1. Requires B4 cost fix + growth execution.**
 
-- Year 1 (base): ~$3,400 cumulative — well short.
+- Year 1 (base): ~$5,130 cumulative (Month 12 in the §5 revenue table) — well short.
 - Year 3 (base): ~$67K cumulative; ~$50K ARR — approaching but below $100K ARR.
 - Year 3.5 (base): first time $100K ARR run rate is crossed.
 
@@ -379,4 +379,4 @@ LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid mo
 the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
 collapses to 20% and becomes negative above ~18 exports/month.
 
-*Last updated: 2026-06-26 (Run 17). Sources cited inline above. Inputs to be updated as real data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing — both change frequently. Section 9 (annual tier analysis) added.*
+*Last updated: 2026-06-28 (Run 24) — consistency fix only: §6 Year-1 cumulative corrected $3,400 → $5,130 to match the §5 revenue table (no model recompute; pricing/COGS/levers unchanged, so `as_of` stays 2026-06-27). Sources cited inline above. Inputs to be updated as real data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing — both change frequently. Section 9 (annual tier analysis) added.*

@@ -4,6 +4,56 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 24 — 2026-06-28 — P0 cost-metering closeout (last unmetered paid LLM call sites)
+Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran an 8-scout
+sweep across E7/E8/F8-levers/G2/P0-metering/H4-H5/web-quality/business-case). Shipped ONE coherent,
+fully-verifiable change; the rest of the candidates proved speculative pre-launch infra, owner-gated,
+duplicate, or unverifiable-here — disciplined NOT to pad.
+- **SHIPPED #151 (P0, merged):** added `[CostMeter]` per-export cost logging to the TWO remaining
+  unmetered paid Anthropic Haiku call sites — `/api/validate` (streaming) + `/api/ios-validate`
+  (non-streaming). scorer/planner/in-process-validate + /api/score were already metered; these two
+  were the blind spot. validate's `collectStreamedText` now also returns token usage parsed from the
+  SSE `message_start` (input) / `message_delta` (cumulative output) events; ios-validate reads
+  `usage.{input,output}_tokens` off the non-streamed body. New test `validation-cost-metering.test.ts`
+  asserts both log lines fire with real token counts AND a NON-ZERO est cost (SSE-stream mock +
+  non-streaming mock). Label is `[CostMeter] api/validate:` — intentionally distinct from the
+  in-process `[CostMeter] validate:` in actions/detect.ts (log-aggregation hygiene, Reviewer B note).
+  Both reviewers APPROVE (Reviewer A first REQUEST_CHANGES on a FACTUAL ERROR — claimed CLAUDE_VALIDATOR
+  unpriced; it's the SAME string literal as CLAUDE_FRAME_SCORER ("claude-haiku-4-5-20251001") so the
+  price map resolves, est=$0.00116 for in=1200/out=50 — disproven + hardened the test, A re-APPROVED).
+- **ROADMAP P0 → both final boxes TICKED (with evidence):** (1) metering+regen-cap+caches — metering
+  now on every paid LLM site (#151); regen cap = 2 passes (DetectingStep.tsx `pass < 2`); caches
+  present (detection-cache.ts + asset-cache.ts). (2) BUSINESS_CASE COGS redo under business-paid —
+  §3 already re-derives ~$0.31/export, ALL business-borne (verified, not new work). P0 is now fully
+  ticked except the owner-gated activations already tracked (APP_STORE_* / KV — REMAINING_STEPS).
+- **LIVING-ARTIFACT fix (BUSINESS_CASE.md):** §6 said Year-1 cumulative "~$3,400" but the §5 revenue
+  table shows Month-12 cumulative $5,130 — internal contradiction. Corrected to $5,130 (no model
+  recompute; pricing/COGS/levers unchanged, `as_of` stays 2026-06-27; footer notes the consistency fix).
+- **Scout claims corrected / traps (do NOT redo):**
+  - email/index.ts pure helpers (minimalHtml/build*Email) are ALREADY covered — `src/lib/email/email.test.ts`
+    exists. Do NOT add email helper tests (scout false-positive, same shape as the elevenlabs trap).
+  - growth/metrics.ts already has `metrics.test.ts`. The E7 "extend metrics" candidate over-reached
+    (Plausible/Resend LIVE queries = speculative + unverifiable here; waitlist-store has NO signup
+    timestamps so 7d filtering needs a store change = broader blast radius). DEFERRED.
+  - web lint is ZERO violations (G1 web side clean — owner can promote web-lint to required; that's
+    an OWNER action, not loop work).
+- **DEFERRED (named, for future runs — NOT speculative-padded this run):**
+  - **E7 analytics surface / E8 experiment engine:** real ROADMAP items but pre-launch the site is
+    GATED, there's no web session-id (variant assignment can't stick per-user) and no real data source
+    (every funnel field 0/null) → shipping now reads as speculative infra (Reviewer B's standing
+    rejection). Revisit once there's a session id + real traffic/data, with the live landing
+    headline/pricing as the concrete consumer (E8 scout ranked hero-headline + Pro-pricing A/B as the
+    consumers; core = deterministic hash→variant + Wilson-CI significance + min-sample gate, pure TS).
+  - **F8 strength levers:** highest-ROI buildable = consumable export-credit packs (a 50-export pack
+    ~$4.99 IAP). BUT it crosses iOS StoreKit (can't compile-verify on Linux) + entitlement.ts +
+    spend-ceiling + PaywallView; a web-only half (credit balance with no purchase flow) = speculative.
+    Build as a DEDICATED run (conservative iOS + verifiable web entitlement/quota). Creator tier =
+    anti-gaming risk unless a real Creator-exclusive feature exists. ROI modest (+$2–4K ARR @ M38) but
+    real expansion revenue; named as a STRENGTH lever for a future readiness pass.
+  - **G2 real gaps:** frame-extractor.ts + audio-mux.ts BROWSER functions (need jsdom/canvas global
+    env — broad blast radius). H5 CLIENT Turnstile widget (unverifiable here without component-test
+    infra + a real Cloudflare key — owner-staged; server half done).
+
 ## Run 23 — 2026-06-28 — B6 resilience (timeouts) + handoff hardening
 Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran a targeted
 ~5-scout sweep). Shipped ONE coherent, fully-verifiable change; the rest of the scout candidates
