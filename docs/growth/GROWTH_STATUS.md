@@ -49,6 +49,13 @@ GROWTH_STATUS:
     ltv_usd: null
     ltv_cac_ratio: null
     top_channel: null
+  pmf:                           # PRODUCT-MARKET FIT signals — the leading indicator (FACTORY_STANDARD §9). REAL data only; 0/null pre-launch
+    activation_rate: null        # % of new users who reach first value (first shareable export — the "aha")
+    retention_d1: null           # % returning day 1
+    retention_d7: null           # % returning day 7
+    retention_d30: null          # % returning day 30 (a flattening cohort curve = strongest PMF signal)
+    organic_share_rate: null     # % of new users arriving via share/referral (is it spreading on its own?)
+    signal: null                 # honest read: none | weak | emerging | strong — NEVER flattered
   channels: []                   # [{name, status, reach_7d, clicks_7d, signups_7d, ctr, notes}]
   experiments: []                # [{id, hypothesis, status, result, lift_pct, started, decided}]
   email:
