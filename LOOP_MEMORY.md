@@ -208,6 +208,20 @@ under the ROADMAP intro + a STABLE-ANCHORS do-not-churn entry.
   loop-back, QUALITY_SCORECARD consume, growth-data signal, B5 model re-bench) — no behavior change,
   just one shared anchor. The detailed product-specific wiring stays in ROADMAP + preflight.
 
+## FACTORY_STANDARD canonical sync — visual verification (2026-06-27)
+Synced FACTORY_STANDARD.md to the new canonical (still byte-identical across factories; a canonical
+sync is the ONLY allowed way to change it). Three exact additions:
+- §6 (BUILDS ≠ WORKS): "SEE WHAT THE USER SEES" — the journey suite CAPTURES a screenshot of every
+  page + key state (empty/loading/error, authed + logged-out) and commits them; a vision-capable
+  loop VISUALLY REVIEWS them at the deep audit (§10) + readiness gate (§7) vs the VISION bar. Blank/
+  broken/overlapping/unstyled/off-brand/"vibe-coded" = release-blocking FAIL even if DOM assertions
+  pass. BOUNDED: capture in the suite, JUDGE at deep-audit + readiness — not per micro-change.
+- §7 Gate-2 functional-reality lens + §10 design/taste lens now require VISUALLY reviewing those
+  screenshots.
+- IMPLICATION (follow-up build work, not done here — task was the doc sync only): the web/e2e journey
+  suite must actually CAPTURE + commit screenshots, and the deep-audit/readiness steps must LOOK at
+  them. Factory will pick this up as Track A5/G4 work since the standard now mandates it.
+
 ## Last run: 2026-06-27 (Run 21)
 
 Scout-driven run (last full DEEP AUDIT was Run 19, within ~24h — targeted scouts instead). Shipped
