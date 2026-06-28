@@ -4,6 +4,22 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Pre-launch SITE GATE + marketing maturity gate (2026-06-28)
+Market autonomously but NEVER before ready, and NEVER expose the half-baked app. Shipped:
+- web/src/middleware.ts (ROADMAP D6): env-driven Basic-Auth gate, ON only when SITE_GATE_PASSWORD is
+  set; EXEMPTS /landing, /privacy, /terms, /support, /offline, and /api/* (waitlist + iOS/TestFlight
+  backend, independently protected) so the waitlist stays public; gates the web app at `/`. Gate OFF
+  (unset) = launch/open. VERIFIED by running: exempt→200, /(no/wrong pw)→401, /(correct pw)→200; e2e
+  stays 7/7 with the gate off. Password VALUE is human-applied (PENDING_OPS site-gate: SITE_GATE_PASSWORD=deepster;
+  UNSET at launch) — never commit it. The loop must NOT hardcode/commit the value.
+- GROWTH_STATUS.site_gate_up: false — HARD precondition (machine-tracked). ANALYSIS_PLAYBOOK marketing
+  maturity gate: pre_launch=WAITLIST-ONLY, EXECUTE-mode public outreach FORBIDDEN until (a) a channel
+  connected AND (b) site_gate_up: true; launching/post_launch advance on EVIDENCE (QUALITY_SCORECARD
+  A/A+ + readiness) only. Agent PROPOSES/RECOMMENDS; never flips config or sets secrets.
+- Growth Agent routine reinforced (belt-and-suspenders): EXECUTE-mode trigger now also requires, while
+  phase=pre_launch, site_gate_up==true; else stay PREPARE, zero external traffic, record owner_blocker.
+- LLM-Quant is exempt (no public marketing/waitlist) — N/A here, noted for cross-factory parity.
+
 ## Last run: 2026-06-28 (Run 22)
 
 Shipped 4 mutually file-disjoint, value-bar-clearing changes, ALL MERGED to main (verified):

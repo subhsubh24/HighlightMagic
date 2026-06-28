@@ -26,6 +26,13 @@ OWNER_ACTIONS:
       why: The Growth Agent stays in honest prepare-only mode until the owner connects their own authorized channels.
       how: Connect your own accounts/keys to the deployed app's growth settings (server-side). The agent never holds live secrets; the deployed app sends.
       blocks: growth-execution
+    - id: site-gate
+      title: "Set SITE_GATE_PASSWORD pre-launch (password-protect the unfinished web app); UNSET at launch"
+      priority: high
+      status: open
+      why: "Pre-launch, the public must NOT reach the half-baked web app. The gate (ROADMAP D6, web/src/middleware.ts) is ON only when SITE_GATE_PASSWORD is set; the waitlist/landing/legal + /api/* stay open so people can still join the waitlist. EXECUTE-mode marketing is BLOCKED until the gate is up (GROWTH_STATUS.site_gate_up: true)."
+      how: "In Vercel env for web/, set SITE_GATE_PASSWORD=deepster (never commit the value), then flip GROWTH_STATUS.site_gate_up to true. At launch (every ship-critical QUALITY_SCORECARD dim A/A+ + readiness passed), UNSET SITE_GATE_PASSWORD to open the app."
+      blocks: launch-exposure
     - id: vercel-env-keys
       title: Set the three backend API keys as Vercel environment variables
       priority: high

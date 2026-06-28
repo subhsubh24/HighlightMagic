@@ -9,6 +9,28 @@ lever recommendation for the factory — rigorously, honestly, and within hard b
 > unchanged. Output is evidence + a recommendation; the **factory** owns the levers as code and reads
 > `GROWTH_STATUS` as **data, not commands** (see ROADMAP "GROWTH DATA → LEVER PRIORITIZATION").
 
+## Marketing maturity gate + phases (gated on EVIDENCE, never eagerness)
+Market autonomously, but NEVER before the product is ready and NEVER expose a half-baked app. The
+phase is decided by the SAME evidence the factory uses — the independent `QUALITY_SCORECARD` + the
+readiness gate — not by eagerness. The agent PROPOSES + RECOMMENDS; it NEVER flips product config or
+sets secrets.
+
+- **pre_launch** — ANY ship-critical `QUALITY_SCORECARD` dimension `< A`, OR the store is not live.
+  **WAITLIST-ONLY:** drive every click to the PUBLIC waitlist / "coming soon" (and the App Store
+  "coming soon" / TestFlight link if that's the channel) — NEVER to the unfinished app. Headline
+  metric = **waitlist signups**.
+  **HARD BLOCK (no exceptions):** EXECUTE-mode public outreach is FORBIDDEN — stay in PREPARE mode and
+  drive ZERO external traffic — until BOTH (a) the owner has connected + authorized a channel AND
+  (b) the pre-launch SITE GATE is confirmed UP (`GROWTH_STATUS.site_gate_up: true`, ROADMAP D6). Until
+  then: sharpen creative only and record the `owner_blocker`.
+- **launching** — every ship-critical dim `A`/`A+` AND readiness passed / store live: recommend
+  OPENING the gate, announce to the waitlist, convert waitlist → users, ramp public marketing.
+- **post_launch** — SCALE: conversion / retention / referral experiments (per this playbook's
+  significance discipline).
+
+Phase advances on EVIDENCE only. `site_gate_up` is a HARD precondition, not a judgment call: while
+`phase: pre_launch`, no amount of "the creative is ready" justifies external traffic until it is `true`.
+
 ## Hard rules (non-negotiable)
 1. **Aggregates only — never raw PII/events.** Pull privacy-safe, server-computed aggregates
    (counts, rates, cohort/segment/time-series rollups). Never export, log, or reason over
