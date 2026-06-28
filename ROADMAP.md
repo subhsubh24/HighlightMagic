@@ -233,6 +233,18 @@ that lets an extracted key or modified client run up cost and bypass the free li
       "build-ready/submittable" claim (un-tick on regression). The signed archive + TestFlight + App
       Store upload/submission are HUMAN-ONLY (PENDING_OPS.md / REMAINING_STEPS.md). The loop NEVER
       does a signed build or touches signing/secrets. *(staging only)*
+- [x] D6. PRE-LAUNCH SITE GATE — env-driven middleware so the public can't reach the unfinished web
+      app before launch, while the marketing surfaces stay open. Gate is ON whenever `SITE_GATE_PASSWORD`
+      is set: Basic-Auth-protect the deployed web app (the editor at `/`) but EXEMPT the public
+      marketing routes — `/landing`, `/privacy`, `/terms`, `/support`, `/offline`, and `/api/*` (the
+      waitlist API + the iOS/TestFlight-facing backend, independently protected by entitlement +
+      rate limiting) — so people can still join the waitlist. UNSET at launch to open the app. The
+      iOS app pre-launch is gated via TestFlight, so point pre-launch traffic at the waitlist /
+      TestFlight. *(web/src/middleware.ts; gate OFF when the env var is unset; password VALUE is
+      human-applied per PENDING_OPS, never committed)*
+      **BLOCKING:** pre-launch EXECUTE-mode public outreach is FORBIDDEN until `GROWTH_STATUS.site_gate_up:
+      true` (owner has applied the gate) AND a channel is connected — see docs/growth/ANALYSIS_PLAYBOOK.md
+      (marketing maturity gate). The Growth Agent stays in PREPARE / waitlist-only until then.
 
 ## Track E — Marketing engine + growth (build to 100%; publishing gated on funded accounts)
 - [x] E1. Conversion-focused **landing page + waitlist** on web/ (hero, demo/preview, value

@@ -32,6 +32,7 @@ GROWTH_STATUS:
   engine_pct: 100                # COMPUTED from E6 anchor files on disk (5/5: waitlist/confirm, email, social queue, metrics, CONNECT.md). DO NOT hand-edit
   channels_connected: []         # none connected yet (engine built in code, not yet live externally)
   awaiting_connect: true         # owner must connect channels before agent executes externally
+  site_gate_up: false            # HARD precondition (ROADMAP D6): pre-launch SITE GATE confirmed UP. While phase=pre_launch, EXECUTE-mode public outreach is FORBIDDEN unless this is true. Flips true only once the owner applies the gate (sets SITE_GATE_PASSWORD)
   funnel:                        # REAL numbers only; 0/null until a connected source reports them
     visitors_7d: 0
     waitlist_signups_total: 0
