@@ -20,6 +20,11 @@ curation, not cold-email at scale. Shipped:
 - Growth Agent ROUTINE updated: ORIENT reads OUTREACH.md; new (3b) STRATEGIC OUTREACH step (any mode,
   DRAFT-ONLY); HARD BOUNDARIES reconciled with the ONE drafting exception ("create Gmail DRAFTS for
   the owner to review+send; still NEVER auto-send"). Model/cron/sources/tools/MCP unchanged.
+- DASHBOARD SURFACING (1c): OUTREACH.md now says — when drafts await, file/refresh ONE OWNER_ACTIONS
+  item `review-outreach-drafts` ("Review + send N … drafts"; priority normal; real N) and decrement/
+  close as the owner sends; honest counts, no ghost item when N=0 (this surfaces on the dashboard,
+  which renders OWNER_ACTIONS). Did NOT create the item now — 0 drafts pending pre-launch (a ghost
+  item would be a fake pending action). Keep the GROWTH_STATUS outreach block current for the tile.
 
 ## PMF is the leading indicator — interpret metrics continuously (2026-06-28)
 Owner direction: both the factory + Growth Agent should INTERPRET business analytics/metrics
