@@ -48,6 +48,23 @@ export async function addPendingSignup(email: string): Promise<string> {
 }
 
 /**
+ * DECISION COROLLARY: when the confirmation-email loop is NOT wired (no provider), do NOT gate
+ * "on the list" on a send that can't happen — record the signup as CONFIRMED directly so the user
+ * is never dead-ended awaiting an email that never sends. Double-opt-in (addPendingSignup + email)
+ * is used ONLY when a real provider is configured.
+ */
+export async function addConfirmedSignup(email: string): Promise<void> {
+  if (isWaitlistStoreConfigured()) {
+    const { kv } = await import("@vercel/kv");
+    await kv.sadd("waitlist:emails", email);
+    await kv.sadd("waitlist:confirmed", email);
+  } else {
+    memEmails.add(email);
+    memConfirmed.add(email);
+  }
+}
+
+/**
  * Confirm a pending token. Returns the confirmed email, or null when the token is
  * unknown/expired. Idempotent: confirming an already-confirmed email is a safe no-op.
  */

@@ -191,6 +191,16 @@ Set up `privacy@highlightmagic.app` email to respond to privacy requests.
 No action needed on PrivacyInfo.xcprivacy. Verify App Privacy labels in App Store Connect
 match what the privacy policy discloses.
 
+## Waitlist double-opt-in — DECISION (no gate on an unbuilt loop)
+
+**Decision (2026-06-28):** the waitlist double-opt-in confirmation is gated on the email loop being
+WIRED. With **no provider** (dry-run / pre-launch) the signup is recorded **confirmed directly** —
+no "check your email" step that could never complete (a gate on an unbuilt loop). When an email
+provider IS configured, the flow uses real double-opt-in (pending → confirmation email → confirm).
+- **Owner action:** when you connect Resend (per `docs/growth/CONNECT.md`), **run the G7 email
+  round-trip test** (receive the real confirmation email → follow the link → confirmed) BEFORE relying
+  on double-opt-in. Until that round-trip passes, the email-confirmed path is UNVALIDATED.
+
 ## Marketing / Web
 
 - **Waitlist email provider**: `/api/waitlist` (PR #42) logs emails to Vercel function logs.
