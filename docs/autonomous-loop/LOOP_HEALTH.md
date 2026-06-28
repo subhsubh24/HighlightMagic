@@ -29,7 +29,7 @@ LOOP_HEALTH:
     readiness_attempts: 0
     readiness_rejected: 0
     recurring_failures: []
-    harness_proposals_open: 0    # #163 "enforce loop gates as required CI checks" APPLIED in PR #164 (web-e2e + web-lint now REQUIRED)
+    harness_proposals_open: 0    # #163 "enforce gates as required CI checks" APPLIED in #164 (web-e2e+web-lint REQUIRED). Deploy-automation Part B (auto-migrate) = N/A: no SQL DB to migrate.
   signal: improving              # bootstrapping | improving | steady | churning | stuck
 ```
 
