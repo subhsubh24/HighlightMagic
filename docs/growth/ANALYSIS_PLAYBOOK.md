@@ -31,6 +31,21 @@ sets secrets.
 Phase advances on EVIDENCE only. `site_gate_up` is a HARD precondition, not a judgment call: while
 `phase: pre_launch`, no amount of "the creative is ready" justifies external traffic until it is `true`.
 
+## Product-market fit — the leading indicator (assess every run; FACTORY_STANDARD §9)
+Revenue FOLLOWS PMF. Your first job each run (once there's real data) is to read whether the product
+has fit — not just whether the funnel is wide. Compute + write the `pmf` block in GROWTH_STATUS:
+- **activation_rate** — do new users reach first value (the first shareable export — the "aha")?
+- **retention_d1/d7/d30** — do they come back? A **flattening retention cohort curve** is the single
+  strongest PMF signal; a curve that decays to ~0 means NO fit yet.
+- **organic_share_rate** — is the product spreading on its own (share/referral-driven new users)?
+- **signal** — your honest read: `none | weak | emerging | strong` (with the N/CI behind it).
+**The PMF read GOVERNS the recommendation:** if retention/activation are weak (pre-PMF), recommend the
+factory fix the PRODUCT (activation, the core import→export loop, the aha, retention) — do NOT
+recommend scaling acquisition into a leaky bucket, and do NOT recommend opening the launch gate on
+funnel width alone. Only when the signal is emerging/strong do reach/acquisition levers become the
+top recommendation. Reconcile docs/BUSINESS_CASE.md to real cohort data once it exists (the metrics
+win over launch-day assumptions). Pre-launch = 0/null (no PMF signal yet — say so; never flatter it).
+
 ## Hard rules (non-negotiable)
 1. **Aggregates only — never raw PII/events.** Pull privacy-safe, server-computed aggregates
    (counts, rates, cohort/segment/time-series rollups). Never export, log, or reason over

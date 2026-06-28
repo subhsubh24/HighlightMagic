@@ -4,6 +4,24 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## PMF is the leading indicator — interpret metrics continuously (2026-06-28)
+Owner direction: both the factory + Growth Agent should INTERPRET business analytics/metrics
+throughout and let that guide work — revenue follows PRODUCT-MARKET FIT, not the reverse. Shipped:
+- FACTORY_STANDARD §9: appended a PMF clause (canonical sync) — interpret live analytics (activation,
+  RETENTION [flattening cohort curve = strongest signal], engagement, organic/referral pull, conversion/
+  churn); PRE-PMF fix the PRODUCT before scaling acquisition (don't pour growth into a leaky bucket);
+  reconcile the business case to real cohort data (metrics win over assumptions); scale only once
+  retention/activation hold; honest metrics only (anti-gaming).
+- ROADMAP GROWTH DATA → LEVER PRIORITIZATION: added a "PMF FIRST" bullet (same discipline, factory side).
+- docs/growth/ANALYSIS_PLAYBOOK.md: added "Product-market fit — the leading indicator" section — the
+  PMF read GOVERNS the Growth Agent's recommendation (weak retention → recommend product fixes, not
+  acquisition; don't open the launch gate on funnel width alone).
+- GROWTH_STATUS: added a machine-tracked `pmf` block (activation_rate, retention_d1/d7/d30,
+  organic_share_rate, signal[none|weak|emerging|strong]); 0/null pre-launch; parses (engine guard ok).
+- NO routine resend needed: the factory reads FACTORY_STANDARD + ROADMAP every run; the Growth Agent
+  follows ANALYSIS_PLAYBOOK — so this propagates automatically.
+- Cross-factory: §9 PMF clause is a canonical sync → broadcast the directive to the other factories.
+
 ## Run 24 — 2026-06-28 — P0 cost-metering closeout (last unmetered paid LLM call sites)
 Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran an 8-scout
 sweep across E7/E8/F8-levers/G2/P0-metering/H4-H5/web-quality/business-case). Shipped ONE coherent,
