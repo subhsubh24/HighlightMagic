@@ -377,6 +377,23 @@ this quality track is G.
 - [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff
       review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
       findings (security, crashes, runaway API cost, data loss) for done.
+- [ ] G6. VISUAL VERIFICATION — capture + visually review screenshots (FACTORY_STANDARD §6 "SEE WHAT
+      THE USER SEES"). DOM assertions (G4) can pass while a page renders blank/unstyled/broken/
+      overlapping or off-brand "vibe-coded" slop, so the functional suite must also CAPTURE a
+      screenshot of every page + key state (empty/loading/error, authed + logged-out) and commit them
+      as artifacts, AND the visual-review lenses must actually LOOK at them:
+      - **web:** add Playwright `page.screenshot()` to the G4 journey suite (`web/e2e/`) per page/state,
+        committed under a screenshots dir; optionally `toHaveScreenshot` visual-regression vs a
+        committed baseline to catch unintended changes between runs.
+      - **iOS:** SwiftUI component/snapshot tests (e.g. swift-snapshot-testing) for the key
+        screens/states. NOTE: the loop runs on Linux (no Xcode) so iOS snapshots are authored/run on a
+        Mac or the macOS `ios` CI job, not locally.
+      - **judge them:** the deep-audit design/taste lens (G5) + the Gate-2 functional-reality lens
+        (READINESS AUDIT GATE) VISUALLY review each screenshot (vision-capable model — actually LOOK)
+        vs the Design taste standard / VISION bar. A blank/broken/overlapping/unstyled/off-brand page
+        is a release-blocking FAIL even if its DOM assertions pass. BOUNDED: capture in the suite,
+        judge at deep-audit + readiness — not a vision pass on every micro-change.
+      *(UNBACKED today — verified 2026-06-27: web/e2e captures NO screenshots; no iOS snapshot tests)*
 
 ## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
 RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,

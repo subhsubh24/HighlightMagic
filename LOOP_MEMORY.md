@@ -220,7 +220,12 @@ sync is the ONLY allowed way to change it). Three exact additions:
   screenshots.
 - IMPLICATION (follow-up build work, not done here — task was the doc sync only): the web/e2e journey
   suite must actually CAPTURE + commit screenshots, and the deep-audit/readiness steps must LOOK at
-  them. Factory will pick this up as Track A5/G4 work since the standard now mandates it.
+  them. NOW TRACKED as ROADMAP G6 (added 2026-06-27) — a loop-memory note alone is NOT a checkbox the
+  checkbox-driven loop advances, so the screenshot-capture + visual-review wiring is a real G6 build
+  item: web = Playwright page.screenshot() per page/state (+ optional toHaveScreenshot baseline);
+  iOS = SwiftUI component/snapshot tests on a Mac / the macOS CI (loop can't xcodebuild on Linux);
+  judged by the G5 deep-audit design lens + the Gate-2 functional-reality lens. UNBACKED today
+  (verified: web/e2e captures no screenshots; no iOS snapshot tests).
 
 ## Last run: 2026-06-27 (Run 21)
 
