@@ -205,7 +205,7 @@ const PRICING: PricingPlan[] = [
     description: "For creators who publish consistently.",
     highlight: true,
     features: [
-      "Unlimited exports",
+      "Unlimited monthly exports",
       "No watermark",
       "AI highlight detection",
       "Auto captions & transitions",
@@ -233,7 +233,7 @@ const FAQ = [
   },
   {
     q: "Is it really free?",
-    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. The Pro subscription ($14.99/month, or $149.99/year) removes the watermark and gives you unlimited exports.",
+    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. Pro ($14.99/month, or $149.99/year) removes the watermark and removes the monthly cap — export as much as you create, day after day. A generous per-day rate limit applies as a routine anti-abuse safeguard, set well above any realistic creative workflow.",
   },
   {
     q: "When is the app available?",
