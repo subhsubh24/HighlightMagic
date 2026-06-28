@@ -109,6 +109,21 @@ Add `RESEND_API_KEY` and `RESEND_AUDIENCE_ID` to Vercel env.
 **Alternative**: Mailchimp, ConvertKit, Loops — each has a similar API. The endpoint already
 validates the email; just swap the `console.log` with the provider's SDK call.
 
+### 2b. Bot protection on the waitlist form (Cloudflare Turnstile — H5)
+
+Server-side verification is **already built**: when `TURNSTILE_SECRET_KEY` is set, `/api/waitlist`
+requires a valid `cfTurnstileToken`, verifies it against Cloudflare (5s timeout, fails open if
+Cloudflare is unreachable), and returns 400 `"CAPTCHA required."` when the token is missing/invalid.
+
+⚠️ **DO NOT set `TURNSTILE_SECRET_KEY` yet.** The landing form (`web/src/app/landing/page.tsx`,
+`WaitlistForm`) does **not** yet render the Turnstile widget, so it sends no token — enabling the
+secret today would reject **every** real signup with a 400 (a gate on an unbuilt loop). Sequence:
+1. (Loop/owner) Wire the Turnstile widget into `WaitlistForm`, conditional on
+   `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, attaching the token as `cfTurnstileToken` in the POST body.
+2. Create a Turnstile widget at the Cloudflare dashboard → get the **Site Key** (public) + **Secret Key**.
+3. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public) **and** `TURNSTILE_SECRET_KEY` (server) **together**
+   in Vercel env — never the secret alone.
+
 ---
 
 ## Phase 2 — iOS App Store setup

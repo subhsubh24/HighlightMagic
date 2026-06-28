@@ -233,14 +233,20 @@ that lets an extracted key or modified client run up cost and bypass the free li
       a FLAGGED candidate for human sign-off (FYI issue with eval-rubric + COGS numbers), NOT an
       auto-swap — that is the one exception to ADOPT-ON-GATES.
       *(standing; updates ai-models.ts + docs/MODEL_COSTS.md + the decision log on adopt)*
-- [ ] B6. RESILIENCE — timeouts on every external call + fail-loud critical env (DEEP_DIAGNOSIS hard
+- [x] B6. RESILIENCE — timeouts on every external call + fail-loud critical env (DEEP_DIAGNOSIS hard
       rules). Every outbound `fetch` (Anthropic/ElevenLabs/AtlasCloud/Resend/Turnstile/proxy-video)
       must carry an explicit `AbortSignal.timeout` shorter than the Vercel function budget — a
-      try/catch is useless if the runtime kills the function first. AUDIT 2026-06-28: most provider
-      calls already do, but gaps remain — `web/src/lib/email/index.ts` (Resend), `/api/waitlist`
-      (Turnstile), `/api/validate` lack explicit timeouts; add them. AND: any env var a critical path
+      try/catch is useless if the runtime kills the function first. AND: any env var a critical path
       requires must FAIL LOUD when missing (not silently dry-run/undefined into a confusing error).
-      *(partial — most calls timed; close the named gaps + a critical-env guard)*
+      *(Run 23 #149: the three named serverless gaps closed — `/api/validate` Anthropic stream
+      (45s < 60s budget), `lib/email` Resend (10s), `/api/waitlist` Turnstile (5s); each with a test
+      asserting the signal. All other serverless provider fetches were already timed (score/ios-score/
+      ios-validate/proxy-video/elevenlabs-*/atlascloud/detect.ts fetchWithRetry). Browser-side fetches
+      (audio-mux/frame-extractor) are out of scope — no Vercel function budget applies. CRITICAL-ENV
+      fail-loud already holds: the paid generation paths throw/503 on missing key (score, ios-score,
+      ElevenLabs, AtlasCloud, render gated by RENDER_ENABLED); `/api/validate` fail-OPENS on a missing
+      ANTHROPIC_API_KEY BY DESIGN — validation is a non-blocking quality gate, not a promised
+      side-effect, so the export still completes (not a silent critical break).)*
 
 ## Track C — Monetization (StoreKit 2)
 - [x] C1. Pro subscription with SERVER-VERIFIED entitlement.
