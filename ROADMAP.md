@@ -503,8 +503,12 @@ preflight verifies the critical ones (H1, H2, H7).
       A test per case.
 - [ ] H5. CAPTCHA / bot protection on public forms (waitlist, signup, any unauth POST) — e.g.
       Cloudflare Turnstile — so day-one bot floods can't spam or drain.
-- [ ] H6. CORS locked down (allowlist prod + localhost, block the rest) + sane security headers
+- [x] H6. CORS locked down (allowlist prod + localhost, block the rest) + sane security headers
       (CSP/HSTS/X-Content-Type-Options, etc.); align to OWASP basics. (Web backend that holds the keys.)
+      *(CORS + HSTS + X-Content-Type-Options + X-Frame-Options + Referrer-Policy + Permissions-Policy
+      in next.config.ts; the final gap — a per-request NONCE-based Content-Security-Policy (script-src
+      nonce + strict-dynamic, NO unsafe-inline) — landed in middleware.ts #156 (Run 25), verified by
+      e2e 7/7 under the CSP + nonce confirmed in served HTML.)*
 - [x] H7. API SPEND CEILING: a code-level usage cap / circuit-breaker per user/day on paid-API calls
       in the backend, AND record in PENDING_OPS.md the human-only step to set HARD daily caps +
       50%-of-cap alerts in the Anthropic/ElevenLabs/AtlasCloud dashboards (the loop cannot set those).

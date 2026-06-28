@@ -44,7 +44,56 @@ throughout and let that guide work — revenue follows PRODUCT-MARKET FIT, not t
   follows ANALYSIS_PLAYBOOK — so this propagates automatically.
 - Cross-factory: §9 PMF clause is a canonical sync → broadcast the directive to the other factories.
 
-## Run 24 — 2026-06-28 — P0 cost-metering closeout (last unmetered paid LLM call sites)
+## Run 25 — 2026-06-28 — H6 CSP (close the last security-header gap) + Pro "unlimited" honesty fix
+Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran a 6-scout
+sweep across web-security/H5-H6, G3 evals, business-case strength, web-product correctness, G2
+coverage, artifact freshness). Shipped TWO coherent, fully-verifiable, file-disjoint changes; the
+rest of the candidates proved by-design, owner-gated, unverifiable-here, or churn — disciplined NOT
+to pad.
+- **SHIPPED #156 (H6, merged):** added a per-request NONCE-based Content-Security-Policy to the
+  existing `web/src/middleware.ts` (alongside the D6 site gate, behavior preserved on all paths).
+  `script-src 'self' 'nonce-<per-req>' 'strict-dynamic' https:` — NO `'unsafe-inline'`; plus
+  object-src/base-uri/form-action/frame-ancestors locked. The inline PWA service-worker `<script>`
+  was moved to a bundled client component (`web/src/app/sw-register.tsx`) so it needs no unsafe-inline.
+  **KEY GOTCHA (do not revert):** the root layout now `await headers()` to force PER-REQUEST
+  (dynamic) rendering — without it, statically-prerendered pages ship UN-nonce'd scripts that
+  strict-dynamic BLOCKS → hydration breaks. This was CAUGHT by the e2e waitlist-submit journey
+  (1 fail before the fix; 7/7 after). All routes are now `ƒ` dynamic (acceptable: marketing pages
+  were already client components; perf cost ~nil at pre-launch traffic — Reviewer B confirmed).
+  Both reviewers APPROVE; both flagged a dead `x-nonce` request header → removed in a cleanup commit.
+- **SHIPPED #158 (honesty, merged):** the landing claimed Pro = "unlimited exports" but
+  spend-ceiling.ts enforces DAILY_EXPORT_CAP=50/user/day on ALL tiers (H7). Reworded: pricing-card
+  bullet → "Unlimited MONTHLY exports"; FAQ → "removes the monthly cap … a generous per-day rate
+  limit applies as a routine anti-abuse safeguard." Reviewer B (REQUEST_CHANGES round 1) caught a
+  card↔FAQ contradiction + alarming "abuse/never" tone → fixed; both APPROVE round 2. (Removes a
+  real Gate-2 marketing-vs-billing honesty risk.)
+- **LIVING-ARTIFACT (BUSINESS_CASE.md, this bookkeeping PR):** reconciled the same discrepancy — "unlimited
+  exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a NEVER-BUILT "50/month cap →
+  $15.50 COGS bound" to the SHIPPED H7 control (50/user/DAY anti-abuse ceiling, not a monthly quota).
+  No model recompute (margins built on ~15 exports/mo typical usage are unchanged); `as_of` stays 2026-06-27.
+- **ROADMAP H6 → [x]** (CSP was the last gap; CORS + all other headers already in next.config.ts).
+- **E2E RUNNER NOTE (sandbox):** Playwright on disk is build **1194** but the project's @playwright/test
+  expects 1228, so the default managed-chromium path is missing. RUN the e2e here with
+  `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome` (+ `CI=1` to avoid
+  reuseExistingServer serving a stale build). 7/7 green this way. CI runners have proper browsers.
+- **Scout claims corrected / traps (do NOT redo):**
+  - `/api/plan`, `/api/ios-plan`, `/api/validate` do NOT call `consumeExport()` — this is BY DESIGN,
+    not a bug (a scout flagged it "CRITICAL"). Monthly quota is consumed ONCE at `/api/score|ios-score`
+    (the export entry point); the sub-calls are gated by `checkExportAllowed` (CHECK, not consume) +
+    the H7 daily GENERATION ceiling + per-IP rate limit. The code comments say so explicitly. Adding
+    consumeExport there would DOUBLE-count quota and break the design.
+  - `/api/validate` streaming read loop IS bounded — `fetch(..., { signal: AbortSignal.timeout(45_000) })`
+    aborts the body stream, so `reader.read()` rejects at 45s (< 60s maxDuration). Not a gap; do not "fix".
+  - validate's anonymous fail-open path (no userId → no quota/ceiling, only per-IP rate limit) is a
+    documented, accepted posture (same as /api/stems); the iOS app always sends userId. Not a new gap.
+- **DEFERRED (named, not padded):** H5 CLIENT Turnstile widget — still the open half of H5; the server
+  half is done. Genuinely hard to verify in this Linux/no-Cloudflare-key sandbox (no component-test
+  infra — vitest is node-env `*.test.ts` only; the external script+iframe can't be exercised). Build
+  it in a dedicated run with a real token/e2e, or treat as owner-staged. G3 stage evals + a 2nd golden
+  fixture: real, but the eval files aren't in the build/test path so they're not gate-verifiable here
+  (live API + a tsx typecheck needed). G2 frame-extractor/audio-mux: browser globals (jsdom) — broad.
+
+
 Scout-driven run (last full DEEP AUDIT was Run 22, <24h prior — no new deep audit; ran an 8-scout
 sweep across E7/E8/F8-levers/G2/P0-metering/H4-H5/web-quality/business-case). Shipped ONE coherent,
 fully-verifiable change; the rest of the candidates proved speculative pre-launch infra, owner-gated,

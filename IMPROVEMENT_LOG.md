@@ -5,6 +5,8 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #156 | feat(H6): per-request nonce-based Content-Security-Policy (script-src nonce + strict-dynamic, no unsafe-inline) — closes the last H6 gap | H6 | Run 25 |
+| #158 | fix(honesty): disclose Pro's daily fair-use cap so "unlimited" isn't misleading (card → "Unlimited monthly exports"; FAQ reworded) | D/honesty | Run 25 |
 | #151 | fix(P0): meter per-export API cost on both validation routes (/api/validate streaming + /api/ios-validate) — last unmetered paid LLM call sites | P0 | Run 24 |
 | #149 | fix(B6): bound the last untimed external fetches (validate/email/Turnstile) + H5 CAPTCHA-required test | B6 | Run 23 |
 | #137 | feat(H7): per-user daily generation ceiling on all paid sub-call routes + gate /api/ios-validate | H7 | Run 22 |

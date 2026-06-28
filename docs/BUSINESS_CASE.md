@@ -57,7 +57,7 @@ conversion/retention data is the owner's job after launch.
 HighlightMagic is a freemium iOS app + web backend:
 - **App**: Swift 6 / iOS 18, distributed through the App Store
 - **Backend**: Next.js on Vercel (AI orchestration, audio/video generation)
-- **Pricing model**: 5 free exports/month → Pro at $14.99/month or $149.99/year (unlimited exports, no watermark) — live config across StoreKit, web, and ASO
+- **Pricing model**: 5 free exports/month → Pro at $14.99/month or $149.99/year (unlimited MONTHLY exports — no monthly quota; a 50/user/day anti-abuse ceiling applies to all tiers — no watermark) — live config across StoreKit, web, and ASO
 - **Business-paid APIs (ALL of them)**: Anthropic (detection + planning + validation), ElevenLabs (music/SFX/TTS), AtlasCloud (photo/video gen). Every paid call is a business COGS line — there is NO user-borne portion.
 
 ---
@@ -161,7 +161,7 @@ user-borne). Post-B4, total COGS is ~$0.31/export. The Pro price is now LIVE at 
 1. **Pro price at $14.99/month** (LIVE) — the single biggest realized lever; ~56% gross margin per user; still mid-market
 2. **B4 planner Opus→Sonnet** (COMPLETE, PR #45) — cut planning COGS 80%; essential for viability
 3. **Annual tier at $149.99/year** (LIVE) — 2-months-free equivalent; improves LTV, reduces churn at renewal, provides upfront cash; see Section 9 for full analysis
-4. **Cap Pro exports at 50/month** — bounds worst-case COGS at $15.50/month (56% GM preserved at $14.99)
+4. **Per-user daily spend ceiling** (H7, SHIPPED — spend-ceiling.ts) — a 50-export/user/day anti-abuse ceiling (all tiers) caps wallet-drain risk. NOTE: this is a DAILY abuse backstop, NOT a monthly quota — Pro stays unlimited-monthly. Realistic per-user margin is driven by typical usage (~15 exports/mo, see §3), not a hard monthly cap.
 5. **Cache frame scoring outputs** — same video re-submitted shouldn’t re-score; potential 30–50% reduction
 6. **Cache planning outputs** — identical/near-identical frame sequences shouldn’t re-plan; saves $0.07/repeat
 7. **Add a usage-based add-on tier** (e.g., extra 50-export pack for $4.99) — captures heavy users
@@ -172,7 +172,7 @@ user-borne). Post-B4, total COGS is ~$0.31/export. The Pro price is now LIVE at 
 
 ### Pricing (as configured — LIVE)
 - **Free**: 5 exports/month, watermark — $0
-- **Pro**: unlimited exports, no watermark — **$14.99/month or $149.99/year**
+- **Pro**: unlimited MONTHLY exports (no monthly quota; a 50/user/day anti-abuse ceiling applies to all tiers), no watermark — **$14.99/month or $149.99/year**
 
 > Price set at $14.99/mo + $149.99/yr (aligned across StoreKit, web, and ASO). Rationale: (1) closes
 > the unit-economics gap (~56% GM vs ~33% at $9.99); (2) Opus Clip charges $15, VEED $20 — $14.99 is
@@ -379,4 +379,4 @@ LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid mo
 the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
 collapses to 20% and becomes negative above ~18 exports/month.
 
-*Last updated: 2026-06-28 (Run 24) — consistency fix only: §6 Year-1 cumulative corrected $3,400 → $5,130 to match the §5 revenue table (no model recompute; pricing/COGS/levers unchanged, so `as_of` stays 2026-06-27). Sources cited inline above. Inputs to be updated as real data replaces estimates. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing — both change frequently. Section 9 (annual tier analysis) added.*
+*Last updated: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
