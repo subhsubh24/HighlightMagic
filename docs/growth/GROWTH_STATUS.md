@@ -26,7 +26,7 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
 ```yaml
 GROWTH_STATUS:
   project: HighlightMagic
-  as_of: 2026-06-27
+  as_of: 2026-06-28
   phase: pre_launch              # pre_launch | launching | post_launch
   engine_built: true             # COMPUTED: == (engine_pct == 100); E6 plumbing shipped in code (#123)
   engine_pct: 100                # COMPUTED from E6 anchor files on disk (5/5: waitlist/confirm, email, social queue, metrics, CONNECT.md). DO NOT hand-edit
@@ -67,12 +67,12 @@ GROWTH_STATUS:
     - "CONNECT.md (E6e owner runbook) was missing — created 2026-06-27 to give owner a clear path to execute mode."
     - "Free-tier watermark must be stated accurately in all emails: free exports have a watermark; Pro removes it."
     - "No channels connected; all funnel metrics correctly 0/null (real data only — none invented)."
+    - "post-batch-2.md created 2026-06-28 (12 scripts: gaming, wedding, fitness, pets, family, car meets, dance, free-vs-Pro x2, food, soccer, extreme sports). Adversarial review fixed 3 issues before merge."
   next_actions:
     - "If owner connects Resend: queue welcome email to existing waitlist; pull real list_size from Resend Audience."
     - "If owner provisions Vercel KV: wire /api/waitlist to store signups; pull real waitlist_signups_total."
-    - "If still no connections at Run 2: draft post-batch-2.md (12 more video scripts, new niches)."
-    - "Check if product loop has built E6a (waitlist datastore) or E6b (email send) — flip engine_built if so."
-    - "CIRCUIT BREAKER: if connect-channels still open at Run 3, escalate prominently in report."
+    - "CIRCUIT BREAKER ACTIVE at Run 3: if connect-channels still open, escalate and recommend Resend (free tier, 5-minute setup) as the single easiest first connection."
+    - "Run 3 PREPARE asset options: press kit/media one-pager (missing, would enable PR outreach at launch) or landing page H1 copy variants."
   owner_blockers:
     - "spend-caps: URGENT — set hard monthly caps in Anthropic + ElevenLabs + AtlasCloud dashboards now"
     - "connect-channels: connect Resend (email) + Vercel KV per docs/growth/CONNECT.md to unlock execute mode"

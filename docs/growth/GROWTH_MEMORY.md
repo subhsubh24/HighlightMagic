@@ -51,3 +51,40 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
 2. Check if product loop has built E6a (waitlist datastore) or E6b (email send) — if yes, engine_built flips toward true
 3. If still no connections and no E6 build: draft post-batch-2.md (12 more video scripts, different niches) as the next PREPARE mode asset
 4. Keep CIRCUIT BREAKER in mind: if connect-channels is still open at Run 3, escalate in report
+
+---
+
+## 2026-06-28 — Run 2
+
+### State found
+- Phase: pre_launch (unchanged)
+- Engine built: true (code confirmed — E6a–E6e all present: waitlist-store.ts, metrics.ts, email/social routes, growth/stats route, CONNECT.md)
+- Channels connected: none (no Resend, no Vercel KV, no GROWTH_AGENT_SECRET — stats route returns 503)
+- site_gate_up: false — HARD BLOCK on execute mode (unchanged from Run 1)
+- All funnel metrics: 0/null (correct — no connected source)
+
+### What I built this run
+- **docs/content/post-batch-2.md** — 12 new video scripts (gaming, wedding, fitness transformation, pet compilation, family events, car meets, dance/performance, free-vs-Pro conversion x2, food/cooking, soccer skills, extreme/adventure sports)
+- Adversarial review (independent subagent) found 3 real issues, all fixed before commit:
+  1. Removed "no sign-up" end-card claim from Post 01 — unverified feature claim not grounded in product spec
+  2. Replaced Post 12 concert/festival with extreme/adventure sports — concert overlapped Batch 1
+  3. Added energy-matched music recording-time verification note — Batch 1 establishes this as a product feature, but owner should verify before recording
+
+### Learnings
+- The adversarial review catch rate was solid: ad hoc feature claims ("no sign-up") slip in easily — always verify onboarding flow specifics against product spec. Batch overlap is easy to miss when writing 12 posts quickly — always diff against existing batches.
+- GROWTH_AGENT_SECRET not set → /api/growth/stats returns 503. Owner must set this to enable real funnel data pull. Not a blocker in PREPARE mode, but needed for EXECUTE mode real-data pulls.
+- Git environment note: initial working state was detached HEAD at PR #152 / origin/main tip; local main branch was behind. Resolved by resetting to origin/main. Future runs: always check and reset local main to origin/main before working.
+- No channels connected; PREPARE mode correct. All metrics 0/null (honest).
+
+### Dead ends / what NOT to repeat
+- Do NOT add "no sign-up" or similar onboarding-flow claims to scripts without verifying the actual app
+- Do NOT add another concert/festival post — covered in Batch 1
+- Batch 3 (if needed): avoid all Batch 1+2 niches (basketball, travel vlog, workout/sports, music sync, concert, gaming, wedding, fitness transformation, pets, family events, car meets, dance, free-vs-Pro conversion, food, soccer, extreme sports)
+
+### Circuit-breaker status
+- **Run 2 of 3 before escalation.** At Run 3 (2026-06-29): if connect-channels still open, ESCALATE prominently. Single easiest connection = Resend (free tier, no credit card needed, ~5-min setup, unlocks the entire email lifecycle from waitlist welcome onward per CONNECT.md).
+
+### Next run priorities (Run 3)
+1. Check for channel connections — if Resend connected, pull real list_size + queue welcome email to existing waitlist
+2. CIRCUIT BREAKER: if still no connections at Run 3, escalate with specific Resend setup instruction
+3. PREPARE asset: press kit / media one-pager (docs/press-kit.md) — missing, would enable PR outreach at launch with zero owner-channel dependency; or landing page H1 copy variants
