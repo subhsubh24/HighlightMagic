@@ -1,5 +1,11 @@
 # PROPOSED CI — enforce the loop's quality gates as REQUIRED checks (owner applies)
 
+> **✅ APPLIED 2026-06-28 (PR #164).** `web-e2e` added to `.github/workflows/ci.yml` and `web-lint`
+> made blocking; both confirmed GREEN on the PR before requiring (web-e2e 1m22s, web-lint 21s).
+> Branch-protection `required_status_checks` is now `["web", "ios", "web-e2e", "web-lint"]`; issue
+> #163 closed. This doc is kept as the record of the staged plan. **Do not set `E2E_RATELIMIT_BYPASS`
+> in Vercel/prod** — it is a CI-only, test-only rate-limit bypass.
+
 **Why this is staged, not applied:** the autonomous loop must NOT edit `.github/` (it trips a
 sensitive-file permission prompt that hangs a headless run). So the loop builds everything it can
 (the functional journey suite, lint-at-zero, the test-only rate-limit bypass) and stages the CI
