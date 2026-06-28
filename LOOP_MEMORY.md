@@ -4,6 +4,26 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## DECISION COROLLARY — no gate on an unbuilt loop (2026-06-28)
+Incident pattern (from a sibling): signup gated on email verification ("check your email") while no
+email pipeline was wired → every new user dead-ended. The bug under the bug was a DECISION: a hard
+gate whose loop was never built.
+- AUDIT here: iOS has NO email-verification/account gate (clean). The only gate-on-loop was the WEB
+  waitlist double-opt-in — it stored signups as PENDING and gated "confirmed" on a confirmation email
+  that is dry-run (no provider) pre-launch → confirmed-via-email never happens.
+- FIX this run: double-opt-in is now CONDITIONAL on the email loop being wired. `isEmailConfigured()`
+  → real double-opt-in (pending + send; configured-provider send failure → 502 honest error). NOT
+  configured (dry-run) → `addConfirmedSignup()` records the signup ON THE LIST directly (no gate on an
+  unbuilt send). Landing copy already honest (no false "check your email"). e2e now asserts the dry-run
+  success shows "You're on the list!" AND has NO "check your email" dead-end. Verified: build + unit +
+  e2e 7/7 green.
+- STANDARD: added DECISION COROLLARY to FACTORY_STANDARD §6 (verbatim canonical sync) — don't introduce
+  a feature/hard-gate whose dependency loop isn't built+round-trip-tested; wire it or don't gate.
+- PENDING_OPS: decision recorded — when Resend is connected, run the G7 email round-trip before relying
+  on double-opt-in (until then that path is UNVALIDATED). Generalizes to any gate-on-unbuilt-loop
+  (notify-me w/o sender, share w/o backend, paywall w/ stub checkout, bot gating on a confirmation it
+  never emits).
+
 ## Deep-diagnosis discipline adopted (2026-06-28)
 Created docs/autonomous-loop/DEEP_DIAGNOSIS.md: for any "builds/deploys but the user hits an error",
 diagnose by OBSERVING the real system (Vercel logs + replay the journey against the deployed URL +

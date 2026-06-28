@@ -58,6 +58,9 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     await input.press("Enter");
     // Intended OUTCOME (not a 200): the success state actually renders.
     await expect(page.getByText("You're on the list!")).toBeVisible();
+    // DECISION COROLLARY — no gate on an unbuilt loop: in this dry-run env (no email provider) the
+    // signup must NOT dead-end on a "check your email to confirm" step that can never complete.
+    await expect(page.getByText(/check your email/i)).toHaveCount(0);
     await expectNoErrorBoundary(page);
     // FACTORY_STANDARD §6 — screenshot after assertions pass.
     await page.screenshot({ path: path.join(SHOT_DIR, "03-landing-waitlist-success.png"), fullPage: true });
