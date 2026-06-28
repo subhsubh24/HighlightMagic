@@ -68,13 +68,12 @@ export function middleware(req: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCsp(nonce);
 
-  // Next.js reads the nonce from THIS request header and applies it to its own scripts.
-  // We also expose it as x-nonce so the root layout can read it (which opts rendering into
-  // per-request/dynamic mode — required for Next to stamp the nonce onto its bootstrap
-  // scripts; statically-prerendered HTML has no per-request nonce and would be CSP-blocked).
+  // Next.js extracts the nonce from THIS request header and stamps it onto its own bootstrap
+  // scripts. (The root layout separately calls headers() to opt rendering into per-request/
+  // dynamic mode — required so a per-request nonce exists at render time; statically-
+  // prerendered HTML has no per-request nonce and its scripts would be CSP-blocked.)
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("content-security-policy", csp);
-  requestHeaders.set("x-nonce", nonce);
 
   // A NextResponse.next() that forwards the nonce request header AND carries the CSP response
   // header. Used for every "allow" path so CSP is present regardless of the site-gate outcome.
