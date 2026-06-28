@@ -5,6 +5,10 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #137 | feat(H7): per-user daily generation ceiling on all paid sub-call routes + gate /api/ios-validate | H7 | Run 22 |
+| #138 | fix(D): correct App Store metadata to honest business-paid model (no BYOK, cloud-first, uses gen-AI) | D | Run 22 |
+| #139 | feat(G4/G6): capture + commit journey screenshots (see what the user sees) | G4/G6 | Run 22 |
+| #141 | feat(design): rework the free-limit paywall into an intentional, on-brand conversion moment | Design | Run 22 |
 | #127 | fix(D/C2): align iOS StoreKit + metadata pricing to $14.99/$149.99 | D/C2 | Run 21 |
 | #126 | fix(D/F): align web + ASO pricing to $14.99/$149.99 + annual line | D/F | Run 21 |
 | #125 | test(G2): cover analytics.trackEvent (SSR-safety, dispatch, prop cleaning) | G2 | Run 21 |

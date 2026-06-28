@@ -393,7 +393,11 @@ this quality track is G.
         vs the Design taste standard / VISION bar. A blank/broken/overlapping/unstyled/off-brand page
         is a release-blocking FAIL even if its DOM assertions pass. BOUNDED: capture in the suite,
         judge at deep-audit + readiness — not a vision pass on every micro-change.
-      *(UNBACKED today — verified 2026-06-27: web/e2e captures NO screenshots; no iOS snapshot tests)*
+      *(Run 22 PARTIAL: web HALF DONE — the G4 journey suite now captures + commits a full-page
+      screenshot of every asserted page/state into web/e2e/__screenshots__/ (#139), paths anchored to
+      the spec dir; orchestrator visually reviewed the landing capture (tasteful, on-brand). STILL
+      OPEN: iOS SwiftUI snapshot tests (Mac/CI-only) + folding the screenshot review formally into the
+      G5/Gate-2 lenses each cycle. Leave unchecked until the iOS half + standing review wiring land.)*
 
 ## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
 RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,
@@ -428,9 +432,13 @@ preflight verifies the critical ones (H1, H2, H7).
       Cloudflare Turnstile — so day-one bot floods can't spam or drain.
 - [ ] H6. CORS locked down (allowlist prod + localhost, block the rest) + sane security headers
       (CSP/HSTS/X-Content-Type-Options, etc.); align to OWASP basics. (Web backend that holds the keys.)
-- [ ] H7. API SPEND CEILING: a code-level usage cap / circuit-breaker per user/day on paid-API calls
+- [x] H7. API SPEND CEILING: a code-level usage cap / circuit-breaker per user/day on paid-API calls
       in the backend, AND record in PENDING_OPS.md the human-only step to set HARD daily caps +
       50%-of-cap alerts in the Anthropic/ElevenLabs/AtlasCloud dashboards (the loop cannot set those).
+      *(Run 22: DAILY_EXPORT_CAP on score/ios-score (#101) PLUS DAILY_GENERATION_CAP=500 on EVERY
+      other paid sub-call route — animate/intro/outro/sfx/voiceover/music/upscale/thumbnail/
+      style-transfer/talking-head/voice-clone/plan/ios-plan/validate/ios-validate (#137); the
+      provider-dashboard hard-cap+alert human step is in PENDING_OPS.md `spend-caps`.)*
 SECRETS stay server-side (never in the iOS app); if exposure is ever suspected, record a PENDING_OPS
 handoff to regenerate the key immediately.
 
