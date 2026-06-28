@@ -10,7 +10,7 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-06-26
+  as_of: 2026-06-28
   items:
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
@@ -36,9 +36,10 @@ OWNER_ACTIONS:
     - id: enforce-ci-gates
       title: "Apply docs/ci/PROPOSED_CI.md — add the web-e2e job + make web-e2e/web-lint REQUIRED checks"
       priority: high
-      status: open
+      status: done
+      done_on: 2026-06-28
       why: "The functional journey suite + lint are not enforced in CI, so a BUILDS!=WORKS or lint-failing change can still auto-merge. The loop can't edit .github/, so it staged the workflow + required-checks list."
-      how: "With workflow scope: add the web-e2e job from docs/ci/PROPOSED_CI.md to .github/workflows/ci.yml; verify it runs GREEN on a throwaway PR; THEN set branch-protection required_status_checks to include web-e2e + web-lint; close the loop:harness-improvement-proposal issue. NEVER set E2E_RATELIMIT_BYPASS in the Vercel/prod env (it's a test-only rate-limit bypass — CI job only)."
+      how: "DONE (PR #164): added the web-e2e job to .github/workflows/ci.yml + made web-lint blocking; confirmed both GREEN on the PR (web-e2e 1m22s, web-lint 21s); set branch-protection required_status_checks = [web, ios, web-e2e, web-lint]; closed #163. REMINDER: NEVER set E2E_RATELIMIT_BYPASS in the Vercel/prod env (it's a test-only rate-limit bypass — CI job only)."
       blocks: ci-gate-enforcement
     - id: vercel-env-keys
       title: Set the three backend API keys as Vercel environment variables

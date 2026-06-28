@@ -14,7 +14,7 @@ the only channel by which the loop's own rules improve, since it can't edit its 
 LOOP_HEALTH:
   project: HighlightMagic
   as_of: 2026-06-28
-  last_run: null
+  last_run: 2026-06-28
   last_deep_audit: null
   this_run:
     changes_shipped: 0
@@ -29,8 +29,8 @@ LOOP_HEALTH:
     readiness_attempts: 0
     readiness_rejected: 0
     recurring_failures: []
-    harness_proposals_open: 1    # "enforce loop gates as required CI checks" — staged docs/ci/PROPOSED_CI.md (owner applies)
-  signal: bootstrapping          # bootstrapping | improving | steady | churning | stuck
+    harness_proposals_open: 0    # #163 "enforce loop gates as required CI checks" APPLIED in PR #164 (web-e2e + web-lint now REQUIRED)
+  signal: improving              # bootstrapping | improving | steady | churning | stuck
 ```
 
 ## How to read it (owner)

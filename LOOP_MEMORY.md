@@ -1148,6 +1148,7 @@ Full read-only codebase sweep performed. Findings by lens:
 - Do not re-add post-processing.test.ts — done in PR #65 (Run 12)
 - Do not re-add VercelKVQuotaStore or kv-quota-store.ts — done in PR #66 (Run 12)
 - Do not re-add validate-waitlist-routes.test.ts — done in PR #67 (Run 12)
+- Do not re-stage/re-propose "enforce loop gates as required CI checks" (#163) — APPLIED in PR #164: web-e2e job added + web-lint made blocking; required_status_checks now [web, ios, web-e2e, web-lint]. The loop still must NOT edit .github/ (owner/interactive-only); see docs/ci/PROPOSED_CI.md.
 
 ### Next priorities (by ROADMAP order)
 1. **P0 iOS service-layer key removal** — `ClaudeVisionService.swift` + `TapeValidationService.swift` + `AIEffectRecommendationService.swift` + `CloudScoringService.swift` still call `api.anthropic.com` directly. Remove embedded/Keychain key path from each; replace calls with `URLSession` to the `web/` backend (or no-op safely). Multi-file, conservative, cannot compile-verify on Linux — sequence carefully, one file per PR.
@@ -1158,5 +1159,5 @@ Full read-only codebase sweep performed. Findings by lens:
 
 ### Runner constraints
 - This factory runs on Linux — cannot run `xcodebuild`, `simctl`, or iOS simulator
-- iOS changes must be validated by the macOS CI runner (`ios` job, pre-existingly broken but non-gating)
-- **TIMING TRICK REQUIRED**: for every PR, push the commit then IMMEDIATELY call `enable_pr_auto_merge` — must happen before the `ios` CI job fails (~77s after push). The `web` job passes at ~50s and triggers the merge.
+- iOS changes must be validated by the macOS CI runner (`ios` job). **CORRECTION (do NOT trust the old "ios always fails" note):** since A1 the app builds and `ios` is GREEN + a REQUIRED check; treat a red `ios` as a REAL failure to fix, not a flake to merge around.
+- **NO TIMING TRICK — it is dead and harmful.** Required checks are now `[web, ios, web-e2e, web-lint]` (A2, PR #164), all of which must pass before auto-merge fires. The old "call enable_pr_auto_merge before ios fails ~77s after push" trick relied on `ios` being non-required + always-red; both are false now. Just push, enable auto-merge, and let ALL required checks go green. A red required check means FIX THE CHANGE, never race the merge.
