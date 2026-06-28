@@ -22,6 +22,9 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  // Whether a confirmation email actually left the system (server tells us). Drives HONEST copy:
+  // only promise "check your email to confirm" when one was really dispatched (SIDE-EFFECT INTEGRITY).
+  const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,6 +43,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         setStatus("error");
       } else {
         trackEvent("waitlist_signup");
+        setConfirmSent(Boolean(data.confirmationEmailSent));
         setStatus("success");
       }
     } catch {
@@ -57,9 +61,13 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
           <Check className="h-4 w-4 text-[var(--success)]" />
         </div>
         <div>
-          <p className="font-semibold text-[var(--success)]">You&apos;re on the list!</p>
+          <p className="font-semibold text-[var(--success)]">
+            {confirmSent ? "Almost there!" : "You're on the list!"}
+          </p>
           <p className="text-sm text-[var(--text-secondary)]">
-            We&apos;ll email you when HighlightMagic launches.
+            {confirmSent
+              ? "Check your email to confirm your spot."
+              : "We'll email you when HighlightMagic launches."}
           </p>
         </div>
       </div>

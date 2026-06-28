@@ -4,6 +4,27 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## SIDE-EFFECT INTEGRITY — verify the effect, not the message (2026-06-28)
+A "success" the user can't verify is a LIE. Sibling product showed "confirmation email sent" while
+the provider was dry-run/unconfigured — BUILDS≠WORKS missed it because it asserts the SCREEN, and
+email is a side-effect, not a screen. Shipped:
+- FACTORY_STANDARD §6: appended SIDE-EFFECT INTEGRITY (verbatim canonical sync) — (1) no fake success
+  (user-facing success must be causally downstream of the op succeeding; optimistic/dry-run success =
+  correctness bug); (2) verify the EFFECT end-to-end in sandbox (email/SMS/push/payment/webhook/write),
+  never "the UI showed success"; narrow escape hatch for live-key-only effects (honest gating +
+  PENDING_OPS, gate still proves completion with the secret set in sandbox).
+- ROADMAP: BUILDS≠WORKS bullet + G7 (UNCHECKED) "side-effect round-trip" — email capture (Mailpit/
+  provider sandbox) round-trip (signup→receive→follow link→confirmed→logged-in), assert provider
+  invoked with right recipient/payload, assert NO fake success; wire into preflight/gate.
+- P0 FIX this run: /api/waitlist awaited sendEmail but IGNORED the result (returned {ok:true} even if
+  a configured provider failed) → fake success. Now: if isEmailConfigured() && !sendResult.ok → 502
+  honest error; returns confirmationEmailSent so the landing copy is honest ("Almost there! Check your
+  email to confirm" only when a real email was dispatched; else "You're on the list! We'll email you
+  when we launch" — no false claim in dry-run). Verified: lint/build/unit/e2e green; dry-run still
+  shows "You're on the list!" (e2e assertion intact). The full G7 round-trip (real capture) is still
+  to build — until it passes, the waitlist email round-trip is UNVALIDATED (don't tick G7).
+- Generalizes to ANY side-effect ("order placed/trade executed/job submitted" etc.): prove the effect.
+
 ## FACTORY_STANDARD canonical sync — §6b Design taste (2026-06-28)
 Synced FACTORY_STANDARD.md to the new canonical: inserted §6b "Design taste — ELIMINATE generic-AI
 frontend" verbatim between §6 (BUILDS ≠ WORKS) and §7 (Readiness), byte-identical across factories.

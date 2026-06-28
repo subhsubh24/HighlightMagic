@@ -95,6 +95,19 @@ that never produces a file; a paywall that charges but never unlocks Pro; a nav 
   app/backend with a SEEDED test env (built in Track G4). Keep a route/flow + screen INVENTORY
   (web/e2e/ROUTE_INVENTORY.md) so coverage is provably complete — a journey with no
   outcome-asserting runtime test is treated as BROKEN.
+- **SIDE-EFFECT INTEGRITY — verify the EFFECT, not the message (a "success" the user can't verify is
+  a LIE).** (1) **No fake success:** any user-facing success state ("sent / saved / submitted /
+  charged / done") MUST be causally downstream of the operation actually succeeding — await the real
+  result, check it, surface failure honestly; a message fired optimistically regardless of the
+  provider's result (or while the provider is dry-run / unconfigured) is a correctness bug. You CANNOT
+  ship email confirmation / 2FA / password-reset without proving the email actually LEAVES the system.
+  (2) **Verify the EFFECT end-to-end:** for every side-effecting integration (email, SMS, push,
+  payment, outbound webhook, storage/third-party write) "works" means the effect is OBSERVABLY
+  produced in test/sandbox — never that the UI showed success (see G7). NARROW escape hatch: a
+  side-effect only enabled by the owner's live key may NOT present a silent dead-end — gate/disable it
+  with honest messaging OR it's a release-blocking PENDING_OPS gap, and the gate must still prove the
+  flow COMPLETES with the secret set in sandbox. Overclaiming a side-effect you didn't observe = a
+  broken flow.
 - **Enforced continuously:** the functional suite is wired into CI (a broken flow BLOCKS merge);
   "FUNCTIONAL REALITY (an ACTUAL RUN)" is a standing DEEP-AUDIT lens; and at the readiness gate,
   build-but-broken OR any critical journey lacking an outcome-asserting runtime test = NOT ready
@@ -410,6 +423,20 @@ this quality track is G.
       the spec dir; orchestrator visually reviewed the landing capture (tasteful, on-brand). STILL
       OPEN: iOS SwiftUI snapshot tests (Mac/CI-only) + folding the screenshot review formally into the
       G5/Gate-2 lenses each cycle. Leave unchecked until the iOS half + standing review wiring land.)*
+- [ ] G7. SIDE-EFFECT ROUND-TRIP (verify the EFFECT, not the message; FACTORY_STANDARD §6 "SIDE-EFFECT
+      INTEGRITY"). DOM/screenshot assertions can't see a side-effect, so extend the G4 journey suite to
+      prove every side-effecting flow's EFFECT in test/sandbox: (a) EMAIL round-trip — stand up an
+      email capture (Mailpit/Mailhog, or a provider sandbox + its fetch API), sign up → assert the
+      provider client was invoked with the right recipient/payload → RETRIEVE the real message → follow
+      the confirm link → confirmed → (for login flows) logged-in. Same shape for password-reset /
+      magic-link / 2FA if/when added. (b) PAYMENT — assert the sandbox charge/entitlement call actually
+      fires (StoreKit sandbox). (c) ASSERT NO FAKE SUCCESS — the product never shows "sent/saved/
+      charged/done" unless the op truly succeeded (provider failure → honest error, not a success
+      toast). Wire into preflight/the gate so a fake-success or an undelivered side-effect BLOCKS merge
+      + readiness. NARROW escape hatch per §6 (live-key-only effects → honest gating + PENDING_OPS, and
+      the gate still proves completion with the secret set in sandbox). *(UNBACKED today — verified
+      2026-06-28: no email-capture round-trip in web/e2e; waitlist success hardened this run, round-trip
+      still to build)*
 
 ## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
 RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,
