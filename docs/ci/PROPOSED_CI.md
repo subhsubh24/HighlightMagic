@@ -85,3 +85,23 @@ every auto-merge and stall the loop. Once both are green + required, **close the
   Recorded in PENDING_OPS — **never set it in the Vercel/prod environment.**
 - iOS: `ios` is already required + green; native UI journeys (XCUITest/snapshot) run on the macOS
   runner and are tracked separately (ROADMAP A6/G6) — not part of this web-e2e gate.
+
+---
+
+## Part B — auto-migrate-on-deploy — **NOT APPLICABLE to HighlightMagic (no DB migrations)**
+
+The cross-factory "auto-apply migrations on deploy" directive is explicitly scoped to products with
+DB migrations (Supabase / Drizzle / Postgres / Alembic) and says **"iOS-only / no-DB backends: skip."**
+HighlightMagic's `web/` has **no SQL database and no migration tooling** — verified 2026-06-28:
+
+- no `web/migrations`, `web/drizzle`, `web/prisma`, or `web/supabase` directory;
+- no SQL/ORM/migration dependency in `web/package.json` (no `drizzle-kit`/`drizzle-orm`/`@prisma`/
+  `@supabase`/`pg`/`postgres`/`kysely`/`knex`/`sequelize`/`typeorm`);
+- no `migrate` / `db:push` / `db:migrate` npm script.
+
+The only optional persistence is **Vercel KV** (`web/src/lib/kv-quota-store.ts`), which is schemaless
+and **falls back to in-memory when `KV_*` is unset** — there is nothing to migrate, forward-only or
+otherwise. Per the DECISION COROLLARY, we do **not** stage a migrate job for a database that does not
+exist. If a relational DB is ever introduced (e.g. the B3 auth/quota layer adds Postgres), revisit
+this section and stage the forward-only, default-branch-only, post-gate migrate job + PITR/backups
+owner action then — not before.

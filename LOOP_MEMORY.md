@@ -1149,6 +1149,7 @@ Full read-only codebase sweep performed. Findings by lens:
 - Do not re-add VercelKVQuotaStore or kv-quota-store.ts — done in PR #66 (Run 12)
 - Do not re-add validate-waitlist-routes.test.ts — done in PR #67 (Run 12)
 - Do not re-stage/re-propose "enforce loop gates as required CI checks" (#163) — APPLIED in PR #164: web-e2e job added + web-lint made blocking; required_status_checks now [web, ios, web-e2e, web-lint]. The loop still must NOT edit .github/ (owner/interactive-only); see docs/ci/PROPOSED_CI.md.
+- Do not stage an "auto-migrate-on-deploy" CI job — N/A for HighlightMagic. The cross-factory deploy-automation directive (Part B) is scoped to products with DB migrations; web/ has NO SQL DB / migration tooling (verified 2026-06-28: no migrations/drizzle/prisma/supabase dir, no SQL/ORM deps, no migrate script). Only optional Vercel KV (schemaless, in-memory fallback) → nothing to migrate. Recorded in docs/ci/PROPOSED_CI.md "Part B"; revisit only if a relational DB is ever added (e.g. B3 auth/quota Postgres).
 
 ### Next priorities (by ROADMAP order)
 1. **P0 iOS service-layer key removal** — `ClaudeVisionService.swift` + `TapeValidationService.swift` + `AIEffectRecommendationService.swift` + `CloudScoringService.swift` still call `api.anthropic.com` directly. Remove embedded/Keychain key path from each; replace calls with `URLSession` to the `web/` backend (or no-op safely). Multi-file, conservative, cannot compile-verify on Linux — sequence carefully, one file per PR.
