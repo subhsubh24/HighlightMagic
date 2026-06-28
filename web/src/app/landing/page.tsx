@@ -233,7 +233,7 @@ const FAQ = [
   },
   {
     q: "Is it really free?",
-    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. The Pro subscription ($14.99/month, or $149.99/year) removes the watermark and gives you unlimited exports.",
+    a: "Yes. The free tier includes 5 full AI-powered exports per month with all core features. The Pro subscription ($14.99/month, or $149.99/year) removes the watermark and lifts the monthly limit — export as much as you create. A high daily fair-use cap applies only to stop automated abuse; normal creators never reach it.",
   },
   {
     q: "When is the app available?",
