@@ -4,6 +4,33 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## ⚠️ STALE-NOTE CORRECTION (2026-06-28): ignore the old "iOS CI timing trick"
+A later "Known blockers / recurring issues" entry says the `ios` CI "consistently fails for ALL
+branches" and describes racing `enable_pr_auto_merge` before it fails. **That is STALE — disregard it.**
+A1 fixed it: the app builds as a SwiftPM package, and `ios` is now a REQUIRED check that is GREEN on
+main (verified). Do NOT race the merge or assume ios fails; both `web` + `ios` genuinely gate, and
+auto-merge completes only when both pass. (Kept here as a correction; the historical note is obsolete.)
+
+## LOOP_HEALTH metric + abandon classification — 2026-06-28
+Made "self-improving" measurable: the deep audit grades the PRODUCT; LOOP_HEALTH grades the LOOP.
+- docs/autonomous-loop/LOOP_HEALTH.md (NEW, SEEDED): fenced LOOP_HEALTH block (this_run shipped/
+  abandoned + abandoned_reasons[], verify/review failures, circuit-breaker trips; rolling_7d merged/
+  reverts/readiness attempts+rejections/recurring_failures/harness_proposals_open; signal:
+  bootstrapping|improving|steady|churning|stuck). Update EVERY bookkeeping run with REAL git/gh counts;
+  honest only; observability, NOT a ship gate. gate_* reasons adapted to HM stack (gate_web_build|
+  gate_web_test|gate_lint|gate_ios_ci|review_value|review_correctness|circuit_breaker|conflict|dead_end|
+  blocked_owner). RULE 1: CLASSIFY every abandoned change so dead-ends aren't re-attempted. RULE 2:
+  churning/stuck → open ONE `loop: harness improvement proposal` (the only channel to change the loop's
+  own rules; it can't edit its routine/.claude).
+- FACTORY_STANDARD §10b added (verbatim canonical sync); ROADMAP living-artifacts list + a LOOP HEALTH
+  bookkeeping bullet added; LOOP_HEALTH added to the living-artifacts set.
+- META SELF-CHECK (last ~10 runs): NO open `loop: harness improvement proposal` issues. The one genuine
+  recurring operational wall — early `ios` CI failing for all branches — was RESOLVED by A1 (SwiftPM
+  build + ios required+green), NOT escalated via a proposal but fixed directly, so it is CLOSED, not
+  festering → opening an issue now would be a FALSE report; none opened. The only residue was the stale
+  timing-trick note, corrected above. No currently-open recurring wall qualifies. GOING FORWARD: a
+  churning/stuck LOOP_HEALTH signal MUST produce a harness proposal.
+
 ## Visual verification is DUAL-AXIS (functional + design) — 2026-06-28
 A screen can pass every DOM assertion while visibly showing the WRONG/EMPTY/placeholder result, a
 stuck spinner, broken image, stale data, or a dead-end — AND separately while looking blank/broken/
