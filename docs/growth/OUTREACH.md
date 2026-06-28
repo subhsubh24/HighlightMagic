@@ -8,4 +8,6 @@ Target types (examples for HighlightMagic — a creator / short-video iOS app; a
 
 Draft format (what the owner receives): one Gmail DRAFT per target containing — Target (name/org/role + PUBLIC contact or "contact form: <url>"); Why this target now + anticipated reply; Confidence (high only); the Email (subject + personalized body + ask + opt-out). Track in the GROWTH_STATUS outreach block (real numbers; replies owner-reported, never fabricated); durable lessons in GROWTH_MEMORY.
 
+Surfacing on the factory dashboard: when outreach drafts await the owner, file/refresh ONE OWNER_ACTIONS item in PENDING_OPS.md — `id: review-outreach-drafts`, title "Review + send N strategic outreach drafts (Gmail)" (priority: normal; status: open), with the real N in the title — and DECREMENT/close it as the owner sends (status: done when N hits 0). Honest counts, never stale: no drafts pending → no such item (don't leave a zero/ghost item). This is what makes the review surface on the factory dashboard, which already renders OWNER_ACTIONS. Keep the GROWTH_STATUS `outreach` block current (drafted_7d/owner_sent_7d/replies_7d) for the dashboard tile.
+
 When NOT to: no genuinely strategic researchable target this run → do NONE. A quiet run with zero outreach drafts is success; a pile of generic cold drafts is failure.
