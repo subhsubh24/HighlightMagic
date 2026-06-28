@@ -56,6 +56,11 @@ GROWTH_STATUS:
     retention_d30: null          # % returning day 30 (a flattening cohort curve = strongest PMF signal)
     organic_share_rate: null     # % of new users arriving via share/referral (is it spreading on its own?)
     signal: null                 # honest read: none | weak | emerging | strong — NEVER flattered
+  outreach:                      # STRATEGIC OUTREACH (docs/growth/OUTREACH.md) — DRAFT-ONLY, owner sends. REAL numbers; replies owner-reported, never fabricated; 0/null pre-launch
+    drafted_7d: 0                # curated 1:1 Gmail drafts created for the owner in the last 7d
+    owner_sent_7d: 0             # of those, how many the owner actually sent (owner-reported)
+    replies_7d: 0                # replies received (owner-reported, never fabricated)
+    signal: none                 # honest read: none | weak | emerging | strong
   channels: []                   # [{name, status, reach_7d, clicks_7d, signups_7d, ctr, notes}]
   experiments: []                # [{id, hypothesis, status, result, lift_pct, started, decided}]
   email:
