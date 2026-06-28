@@ -10,6 +10,14 @@ async function expectNoErrorBoundary(page: Page) {
   await expect(page.getByText(ERROR_BOUNDARY)).toHaveCount(0);
 }
 
+// Route-to-screenshot filename map for the parameterized nav loop.
+const NAV_SCREENSHOTS: Record<string, string> = {
+  "/privacy": "e2e/__screenshots__/04-privacy.png",
+  "/terms": "e2e/__screenshots__/05-terms.png",
+  "/support": "e2e/__screenshots__/06-support.png",
+  "/offline": "e2e/__screenshots__/07-offline.png",
+};
+
 test.describe("HighlightMagic web — critical journeys (outcome-asserting)", () => {
   test("app main screen (/) renders the real editor, not an error", async ({ page }) => {
     const res = await page.goto("/");
@@ -18,6 +26,9 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     // footage." hero where a user starts — NOT the error boundary or a blank page.
     await expect(page.getByRole("heading", { name: /Drop your footage/i })).toBeVisible();
     await expectNoErrorBoundary(page);
+    // FACTORY_STANDARD §6 — capture the asserted state so a vision-capable gate can
+    // visually review the real rendered UI (a green DOM assertion alone hides a blank surface).
+    await page.screenshot({ path: "e2e/__screenshots__/01-app-main-drop-footage.png", fullPage: true });
   });
 
   test("landing (/landing) renders the real marketing page with a working waitlist form", async ({ page }) => {
@@ -26,6 +37,8 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     await expect(page.locator("h1").first()).toBeVisible(); // real hero, not a blank/boundary
     await expect(page.locator('input[type="email"]').first()).toBeVisible();
     await expectNoErrorBoundary(page);
+    // FACTORY_STANDARD §6 — screenshot after assertions pass.
+    await page.screenshot({ path: "e2e/__screenshots__/02-landing-hero.png", fullPage: true });
   });
 
   test('waitlist signup (the real "signup" flow) reaches the success outcome', async ({ page }) => {
@@ -38,6 +51,8 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     // Intended OUTCOME (not a 200): the success state actually renders.
     await expect(page.getByText("You're on the list!")).toBeVisible();
     await expectNoErrorBoundary(page);
+    // FACTORY_STANDARD §6 — screenshot after assertions pass.
+    await page.screenshot({ path: "e2e/__screenshots__/03-landing-waitlist-success.png", fullPage: true });
   });
 
   // Every primary nav target resolves to its REAL screen (heading present, no boundary, not 404).
@@ -47,6 +62,8 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
       expect(res?.status(), `${route} must not be 4xx/5xx`).toBeLessThan(400);
       await expect(page.locator("h1, h2").first()).toBeVisible();
       await expectNoErrorBoundary(page);
+      // FACTORY_STANDARD §6 — screenshot after assertions pass, keyed by route.
+      await page.screenshot({ path: NAV_SCREENSHOTS[route], fullPage: true });
     });
   }
 });
