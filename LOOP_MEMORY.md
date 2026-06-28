@@ -4,6 +4,82 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Last run: 2026-06-28 (Run 22)
+
+Shipped 4 mutually file-disjoint, value-bar-clearing changes, ALL MERGED to main (verified):
+
+### DEEP AUDIT — 2026-06-28 (Run 22) — security/abuse + design + artifact-freshness sweep
+Full ~8-scout sweep (last full deep audit was Run 19, >24h prior). Findings, highest-severity first:
+- **CRITICAL — H7 wallet-drain gap (FIXED #137):** only /api/score + /api/ios-score enforced the
+  per-user daily ceiling. ~14 other expensive paid routes (animate/Kling, intro, outro, upscale,
+  thumbnail, style-transfer, talking-head, voice-clone, sfx, voiceover, music, plan, ios-plan,
+  ios-validate) had NO per-user daily backstop and do NOT consume the monthly export quota (metered
+  once at /api/score), so an authenticated userId rotating IPs could call them unbounded past the
+  per-IP/min rate limit — a live wallet drain. Added DAILY_GENERATION_CAP=500 (separate counter,
+  enforceGenerationCeiling, records at admission, 429 at cap) wired before the paid call on all of
+  them + /api/validate. ALSO: /api/ios-validate had NO checkExportAllowed at all → added it.
+- **HIGH — store-trust/privacy (FIXED #138):** Sources/Utilities/AppStoreMetadata.swift still
+  described the REMOVED BYOK model + claimed "on-device by default" and "does NOT use generative AI"
+  — all false under business-paid (cloud-first detection; generates music/SFX/voiceover via
+  ElevenLabs + intro/outro/photo-animation via AtlasCloud). Rewrote to the honest model mirroring
+  web/src/app/privacy/page.tsx. VERIFIED true vs code: on-device Vision IS the offline fallback
+  (HighlightDetectionService.swift:45-57); Settings shows "AI Processing → Cloud" (SettingsView:82-87).
+- **MEDIUM — design taste (FIXED #141):** the free-limit/paywall screen (ExportStep.tsx) was the one
+  generic template surface (bare Crown + flat heading). Reworked to brand glass/gradient + verb-first
+  "Go unlimited." + honest Pro value (unlimited + watermark removed). Presentation only.
+- **G6/§6 web half (LANDED #139):** the G4 journey suite now captures + commits a full-page screenshot
+  of every asserted page/state into web/e2e/__screenshots__/ (paths anchored to __dirname). 7/7 green.
+- **G2 scout premise WRONG:** elevenlabs-tts.ts + elevenlabs-music.ts ARE already covered via
+  web/src/lib/elevenlabs.test.ts (it dynamically imports those modules). PR #140 (new tests) was
+  ABANDONED as ~mostly-duplicate per Reviewer B. The REAL remaining G2 gaps are frame-extractor.ts +
+  audio-mux.ts (browser-dependent — need jsdom/mock setup).
+- **COST levers (DEFERRED — need eval validation w/ real keys, RUN_EVALS=1):** validation regen
+  gating + confidence-skip of pass 2 (DetectingStep.tsx); planner frame-summary filter to top-N
+  (actions/detect.ts); clipFrames sampling / text-only validate pass-1 (validate route); WEBP/lower
+  JPEG quality (frame-extractor.ts). Real margin (~$1.6-7.8k/yr @ 10k exports) but quality-risky —
+  do as a dedicated B5-adjacent run with evals, not blind.
+- **Business case:** no price/COGS/lever change this run → BUSINESS_CASE NOT recomputed (correct; do
+  not churn). Artifact-freshness scout: docs consistent at $14.99/$149.99; year-1 run-rate ARR ~$7.7K
+  (base reaches $100K ~month 38 — multi-year path, expected, NOT a floor failure). Named unbuilt
+  STRENGTH levers for a future readiness pass: export-credit packs, a creator/higher tier (Track E/F).
+
+### ROADMAP box changes this run
+- **H7** → [x] (code-level ceiling now on EVERY paid route + PENDING_OPS `spend-caps` human step).
+- **G6** → annotated PARTIAL (web capture half done #139; iOS snapshot tests + standing review wiring
+  still open) — left UNCHECKED.
+
+### What NOT to re-do (Run 22)
+- Do not re-add the daily generation ceiling / enforceGenerationCeiling — done #137 (spend-ceiling.ts
+  has DAILY_EXPORT_CAP + DAILY_GENERATION_CAP, two separate Maps). Do not re-gate ios-validate or
+  re-wire validate/plan/ios-plan/intro/outro/sfx/voiceover/music/animate/upscale/thumbnail/
+  style-transfer/talking-head/voice-clone — done #137. stems stays unwired (no userId; rate-limited).
+- Do not re-fix AppStoreMetadata BYOK/on-device/no-genAI claims — done #138.
+- Do not re-add elevenlabs-tts.test.ts / elevenlabs-music.test.ts — coverage already lives in
+  elevenlabs.test.ts (dynamic imports). #140 abandoned as duplicate.
+- Do not re-add screenshot capture to web/e2e/journeys.spec.ts — done #139 (path.join(__dirname,…)).
+- Do not re-rework the ExportStep limit/paywall screen — done #141.
+
+### Next priorities (Run 23)
+1. **G6 iOS half** — SwiftUI snapshot tests for key screens (Mac/CI-only; author conservatively).
+2. **G2** — frame-extractor.ts + audio-mux.ts coverage (browser-dependent; needs jsdom/mocks).
+3. **COST levers (B5-adjacent)** — the deferred margin cuts above, validated with RUN_EVALS + the G4
+   functional suite (do NOT ship blind — quality floor first).
+4. **E7 analytics SURFACE / E8 experiment ENGINE** — next Track E items; build with a real consumer
+   (don't ship an unused engine — Reviewer B will reject speculative infra).
+5. **STRENGTH levers (Track E/F, for a future readiness pass)** — export-credit packs + creator tier.
+
+### Note on infra/runner (Run 22)
+- `ios` CI now PASSES on main (green on #135-#141) — the old "timing trick" from earlier runs is NO
+  LONGER NEEDED; normal auto-merge (or direct merge once checks pass) works.
+- Local `main` ref can drift stale (started this run pointing at an OLD commit 5cc66fa) — ALWAYS branch
+  off `origin/main`, never local `main`, and `git branch -f main origin/main` to realign.
+- web/e2e managed-chromium 1228 is absent in THIS sandbox; the pre-installed browser is 1194 at
+  /opt/pw-browsers/chromium-1194/chrome-linux/chrome — run the e2e suite with
+  PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome (the config's escape hatch).
+- docs/quality/ does NOT exist yet (no QUALITY_SCORECARD.md) — owned by the separate Quality Auditor
+  routine; do NOT create it. Preflight will (correctly) fail its scorecard parse until the auditor
+  bootstraps it; that's expected pre-readiness.
+
 ## Owner reconciliation — 2026-06-26 (prompt/ROADMAP consistency audit)
 Resolved stale wording so the routine + ROADMAP agree on ONE volume rule: **coherence is over
 CHURN, not fewer-for-its-own-sake; the VALUE BAR is the only limiter on how many changes ship —
