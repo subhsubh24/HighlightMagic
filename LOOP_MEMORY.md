@@ -4,6 +4,23 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Deep-diagnosis discipline adopted (2026-06-28)
+Created docs/autonomous-loop/DEEP_DIAGNOSIS.md: for any "builds/deploys but the user hits an error",
+diagnose by OBSERVING the real system (Vercel logs + replay the journey against the deployed URL +
+inspect KV), separate code/data/config with evidence, prove ONE hypothesis live, find the UNCAUGHT
+throw, verify the fix in the real system (not the build), fix ROOT cause + regression test + make the
+silent trap fail LOUD, peel stacked causes, stay honest. ROADMAP "## INCIDENT DIAGNOSIS" standing
+pointer added. Adapted to THIS stack: NO Supabase/SQL DB here — the directive's execute_sql/get_logs
+map to Vercel function logs + deployed-URL journey replay + Vercel KV inspection (if a SQL DB is ever
+added, use its tooling). Record each future incident here (symptom→evidence→layer→root cause→fix→proof).
+TWO HARD RULES (now in ROADMAP, standing): (a) every external/LLM fetch needs an AbortSignal.timeout
+< the serverless budget; (b) a required-but-optional env var must fail LOUD.
+- FINDING from following the method (no active incident — preventive): most provider calls already
+  carry timeouts, but web/src/lib/email/index.ts (Resend), /api/waitlist (Turnstile), and /api/validate
+  do NOT — tracked as ROADMAP B6 to close (relates to the side-effect-integrity email work: an
+  un-timed Resend call could be killed mid-await). NOT fixed this run (scope = adopt the discipline);
+  B6 is the build item. No incident fabricated.
+
 ## SIDE-EFFECT INTEGRITY — verify the effect, not the message (2026-06-28)
 A "success" the user can't verify is a LIE. Sibling product showed "confirmation email sent" while
 the provider was dry-run/unconfigured — BUILDS≠WORKS missed it because it asserts the SCREEN, and
