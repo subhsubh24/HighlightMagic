@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
+import { ServiceWorkerRegister } from "./sw-register";
 
 export const metadata: Metadata = {
   title: "Highlight Magic — AI Video Highlights in Seconds",
@@ -33,7 +35,13 @@ export const viewport: Viewport = {
   userScalable: true,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Track H6: reading the request headers opts rendering into per-request (dynamic) mode so
+  // Next.js stamps the middleware-issued nonce onto its bootstrap scripts. Without this, the
+  // statically-prerendered HTML ships un-nonce'd scripts that the strict-dynamic CSP blocks,
+  // breaking hydration. We don't need the value here — the read itself is what matters.
+  await headers();
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -41,12 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-app-gradient min-h-screen antialiased">
         {children}
-        {/* PWA service worker registration */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js")}`,
-          }}
-        />
+        {/* PWA service worker registration — bundled (nonce'd) module, not an inline
+            script, so it works under the Track H6 CSP without 'unsafe-inline'. */}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
