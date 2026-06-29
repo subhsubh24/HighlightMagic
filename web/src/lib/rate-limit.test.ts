@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { checkRateLimit, getClientIP, rateLimitResponse } from "./rate-limit";
+import {
+  checkRateLimit,
+  getClientIP,
+  rateLimitResponse,
+  assertRateLimitBypassNotOnLivePlatform,
+} from "./rate-limit";
 
 describe("checkRateLimit", () => {
   it("allows requests within limit", () => {
@@ -62,6 +67,33 @@ describe("getClientIP", () => {
 
   it("returns unknown when no IP header present", () => {
     expect(getClientIP(new Request("http://localhost"))).toBe("unknown");
+  });
+});
+
+describe("assertRateLimitBypassNotOnLivePlatform", () => {
+  it("THROWS when the bypass is set on a Vercel deployment (prod or preview)", () => {
+    expect(() =>
+      assertRateLimitBypassNotOnLivePlatform({ E2E_RATELIMIT_BYPASS: "1", VERCEL: "1" }),
+    ).toThrow(/E2E_RATELIMIT_BYPASS .*Vercel/);
+  });
+
+  it("allows the bypass in CI / off-platform (VERCEL unset) — that's the legitimate use", () => {
+    expect(() =>
+      assertRateLimitBypassNotOnLivePlatform({ E2E_RATELIMIT_BYPASS: "1" }),
+    ).not.toThrow();
+  });
+
+  it("does not throw on Vercel when the bypass is absent (normal production)", () => {
+    expect(() =>
+      assertRateLimitBypassNotOnLivePlatform({ VERCEL: "1" }),
+    ).not.toThrow();
+    expect(() => assertRateLimitBypassNotOnLivePlatform({})).not.toThrow();
+  });
+
+  it("only the exact '1' value arms the bypass (a stray value is inert, so no false boot-fail)", () => {
+    expect(() =>
+      assertRateLimitBypassNotOnLivePlatform({ E2E_RATELIMIT_BYPASS: "true", VERCEL: "1" }),
+    ).not.toThrow();
   });
 });
 
