@@ -5,6 +5,8 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #185 | test(web): cover the time-decay + capacity edges of the wallet-drain & cache controls — spend-ceiling 24h window reset (+ must-not-reset-early), rate-limit sliding-window decay (full + partial), asset-cache LRU eviction + expired-purge, detection-cache source-fingerprint invalidation. +12 tests (619→631); previously these abuse/cache controls were only tested at a single instant | G/tests | Run 28 |
+| #184 | fix(web): set maxDuration=300 on /api/plan so the SSE planner (Sonnet, 1–3 min adaptive thinking) isn't killed at Vercel's platform default mid-stream — silent "Failed to fetch"/lost export. Brings the web planner to parity with /api/ios-plan (already 300). Functional-reality fix | B/reliability | Run 28 |
 | #180 | security(ios): hard-disable the ElevenLabs + AtlasCloud direct-to-provider key paths (apiKey→nil, isAvailable→false) — closes the scorecard's #1 store_readiness blocker (App Store credential-handling risk) + a server-gate bypass; a previously-untracked gap (REMAINING_STEPS 0a only covered the 4 Anthropic services) | H/store | Run 27 |
 | #179 | fix(poll-manager): fan out duplicate-predictionId waiters via a per-task array instead of mutating a shared resolve/reject callback chain — closes the scorecard correctness_reliability callback-race finding | G/correctness | Run 27 |
 | #170 | feat(cost): meter ElevenLabs + AtlasCloud usage (chars/seconds/job) via [CostMeter] — closes the audio/video COGS-observability blind spot so per-export cost is reconcilable from Vercel logs vs invoices | B/cost | Run 26 |
