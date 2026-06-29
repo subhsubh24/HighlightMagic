@@ -28,6 +28,34 @@ export interface RateLimitResult {
 const buckets = new Map<string, number[]>();
 
 /**
+ * HARD-REFUSE the test-only bypass on the live platform.
+ *
+ * `E2E_RATELIMIT_BYPASS=1` disables per-IP throttling so the CI functional-journey suite (one runner,
+ * one IP, self-seeding journeys) doesn't trip limits. That CI job runs on GitHub Actions, OFF Vercel,
+ * where `VERCEL` is unset. On ANY Vercel deployment (production OR preview) the var must NEVER be set —
+ * if it is, abuse + wallet-drain protection on a live, paid, public backend is silently off. So we FAIL
+ * LOUD at module load (the route can't even boot) rather than serve traffic with rate limiting disabled.
+ *
+ * `VERCEL` is "1" on every Vercel build/runtime and unset in GitHub Actions / local dev — exactly the
+ * signal that separates "live platform" from "CI/test". Exported + env-injectable so it's unit-testable.
+ */
+export function assertRateLimitBypassNotOnLivePlatform(
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (env.E2E_RATELIMIT_BYPASS === "1" && env.VERCEL) {
+    throw new Error(
+      `SECURITY: E2E_RATELIMIT_BYPASS is set on a Vercel deployment (VERCEL=${env.VERCEL}). ` +
+        "This is a TEST-ONLY rate-limit bypass for the CI journey suite and MUST NEVER be set in " +
+        "production/preview — it disables abuse + wallet-drain protection. Remove it from the Vercel " +
+        "environment immediately.",
+    );
+  }
+}
+
+// Enforced at module load: importing the limiter on a misconfigured live deployment fails the boot.
+assertRateLimitBypassNotOnLivePlatform();
+
+/**
  * Check and record a rate-limit hit. Returns whether the request is allowed.
  * @param key    Unique key (e.g. `score:1.2.3.4` or `waitlist:5.6.7.8`)
  * @param config Limit + window duration
