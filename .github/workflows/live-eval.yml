@@ -1,0 +1,52 @@
+name: live-eval
+
+# Validates the REAL paid round-trips (Anthropic detection now; ElevenLabs/AtlasCloud as their evals
+# land — ROADMAP G3) against the gold fixtures. This is NOT a required check and does NOT run on PRs:
+# it spends real API tokens, so it runs on a cadence + on demand only. Owner-funded keys are GitHub
+# Actions secrets (see OWNER_ACTIONS: validation-eval-keys). When a key is absent the matching step
+# SKIPS cleanly and prints how to enable it — so this workflow never reddens the branch during setup.
+#
+# Provider spend caps (PENDING_OPS: spend-caps) are the backstop; keep the eval set small + cheap.
+
+on:
+  workflow_dispatch: # run manually from the Actions tab any time
+  schedule:
+    - cron: "0 9 * * 1" # weekly, Mondays 09:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  live-eval:
+    name: live-eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      EVAL_MODE: "1"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      ATLASCLOUD_API_KEY: ${{ secrets.ATLASCLOUD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+
+      - name: Detection eval (Anthropic — real round-trip vs gold fixtures)
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        run: npx tsx src/evals/detect.eval.ts
+
+      - name: Detection eval SKIPPED (ANTHROPIC_API_KEY not set)
+        if: ${{ env.ANTHROPIC_API_KEY == '' }}
+        run: |
+          echo "::warning::ANTHROPIC_API_KEY not set — the real detection round-trip was NOT validated."
+          echo "Set it as a GitHub Actions secret (low-budget + capped) to enable. See OWNER_ACTIONS: validation-eval-keys."
+
+      # ElevenLabs (TTS) + AtlasCloud (video) evals are tracked in ROADMAP G3. Once those eval scripts
+      # exist, add steps here guarded the same way (`if: env.<KEY> != ''`) so they validate the real
+      # round-trip when the owner-funded key is present and skip+warn when it isn't.
