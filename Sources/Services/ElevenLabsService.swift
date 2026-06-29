@@ -17,23 +17,14 @@ actor ElevenLabsService {
 
     // MARK: - API Key Resolution
 
-    private var apiKey: String? {
-        if let envKey = ProcessInfo.processInfo.environment["ELEVENLABS_API_KEY"],
-           !envKey.isEmpty {
-            return envKey
-        }
-        if let keychainKey = KeychainHelper.load(key: "elevenlabs_api_key"),
-           !keychainKey.isEmpty {
-            return keychainKey
-        }
-        if let plistKey = Bundle.main.object(forInfoDictionaryKey: "ELEVENLABS_API_KEY") as? String,
-           !plistKey.isEmpty {
-            return plistKey
-        }
-        return nil
-    }
+    // Business-paid model (2026-06-25): all ElevenLabs generation routes through the
+    // web backend, gated by server-side entitlement + quota. The app NEVER holds a
+    // provider key. This intentionally resolves to nil so the direct-to-provider path
+    // below can never fire — even if a key were injected via env/Keychain/Info.plist —
+    // closing both the App Store credential-handling risk and the server-gate bypass.
+    private var apiKey: String? { nil }
 
-    var isAvailable: Bool { apiKey != nil }
+    var isAvailable: Bool { false }
 
     // MARK: - Error Types
 
