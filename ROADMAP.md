@@ -443,6 +443,19 @@ this quality track is G.
 - [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff
       review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
       findings (security, crashes, runaway API cost, data loss) for done.
+- [~] G6. VALIDATION COMPLETENESS — the loop must be ABLE to validate everything it ships, and must
+      be UNABLE to silently ship a capability it can't validate (STANDING; read every run). Mechanism
+      (built): `web/src/lib/validation-manifest.ts` registers EVERY external service/secret the
+      backend reads with a validation mode (mock | live-eval | owner-only | build-config | test-only
+      | internal); `validation-manifest.test.ts` runs in the REQUIRED `web` check and FAILS the build
+      if any `process.env.*` is unregistered → a NEW service hard-blocks its PR until registered with
+      a real validation path. DISCIPLINE: when you add a new external service, register it AND build
+      its validation — a keyless contract/journey test for `mock`; for `live-eval`, add the eval +
+      open the OWNER_ACTION for the owner-funded key (validation-eval-keys) and DO NOT tick the
+      capability done until the live-eval has actually run green. Real paid round-trips run in the
+      gated `.github/workflows/live-eval.yml` (cadence + manual; skips+warns without keys; never on
+      PRs). DONE when every ship-critical capability has either a green keyless validation or a green
+      live-eval (no capability stuck mock-only because a key is missing). See docs/ci/VALIDATION.md.
 - [ ] G6. VISUAL VERIFICATION — capture + visually review screenshots (FACTORY_STANDARD §6 "SEE WHAT
       THE USER SEES"). DOM assertions (G4) can pass while a page renders blank/unstyled/broken/
       overlapping or off-brand "vibe-coded" slop, so the functional suite must also CAPTURE a
