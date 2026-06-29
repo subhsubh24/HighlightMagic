@@ -26,7 +26,7 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
 ```yaml
 GROWTH_STATUS:
   project: HighlightMagic
-  as_of: 2026-06-28
+  as_of: 2026-06-29
   phase: pre_launch              # pre_launch | launching | post_launch
   engine_built: true             # COMPUTED: == (engine_pct == 100); E6 plumbing shipped in code (#123)
   engine_pct: 100                # COMPUTED from E6 anchor files on disk (5/5: waitlist/confirm, email, social queue, metrics, CONNECT.md). DO NOT hand-edit
@@ -57,7 +57,7 @@ GROWTH_STATUS:
     organic_share_rate: null     # % of new users arriving via share/referral (is it spreading on its own?)
     signal: null                 # honest read: none | weak | emerging | strong — NEVER flattered
   outreach:                      # STRATEGIC OUTREACH (docs/growth/OUTREACH.md) — DRAFT-ONLY, owner sends. REAL numbers; replies owner-reported, never fabricated; 0/null pre-launch
-    drafted_7d: 0                # curated 1:1 Gmail drafts created for the owner in the last 7d
+    drafted_7d: 1                # curated 1:1 Gmail drafts created for the owner in the last 7d (Run 3: Sam Gutelle, Tubefilter)
     owner_sent_7d: 0             # of those, how many the owner actually sent (owner-reported)
     replies_7d: 0                # replies received (owner-reported, never fabricated)
     signal: none                 # honest read: none | weak | emerging | strong
@@ -80,11 +80,15 @@ GROWTH_STATUS:
     - "Free-tier watermark must be stated accurately in all emails: free exports have a watermark; Pro removes it."
     - "No channels connected; all funnel metrics correctly 0/null (real data only — none invented)."
     - "post-batch-2.md created 2026-06-28 (12 scripts: gaming, wedding, fitness, pets, family, car meets, dance, free-vs-Pro x2, food, soccer, extreme sports). Adversarial review fixed 3 issues before merge."
+    - "docs/press-kit.md created 2026-06-29. Adversarial review caught 8 real issues: 'Unlimited exports' vs 50/day ceiling contradiction (FTC risk), 'full feature access' falsehood, unconfirmed one-tap deep-link claim, voice-clone biometric compliance complexity, 'every frame' accuracy, base domain gating, internal repo path links, aggregator-sourced pricing. All fixed before commit."
+    - "First strategic outreach draft created (Sam Gutelle, Tubefilter) — DRAFT ONLY, awaiting owner review + send. Reviewer flagged: physical address (CAN-SPAM), opt-out language, and personalization (specific article reference) as required before sending."
+    - "CIRCUIT BREAKER TRIGGERED at Run 3: connect-channels open 3 consecutive runs. Easiest unlock = Resend (free, 5-min setup) per CONNECT.md."
   next_actions:
+    - "CIRCUIT BREAKER TRIGGERED: owner must connect Resend + set SITE_GATE_PASSWORD — both required to unlock execute mode. See CONNECT.md. Resend is free, no credit card, ~5 minutes."
+    - "Owner: review + send the Sam Gutelle / Tubefilter Gmail draft (search inbox drafts for 'Highlight Magic (iOS, pre-launch)'). Add full name, business address, one specific article reference first."
     - "If owner connects Resend: queue welcome email to existing waitlist; pull real list_size from Resend Audience."
     - "If owner provisions Vercel KV: wire /api/waitlist to store signups; pull real waitlist_signups_total."
-    - "CIRCUIT BREAKER ACTIVE at Run 3: if connect-channels still open, escalate and recommend Resend (free tier, 5-minute setup) as the single easiest first connection."
-    - "Run 3 PREPARE asset options: press kit/media one-pager (missing, would enable PR outreach at launch) or landing page H1 copy variants."
+    - "Run 4 PREPARE option: H1 copy variants for the landing page (A/B test copy design, staged for when experiments engine is built)."
   owner_blockers:
     - "spend-caps: URGENT — set hard monthly caps in Anthropic + ElevenLabs + AtlasCloud dashboards now"
     - "connect-channels: connect Resend (email) + Vercel KV per docs/growth/CONNECT.md to unlock execute mode"

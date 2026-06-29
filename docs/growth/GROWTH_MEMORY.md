@@ -88,3 +88,55 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
 1. Check for channel connections — if Resend connected, pull real list_size + queue welcome email to existing waitlist
 2. CIRCUIT BREAKER: if still no connections at Run 3, escalate with specific Resend setup instruction
 3. PREPARE asset: press kit / media one-pager (docs/press-kit.md) — missing, would enable PR outreach at launch with zero owner-channel dependency; or landing page H1 copy variants
+
+---
+
+## 2026-06-29 — Run 3
+
+### State found
+- Phase: pre_launch (unchanged)
+- Engine built: true (unchanged)
+- Channels connected: none (CIRCUIT BREAKER TRIGGERED — 3 consecutive runs with no connection)
+- site_gate_up: false (unchanged — HARD BLOCK on execute mode)
+- Quality scorecard: B overall, ship_gate_met: false (correctness_reliability C, store_readiness C)
+- All funnel metrics: 0/null (correct — no connected source)
+
+### What I built this run
+- **docs/press-kit.md** — media one-pager enabling journalist/press outreach at launch. Adversarial review caught 8 real issues, all fixed before commit:
+  1. "Unlimited exports" contradicted the 50-export/day ceiling in the same sentence — FTC risk; removed "Unlimited," replaced with "No monthly export quota"
+  2. "Free tier offers full feature access" — factually false (watermark + quota ARE feature restrictions); removed
+  3. "One-tap share to TikTok/Reels/Shorts" — implies native deep-link integration not confirmed; changed to "share via iOS share sheet"
+  4. "Clone your voice for narration" — biometric data (voice samples) compliance complexity + pre-launch confirmation gap; removed from press kit
+  5. "AI analyzes every frame" — inaccurate (max 120 frames sampled, not every frame); changed to "samples and scores frames"
+  6. Website link "highlightmagic.app" — may be gated by SITE_GATE_PASSWORD; changed to highlightmagic.app/landing (public)
+  7. Internal repo paths (docs/brand-kit.md, docs/aso-package.md) — not accessible to press; changed to "available on request"
+  8. Competitor pricing from aggregator sites — stale risk; added "verify directly with each vendor before publishing"
+
+- **Gmail draft: Sam Gutelle (Tubefilter)** — 1 pre-launch pitch email created as Gmail draft for owner to review + send. Independent adversarial review flagged: missing physical address (CAN-SPAM), opt-out language needed, personalization gap (no specific article reference). All flagged in draft for owner to complete before sending.
+
+### Learnings
+- ADVERSARIAL REVIEW CATCH RATE IS HIGH: The press kit had 8 real issues despite being written carefully. The pattern is that honesty-adjacent traps are the hardest to catch yourself: "full feature access" sounded reasonable because we provide all AI features in the free tier (before hitting the cap), but the watermark + quota ARE restrictions, and "full feature access" is straightforwardly false. Always run the checker.
+- "UNLIMITED" and a hard cap cannot coexist in the same sentence without being deceptive. The 50-export/day anti-abuse ceiling makes "unlimited" a misrepresentation. Fix: "No monthly export quota" — accurate and still differentiated from free tier's 5/month cap.
+- "Every frame" is a common exaggeration. The product scores up to 120 frames per video — a sample, not every frame. Be precise.
+- Voice cloning has a GDPR/biometric compliance surface (voice samples = biometric data under GDPR Article 9, BIPA in Illinois). Pre-launch press kit is not the place for this claim without a confirmed compliant flow.
+- CAN-SPAM applies to promotional emails even when sent to journalists. A physical postal address is a legal requirement. For a solo founder, a virtual office or registered agent address is the right solution — flag this prominently in outreach drafts.
+- Strategic outreach research found 2 real targets (Ariel Michaeli / Appfigures, Sam Gutelle / Tubefilter). Drafted for Sam Gutelle because his beat (creator tools + creator economy) is the more precise fit. Ariel Michaeli's audience (app market professionals, not creators) is better targeted post-launch with real download data.
+
+### Dead ends / what NOT to repeat
+- Do NOT claim "every frame" is analyzed — product samples up to 120 frames
+- Do NOT use "unlimited" with a hard ceiling in the same sentence
+- Do NOT describe voice cloning as a press-kit feature without confirming the GDPR/consent flow
+- Do NOT reference internal repo file paths (docs/*.md) in external-facing media documents
+- Do NOT link to highlightmagic.app base domain in pre-launch materials — may be gated
+- Ariel Michaeli (This Week in Apps): better for post-launch with real download data; his audience is app-market professionals, not creators. Do NOT draft pre-launch outreach to him.
+
+### Circuit-breaker status
+- **TRIGGERED at Run 3.** connect-channels has been open for 3 consecutive runs. The circuit breaker has fired — this is now the prominent blocker.
+- The single easiest unlock: Resend (email provider, free tier, ~5 min setup per CONNECT.md)
+- At Run 4: if connect-channels still open, do not repeat the same escalation — instead note "blocked same action for N runs, only action available is Resend per CONNECT.md" and keep PREPARE mode work short (one focused asset only).
+
+### Next run priorities (Run 4)
+1. Check for channel connections (Resend, Vercel KV, GROWTH_AGENT_SECRET) — if any connected, pull real data and switch to execute mode
+2. Check whether Sam Gutelle draft was sent (owner-reported) and update outreach.owner_sent_7d accordingly
+3. If still no connections: short PREPARE asset — landing page H1 copy variants (A/B test copy design staged for when the experiments engine is built)
+4. Do NOT build another video script batch or repeat press kit work — both are done

@@ -10,8 +10,15 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-06-28
+  as_of: 2026-06-29
   items:
+    - id: review-outreach-drafts
+      title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
+      priority: normal
+      status: open
+      why: "Growth Agent created a pre-launch pitch email for Sam Gutelle (Senior Editor, Tubefilter, creator economy press) as a Gmail DRAFT for owner to review + send. The agent never sends; the owner sends after reviewing."
+      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions."
+      blocks: press-outreach
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
       priority: urgent
