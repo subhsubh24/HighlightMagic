@@ -7,6 +7,11 @@ import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/in
 import { MAX_FILES } from "@/lib/constants";
 
 export const runtime = "nodejs";
+// The Sonnet planner runs adaptive thinking for 1-3 minutes. Without an explicit
+// maxDuration, Vercel kills the function at the platform default (well under a
+// minute), silently dropping the SSE stream mid-plan — the user sees "Failed to
+// fetch" and loses the export. Match the iOS planner route (/api/ios-plan = 300).
+export const maxDuration = 300;
 
 /**
  * SSE route handler for the planner.
