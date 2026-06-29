@@ -116,5 +116,41 @@ describe("poll-manager", () => {
       expect(r1).toBe("https://example.com/v.mp4");
       expect(r2).toBe("https://example.com/v.mp4");
     });
+
+    it("fans out a single failure to every duplicate registrant", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: "failed", error: "boom" }),
+      });
+
+      // Three callers register the SAME predictionId.
+      const p1 = pollBatched("pred_fanout", { timeoutMs: 60_000 });
+      const p2 = pollBatched("pred_fanout", { timeoutMs: 60_000 });
+      const p3 = pollBatched("pred_fanout", { timeoutMs: 60_000 });
+      const a1 = expect(p1).rejects.toThrow("boom");
+      const a2 = expect(p2).rejects.toThrow("boom");
+      const a3 = expect(p3).rejects.toThrow("boom");
+
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      // Every registrant must settle — not just the first/last in a chain.
+      await Promise.all([a1, a2, a3]);
+    });
+
+    it("settles many duplicate registrants with the same success value", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: "completed", videoUrl: "https://example.com/many.mp4" }),
+      });
+
+      const promises = Array.from({ length: 5 }, () =>
+        pollBatched("pred_many", { timeoutMs: 60_000 })
+      );
+
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      const results = await Promise.all(promises);
+      expect(results).toEqual(Array(5).fill("https://example.com/many.mp4"));
+    });
   });
 });

@@ -15,13 +15,27 @@
 const POLL_INTERVAL_MS = 5_000;
 const DEFAULT_TIMEOUT_MS = 600_000; // 10 min — headroom for large animation batches
 
-interface PendingTask {
-  predictionId: string;
+interface Waiter {
   resolve: (url: string) => void;
   reject: (err: Error) => void;
+}
+
+interface PendingTask {
+  predictionId: string;
+  // Every caller that registered this predictionId gets its own waiter.
+  // Settling fans out to ALL of them — no shared callback mutation/chaining.
+  waiters: Waiter[];
   deadline: number;
   consecutiveErrors: number;
   maxErrors: number;
+}
+
+// Resolve/reject every waiter on a task exactly once.
+function settleResolve(task: PendingTask, url: string) {
+  for (const w of task.waiters) w.resolve(url);
+}
+function settleReject(task: PendingTask, err: Error) {
+  for (const w of task.waiters) w.reject(err);
 }
 
 let pendingTasks: Map<string, PendingTask> = new Map();
@@ -43,7 +57,7 @@ async function tick() {
   for (const [id, task] of pendingTasks) {
     if (now >= task.deadline) {
       pendingTasks.delete(id);
-      task.reject(new Error(`Poll timeout for ${id}`));
+      settleReject(task, new Error(`Poll timeout for ${id}`));
     }
   }
 
@@ -76,10 +90,10 @@ async function tick() {
 
       if (data.status === "completed" && data.videoUrl) {
         pendingTasks.delete(predictionId);
-        task.resolve(data.videoUrl);
+        settleResolve(task, data.videoUrl);
       } else if (data.status === "failed") {
         pendingTasks.delete(predictionId);
-        task.reject(new Error(data.error || "Task failed"));
+        settleReject(task, new Error(data.error || "Task failed"));
       }
       // "processing" — keep in the map for next tick
     } else {
@@ -92,7 +106,7 @@ async function tick() {
         task.consecutiveErrors++;
         if (task.consecutiveErrors >= task.maxErrors) {
           pendingTasks.delete(predictionId);
-          task.reject(new Error(`Too many consecutive poll errors for ${predictionId}`));
+          settleReject(task, new Error(`Too many consecutive poll errors for ${predictionId}`));
         }
       }
     }
@@ -114,26 +128,22 @@ export function pollBatched(
   predictionId: string,
   options?: { timeoutMs?: number; maxErrors?: number }
 ): Promise<string> {
-  // If already being polled, return a new promise that piggybacks
+  // If already being polled, piggyback by appending a waiter — never mutate
+  // a shared resolve/reject pair (that chained callbacks and was order-fragile).
   const existing = pendingTasks.get(predictionId);
   if (existing) {
     // Extend deadline to whichever caller has the longer timeout
     const newDeadline = Date.now() + (options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     existing.deadline = Math.max(existing.deadline, newDeadline);
     return new Promise<string>((resolve, reject) => {
-      const orig = existing;
-      const origResolve = orig.resolve;
-      const origReject = orig.reject;
-      orig.resolve = (url) => { origResolve(url); resolve(url); };
-      orig.reject = (err) => { origReject(err); reject(err); };
+      existing.waiters.push({ resolve, reject });
     });
   }
 
   return new Promise<string>((resolve, reject) => {
     pendingTasks.set(predictionId, {
       predictionId,
-      resolve,
-      reject,
+      waiters: [{ resolve, reject }],
       deadline: Date.now() + (options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       consecutiveErrors: 0,
       maxErrors: options?.maxErrors ?? 5,
@@ -150,7 +160,7 @@ export function cancelPoll(predictionId: string) {
   const task = pendingTasks.get(predictionId);
   if (task) {
     pendingTasks.delete(predictionId);
-    task.reject(new Error(`Polling cancelled for ${predictionId}`));
+    settleReject(task, new Error(`Polling cancelled for ${predictionId}`));
   }
 }
 
@@ -159,7 +169,7 @@ export function cancelPoll(predictionId: string) {
  */
 export function cancelAllPolls() {
   for (const task of pendingTasks.values()) {
-    task.reject(new Error("Polling cancelled"));
+    settleReject(task, new Error("Polling cancelled"));
   }
   pendingTasks.clear();
   if (pollTimer !== null) {
