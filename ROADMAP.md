@@ -520,8 +520,12 @@ preflight verifies the critical ones (H1, H2, H7).
       passwords; password-reset does NOT reveal whether an email exists; email-verification link
       idempotent (double-click safe); signup with an existing email does NOT leak it's registered.
       A test per case.
-- [ ] H5. CAPTCHA / bot protection on public forms (waitlist, signup, any unauth POST) — e.g.
-      Cloudflare Turnstile — so day-one bot floods can't spam or drain.
+- [x] H5. CAPTCHA / bot protection on public forms (waitlist, signup, any unauth POST) — e.g.
+      Cloudflare Turnstile — so day-one bot floods can't spam or drain. *(Built end-to-end: server-side
+      token verification in /api/waitlist (prior run) + the landing WaitlistForm now renders the Turnstile
+      widget when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set and sends cfTurnstileToken, with a CSP frame-src
+      for the challenge iframe (#187, Run 29). The only public form is the waitlist (no accounts). Owner
+      activates by setting BOTH Turnstile keys together — REMAINING_STEPS 2b.)*
 - [x] H6. CORS locked down (allowlist prod + localhost, block the rest) + sane security headers
       (CSP/HSTS/X-Content-Type-Options, etc.); align to OWASP basics. (Web backend that holds the keys.)
       *(CORS + HSTS + X-Content-Type-Options + X-Frame-Options + Referrer-Policy + Permissions-Policy

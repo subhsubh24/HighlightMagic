@@ -131,18 +131,16 @@ validates the email; just swap the `console.log` with the provider's SDK call.
 
 ### 2b. Bot protection on the waitlist form (Cloudflare Turnstile — H5)
 
-Server-side verification is **already built**: when `TURNSTILE_SECRET_KEY` is set, `/api/waitlist`
-requires a valid `cfTurnstileToken`, verifies it against Cloudflare (5s timeout, fails open if
-Cloudflare is unreachable), and returns 400 `"CAPTCHA required."` when the token is missing/invalid.
-
-⚠️ **DO NOT set `TURNSTILE_SECRET_KEY` yet.** The landing form (`web/src/app/landing/page.tsx`,
-`WaitlistForm`) does **not** yet render the Turnstile widget, so it sends no token — enabling the
-secret today would reject **every** real signup with a 400 (a gate on an unbuilt loop). Sequence:
-1. (Loop/owner) Wire the Turnstile widget into `WaitlistForm`, conditional on
-   `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, attaching the token as `cfTurnstileToken` in the POST body.
-2. Create a Turnstile widget at the Cloudflare dashboard → get the **Site Key** (public) + **Secret Key**.
-3. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public) **and** `TURNSTILE_SECRET_KEY` (server) **together**
-   in Vercel env — never the secret alone.
+Both halves are now **built** (H5 complete in code, #187 Run 29): the server verifies the token in
+`/api/waitlist` (when `TURNSTILE_SECRET_KEY` is set — 5s timeout, fails open if Cloudflare is
+unreachable, returns 400 `"CAPTCHA required."` on a missing/invalid token), AND the landing
+`WaitlistForm` renders the Turnstile widget + sends `cfTurnstileToken` whenever
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` is set (with a CSP `frame-src` for the challenge iframe). With
+neither key set (current prod state) the form is unchanged. **Owner steps to activate:**
+1. Create a Turnstile widget at the Cloudflare dashboard → get the **Site Key** (public) + **Secret Key**.
+2. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public) **and** `TURNSTILE_SECRET_KEY` (server) **together**
+   in Vercel env — never the secret alone (the secret alone would 400 every signup since the public
+   key gates whether the widget renders the token).
 
 ---
 
