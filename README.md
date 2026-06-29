@@ -23,8 +23,9 @@ App Store / TestFlight).
 Paid AI runs **on the backend**, not on the device, and the business holds the keys — the iOS app
 routes calls through `web/` and ships with **no embedded API keys**:
 
-- **Highlight detection** — server-side Claude Haiku frame scoring via `/api/score` (with an
-  on-device Vision/CoreML fallback).
+- **Highlight detection** — server-side Claude Haiku frame scoring via `/api/score` (with a
+  lightweight on-device Vision classification fallback for offline/degraded scenarios; the
+  optional CoreML model is not bundled in the shipped build).
 - **Planning / effects** — Claude Sonnet planner.
 - **Audio** — ElevenLabs (music / SFX / voiceover / voice clone).
 - **Photo→video / intro-outro** — AtlasCloud (Kling).
