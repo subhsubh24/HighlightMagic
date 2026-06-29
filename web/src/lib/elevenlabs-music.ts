@@ -7,6 +7,8 @@
  * so no submit/poll pattern is needed (unlike Kling).
  */
 
+import { logProviderUsage } from "@/lib/usage-meter";
+
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
 /** Max music length we request (ms). 60s default for highlight tapes. */
@@ -105,6 +107,15 @@ export async function generateMusic(
   const estimatedDuration = Math.round(audioBuffer.byteLength / 24_000);
 
   console.log(`[elevenlabs-music] Generated ${audioBuffer.byteLength} bytes (~${estimatedDuration}s)`);
+
+  // COGS observability: ElevenLabs Music bills by requested track length (seconds).
+  logProviderUsage({
+    provider: "elevenlabs",
+    op: "music",
+    units: clampedDuration / 1000,
+    unit: "seconds",
+    meta: { bytes: audioBuffer.byteLength },
+  });
 
   return {
     status: "completed",
