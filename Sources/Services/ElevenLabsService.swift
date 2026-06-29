@@ -6,7 +6,9 @@ import os.log
 /// sound effects, audio transcription (Scribe), voice cloning, and stem separation.
 ///
 /// Matches the web platform's ElevenLabs integration to achieve feature parity.
-/// Server-side API key is resolved from environment, Keychain, or Info.plist.
+/// The app holds NO provider key: under the business-paid model all generation
+/// routes through the gated web backend, so the direct-call paths here stay
+/// dormant (`isAvailable` is always false).
 actor ElevenLabsService {
     static let shared = ElevenLabsService()
 
