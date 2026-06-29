@@ -55,6 +55,13 @@ OWNER_ACTIONS:
       why: All paid AI calls are routed server-side through web/; without these keys every detection/generation path fails.
       how: In the Vercel dashboard for the web/ deployment set ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, and ATLASCLOUD_API_KEY (server-side only, never in the iOS app).
       blocks: backend-functionality
+    - id: validation-eval-keys
+      title: "Set low-budget CAPPED API keys as GitHub Actions secrets so the loop validates REAL paid round-trips"
+      priority: high
+      status: open
+      why: "The loop validates all FLOWS keyless on every PR (journey suite + the new validation-completeness gate). But the REAL paid round-trips (does Anthropic detection / ElevenLabs TTS / AtlasCloud video actually work + meet the quality bar?) can only be validated with real keys. Without these, those capabilities stay mock-validated and CANNOT be ticked 'done' (the live-eval job skips + warns). Owner chose to fund Anthropic + ElevenLabs + AtlasCloud."
+      how: "In GitHub repo Settings → Secrets and variables → Actions, add repository secrets ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ATLASCLOUD_API_KEY. Use SEPARATE low-budget keys with HARD provider caps (see spend-caps) — these are exercised by the .github/workflows/live-eval.yml job (weekly + manual), NOT on every PR. These are DISTINCT from the Vercel runtime keys (vercel-env-keys): GitHub secrets = CI validation; Vercel env = the live app. NEVER commit a key value. (Anthropic enables the detect eval now; ElevenLabs/AtlasCloud activate once their G3 evals land.)"
+      blocks: live-round-trip-validation
     - id: server-quota-infra
       title: Provision the auth layer + Vercel KV for authoritative server-side quota (B3)
       priority: high
