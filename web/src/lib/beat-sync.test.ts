@@ -54,6 +54,32 @@ describe("buildBeatGrid", () => {
     expect(grid.beatInterval).toBe(2.0);
     expect(grid.beats.length).toBeGreaterThanOrEqual(5);
   });
+
+  // Regression: an invalid BPM made beatInterval Infinity/NaN and turned the
+  // beat loop into an infinite loop, hanging the export/preview. Guard returns
+  // an empty, beat-interval-0 grid ("no beat sync") instead of looping forever.
+  it("returns an empty grid (no hang) for zero/negative/non-finite BPM", () => {
+    for (const bad of [0, -120, NaN, Infinity, -Infinity]) {
+      const grid = buildBeatGrid(bad, 10);
+      expect(grid.beatInterval).toBe(0);
+      expect(grid.beats).toEqual([]);
+      expect(grid.bpm).toBe(0);
+    }
+  });
+
+  it("returns an empty grid for a non-finite or negative duration", () => {
+    expect(buildBeatGrid(120, NaN).beats).toEqual([]);
+    expect(buildBeatGrid(120, -5).beats).toEqual([]);
+  });
+});
+
+// ── getBeatPhase (zero-grid safety) ──
+
+describe("getBeatPhase", () => {
+  it("returns 0 (not NaN) for an empty/invalid grid", () => {
+    const grid = buildBeatGrid(0, 10); // beatInterval 0
+    expect(getBeatPhase(1.23, grid)).toBe(0);
+  });
 });
 
 // ── snapToBeat ──

@@ -19,8 +19,21 @@ export interface BeatGrid {
   beats: number[];
 }
 
-/** Build a beat grid for the given BPM and total duration. */
+/**
+ * Build a beat grid for the given BPM and total duration.
+ *
+ * A non-positive or non-finite BPM (e.g. a music track with no detected tempo)
+ * would make `beatInterval` Infinity/NaN and turn the loop below into an
+ * infinite loop, hanging the export/preview. Callers (ExportStep,
+ * TapePreviewPlayer) pass `track.bpm` directly without a `> 0` check, so guard
+ * here: return an empty, beat-interval-0 grid which downstream consumers already
+ * treat as "no beat sync" (validateTimeline checks `beatInterval > 0`;
+ * getBeatIntensity/getBeatPhase return 0 on an empty/zero grid).
+ */
 export function buildBeatGrid(bpm: number, totalDuration: number): BeatGrid {
+  if (!Number.isFinite(bpm) || bpm <= 0 || !Number.isFinite(totalDuration) || totalDuration < 0) {
+    return { bpm: 0, beatInterval: 0, beats: [] };
+  }
   const beatInterval = 60 / bpm;
   const beats: number[] = [];
   for (let t = 0; t <= totalDuration + beatInterval; t += beatInterval) {
@@ -149,6 +162,7 @@ export function buildBeatSyncedTimeline(
  * Useful for pulsing effects that sync to the rhythm.
  */
 export function getBeatPhase(time: number, grid: BeatGrid): number {
+  if (!(grid.beatInterval > 0)) return 0; // no usable grid (e.g. invalid BPM) — avoid NaN
   const posInBeat = (time % grid.beatInterval) / grid.beatInterval;
   return posInBeat;
 }
