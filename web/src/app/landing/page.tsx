@@ -268,9 +268,8 @@ function FaqItem({ q, a }: { q: string; a: string }) {
           className={`h-5 w-5 flex-shrink-0 text-[var(--text-tertiary)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <p id={panelId} className="pb-5 text-[var(--text-secondary)] leading-relaxed">{a}</p>
-      )}
+      {/* Always rendered (hidden when collapsed) so aria-controls always resolves to a real node. */}
+      <p id={panelId} hidden={!open} className="pb-5 text-[var(--text-secondary)] leading-relaxed">{a}</p>
     </div>
   );
 }
