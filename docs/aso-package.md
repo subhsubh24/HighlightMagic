@@ -82,7 +82,7 @@ FREE TIER:
 5 full AI-powered exports per month. Every feature included. A small watermark is added — remove it with Pro.
 
 PRO SUBSCRIPTION:
-Unlimited exports + no watermark. $14.99/month or $149.99/year (2 months free), cancel anytime.
+Unlimited monthly exports (a 50-per-day fair-use ceiling applies to all tiers) + no watermark. $14.99/month or $149.99/year (2 months free), cancel anytime.
 
 PRIVACY:
 Your videos are processed on secure servers to create your highlights. We do not store your raw footage after processing is complete. See our full privacy policy at highlightmagic.app/privacy.
