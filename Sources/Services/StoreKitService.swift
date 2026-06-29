@@ -14,7 +14,10 @@ final class StoreKitService {
         SubscriptionProduct.yearly.rawValue
     ]
 
-    nonisolated(unsafe) private var updateListenerTask: Task<Void, Never>?
+    // MainActor-isolated: assigned only in the @MainActor init and read only in
+    // deinit. `Task` is Sendable, so a nonisolated deinit may cancel it safely —
+    // no `nonisolated(unsafe)` escape hatch is needed under Swift 6.
+    private var updateListenerTask: Task<Void, Never>?
 
     init() {
         updateListenerTask = listenForTransactions()
