@@ -4,6 +4,60 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 27 — 2026-06-29 — scorecard ship-critical gaps: poll-manager race (#179) + iOS provider-key hard-disable (#180); abandoned StoreKit concurrency (#181)
+Consumed the fresh independent QUALITY_SCORECARD (as_of 2026-06-29, overall B, ship_gate_met=false;
+ship-critical C's = correctness_reliability + store_readiness). No DEEP AUDIT this run (Run 26 ran one
+same-day, <24h). Drove the named top_gaps. 8-scout-equivalent sweep (4 Haiku scouts) → SELECT 3
+file-disjoint ship-critical changes. Gate green throughout (web build + 617→620 tests + 0 lint).
+
+### Shipped (merged, 2 Sonnet reviewers each APPROVED)
+- **#179 poll-manager waiter fan-out** (correctness_reliability): old code mutated a shared task's
+  resolve/reject into a nested wrapper chain on duplicate-predictionId registration (order-fragile;
+  cancelAllPolls could drop inner callers). Replaced with a per-task `waiters: Waiter[]` + settleResolve/
+  settleReject fan-out — every registrant settles exactly once. +2 tests (3-way failure fan-out, 5-way
+  success). Fully web-verified.
+- **#180 iOS provider-key hard-disable** (store_readiness #1 blocker + security + artifact_integrity):
+  ElevenLabsService + AtlasCloudService resolved a key from env/Keychain/Info.plist and would call the
+  provider DIRECTLY if present (App Store credential risk + server-gate bypass). Set `apiKey→nil`
+  (isAvailable→false) so the direct path can never fire. In prod no key is bundled → zero functional
+  regression; converts "coincidentally dormant" into "structurally impossible." Also corrected the now-stale
+  ElevenLabsService header comment. NOTE: this gap was UNTRACKED — REMAINING_STEPS 0a's "iOS key removal
+  COMPLETE (Run 19)" only covered the 4 ANTHROPIC services; the ElevenLabs/AtlasCloud provider keys were
+  never addressed until now.
+
+### Abandoned (don't re-attempt) — LESSON
+- **#181 drop `nonisolated(unsafe)` on StoreKitService.updateListenerTask** — reason `ios_compile_fail`.
+  The `ios` check failed with `Main actor-isolated property 'updateListenerTask' can not be referenced
+  from a nonisolated context` (Xcode 26.3 / Swift 6). **The `nonisolated(unsafe)` IS LOAD-BEARING**: the
+  nonisolated `deinit` needs it to call `.cancel()` on the @MainActor-isolated property. The reviewers'
+  AND scout's belief that "Task is Sendable ⇒ a nonisolated deinit may access it without the annotation"
+  is FALSE on this toolchain. DO NOT re-attempt removing `nonisolated(unsafe)` here — it is a deliberate,
+  in-practice-safe escape hatch (assign-once in init, read-once in deinit), not a real bug. If the
+  scorecard keeps flagging it, the only Swift-6-clean alternative is `isolated deinit` (SE-0371), which
+  needs a newer toolchain + changes deinit semantics — not worth the risk. Closed PR #181.
+  - META lesson: for iOS edits I can't compile, deinit/actor-isolation claims from reviewers are NOT
+    reliable — `nonisolated(unsafe)` on a @MainActor Task handle accessed in deinit is the canonical case
+    where removing it breaks the build. Treat such "it's obviously safe to remove" annotations skeptically.
+  - ORPHAN BRANCH: `origin/fix/storekit-listener-concurrency` could not be deleted (proxy/network
+    `send-pack: unexpected disconnect` on every attempt). PR is CLOSED so it's harmless; a future run or
+    the owner can delete it.
+
+### Dropped candidates (would have been padding — verified, not assumed)
+- elevenlabs-* provider module tests: already fully covered in elevenlabs.test.ts (scout-confirmed).
+- AI-response array-access guards: scout audit found NO unguarded `[0]` access — codebase already defensive.
+- transitions.ts coverage (16%): the 3 pure fns are already tested; the only gap is drawTransitionOverlay
+  (canvas-2d), which yields only brittle mock-call assertions. Skipped.
+- coverage-threshold ENFORCEMENT (flip `npm test`→`--coverage`): measured real coverage = lines 59.6% /
+  statements 58.9%, BELOW the declared 60% floors → enforcing now reddens CI. Needs a real coverage lift
+  first (transitions/store/post-processing drag it down). Left unenforced; recorded as a tests_evals gap.
+
+### Follow-up gaps surfaced this run (for a future run / REMAINING_STEPS)
+- **EditorView dead-UI** (Reviewer B, #180): EditorView shows AI Music/Voiceover/SFX/Intro/Outro/Voice-Clone/
+  Stem/Style-Transfer toggles as ENABLED with no `isAvailable` guard, but those ElevenLabs/AtlasCloud features
+  are now (and were already in prod) dormant → a user flips a toggle and the feature silently does nothing
+  (BUILDS≠WORKS). Right fix: route these through the gated backend (like /api/ios-score/plan/validate) OR
+  hide/disable the toggles with a "Coming soon" affordance. Tracked in REMAINING_STEPS.
+
 ## Run 26 — 2026-06-29 — DEEP AUDIT + provider COGS metering (#170) + landing a11y (#171)
 Ran the periodic DEEP AUDIT (last was Run 22; 6 read-only Haiku lenses: security/abuse, correctness/
 dead-code, test/eval coverage, cost/perf, artifact-freshness/business-case, design/a11y). Shipped 2

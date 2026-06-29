@@ -5,6 +5,8 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #180 | security(ios): hard-disable the ElevenLabs + AtlasCloud direct-to-provider key paths (apiKey→nil, isAvailable→false) — closes the scorecard's #1 store_readiness blocker (App Store credential-handling risk) + a server-gate bypass; a previously-untracked gap (REMAINING_STEPS 0a only covered the 4 Anthropic services) | H/store | Run 27 |
+| #179 | fix(poll-manager): fan out duplicate-predictionId waiters via a per-task array instead of mutating a shared resolve/reject callback chain — closes the scorecard correctness_reliability callback-race finding | G/correctness | Run 27 |
 | #170 | feat(cost): meter ElevenLabs + AtlasCloud usage (chars/seconds/job) via [CostMeter] — closes the audio/video COGS-observability blind spot so per-export cost is reconcilable from Vercel logs vs invoices | B/cost | Run 26 |
 | #171 | a11y: label waitlist input (aria-label/autocomplete), announce form result (role=status/alert), wire FAQ aria-controls (always-rendered panel), focus-visible rings on landing | G/a11y | Run 26 |
 | #156 | feat(H6): per-request nonce-based Content-Security-Policy (script-src nonce + strict-dynamic, no unsafe-inline) — closes the last H6 gap | H6 | Run 25 |
