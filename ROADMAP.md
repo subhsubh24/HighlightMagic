@@ -413,9 +413,10 @@ How quality is continuously re-validated IN DEPTH — enforced gates on every ch
 evals + periodic deep audits. (This is NOT a pretense of re-reviewing every character every
 run; it is layered, automated, and auditable.) NOTE: "Track F" is the business case above;
 this quality track is G.
-- [ ] G1. Lint/format clean + ENFORCED — web lint (and Swift lint, e.g. SwiftLint, if present)
+- [x] G1. Lint/format clean + ENFORCED — web lint (and Swift lint, e.g. SwiftLint, if present)
       at ZERO errors and no new warnings, kept clean. Reviewer A rejects any change that
-      introduces a lint error/warning. Owner promotes lint to a REQUIRED CI check once green.
+      introduces a lint error/warning. DONE: `web-lint` is a REQUIRED CI check (PR #164) and
+      `enforce_admins: true` makes it un-bypassable. (Swift lint not yet wired — tracked separately.)
 - [ ] G2. Coverage floor — enforce a meaningful test-coverage threshold on web/backend critical
       paths (Vitest `--coverage`) and on iOS logic modules (XCTest); a drop below the floor FAILS.
 - [ ] G3. Detection/generation EVAL coverage COMPLETE — a live eval per CORE PIPELINE STAGE
@@ -735,6 +736,20 @@ ONLY the actions the loop physically cannot take. Keep it current every run. Exp
   6. TestFlight build, then App Store submission + respond to review.
   7. Fund/launch marketing + ad accounts and start the content calendar.
 Each item: what to do, where, and what in the repo it maps to. Nothing the loop could have done.
+
+## Shipping protocol (STANDING; read every run)
+Merge EVERY PR with `gh pr merge --squash --auto --delete-branch`. Auto-merge WAITS for the
+REQUIRED CI checks and merges only once they're all green — that is how the loop WAITS for CI
+instead of bypassing it. **NEVER `--admin`, and never any force/override/merge-while-red.** Branch
+protection on `main` enforces the required checks **for administrators too** (`enforce_admins: true`),
+so a force path would be rejected anyway — but the rule stands regardless of tokens/permissions.
+- REQUIRED checks (must all pass before any merge): `web` (Next.js build + Vitest), `ios`
+  (xcodebuild build+test), `web-e2e` (Playwright functional journey suite — BUILDS ≠ WORKS), and
+  `web-lint` (zero warnings). A change that builds but is broken-for-a-user, or is lint-dirty,
+  CANNOT auto-merge.
+- A red required check BLOCKS the merge → FIX it (≤2 cycles) or ABANDON the change (clean tree),
+  never force it through. `strict: false` is intentional, so file-disjoint PRs still auto-merge
+  without serial rebases.
 
 ## Guardrails
 Live secrets/signing/billing are human-applied (PENDING_OPS.md + REMAINING_STEPS.md); never

@@ -13,8 +13,9 @@ the only channel by which the loop's own rules improve, since it can't edit its 
 ```yaml
 LOOP_HEALTH:
   project: HighlightMagic
-  as_of: 2026-06-28
-  last_run: 2026-06-28
+  as_of: 2026-06-29
+  enforced_in_ci: true           # quality gates are REQUIRED checks [web, ios, web-e2e, web-lint] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass
+  last_run: 2026-06-29
   last_deep_audit: null
   this_run:
     changes_shipped: 0

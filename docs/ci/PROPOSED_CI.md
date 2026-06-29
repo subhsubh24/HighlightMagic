@@ -5,6 +5,15 @@
 > Branch-protection `required_status_checks` is now `["web", "ios", "web-e2e", "web-lint"]`; issue
 > #163 closed. This doc is kept as the record of the staged plan. **Do not set `E2E_RATELIMIT_BYPASS`
 > in Vercel/prod** — it is a CI-only, test-only rate-limit bypass.
+>
+> **✅ TEETH ADDED 2026-06-29.** `enforce_admins: true` now on `main` — the required checks apply to
+> administrators too, so even an `--admin`/force-merge cannot bypass a red check (the loop already
+> merges via `--auto`; this guarantees no path bypasses CI). `strict: false` kept so file-disjoint
+> PRs still auto-merge without serial rebases. The three PR-merging routines (factory, growth,
+> auditor) and ROADMAP "Shipping protocol" now mandate `--auto`, never `--admin`. Defense-in-depth on
+> the bypass var: `assertRateLimitBypassNotOnLivePlatform()` (PR #167) makes the app **fail to boot**
+> if `E2E_RATELIMIT_BYPASS=1` is ever set while `VERCEL` is set, so a fat-finger into the Vercel env
+> fails LOUD instead of silently disabling rate limiting.
 
 **Why this is staged, not applied:** the autonomous loop must NOT edit `.github/` (it trips a
 sensitive-file permission prompt that hangs a headless run). So the loop builds everything it can
