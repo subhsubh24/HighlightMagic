@@ -7,11 +7,34 @@ all capabilities." Two layers:
 - **Flows** are validated by the journey suite (`web/e2e/`, the required `web-e2e` check): it builds
   + starts the app and drives the real user journeys, asserting the intended OUTCOME (not just HTTP
   200). Plus 600+ unit tests (`web`) and lint-at-zero (`web-lint`).
-- **No-unregistered-service gate** (`web/src/lib/validation-manifest.test.ts`, runs in the required
-  `web` check): every `process.env.*` the backend reads must be registered in
-  `web/src/lib/validation-manifest.ts` with a validation mode. A brand-new, unregistered external
-  service **fails the build → blocks the PR**. This is the mechanism that stops the loop from silently
-  shipping a capability it hasn't accounted for. (It already caught `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.)
+- **No-unregistered-service gate** (`web/src/lib/validation-manifest.test.ts`, runs in the dedicated
+  required **`validate-capabilities`** check *and* in `web`): every `process.env.*` the **runtime**
+  backend reads must be registered in `web/src/lib/validation-manifest.ts` with a validation mode. A
+  brand-new, unregistered external service **fails the build → blocks the PR**. This is the mechanism
+  that stops the loop from silently shipping a capability it hasn't accounted for. (It already caught
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.)
+  - The scanner reads **runtime app code only** — `*.test.ts`/`*.spec.ts`, `__tests__/`, and `evals/`
+    are excluded (and `web/e2e/` + `/scripts` are outside `web/src`), so CI/test-only env vars never
+    cause a false "drift" failure (pitfall #1).
+  - It's a **global completeness** check (not scoped-to-the-PR-diff), so it needs no base-diff/full
+    history, and the manifest is a typed TS module imported directly — no YAML parser dependency.
+
+## Readiness mode (the ship gate)
+`scripts/preflight.sh` (the readiness gate, not a per-PR check) parses `LOOP_HEALTH.validation.unmet`
+and **fails "ready" if any capability is unmet** — i.e. a capability whose real validation is blocked
+on an owner-only secret (the live-eval AI keys). So the app cannot be declared ready while a paid
+round-trip has never actually been validated.
+
+## Surfacing — every unmet capability lives in BOTH places
+An unmet capability is recorded in **both** (1) `LOOP_HEALTH.validation.unmet` (the dashboard feed) and
+(2) an **urgent `validation-capability-<service>` OWNER_ACTION** in `PENDING_OPS.md`. If it's in only
+one, it's invisible to the owner — that's a bug. Today's unmet set: `validation-capability-anthropic`,
+`-elevenlabs`, `-atlascloud` (set those keys as GitHub Actions secrets to clear them).
+
+## Honesty check (the email-verification trap, generalized)
+A `mock`/keyless capability counts as validated **only if the flow is genuinely exercised elsewhere**.
+The readiness auditors must reconcile that a "validated" capability isn't actually an un-exercised
+critical path hiding behind a stub — a green DOM or a passing contract test over a no-op is a LIE.
 
 When the gate trips, the loop must register the service with the right mode **and** build its
 validation path before the PR can merge:
