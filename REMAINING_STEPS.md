@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-06-27 (Run 19).
+be executed. Last updated: 2026-06-29 (Run 27).
 
 ---
 
@@ -62,6 +62,26 @@ cannot fetch (apple.com is blocked from the build egress), so the owner supplies
 DONE (loop, #114): the iOS client now attaches its StoreKit signed transaction
 (`result.jwsRepresentation`) to the entitlement-gated backend calls (ios-score, ios-plan), so the
 gate receives input. The only remaining step is owner-supplied — set `APP_STORE_ROOT_CA_PEM` above.
+
+### 0d. iOS enhancement-generation (audio/video) — route through the gated backend + fix the dead toggles
+
+**LOOP-DEFERRED (loop CAN build this).** Scope clarification: item 0a's "iOS key removal COMPLETE
+(Run 19)" covered only the 4 **Anthropic** services. The **ElevenLabs + AtlasCloud** services held
+their OWN provider-key resolution (env/Keychain/Info.plist) and would have called those providers
+directly. **#180 (Run 27)** hard-disabled that path (`apiKey→nil`, `isAvailable→false`), closing the
+App Store credential risk + server-gate bypass. CONSEQUENCE: the iOS enhancement features that depend
+on them — **AI Music, Voiceover, SFX, Intro/Outro cards, Voice Clone, Stem Separation, Style Transfer**
+— are now (and were already in production, since no key is bundled) **dormant**. Two follow-ups remain:
+
+1. **Backend-route these features** through the gated web backend (analogous to the existing
+   `/api/ios-score`, `/api/ios-plan`, `/api/ios-validate`), so Pro users actually get them and the spend
+   stays server-gated. This is the proper restoration path.
+2. **EditorView dead-UI** (flagged by Reviewer B on #180): until (1) lands, `EditorView` still shows
+   these toggles as ENABLED with no `isAvailable` guard, so a user can flip one and the feature silently
+   does nothing (BUILDS≠WORKS). Interim fix: hide or `.disabled()` the affected toggles with a
+   "Coming soon" affordance. (iOS UI change — gated by the `ios` check; edit conservatively.)
+
+**What the owner can do to unblock**: nothing — loop work.
 
 ---
 
