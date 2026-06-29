@@ -4,6 +4,63 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 26 — 2026-06-29 — DEEP AUDIT + provider COGS metering (#170) + landing a11y (#171)
+Ran the periodic DEEP AUDIT (last was Run 22; 6 read-only Haiku lenses: security/abuse, correctness/
+dead-code, test/eval coverage, cost/perf, artifact-freshness/business-case, design/a11y). Shipped 2
+file-disjoint, fully-web-verified changes; abandoned 1 on the value bar. Gate green throughout
+(build + lint + 50 files/613 tests).
+
+### ⚠️ OPERATIONAL GOTCHA (cost me real time — DO NOT repeat): local `main` was STALE
+At session start the local `main` ref was at an ancient commit (`5cc66fa`, the PR #8 "Add CI" era),
+while `origin/main` was `dd3336f` (#166). I cut my first branches from local `main` → wrong/old file
+versions (e.g. elevenlabs-tts.ts used a literal model id + no imports) and ~25 test files missing
+(only 23 vs the real 50). RULE GOING FORWARD: every branch MUST be cut from `origin/main`
+(`git checkout -B <branch> origin/main`) and the baseline gate MUST run on origin/main. Verify with
+`git rev-parse origin/main` vs HEAD before building. (The detached-HEAD baseline I ran first was at
+dd3336f and correct — but `main` the local branch was not. Always trust origin/main.)
+
+### Shipped
+- **#170 provider COGS metering** (B/cost): LLM calls already emit a computed-USD `[CostMeter]` line,
+  but ElevenLabs (tts/sfx/music) + AtlasCloud (submitTask) emitted nothing → the bulk of per-export
+  COGS was invisible, even though BUSINESS_CASE §3 says "verify from Vercel logs + invoices". New
+  `web/src/lib/usage-meter.ts` (`logProviderUsage`) emits `[CostMeter] <provider>-<op>: <unit>=<n>`
+  with the COST DRIVER UNITS (chars / seconds / job) — NOT a fabricated USD (provider per-unit prices
+  are plan-dependent + uncited; honesty). Wired into the 4 provider files (success-only). Tests:
+  usage-meter + provider-usage-metering wiring. Both reviewers APPROVED.
+- **#171 landing a11y** (G/a11y): waitlist input aria-label+autocomplete; success=role=status, error=
+  role=alert; FAQ aria-controls→an ALWAYS-rendered `<p hidden={!open}>` panel (APG pattern; first
+  attempt used a conditionally-mounted panel → both reviewers REQUEST_CHANGES → fixed + re-approved);
+  focus-visible rings on nav + FAQ. No copy/pricing touched.
+
+### Abandoned (don't re-attempt)
+- **#168 beat-sync buildBeatGrid invalid-BPM guard** — reason `review_value`. A 0/NaN BPM would make
+  buildBeatGrid loop forever, BUT music BPMs come from a static curated array (music.ts, asserted >0
+  in music.test.ts); the input is UNREACHABLE from any user path → defensive guard + impossible-case
+  tests = below the value bar. Closed PR, deleted branch.
+
+### DEEP AUDIT — 2026-06-29 (Run 26) — dispositions (most "findings" were false alarms; verify before acting)
+- SECURITY (Track H): consumeExport "gap" on /api/plan,/sfx,/voiceover,/ios-plan is BY DESIGN — quota
+  consumed once at score; sub-routes are capped by H7 per-user/day spend ceiling + rate limit (NOT a
+  hole). Timeout "gaps" on ios-score/ios-validate = FALSE (90s / 20s|15s AbortSignal present; B6 holds).
+  proxy-video content-type, CORS env-default = LOW. No critical security finding.
+- COST: ElevenLabs/AtlasCloud metering gap → FIXED (#170). "MODEL_PRICES missing CLAUDE_VALIDATOR" =
+  FALSE — CLAUDE_VALIDATOR === CLAUDE_FRAME_SCORER (same Haiku id) so estimateCostUSD resolves; do NOT
+  add a duplicate entry (causes TS error). Kling cost-awareness in planner + content-hash detection
+  cache = real nice-to-haves, deferred (planner-prompt change is unverifiable here).
+- CORRECTNESS: KV checkExportAllowed/consumeExport unwrapped — already fails CLOSED (throw happens
+  BEFORE any paid call, wallet protected; only UX is a 500 vs graceful) → below the bar. iOS
+  KineticCaptionRenderer flicker/fade is a TODO (silent fallback to static) — REAL but iOS, can't
+  compile-verify on Linux; left for a careful iOS run.
+- COVERAGE: detect.eval.ts already covers the PLANNER stage (planFromScores) with 4 fixtures — the
+  "planner has no eval" finding was wrong. Remaining G3 evals (validate/voiceover/music/sfx/video) are
+  EVAL_MODE=1-gated real-API specs — unverifiable locally, deferred. Coverage thresholds exist in
+  vitest.config but aren't CI-enforced (`npm test` has no --coverage) → OWNER (.github, can't edit).
+- DESIGN/A11y: landing a11y → FIXED (#171). Hero double-gradient redesign = subjective, deferred.
+- ARTIFACT FRESHNESS: pricing/COGS/limits all consistent across StoreKit↔landing↔ASO↔BUSINESS_CASE.
+  Minor: D1 annotation "PrivacyInfo.xcprivacy pending" is stale (file exists+valid) — left ROADMAP
+  tick untouched (App-Privacy-labels-in-ASC is the genuine owner-pending part). BUSINESS_CASE as_of
+  reconciled this run.
+
 ## Enforce loop gates as REQUIRED CI checks (harness proposal #1) — 2026-06-28
 GAP (loop-health): required checks are only `web` (vitest unit) + `ios`; the FUNCTIONAL JOURNEY SUITE
 isn't run in CI at all and lint is non-blocking → a BUILDS≠WORKS or lint-failing change can auto-merge.

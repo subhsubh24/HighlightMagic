@@ -5,6 +5,8 @@ Format: newest first. Only MERGED changes appear here.
 
 | PR | Title | Track | Merged |
 |---|---|---|---|
+| #170 | feat(cost): meter ElevenLabs + AtlasCloud usage (chars/seconds/job) via [CostMeter] — closes the audio/video COGS-observability blind spot so per-export cost is reconcilable from Vercel logs vs invoices | B/cost | Run 26 |
+| #171 | a11y: label waitlist input (aria-label/autocomplete), announce form result (role=status/alert), wire FAQ aria-controls (always-rendered panel), focus-visible rings on landing | G/a11y | Run 26 |
 | #156 | feat(H6): per-request nonce-based Content-Security-Policy (script-src nonce + strict-dynamic, no unsafe-inline) — closes the last H6 gap | H6 | Run 25 |
 | #158 | fix(honesty): disclose Pro's daily fair-use cap so "unlimited" isn't misleading (card → "Unlimited monthly exports"; FAQ reworded) | D/honesty | Run 25 |
 | #151 | fix(P0): meter per-export API cost on both validation routes (/api/validate streaming + /api/ios-validate) — last unmetered paid LLM call sites | P0 | Run 24 |

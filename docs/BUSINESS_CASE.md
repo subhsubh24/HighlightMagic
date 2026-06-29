@@ -119,6 +119,12 @@ audio generation, and photo animation are all COGS lines the business pays.
 > ⚠️ **Estimates only.** Verify actual per-export costs from Vercel function logs + ElevenLabs +
 > AtlasCloud invoices after the first live traffic week. Frame scoring cost depends on video
 > length and extraction frame rate; typical exports may be 60–120 frames.
+>
+> 🔎 **Now instrumented (PR #170):** every paid call emits a `[CostMeter]` log line — the LLM calls
+> log a computed USD estimate, and the audio/video providers (ElevenLabs tts/sfx/music, AtlasCloud
+> video) now log the billed **cost-driver units** (chars / seconds / job). So a single
+> `grep [CostMeter]` over the Vercel function logs yields the full per-export usage picture to
+> reconcile against the provider invoices — closing the previous audio/video observability blind spot.
 
 ### Base case per-export COGS (audio-only, no photo animation)
 
@@ -379,4 +385,4 @@ LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid mo
 the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
 collapses to 20% and becomes negative above ~18 exports/month.
 
-*Last updated: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
+*Last updated: 2026-06-29 (Run 26) — added the §3 "Now instrumented (PR #170)" note: audio/video provider calls now emit `[CostMeter]` usage-unit lines so the "verify per-export cost from Vercel logs" guidance is actually actionable. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
