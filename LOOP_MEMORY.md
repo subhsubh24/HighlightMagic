@@ -4,6 +4,56 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 28 — 2026-06-29 — web planner timeout fix (#184) + wallet-drain/cache time-edge tests (#185)
+Cold start. Local `main` was badly stale (old bootstrap HEAD) — hard-reset to origin/main per the
+known stale-main gotcha before doing anything. No DEEP AUDIT this run (Run 26 ran one 2026-06-29,
+<24h). Consumed the QUALITY_SCORECARD (as_of 2026-06-29, overall B, ship_gate_met=false) as DATA —
+but it is now STALE: its two ship-critical C's were largely closed AFTER it was graded — #179 fixed
+the poll-manager race (correctness) and #180 hard-disabled the iOS ElevenLabs/AtlasCloud direct paths
+(store_readiness). VERIFIED in code this run: all 3 iOS provider services (ClaudeVision/ElevenLabs/
+AtlasCloud) are `isAvailable=false`; the elevenlabs-* web modules ARE tested (elevenlabs.test.ts covers
+tts/music/sfx/scribe/stems/voice-clone). Ran 5 Haiku scouts (security/abuse, tests/coverage, artifact
+freshness, iOS correctness, backend functional reality). Gate green throughout (build + 619→631 tests +
+0 lint). 2 changes selected (file-disjoint), 2 Sonnet reviewers each APPROVED, both merged.
+
+### Shipped (merged)
+- **#184 /api/plan maxDuration=300** (functional reality / B-reliability): the web planner SSE route
+  declared `runtime=nodejs` but NO maxDuration, so on Vercel the Sonnet planner (1–3 min adaptive
+  thinking) is killed at the platform default mid-stream → silent "Failed to fetch", lost export.
+  /api/ios-plan already had 300; brought web to parity. One-line + comment; build verified.
+- **#185 wallet-drain/cache time-edge tests** (G/tests): +12 unit tests on 4 pure modules covering the
+  edges that were untested (existing tests only probed a single instant): spend-ceiling 24h window RESET
+  (+ must-not-reset-early), rate-limit sliding-window decay (full + partial hit expiry), asset-cache LRU
+  eviction at MAX_ENTRIES + expired-purge-before-cap, detection-cache source-fingerprint invalidation
+  (size change / file add-remove / order-independence). Fake-timer driven, deterministic. Source untouched.
+
+### Dropped candidates (verified, NOT padding — do not re-attempt without new evidence)
+- **/api/render hardening (scout flagged HIGH)** — NOT shipped: the route returns 501 BEFORE any work
+  (feature-gated `RENDER_ENABLED!=="true"`, default off) and makes NO paid call; the FFmpeg worker isn't
+  deployed. Adding rate-limit/quota gating to a non-functional 501 stub is speculative — the right time is
+  when the worker is actually built. Re-open ONLY when the RENDER_ENABLED path does real work.
+- **/api/stems generation-ceiling (scout flagged MED)** — NOT shipped: already per-IP rate-limited; the
+  web caller sends no userId by design (quota metered upstream at /api/score) so a ceiling here is a no-op.
+  Documented design, not a gap.
+- **iOS StoreKitService nonisolated(unsafe) + crash-guards** — NOT attempted: confirmed Run 27's recorded
+  lesson — removing `nonisolated(unsafe)` BREAKS the ios build (nonisolated deinit needs it). The other
+  scout "crash guards" were impossible-case (ConfettiView hardcoded non-empty array) or in now-dormant
+  (isAvailable=false) services = churn. iOS stays untouched this run.
+- **Privacy manifest "under-declaration"** — scout's Keychain suggestion is WRONG (Keychain/Security is
+  NOT a Required-Reason API). NSPrivacyCollectedDataTypes empty is defensible: frames are transient/not
+  retained (privacy policy), which is not "collection" under Apple's definition. Docs verified CONSISTENT
+  with the now-disabled provider paths. No doc bug to fix → no churn.
+
+### Follow-ups noted (not owner-only; future loop work)
+- **G2 coverage ENFORCEMENT**: @vitest/coverage-v8 is NOT in web/package.json (vitest.config.ts declares
+  thresholds 60/60/50/60 but they're unenforced — no provider, and the `web` CI runs `npm test` not
+  `--coverage`). #185 raised real coverage but enforcement needs either a package.json `test:coverage`
+  gate wired into CI (.github = owner/interactive-only) or coupling `npm test` to --coverage (risky if
+  current coverage < thresholds — MEASURE first). Deferred.
+- **BUSINESS_CASE A→A+**: scorecard's only business_case_strength gap is the §5 subscriber-growth table
+  not reconciling with the stated conversion×MAU assumptions. Above ship bar (already grade A); a careful
+  living-artifact fix, not ship-critical. Deferred (avoid a wrong edit to the governing revenue doc).
+
 ## Run 27 — 2026-06-29 — scorecard ship-critical gaps: poll-manager race (#179) + iOS provider-key hard-disable (#180); abandoned StoreKit concurrency (#181)
 Consumed the fresh independent QUALITY_SCORECARD (as_of 2026-06-29, overall B, ship_gate_met=false;
 ship-critical C's = correctness_reliability + store_readiness). No DEEP AUDIT this run (Run 26 ran one
