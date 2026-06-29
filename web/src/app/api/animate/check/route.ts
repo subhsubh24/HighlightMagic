@@ -1,4 +1,5 @@
 import { checkAnimationResult } from "@/lib/kling";
+import { checkRateLimit, getClientIP, rateLimitResponse, POLL_RATE_LIMIT } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,6 +13,12 @@ const PREDICTION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
  */
 export async function POST(req: Request) {
   try {
+    // Track H: this status poll hits the AtlasCloud/Kling provider and is unauthenticated, so
+    // throttle it (generously, per POLL_RATE_LIMIT) to bound job-ID enumeration + DoS amplification
+    // without breaking legitimate ~5s polling of an in-flight job.
+    const rl = checkRateLimit(`animate-check:${getClientIP(req)}`, POLL_RATE_LIMIT);
+    if (!rl.allowed) return rateLimitResponse(rl);
+
     const { predictionId } = await req.json();
 
     if (!predictionId || typeof predictionId !== "string") {

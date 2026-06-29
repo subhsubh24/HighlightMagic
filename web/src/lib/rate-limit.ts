@@ -101,6 +101,13 @@ export function getClientIP(req: Request): string {
 export const PAID_RATE_LIMIT: RateLimitConfig = { limit: 10, windowSec: 60 };
 /** Public unauthenticated forms (waitlist) — 5 req/min/IP to resist bot floods */
 export const PUBLIC_RATE_LIMIT: RateLimitConfig = { limit: 5, windowSec: 60 };
+/**
+ * Status/polling endpoints (e.g. /api/animate/check) — generous so legitimate polling never trips
+ * (poll-manager waves run ~every 5s ≈ 12/min; even an aggressive 1s cadence stays at 60/min), while
+ * still bounding job-ID enumeration / DoS amplification at 60 req/min/IP. Do NOT use PAID_RATE_LIMIT
+ * (10/min) here — it would reject normal polling and dead-end an in-flight photo-animation job.
+ */
+export const POLL_RATE_LIMIT: RateLimitConfig = { limit: 60, windowSec: 60 };
 
 /** Build a standard 429 Too Many Requests response with Retry-After headers. */
 export function rateLimitResponse(result: RateLimitResult): Response {

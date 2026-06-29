@@ -3,22 +3,27 @@
  * /api/animate/submit; covers input sanitisation (predictionId format), the outputUrl→videoUrl
  * mapping the client depends on, and error hygiene.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/kling", () => ({ checkAnimationResult: vi.fn() }));
 import { checkAnimationResult } from "@/lib/kling";
 import { POST } from "@/app/api/animate/check/route";
+import { _resetBuckets, POLL_RATE_LIMIT } from "@/lib/rate-limit";
 
 const mockCheck = vi.mocked(checkAnimationResult);
 
-function req(body: unknown): Request {
+function req(body: unknown, ip?: string): Request {
   return new Request("http://localhost/api/animate/check", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(ip ? { "x-forwarded-for": ip } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
 
+beforeEach(() => _resetBuckets());
 afterEach(() => vi.clearAllMocks());
 
 describe("POST /api/animate/check", () => {
@@ -58,5 +63,23 @@ describe("POST /api/animate/check", () => {
     const body = await res.json();
     expect(body.error).toBe("Animation check failed");
     expect(JSON.stringify(body)).not.toContain("queue");
+  });
+
+  it("rate-limits per IP after POLL_RATE_LIMIT, without hitting the provider on the blocked call", async () => {
+    mockCheck.mockResolvedValue({ status: "processing" });
+    const ip = "203.0.113.7";
+    // Exhaust the generous poll budget — all allowed.
+    for (let i = 0; i < POLL_RATE_LIMIT.limit; i++) {
+      const res = await POST(req({ predictionId: "abc123" }, ip));
+      expect(res.status).toBe(200);
+    }
+    // The next call from the same IP is throttled BEFORE the provider is queried.
+    const callsBefore = mockCheck.mock.calls.length;
+    const blocked = await POST(req({ predictionId: "abc123" }, ip));
+    expect(blocked.status).toBe(429);
+    expect(mockCheck.mock.calls.length).toBe(callsBefore);
+    // A different IP is unaffected (per-IP bucketing).
+    const other = await POST(req({ predictionId: "abc123" }, "198.51.100.4"));
+    expect(other.status).toBe(200);
   });
 });
