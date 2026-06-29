@@ -12,6 +12,8 @@
  * Server-side only — requires ATLASCLOUD_API_KEY env var.
  */
 
+import { logProviderUsage } from "@/lib/usage-meter";
+
 const ATLAS_API_BASE = "https://api.atlascloud.ai/api/v1/model";
 
 // ── Model IDs ──
@@ -146,6 +148,19 @@ export async function submitTask(
     if (!data?.data?.id) {
       throw new Error("Atlas Cloud API returned no prediction ID");
     }
+
+    // COGS observability: AtlasCloud bills per accepted job (video/upscale/lipsync);
+    // these are the most expensive per-export calls. Log the cost driver + duration.
+    logProviderUsage({
+      provider: "atlascloud",
+      op: endpoint === "generateImage" ? "image" : "video",
+      units: 1,
+      unit: "job",
+      meta: {
+        model: modelId,
+        ...(typeof payload.duration === "number" ? { duration: payload.duration } : {}),
+      },
+    });
 
     return data.data.id;
   }

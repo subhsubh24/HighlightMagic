@@ -8,6 +8,8 @@
  * Server-side only — requires ELEVENLABS_API_KEY env var.
  */
 
+import { logProviderUsage } from "@/lib/usage-meter";
+
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
 /** Max SFX duration (ms). Most transition SFX are 1-3 seconds. */
@@ -88,6 +90,15 @@ export async function generateSoundEffect(
   console.log(
     `[elevenlabs-sfx] Generated ${audioBuffer.byteLength} bytes (~${estimatedDuration}s)`
   );
+
+  // COGS observability: ElevenLabs SFX bills by requested duration (seconds).
+  logProviderUsage({
+    provider: "elevenlabs",
+    op: "sfx",
+    units: clampedDuration / 1000,
+    unit: "seconds",
+    meta: { bytes: audioBuffer.byteLength },
+  });
 
   return { status: "completed", audioUrl, duration: estimatedDuration };
 }

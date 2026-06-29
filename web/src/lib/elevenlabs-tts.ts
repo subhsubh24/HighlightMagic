@@ -9,6 +9,7 @@
  */
 
 import { ELEVENLABS_TTS } from "@/lib/ai-models";
+import { logProviderUsage } from "@/lib/usage-meter";
 
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
@@ -124,6 +125,15 @@ export async function generateVoiceover(
   console.log(
     `[elevenlabs-tts] Generated ${audioBuffer.byteLength} bytes (~${estimatedDuration}s)`
   );
+
+  // COGS observability: ElevenLabs TTS bills per input character.
+  logProviderUsage({
+    provider: "elevenlabs",
+    op: "tts",
+    units: text.length,
+    unit: "chars",
+    meta: { model: ELEVENLABS_TTS, voice: voiceCharacter, bytes: audioBuffer.byteLength },
+  });
 
   return { status: "completed", audioUrl, duration: estimatedDuration };
 }
