@@ -60,6 +60,10 @@ function buildCsp(nonce: string): string {
     `base-uri 'self'`,
     `form-action 'self'`,
     `frame-ancestors 'none'`,
+    // Track H5: the Cloudflare Turnstile CAPTCHA renders its challenge in an iframe from
+    // challenges.cloudflare.com. With no frame-src this falls back to default-src 'self' and the
+    // widget is blocked — so allow exactly that origin (and self), nothing wider.
+    `frame-src 'self' https://challenges.cloudflare.com`,
     `upgrade-insecure-requests`,
   ].join("; ");
 }

@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 import { IOS_APP_STORE_URL } from "@/lib/constants";
 import { trackEvent } from "@/lib/analytics";
+import { Turnstile } from "@/components/Turnstile";
+
+// Track H5 — public Turnstile site key. Inlined at build time by Next. When unset, the waitlist
+// form renders no CAPTCHA and behaves as before; when set (owner connects Turnstile), the widget
+// renders and a token is required before submit, matching the server-side check in /api/waitlist.
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 // ── Waitlist form ──────────────────────────────────────────────────────────
 
@@ -25,22 +31,39 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
   // Whether a confirmation email actually left the system (server tells us). Drives HONEST copy:
   // only promise "check your email to confirm" when one was really dispatched (SIDE-EFFECT INTEGRITY).
   const [confirmSent, setConfirmSent] = useState(false);
+  // Track H5: when Turnstile is configured, hold the verification token; submit is blocked until
+  // the challenge passes. When TURNSTILE_SITE_KEY is unset, this stays null and never gates submit.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  // Turnstile tokens are single-use; bumping this remounts the widget to issue a fresh one
+  // after a failed submit so a retry isn't stuck holding a spent token.
+  const [captchaNonce, setCaptchaNonce] = useState(0);
+  const captchaRequired = Boolean(TURNSTILE_SITE_KEY);
+
+  function resetCaptcha() {
+    if (!captchaRequired) return;
+    setTurnstileToken(null);
+    setCaptchaNonce((n) => n + 1);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
+    if (captchaRequired && !turnstileToken) return;
     setStatus("loading");
     setErrorMsg("");
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(
+          turnstileToken ? { email, cfTurnstileToken: turnstileToken } : { email }
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.error ?? "Something went wrong.");
         setStatus("error");
+        resetCaptcha();
       } else {
         trackEvent("waitlist_signup");
         setConfirmSent(Boolean(data.confirmationEmailSent));
@@ -49,6 +72,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
     } catch {
       setErrorMsg("Network error. Please try again.");
       setStatus("error");
+      resetCaptcha();
     }
   }
 
@@ -92,12 +116,22 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         />
         <button
           type="submit"
-          disabled={status === "loading" || !email.trim()}
+          disabled={status === "loading" || !email.trim() || (captchaRequired && !turnstileToken)}
           className="btn-primary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === "loading" ? "Joining…" : "Join Waitlist"}
         </button>
       </div>
+      {TURNSTILE_SITE_KEY && (
+        <div className="mt-3">
+          <Turnstile
+            key={captchaNonce}
+            siteKey={TURNSTILE_SITE_KEY}
+            onVerify={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(null)}
+          />
+        </div>
+      )}
       {status === "error" && (
         <p role="alert" className="mt-2 text-sm text-[var(--error)]">{errorMsg}</p>
       )}
