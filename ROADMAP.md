@@ -443,19 +443,6 @@ this quality track is G.
 - [ ] G5. Periodic DEEP AUDIT (holistic) — recurring whole-codebase audit beyond per-diff
       review (see the routine's PERIODIC DEEP AUDIT). Latest audit must be clean of CRITICAL
       findings (security, crashes, runaway API cost, data loss) for done.
-- [~] G6. VALIDATION COMPLETENESS — the loop must be ABLE to validate everything it ships, and must
-      be UNABLE to silently ship a capability it can't validate (STANDING; read every run). Mechanism
-      (built): `web/src/lib/validation-manifest.ts` registers EVERY external service/secret the
-      backend reads with a validation mode (mock | live-eval | owner-only | build-config | test-only
-      | internal); `validation-manifest.test.ts` runs in the REQUIRED `web` check and FAILS the build
-      if any `process.env.*` is unregistered → a NEW service hard-blocks its PR until registered with
-      a real validation path. DISCIPLINE: when you add a new external service, register it AND build
-      its validation — a keyless contract/journey test for `mock`; for `live-eval`, add the eval +
-      open the OWNER_ACTION for the owner-funded key (validation-eval-keys) and DO NOT tick the
-      capability done until the live-eval has actually run green. Real paid round-trips run in the
-      gated `.github/workflows/live-eval.yml` (cadence + manual; skips+warns without keys; never on
-      PRs). DONE when every ship-critical capability has either a green keyless validation or a green
-      live-eval (no capability stuck mock-only because a key is missing). See docs/ci/VALIDATION.md.
 - [ ] G6. VISUAL VERIFICATION — capture + visually review screenshots (FACTORY_STANDARD §6 "SEE WHAT
       THE USER SEES"). DOM assertions (G4) can pass while a page renders blank/unstyled/broken/
       overlapping or off-brand "vibe-coded" slop, so the functional suite must also CAPTURE a
@@ -503,6 +490,25 @@ this quality track is G.
       the gate still proves completion with the secret set in sandbox). *(UNBACKED today — verified
       2026-06-28: no email-capture round-trip in web/e2e; waitlist success hardened this run, round-trip
       still to build)*
+- [~] G8. VALIDATION COMPLETENESS — the loop must be ABLE to validate everything it ships, and must be
+      UNABLE to silently ship a capability it can't validate (STANDING; read every run). Mechanism
+      (built): `web/src/lib/validation-manifest.ts` registers EVERY external service/secret the runtime
+      backend reads with a validation mode (mock | live-eval | owner-only | build-config | test-only |
+      internal). TWO MODES: (per-PR) `validation-manifest.test.ts` runs in the REQUIRED
+      `validate-capabilities` check (and `web`) and scans ONLY runtime app code (not tests/evals/CI —
+      pitfall #1) — a NEW unregistered `process.env.*` FAILS → hard-blocks the PR; (readiness) preflight
+      fails if `LOOP_HEALTH.validation.unmet` is non-empty (any capability blocked on an owner-only
+      secret blocks "ready"). DISCIPLINE: when you add a new external service, register it AND build its
+      validation — a keyless contract/journey test for `mock`; for `live-eval`, add the eval + an urgent
+      OWNER_ACTION `validation-capability-<service>` for the owner-funded key, mirror it in
+      `LOOP_HEALTH.validation.unmet` (must be in BOTH — an unmet capability in only one place is
+      invisible = a bug), and DO NOT tick the capability done until the gated
+      `.github/workflows/live-eval.yml` (cadence + manual; skips+warns without keys; never on PRs) has
+      run it green. HONESTY (pitfall #5 — the email-verification trap in a new form): a `mock`/keyless
+      capability counts as validated ONLY if the flow is genuinely exercised elsewhere; the readiness
+      auditors must reconcile that a "validated" capability isn't an un-exercised critical path hiding
+      behind a stub. DONE when every ship-critical capability has a green keyless validation OR a green
+      live-eval (none stuck mock-only because a key is missing). See docs/ci/VALIDATION.md.
 
 ## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
 RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,

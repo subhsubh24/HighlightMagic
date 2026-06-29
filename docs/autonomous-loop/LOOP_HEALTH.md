@@ -17,6 +17,16 @@ LOOP_HEALTH:
   enforced_in_ci: true           # quality gates are REQUIRED checks [web, ios, web-e2e, web-lint] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass
   last_run: 2026-06-29
   last_deep_audit: 2026-06-29
+  validation:                    # self-validation capability gate (ROADMAP G8) — surfaced HERE + as OWNER_ACTIONS (must be in BOTH)
+    enforced_in_ci: true         # `validate-capabilities` is a REQUIRED check; a new unregistered external service CANNOT merge
+    capabilities_total: 12       # distinct external services in web/src/lib/validation-manifest.ts
+    ci_validated_keyless: 3      # mock, green every PR: Resend (flow), Turnstile, Vercel KV
+    live_eval: 3                 # Anthropic, ElevenLabs, AtlasCloud — real round-trip needs owner-funded GH Actions secrets
+    owner_only: 6                # Apple StoreKit receipt, site-gate, Instagram/Reddit/TikTok/X — validated at launch (existing OWNER_ACTIONs)
+    unmet:                       # blocks readiness (preflight) until validated; each is ALSO an urgent OWNER_ACTION in PENDING_OPS
+      - validation-capability-anthropic
+      - validation-capability-elevenlabs
+      - validation-capability-atlascloud
   this_run:
     changes_shipped: 2          # #170 provider cost metering, #171 landing a11y
     changes_abandoned: 1

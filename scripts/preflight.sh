@@ -197,6 +197,29 @@ PY
 then ok "QUALITY_SCORECARD: valid block; grades in {A+,A,B,C,D,F,null}"
 else fail "QUALITY_SCORECARD: missing, UNPARSEABLE, or contains an invalid grade"; fi
 
+# VALIDATION COMPLETENESS — readiness mode (per-PR mode is the required `web`/`validate-capabilities`
+# check that fails on an unregistered service). At readiness, EVERY capability must be validated: the
+# gate must be enforced in CI AND there must be ZERO unmet capabilities (a capability whose real
+# validation is blocked on an owner-only secret — e.g. the live-eval AI keys). An unmet capability is
+# surfaced in BOTH the LOOP_HEALTH validation.unmet list AND as an urgent OWNER_ACTION; it BLOCKS ready.
+if python3 - "$ROOT/docs/autonomous-loop/LOOP_HEALTH.md" <<'PY'
+import sys, re, yaml
+try: txt = open(sys.argv[1]).read()
+except OSError: print("LOOP_HEALTH.md missing"); sys.exit(1)
+m = re.search(r"```ya?ml\s*\n(.*?LOOP_HEALTH.*?)\n```", txt, re.S)
+if not m: print("no LOOP_HEALTH block"); sys.exit(1)
+try: d = (yaml.safe_load(m.group(1)) or {}).get("LOOP_HEALTH") or {}
+except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
+v = d.get("validation")
+if not isinstance(v, dict): print("no validation sub-block in LOOP_HEALTH (capability surfacing missing)"); sys.exit(1)
+if v.get("enforced_in_ci") is not True: print("validation.enforced_in_ci must be true"); sys.exit(1)
+unmet = v.get("unmet") or []
+if unmet: print("UNMET capabilities block readiness (provide the owner secret + validate, or it's a stub):", unmet); sys.exit(1)
+print("ok validation: enforced_in_ci=true, 0 unmet")
+PY
+then ok "VALIDATION: capability gate enforced in CI; 0 unmet capabilities"
+else fail "VALIDATION: gate not enforced, validation block missing, or unmet capabilities remain (see LOOP_HEALTH validation.unmet + OWNER_ACTIONS validation-capability-*)"; fi
+
 echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
 ok "web build + tests green"

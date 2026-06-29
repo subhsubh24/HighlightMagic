@@ -20,13 +20,19 @@ import { VALIDATION_MANIFEST, REGISTERED_ENV_VARS } from "./validation-manifest"
 const SRC_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ENV_READ = /process\.env\.([A-Z0-9_]+)/g;
 
+// Pitfall #1: scan ONLY runtime app code. Tests, eval scripts, and snapshots may read CI/test-only
+// env vars; counting them would force bogus registrations / false "drift" failures. (e2e lives in
+// web/e2e and scripts in /scripts — already outside SRC_ROOT, so they're never scanned.)
+const SKIP_DIRS = new Set(["node_modules", "__screenshots__", "__tests__", "evals"]);
+const SKIP_FILE = /\.(test|spec)\.[tj]sx?$/;
+
 function collectSourceFiles(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (entry === "node_modules" || entry === "__screenshots__") continue;
+      if (SKIP_DIRS.has(entry)) continue;
       collectSourceFiles(full, acc);
-    } else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry)) {
+    } else if (/\.(ts|tsx|js|jsx|mjs)$/.test(entry) && !SKIP_FILE.test(entry)) {
       acc.push(full);
     }
   }
@@ -36,8 +42,8 @@ function collectSourceFiles(dir: string, acc: string[] = []): string[] {
 function envVarsReadInSource(): Map<string, string[]> {
   const usage = new Map<string, string[]>();
   for (const file of collectSourceFiles(SRC_ROOT)) {
-    // Don't count the manifest or this gate itself — they reference env NAMES as data, not reads.
-    if (file.endsWith("validation-manifest.ts") || file.endsWith("validation-manifest.test.ts")) {
+    // Don't count the manifest itself — it references env NAMES as data, not reads.
+    if (file.endsWith("validation-manifest.ts")) {
       continue;
     }
     const text = readFileSync(file, "utf8");

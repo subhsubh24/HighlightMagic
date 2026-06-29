@@ -55,12 +55,32 @@ OWNER_ACTIONS:
       why: All paid AI calls are routed server-side through web/; without these keys every detection/generation path fails.
       how: In the Vercel dashboard for the web/ deployment set ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, and ATLASCLOUD_API_KEY (server-side only, never in the iOS app).
       blocks: backend-functionality
-    - id: validation-eval-keys
-      title: "Set low-budget CAPPED API keys as GitHub Actions secrets so the loop validates REAL paid round-trips"
-      priority: high
+    # VALIDATION CAPABILITIES (ROADMAP G6) — unmet capabilities the loop cannot self-validate without
+    # an owner-funded key. Each is mirrored in LOOP_HEALTH validation.unmet (must be in BOTH places).
+    # All three secrets are set on the SAME screen (GitHub → Settings → Secrets and variables →
+    # Actions) and consumed by .github/workflows/live-eval.yml (weekly + manual; NOT per-PR). Use
+    # SEPARATE low-budget keys with HARD provider caps (see spend-caps). DISTINCT from the Vercel
+    # runtime keys (vercel-env-keys): GitHub secrets = CI validation; Vercel env = the live app.
+    - id: validation-capability-anthropic
+      title: "Set ANTHROPIC_API_KEY as a GitHub Actions secret so the loop validates the REAL detection round-trip"
+      priority: urgent
       status: open
-      why: "The loop validates all FLOWS keyless on every PR (journey suite + the new validation-completeness gate). But the REAL paid round-trips (does Anthropic detection / ElevenLabs TTS / AtlasCloud video actually work + meet the quality bar?) can only be validated with real keys. Without these, those capabilities stay mock-validated and CANNOT be ticked 'done' (the live-eval job skips + warns). Owner chose to fund Anthropic + ElevenLabs + AtlasCloud."
-      how: "In GitHub repo Settings → Secrets and variables → Actions, add repository secrets ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, ATLASCLOUD_API_KEY. Use SEPARATE low-budget keys with HARD provider caps (see spend-caps) — these are exercised by the .github/workflows/live-eval.yml job (weekly + manual), NOT on every PR. These are DISTINCT from the Vercel runtime keys (vercel-env-keys): GitHub secrets = CI validation; Vercel env = the live app. NEVER commit a key value. (Anthropic enables the detect eval now; ElevenLabs/AtlasCloud activate once their G3 evals land.)"
+      why: "Anthropic frame-scoring + edit-planning is the detection CORE. Until the key is a GH secret it's only mock-validated; the detect eval (web/src/evals/detect.eval.ts) skips + warns, so 'detection works' is unproven and the capability cannot be ticked done."
+      how: "GitHub → Settings → Secrets and variables → Actions → add ANTHROPIC_API_KEY (separate low-budget, HARD-capped key). Enables the detect eval in live-eval.yml now. NEVER commit a key value."
+      blocks: live-round-trip-validation
+    - id: validation-capability-elevenlabs
+      title: "Set ELEVENLABS_API_KEY as a GitHub Actions secret so the loop validates the REAL voiceover round-trip"
+      priority: urgent
+      status: open
+      why: "ElevenLabs TTS (voiceover) is a paid capability validated only with a real key. Until set, it stays mock-validated and cannot be ticked done."
+      how: "GitHub → Settings → Secrets and variables → Actions → add ELEVENLABS_API_KEY (separate low-budget, HARD-capped key). Activates once the TTS eval lands (ROADMAP G3). NEVER commit a key value."
+      blocks: live-round-trip-validation
+    - id: validation-capability-atlascloud
+      title: "Set ATLASCLOUD_API_KEY as a GitHub Actions secret so the loop validates the REAL video-generation round-trip"
+      priority: urgent
+      status: open
+      why: "AtlasCloud/Kling video generation is the most expensive paid call and is validated only with a real key. Until set, it stays mock-validated and cannot be ticked done."
+      how: "GitHub → Settings → Secrets and variables → Actions → add ATLASCLOUD_API_KEY (separate low-budget, HARD-capped key). Activates once the video-gen eval lands (ROADMAP G3). NEVER commit a key value."
       blocks: live-round-trip-validation
     - id: server-quota-infra
       title: Provision the auth layer + Vercel KV for authoritative server-side quota (B3)

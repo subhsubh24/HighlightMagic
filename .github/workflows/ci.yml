@@ -78,6 +78,28 @@ jobs:
       - name: Functional journey suite (build + start + drive real journeys)
         run: npm run test:e2e
 
+  # ---- VALIDATE-CAPABILITIES — self-validation completeness gate (per-PR) — REQUIRED check ----
+  # Fails if any external service/secret the runtime code reads is NOT registered in
+  # web/src/lib/validation-manifest.ts with a validation path. A brand-new, unregistered service
+  # CANNOT merge — the loop must register it + build its validation first (keyless contract test for
+  # `mock`; an eval + an OWNER_ACTION for the key for `live-eval`). Readiness mode lives in preflight.
+  validate-capabilities:
+    name: validate-capabilities
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Capability manifest completeness (no unregistered external service can merge)
+        run: npx vitest run src/lib/validation-manifest.test.ts
+
   # ---- iOS (Swift app) ----
   # Kept NON-required until reliably green, then promote `ios` to a required check.
   # The app builds as a SwiftPM package (Package.swift, target HighlightMagic +
