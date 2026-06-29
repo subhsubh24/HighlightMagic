@@ -4,6 +4,55 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 29 — 2026-06-29 — complete H5 Turnstile end-to-end (#187) + ASO/README honesty (#188) + animate/check rate-limit (#189)
+Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. No DEEP
+AUDIT (Run 26 ran one same-day, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29, overall B,
+ship_gate_met=false) as DATA — but its two ship-critical C's are STALE (closed by #179/#180 after grading,
+per Run 27/28). Ran 4 Haiku scouts (tests/coverage, security/abuse, backend functional-reality, artifact
+freshness). Baseline web gate green throughout. SELECTED 3 file-disjoint value-bar-clearing changes; 2
+Sonnet reviewers EACH APPROVED all 3; all merged clean (no CI retries).
+
+### Shipped (merged)
+- **#187 H5 Turnstile widget (frontend)** — completes Track H5. Backend already verified a Turnstile
+  token when TURNSTILE_SECRET_KEY is set, but the landing form never RENDERED the widget → setting the
+  secret would have 400'd every signup ("CAPTCHA required", no token) = latent BUILDS≠WORKS. New
+  web/src/components/Turnstile.tsx (explicit render, single script load that resets on failure so a flaky
+  first load can retry, StrictMode-safe, unmount cleanup), gated on NEXT_PUBLIC_TURNSTILE_SITE_KEY; sends
+  cfTurnstileToken + remounts on failed submit (single-use tokens); middleware CSP gains
+  `frame-src 'self' https://challenges.cloudflare.com` (without it the challenge iframe falls back to
+  default-src 'self' and is blocked). No behavior change until owner sets BOTH keys. H5 ticked;
+  REMAINING_STEPS 2b updated (widget now built; only the owner key-set steps remain).
+- **#188 ASO + README honesty** — ASO listing said "Unlimited exports" with no mention of the enforced
+  50-export/day fair-use ceiling (spend-ceiling.ts DAILY_EXPORT_CAP=50, all tiers) → Apple/FTC accuracy;
+  README's "on-device Vision/CoreML fallback" overstated (no .mlmodel bundled → Vision-only). Both verified
+  in code by the reviewer (repo-wide .mlmodel glob = 0 hits).
+- **#189 animate/check rate-limit** — /api/animate/check (unauthenticated, hits AtlasCloud/Kling per call)
+  had NO rate limit. Added NEW generous POLL_RATE_LIMIT=60/min/IP (NOT PAID's 10/min — poll-manager polls
+  ~every 5s ≈12/min, so 10/min would break legit polling + dead-end a job). Check precedes the provider
+  call; +test proves the 429 path skips the provider + per-IP isolation.
+
+### Dropped scout findings (verified, NOT padding — reasons recorded so they're not re-attempted)
+- Functional-reality scout's 10 "gaps" were mostly BY DESIGN: /api/validate fail-open (intentional
+  best-effort safety net — making it 502 would break exports on any hiccup = WORSE); /api/score 0.5
+  neutral-score fallback (documented graceful degradation); sfx-library url=null (owner uploads CDN);
+  several "inconsistent error-shape" findings are defensive-client-handled + low value. NOT shipped.
+- Landing FAQ "generous per-day rate limit" (line ~274) already discloses a per-day cap honestly (just not
+  the number "50") — defensible; left it (also keeps the H5 branch clean, same file).
+- tests/coverage scout's sfx-library/frame-batching/beat-sync/social-queue test ideas: real but lower-value
+  than the 3 shipped; recent runs (27/28) already added many tests and coverage isn't CI-enforced. Deferred.
+
+### Follow-ups noted (future loop / not owner-only)
+- **BUSINESS_CASE.md line ~329** says "the 50-export/MONTH cap (Lever 4)" — contradicts the 50/DAY language
+  everywhere else in the same doc (Reviewer A flagged; pre-existing, NOT from this run's diffs). Above ship
+  bar (business_case_strength = A). Fix in a careful, separately-reviewed change — do NOT drive-by edit the
+  governing revenue doc in bookkeeping (per Run 28's same discipline). Verify what "Lever 4" actually is first.
+- **/api/plan stream-stall** (detect.ts ~195): a 90s planner stall throws but may not emit a client error
+  event → user sees a silent "Failed to fetch". Borderline-real UX gap; #184 (maxDuration=300) reduced the
+  trigger. Consider a structured error event on stall in a future run.
+- **H5 UX polish (non-blocking, reviewer notes)**: the landing page renders TWO WaitlistForm instances
+  (hero + bottom CTA) → two Turnstile widgets when the key is set (acceptable); the widget onError clears
+  the token silently (submit disabled, no inline message). Both fine for now; polish later if H5 is activated.
+
 ## Run 28 — 2026-06-29 — web planner timeout fix (#184) + wallet-drain/cache time-edge tests (#185)
 Cold start. Local `main` was badly stale (old bootstrap HEAD) — hard-reset to origin/main per the
 known stale-main gotcha before doing anything. No DEEP AUDIT this run (Run 26 ran one 2026-06-29,
