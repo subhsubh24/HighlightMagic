@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import {
   Sparkles,
   Zap,
@@ -55,6 +55,8 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
   if (status === "success") {
     return (
       <div
+        role="status"
+        aria-live="polite"
         className={`flex items-center gap-3 rounded-2xl border border-[var(--success)]/30 bg-[var(--success)]/10 px-5 py-4 ${compact ? "max-w-sm" : "max-w-md"}`}
       >
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--success)]/20">
@@ -80,6 +82,8 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         <input
           type="email"
           required
+          aria-label="Email address"
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="your@email.com"
@@ -95,7 +99,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         </button>
       </div>
       {status === "error" && (
-        <p className="mt-2 text-sm text-[var(--error)]">{errorMsg}</p>
+        <p role="alert" className="mt-2 text-sm text-[var(--error)]">{errorMsg}</p>
       )}
     </form>
   );
@@ -249,21 +253,23 @@ const FAQ = [
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   return (
     <div className="border-b border-white/8 last:border-b-0">
       <button
         onClick={() => { setOpen(!open); if (!open) trackEvent("faq_open", { question: q.slice(0, 60) }); }}
-        className="flex w-full items-start justify-between gap-4 py-5 text-left"
+        className="flex w-full items-start justify-between gap-4 py-5 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
         aria-expanded={open}
+        aria-controls={panelId}
       >
         <span className="font-semibold text-[var(--text-primary)]">{q}</span>
         <ChevronDown
+          aria-hidden="true"
           className={`h-5 w-5 flex-shrink-0 text-[var(--text-tertiary)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
-        <p className="pb-5 text-[var(--text-secondary)] leading-relaxed">{a}</p>
-      )}
+      {/* Always rendered (hidden when collapsed) so aria-controls always resolves to a real node. */}
+      <p id={panelId} hidden={!open} className="pb-5 text-[var(--text-secondary)] leading-relaxed">{a}</p>
     </div>
   );
 }
@@ -281,13 +287,13 @@ function Nav() {
           <span className="font-bold text-white">Highlight Magic</span>
         </div>
         <nav className="hidden items-center gap-6 md:flex">
-          <a href="#features" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+          <a href="#features" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
             Features
           </a>
-          <a href="#pricing" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+          <a href="#pricing" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
             Pricing
           </a>
-          <a href="#faq" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors">
+          <a href="#faq" className="text-sm text-[var(--text-secondary)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
             FAQ
           </a>
         </nav>
