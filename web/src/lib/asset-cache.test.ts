@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { cacheKey, getCachedAsset, setCachedAsset, clearAssetCache } from "./asset-cache";
 
 // Mock localStorage
@@ -56,6 +56,62 @@ describe("getCachedAsset / setCachedAsset", () => {
     // Manually store with old timestamp
     storage.set(key, JSON.stringify({ data: "old", ts: Date.now() - 25 * 60 * 60 * 1000 }));
     expect(getCachedAsset(key)).toBeNull();
+  });
+});
+
+// The cache is bounded to 50 entries to avoid unbounded localStorage growth; each generated
+// asset (music/SFX/voiceover) is a large base64 data URI, so eviction correctness is real
+// (a broken evictor either blows the storage quota or wrongly drops fresh entries). LRU/expiry
+// eviction was previously untested.
+describe("eviction at capacity (LRU + expiry)", () => {
+  const MAX_ENTRIES = 50;
+  const TTL_MS = 24 * 60 * 60 * 1000;
+
+  it("evicts the oldest entry once MAX_ENTRIES is exceeded", () => {
+    vi.useFakeTimers();
+    try {
+      const base = new Date("2026-05-01T00:00:00.000Z").getTime();
+      const keys: string[] = [];
+      // Fill to capacity with strictly increasing timestamps (1ms apart) for deterministic order.
+      for (let i = 0; i < MAX_ENTRIES; i++) {
+        vi.setSystemTime(base + i);
+        const k = cacheKey("music", { i });
+        keys.push(k);
+        setCachedAsset(k, `data-${i}`);
+      }
+      expect(getCachedAsset(keys[0])?.data).toBe("data-0");
+
+      // Inserting the 51st entry evicts the oldest (keys[0]); the rest survive.
+      vi.setSystemTime(base + MAX_ENTRIES);
+      const newest = cacheKey("music", { i: MAX_ENTRIES });
+      setCachedAsset(newest, "newest");
+
+      expect(getCachedAsset(keys[0])).toBeNull();
+      expect(getCachedAsset(keys[1])?.data).toBe("data-1");
+      expect(getCachedAsset(newest)?.data).toBe("newest");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("purges expired entries before applying the LRU cap", () => {
+    vi.useFakeTimers();
+    try {
+      const base = new Date("2026-06-01T00:00:00.000Z").getTime();
+      vi.setSystemTime(base);
+      const stale = cacheKey("sfx", { id: "stale" });
+      setCachedAsset(stale, "old");
+
+      // Advance past the 24h TTL, then write a fresh entry — the stale one is swept out.
+      vi.setSystemTime(base + TTL_MS + 1);
+      const fresh = cacheKey("sfx", { id: "fresh" });
+      setCachedAsset(fresh, "new");
+
+      expect(getCachedAsset(stale)).toBeNull();
+      expect(getCachedAsset(fresh)?.data).toBe("new");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

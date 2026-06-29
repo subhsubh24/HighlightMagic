@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   checkDailySpendCeiling,
   recordDailyExport,
@@ -8,6 +8,8 @@ import {
   enforceGenerationCeiling,
   DAILY_GENERATION_CAP,
 } from "./spend-ceiling";
+
+const WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function uniqueUser(): string {
   return `user-${Math.random().toString(36).slice(2)}`;
@@ -120,5 +122,72 @@ describe("enforceGenerationCeiling", () => {
     for (let i = 0; i < DAILY_GENERATION_CAP; i++) enforceGenerationCeiling(userA);
     expect(enforceGenerationCeiling(userA)).toBeInstanceOf(Response);
     expect(enforceGenerationCeiling(userB)).toBeNull();
+  });
+});
+
+// The ceiling is the wallet-drain backstop: an attacker rotating IPs with a valid userId
+// is bounded by it. Its protective value depends entirely on the 24h window RESETTING (not
+// permanently locking a heavy-but-legitimate user out) AND not resetting EARLY (which would
+// re-open the drain). Both edges were previously untested.
+describe("24h window reset", () => {
+  it("resets the EXPORT ceiling only after the full window elapses", () => {
+    vi.useFakeTimers();
+    try {
+      const userId = uniqueUser();
+      const base = new Date("2026-01-01T00:00:00.000Z").getTime();
+      vi.setSystemTime(base);
+      for (let i = 0; i < DAILY_EXPORT_CAP; i++) recordDailyExport(userId);
+      expect(checkDailySpendCeiling(userId).allowed).toBe(false);
+
+      // 1ms before the window closes — still blocked (must not reset early).
+      vi.setSystemTime(base + WINDOW_MS - 1);
+      expect(checkDailySpendCeiling(userId).allowed).toBe(false);
+
+      // At the window boundary — the daily counter resets.
+      vi.setSystemTime(base + WINDOW_MS);
+      const after = checkDailySpendCeiling(userId);
+      expect(after.allowed).toBe(true);
+      expect(after.usage).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets the GENERATION ceiling after the full window elapses", () => {
+    vi.useFakeTimers();
+    try {
+      const userId = uniqueUser();
+      const base = new Date("2026-02-01T00:00:00.000Z").getTime();
+      vi.setSystemTime(base);
+      for (let i = 0; i < DAILY_GENERATION_CAP; i++) recordDailyGeneration(userId);
+      expect(checkDailyGenerationCeiling(userId).allowed).toBe(false);
+
+      vi.setSystemTime(base + WINDOW_MS - 1);
+      expect(checkDailyGenerationCeiling(userId).allowed).toBe(false);
+
+      vi.setSystemTime(base + WINDOW_MS);
+      expect(checkDailyGenerationCeiling(userId).allowed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts a fresh window on the first record after expiry (count restarts at 1)", () => {
+    vi.useFakeTimers();
+    try {
+      const userId = uniqueUser();
+      const base = new Date("2026-03-01T00:00:00.000Z").getTime();
+      vi.setSystemTime(base);
+      recordDailyExport(userId);
+      recordDailyExport(userId);
+      expect(checkDailySpendCeiling(userId).usage).toBe(2);
+
+      // After the window elapses, the next record begins a brand-new window.
+      vi.setSystemTime(base + WINDOW_MS + 5);
+      recordDailyExport(userId);
+      expect(checkDailySpendCeiling(userId).usage).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   checkRateLimit,
   getClientIP,
@@ -49,6 +49,60 @@ describe("checkRateLimit", () => {
     const key = `test-limit:${Math.random()}`;
     const result = checkRateLimit(key, { limit: 7, windowSec: 60 });
     expect(result.limit).toBe(7);
+  });
+});
+
+// The limiter is the first-line abuse brake on every paid endpoint. Its whole point is a
+// SLIDING window: old hits must decay out so a legitimate user isn't locked out forever, and
+// the window must NOT decay early (which would re-open a flood vector). Existing tests only
+// covered allow/block within a single instant — the time-decay edge was untested.
+describe("sliding-window decay", () => {
+  it("allows requests again only after the window slides past the old hits", () => {
+    vi.useFakeTimers();
+    try {
+      const key = `decay:${Math.random()}`;
+      const config = { limit: 2, windowSec: 60 };
+      const base = new Date("2026-03-01T00:00:00.000Z").getTime();
+      vi.setSystemTime(base);
+
+      expect(checkRateLimit(key, config).allowed).toBe(true);
+      expect(checkRateLimit(key, config).allowed).toBe(true);
+      // Third hit inside the window is blocked.
+      expect(checkRateLimit(key, config).allowed).toBe(false);
+
+      // 1ms before the window elapses — the two old hits are still in range, still blocked.
+      vi.setSystemTime(base + 60_000 - 1);
+      expect(checkRateLimit(key, config).allowed).toBe(false);
+
+      // Once the full window elapses, the old hits decay out and the request is allowed.
+      vi.setSystemTime(base + 60_000);
+      const recovered = checkRateLimit(key, config);
+      expect(recovered.allowed).toBe(true);
+      expect(recovered.remaining).toBe(config.limit - 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("expires hits individually as the window slides (partial decay)", () => {
+    vi.useFakeTimers();
+    try {
+      const key = `partial:${Math.random()}`;
+      const config = { limit: 2, windowSec: 60 };
+      const base = new Date("2026-04-01T00:00:00.000Z").getTime();
+
+      vi.setSystemTime(base);
+      checkRateLimit(key, config); // hit at t=0
+      vi.setSystemTime(base + 30_000);
+      checkRateLimit(key, config); // hit at t=30s — now at the limit
+      expect(checkRateLimit(key, config).allowed).toBe(false);
+
+      // At t=60s the first hit (t=0) decays out but the second (t=30s) remains → one slot frees.
+      vi.setSystemTime(base + 60_000);
+      expect(checkRateLimit(key, config).allowed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
