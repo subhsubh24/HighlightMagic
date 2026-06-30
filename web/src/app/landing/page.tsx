@@ -4,8 +4,6 @@ import { useState, useId } from "react";
 import {
   Sparkles,
   Zap,
-  Mic,
-  Music,
   Film,
   Share2,
   Check,
@@ -160,7 +158,7 @@ const HOW_IT_WORKS = [
     step: "03",
     title: "Export & share",
     description:
-      "Get a polished 1080×1920 clip with captions, music, and effects — export-ready for TikTok, Reels, and Shorts in seconds.",
+      "Get a polished 1080×1920 clip with captions, transitions, and effects — export-ready for TikTok, Reels, and Shorts in seconds.",
     icon: Share2,
   },
 ];
@@ -177,18 +175,6 @@ const FEATURES = [
     title: "Auto Captions & Effects",
     description:
       "Kinetic text, transitions, color filters — all styled to match your content.",
-  },
-  {
-    icon: Music,
-    title: "AI Music & SFX",
-    description:
-      "Generate custom music and sound effects that perfectly match the mood and pacing of your clip.",
-  },
-  {
-    icon: Mic,
-    title: "Voiceover & Voice Clone",
-    description:
-      "Add AI narration or clone your own voice for a consistent brand across all your content.",
   },
   {
     icon: Film,
@@ -228,7 +214,6 @@ const PRICING: PricingPlan[] = [
       "5 exports per month",
       "AI highlight detection",
       "Auto captions & transitions",
-      "Music & SFX generation",
       "1080×1920 MP4 export",
       "HighlightMagic watermark",
     ],
@@ -247,7 +232,6 @@ const PRICING: PricingPlan[] = [
       "No watermark",
       "AI highlight detection",
       "Auto captions & transitions",
-      "Music, SFX & voice clone",
       "1080×1920 MP4 export",
       "Priority processing",
     ],
