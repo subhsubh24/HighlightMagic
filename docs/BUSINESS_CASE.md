@@ -27,6 +27,20 @@ Living document. Updated each loop run as tracks land and real data replaces est
 > high-return ones and RECOMPUTE this summary block when they ship. Every number honest/researched —
 > anti-gaming holds.
 
+> **Monetization MODEL considered (2026-06-30; ROADMAP F10 / FACTORY_STANDARD §9).** The model itself
+> is a first-class lever, not a fixed assumption. Current default = **freemium auto-renewable
+> subscription** (5 free exports/mo + watermark → Pro $14.99/mo · $149.99/yr) — chosen because it's the
+> dominant, best-understood model for consumer creative iOS apps and matches the current paywall +
+> StoreKit config. Alternatives ON THE TABLE as the funnel data arrives, each with its rationale:
+> **usage/credit (consumable export packs)** — directly couples revenue to per-export COGS and caps the
+> unlimited-free wallet-drain risk, attractive given this product's real Anthropic/ElevenLabs/AtlasCloud
+> cost per export; **hybrid** (sub + credit top-ups) for heavy users; **free-trial→paid** if free-tier
+> conversion underperforms; **creator/higher tier**; **team/B2B** if a pro segment emerges. DECISION:
+> keep freemium-subscription as the default PRE-PMF (no thrashing); revisit from real funnel/retention/
+> ARPU post-launch. A switch would re-open building (paywall, StoreKit product TYPES, entitlement, copy)
+> + recompute the unit economics here, recorded as a dated decision. *(No model change made today — this
+> records that the model is now an explicit, evaluated lever.)*
+
 ## Mandate — MAXIMIZE revenue ($100K/yr is the FLOOR, not the target)
 Do NOT settle once the base case clears $100K/yr. Build toward the OPTIMISTIC scenario by pushing
 each revenue lever to its DEFENSIBLE maximum — every number still honest + researched (the
