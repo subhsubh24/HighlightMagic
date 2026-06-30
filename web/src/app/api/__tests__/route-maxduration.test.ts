@@ -15,11 +15,19 @@ import path from "path";
 
 const API_DIR = path.resolve(__dirname, "..");
 
-/** Source markers that mean "this route makes a paid/slow external provider call". */
+/**
+ * Source markers that mean "this route makes a paid/slow external provider call".
+ * Includes the indirect provider paths — `@/lib/kling` (a re-export shim over
+ * atlascloud, used by the animate routes) and `@/actions/detect` (wraps the Anthropic
+ * planner, used by plan/ios-plan) — so a route that reaches a provider through a
+ * wrapper is still required to declare a budget, not just the direct importers.
+ */
 const PROVIDER_MARKERS = [
   "@/lib/atlascloud",
+  "@/lib/kling",
   "@/lib/elevenlabs",
   "@/lib/ai-models",
+  "@/actions/detect",
   "api.anthropic.com",
 ];
 
