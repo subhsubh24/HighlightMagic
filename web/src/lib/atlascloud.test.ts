@@ -72,6 +72,41 @@ describe("Atlas Cloud API", () => {
     });
   });
 
+  describe("submitAttemptTimeoutMs (B6 budget invariant)", () => {
+    it("caps a fresh attempt at the per-attempt timeout", async () => {
+      const { submitAttemptTimeoutMs } = await import("./atlascloud");
+      // At elapsed=0 the per-attempt cap (50s) binds, not the 55s overall budget.
+      expect(submitAttemptTimeoutMs(0)).toBe(50_000);
+    });
+
+    it("shrinks the attempt timeout as the overall budget is consumed", async () => {
+      const { submitAttemptTimeoutMs } = await import("./atlascloud");
+      // 6s in: 55s budget - 6s elapsed = 49s remaining, under the 50s per-attempt cap.
+      expect(submitAttemptTimeoutMs(6_000)).toBe(49_000);
+      // 54s in: only 1s of budget left.
+      expect(submitAttemptTimeoutMs(54_000)).toBe(1_000);
+    });
+
+    it("keeps every firing attempt's deadline under the 60s route maxDuration", async () => {
+      const { submitAttemptTimeoutMs } = await import("./atlascloud");
+      for (const elapsed of [0, 1_000, 25_000, 49_000, 54_000, 60_000]) {
+        const timeout = submitAttemptTimeoutMs(elapsed);
+        // Once the budget is spent the helper returns 0 and the caller stops without
+        // firing — so the only attempts that run finish comfortably before the 60s kill.
+        if (timeout > 0) {
+          expect(elapsed + timeout).toBeLessThanOrEqual(55_000); // SUBMIT_OVERALL_BUDGET_MS
+          expect(elapsed + timeout).toBeLessThan(60_000);
+        }
+      }
+    });
+
+    it("returns 0 (caller must stop) once the budget is spent", async () => {
+      const { submitAttemptTimeoutMs } = await import("./atlascloud");
+      expect(submitAttemptTimeoutMs(55_000)).toBe(0);
+      expect(submitAttemptTimeoutMs(99_000)).toBe(0);
+    });
+  });
+
   describe("checkTaskResult", () => {
     it("returns completed with output URL on success", async () => {
       mockFetch.mockResolvedValueOnce({

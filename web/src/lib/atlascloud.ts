@@ -44,8 +44,23 @@ const POLL_TIMEOUT_MS = 600_000; // 10 minutes — headroom for large batches (3
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 2_000;
-const SUBMIT_TIMEOUT_MS = 120_000; // 120s for submissions (large base64 uploads)
+// B6 timeout-inversion fix: the submit routes (animate/submit, talking-head,
+// style-transfer, thumbnail, upscale, voice-clone) run with `maxDuration = 60`. The
+// internal abort MUST fire BEFORE Vercel's platform kill, otherwise the user gets an
+// opaque "function timed out" instead of a clean error — and the in-code retry/timeout
+// logic is dead code. So the per-attempt cap and the whole-call budget both sit UNDER 60s.
+const SUBMIT_TIMEOUT_MS = 50_000; // per-attempt cap (< the 60s route maxDuration)
+const SUBMIT_OVERALL_BUDGET_MS = 55_000; // total across retries (< the 60s route maxDuration)
 const POLL_TIMEOUT_FETCH_MS = 30_000; // 30s for poll checks (lightweight)
+
+/**
+ * Per-attempt fetch timeout for a submission, bounded so that this attempt cannot push
+ * the cumulative submit time past the serverless budget. Returns 0 once the budget is
+ * spent (the caller must then stop, not fire a doomed request).
+ */
+export function submitAttemptTimeoutMs(elapsedMs: number): number {
+  return Math.max(0, Math.min(SUBMIT_TIMEOUT_MS, SUBMIT_OVERALL_BUDGET_MS - elapsedMs));
+}
 
 // ── Response types ──
 
@@ -106,15 +121,24 @@ export async function submitTask(
   const payloadSummary = payloadKeys.map((k) => `${k}=${JSON.stringify(payload[k])}`).join(", ");
   console.log(`[atlascloud] submitTask: model=${modelId}, endpoint=${endpoint}, payload={${payloadSummary}}, bodySize=${(requestBody.length / 1024).toFixed(0)}KB`);
 
+  const submitStart = Date.now();
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      // Don't start a retry (delay + a real attempt) that would blow the serverless
+      // budget — Vercel would kill it mid-flight, so fail clean with the last error now.
+      if (Date.now() - submitStart + delay >= SUBMIT_OVERALL_BUDGET_MS) {
+        break;
+      }
       console.log(
         `[atlascloud] Retry ${attempt}/${MAX_RETRIES} for ${modelId} after ${delay}ms...`
       );
       await new Promise((r) => setTimeout(r, delay));
     }
+
+    const attemptTimeout = submitAttemptTimeoutMs(Date.now() - submitStart);
+    if (attemptTimeout <= 0) break; // budget spent — don't fire a doomed request
 
     const fetchStart = Date.now();
     const response = await fetch(`${ATLAS_API_BASE}/${endpoint}`, {
@@ -124,7 +148,7 @@ export async function submitTask(
         Authorization: `Bearer ${apiKey}`,
       },
       body: requestBody,
-      signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(attemptTimeout),
     });
 
     if (!response.ok) {
