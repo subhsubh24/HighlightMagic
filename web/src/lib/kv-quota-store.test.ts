@@ -16,7 +16,7 @@ const mockKv = {
 };
 vi.mock("@vercel/kv", () => ({ kv: mockKv }));
 
-import { VercelKVQuotaStore, isKVConfigured } from "@/lib/kv-quota-store";
+import { VercelKVQuotaStore, isKVConfigured, KV_OP_TIMEOUT_MS } from "@/lib/kv-quota-store";
 
 // ── isKVConfigured ────────────────────────────────────────────────────────────
 
@@ -139,6 +139,37 @@ describe("VercelKVQuotaStore", () => {
       await store.increment("user-A", "2026-06");
       expect(mockKv.incr).toHaveBeenNthCalledWith(1, "quota:2026-05:user-A");
       expect(mockKv.incr).toHaveBeenNthCalledWith(2, "quota:2026-06:user-A");
+    });
+  });
+
+  // ── timeout (a hung KV must not burn the serverless budget) ─────────────────
+  describe("timeout", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("get() rejects with a timeout error when KV hangs past KV_OP_TIMEOUT_MS", async () => {
+      vi.useFakeTimers();
+      mockKv.get.mockReturnValueOnce(new Promise<number>(() => {})); // never resolves
+      const p = store.get("user-hang", "2026-06");
+      const assertion = expect(p).rejects.toThrow(/timed out/i);
+      await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 100);
+      await assertion;
+    });
+
+    it("increment() rejects with a timeout error when KV hangs past KV_OP_TIMEOUT_MS", async () => {
+      vi.useFakeTimers();
+      mockKv.incr.mockReturnValueOnce(new Promise<number>(() => {})); // never resolves
+      const p = store.increment("user-hang", "2026-06");
+      const assertion = expect(p).rejects.toThrow(/timed out/i);
+      await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 100);
+      await assertion;
+    });
+
+    it("get() resolves normally when KV answers before the timeout", async () => {
+      vi.useFakeTimers();
+      mockKv.get.mockResolvedValueOnce(7);
+      await expect(store.get("user-fast", "2026-06")).resolves.toBe(7);
     });
   });
 });
