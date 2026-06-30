@@ -21,11 +21,6 @@ const PROVIDER_MARKERS = [
   "@/lib/elevenlabs",
   "@/lib/ai-models",
   "api.anthropic.com",
-  // Wrapper modules that fan out to a paid provider — animate/* import the Kling
-  // wrapper and plan/* import the detect action (which calls the Anthropic planner),
-  // so a future route added under these without a budget must also fail loud (B6).
-  "@/lib/kling",
-  "@/actions/detect",
 ];
 
 /** Recursively collect every route.ts under the api tree. */
