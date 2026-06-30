@@ -10,14 +10,14 @@ export default function OfflinePage() {
         Highlight Magic needs an internet connection for AI video analysis. Please reconnect and try again.
       </p>
       <p className="text-sm text-[var(--text-tertiary)]">
-        Want offline AI? Get the{" "}
+        Prefer a native experience? Get the{" "}
         <a
           href={IOS_APP_STORE_URL}
           className="text-[var(--accent)] underline"
         >
           iOS app
-        </a>{" "}
-        for 100% on-device processing.
+        </a>
+        .
       </p>
     </div>
   );
