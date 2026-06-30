@@ -4,6 +4,64 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 30 — 2026-06-30 — DEEP AUDIT + B6 reliability (maxDuration #195, ios-validate vision budget #196) + business-case honesty (#197)
+Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. Ran a
+DEEP AUDIT this run (last was Run 26 2026-06-29, >24h/3 runs ago). Consumed QUALITY_SCORECARD (as_of
+2026-06-29, overall B, ship_gate_met=false) as DATA — its two ship-critical C's (correctness, store)
+remain STALE (closed by #179/#180 after grading, per Runs 27/28). GROWTH_STATUS pre_launch, funnel
+0/null — no funnel lever to weight. Baseline web gate green throughout (build + 635 tests + 0 lint).
+SELECTED 3 file-disjoint value-bar-clearing changes; 2 Sonnet reviewers EACH approved all 3; all merged.
+
+### DEEP AUDIT — 2026-06-30 (8 read-only Haiku lenses: security/Track-H, backend functional-reality,
+tests/eval, correctness/dead-code, artifact freshness, perf/COGS, design-taste/a11y, E7/E8)
+Key REAL findings → turned into this run's work: (1) 4 paid routes (style-transfer/thumbnail/upscale/
+voice-clone) had NO maxDuration → killed at Vercel's ~10-15s default mid-provider-call (BUILDS≠WORKS).
+(2) /api/ios-validate under-provisioned the SAME Haiku vision call as web /api/validate (20s vs 45s) →
+asymmetric iOS fail-open. (3) BUSINESS_CASE.md still had two "50/MONTH cap" refs (§5, §9) Run 25 missed.
+NO CRITICAL findings (security/abuse/crash/data-loss/runaway-cost) survived verification → deep audit clean.
+
+### Shipped (merged, 2 Sonnet reviewers each APPROVED)
+- **#195 maxDuration parity** (B6/reliability) — +`export const maxDuration = 60;` on the 4 outlier
+  routes (parity with animate/submit & talking-head on the same Atlas submitTask path; voice-clone is a
+  single 30s ElevenLabs call) + a NEW fleet-wide regression guard (route-maxduration.test.ts: scans every
+  route.ts importing a paid provider, asserts a positive maxDuration, with a >=10 discovery tripwire).
+- **#196 ios-validate vision budget** (B6/reliability) — vision timeout 20→45s, text 15→30s,
+  maxDuration 30→60, matching the proven web /api/validate. No model/quota change.
+- **#197 BUSINESS_CASE honesty** (F/living-artifact) — corrected the last two phantom "50/MONTH cap"
+  refs to the shipped 50/DAY ceiling; states Pro is unlimited-monthly so the $99.99/yr heavy-usage
+  margin is unbounded (why $149.99/yr is recommended). Consistency-only; no recompute, as_of unchanged.
+
+### Verified-and-DROPPED (skepticism paid off — NOT padding; do not re-attempt without new evidence)
+- **Security audit's 2 "CRITICAL"s were FALSE**: /api/validate ALREADY has enforceGenerationCeiling
+  (line 70) + sfxTracks/voiceoverSegments bounds (51-56); the "fail-loud on missing ANTHROPIC_API_KEY"
+  idea contradicts documented intentional fail-open graceful degradation. Haiku over-reports — verify in code.
+- **"Quota bypass" on music/voiceover/sfx submit (backend audit #3-5)**: BY DESIGN — quota is consumed
+  ONCE per export at /api/score|ios-score; sub-call routes are gated by checkExportAllowed + bounded by the
+  DAILY_GENERATION_CAP=500 (H7), not by consumeExport. ios-validate header (line 109) documents this.
+- **elevenlabs-sfx/scribe/voice-clone unit tests (tests scout)**: ALREADY tested in elevenlabs.test.ts via
+  dynamic import (SFX:5, Scribe:2, VoiceClone:3 tests). Scout grepped for separate files + missed them. Redundant.
+- **COGS payload/model changes (perf audit, ~40-70% claimed)**: validator frame-sampling, single-pass
+  validation early-exit, 40KB planner-prompt trim, dynamic frame-batch size — all QUALITY trade-offs that
+  need G3 eval validation (owner-funded keys) per the B5 discipline. NOT shippable without evals. Follow-up.
+- **E8 experiment engine scaffold (E7/E8 audit said BUILD NOW)**: DEFERRED as speculative pre-launch (0
+  users, no caller, no wired event stream) — Reviewer-B-anti-speculation wins over the audit's "build now".
+- **correctness micro-guards (canvas split[1], JSON.parse(match[0]))**: low-value defensive in huge client
+  files (DetectingStep/ExportStep); app-store-jws empty-certs crash → falls to free tier (safe default). Skipped.
+
+### Follow-ups noted (NOT owner-only; future loop work)
+- **maxDuration guard blind spot**: the MERGED guard (#195) only matches DIRECT provider imports. A
+  broadening to also match `@/lib/kling` (animate routes) + `@/actions/detect` (plan/ios-plan) was written +
+  verified green (test 16→20) but pushed to the branch AFTER #195 auto-merged (fast-merge gotcha) so it was
+  LOST. All 4 wrapper-routes already have maxDuration, so low-priority. Re-land as a fresh 2-line PR: add
+  "@/lib/kling" and "@/actions/detect" to PROVIDER_MARKERS in route-maxduration.test.ts.
+- **Fleet-wide B6 timeout inversion**: Atlas submitTask internal AbortSignal.timeout is 120s but the submit
+  routes' maxDuration is 60s (pre-existing on animate/submit, talking-head + the 3 new) — the internal abort
+  can't fire before the platform kill. Tighten SUBMIT_TIMEOUT_MS to ≤55s OR raise submit-route budgets, fleet-wide.
+- **COGS wins to validate once eval keys exist**: validator frame capping (min(5, clipCount/2)), photo-ratio
+  dynamic MAX_FRAMES_PER_BATCH — real margin, but require G3 evals to prove no quality loss (B5).
+- **G2 coverage provider**: @vitest/coverage-v8 still not installed (vitest.config thresholds unenforced);
+  CI enforcement is owner-only (.github). Measure-then-wire is the remaining step.
+
 ## Run 29 — 2026-06-29 — complete H5 Turnstile end-to-end (#187) + ASO/README honesty (#188) + animate/check rate-limit (#189)
 Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. No DEEP
 AUDIT (Run 26 ran one same-day, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29, overall B,
