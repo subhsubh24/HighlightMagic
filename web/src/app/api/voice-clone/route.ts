@@ -5,6 +5,11 @@ import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+// B6 resilience: this route uploads an audio sample to ElevenLabs' voice-clone
+// endpoint (a 30s-bounded call). Without an explicit budget the function inherits
+// the short platform default and is killed mid-upload → silent "request failed".
+// 60s comfortably exceeds the single 30s provider call.
+export const maxDuration = 60;
 
 /** Max voice sample size: 10 MB */
 const MAX_BODY_SIZE = 10 * 1024 * 1024;
