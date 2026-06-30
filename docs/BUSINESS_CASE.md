@@ -325,8 +325,10 @@ the current per-user COGS baseline in Section 3).
 | COGS — heavy (15 exp/mo) | −$4.65/mo | −$55.80/yr | −$55.80/yr |
 | **GM — heavy** | **$5.84/mo (56%)** | **$14.19/yr (20%) ⚠️** | **$49.19/yr (47%) ✅** |
 
-**$99.99/year is marginal at heavy usage** (20% GM, breakeven at ~18 exports/month). It requires
-the 50-export/month cap (Lever 4) to remain viable.
+**$99.99/year is marginal at heavy usage** (20% GM, breakeven at ~18 exports/month), and there is
+**no monthly export cap** to bound that downside (Pro is unlimited-monthly; the only ceiling is the
+50/user/**day** anti-abuse backstop in spend-ceiling.ts, which never binds at ~15–18 exports/month).
+That thin, unbounded margin is exactly why $99.99/year is **not** the recommended price.
 
 **$149.99/year is healthy at all usage levels** (47–72% GM) and is the recommended price:
 - Equivalent to "$14.99 × 10 months" — a standard "2 months free" offer
@@ -376,7 +378,9 @@ base scenario (from ~Month 42 to ~Month 38–39).
 2. **Paywall update**: show both monthly ($14.99) and annual ($149.99, "$12.50/mo, 2 months free")
    with annual highlighted as "Best Value"
 3. **Server entitlement**: `verifyProEntitlement` must validate both monthly and annual product IDs
-4. **Export cap**: enforce 50 exports/month for all Pro tiers (monthly + annual) to bound COGS
+4. **Daily anti-abuse ceiling**: the shipped 50-export/user/**day** backstop (spend-ceiling.ts) applies
+   to all tiers; it is NOT a monthly quota and does not cap Pro revenue (Pro stays unlimited-monthly).
+   COGS is bounded by typical usage (~8–15 exports/mo, Section 3), not a per-user monthly limit
 
 ### Conclusion
 
@@ -385,4 +389,4 @@ LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid mo
 the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
 collapses to 20% and becomes negative above ~18 exports/month.
 
-*Last updated: 2026-06-29 (Run 26) — added the §3 "Now instrumented (PR #170)" note: audio/video provider calls now emit `[CostMeter]` usage-unit lines so the "verify per-export cost from Vercel logs" guidance is actually actionable. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
+*Last updated: 2026-06-30 (Run 30) — consistency/honesty fix only: corrected the last two stale references to a non-existent "50-export/MONTH cap" that Run 25's Lever-4 correction missed — the §5 $99.99/yr viability sentence and the §9 annual-tier checklist item 4. Both now describe the ACTUAL shipped control (the 50/user/DAY anti-abuse ceiling in spend-ceiling.ts) and state plainly that Pro is unlimited-monthly with no monthly quota, so the thin $99.99/yr heavy-usage margin is unbounded — which is why $149.99/yr is recommended. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-29 (Run 26) — added the §3 "Now instrumented (PR #170)" note: audio/video provider calls now emit `[CostMeter]` usage-unit lines so the "verify per-export cost from Vercel logs" guidance is actually actionable. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
