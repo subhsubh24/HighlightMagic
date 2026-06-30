@@ -24,8 +24,14 @@ account-signup/login** (only optional Vercel KV for quota). The product's "signu
 | `/offline` | PWA offline fallback | journeys.spec.ts | Heading renders, not 404/boundary |
 
 Auth note: there are **no protected/authed web routes** (no web login), so there is no
-logged-out-bounce journey to assert on web. If web auth is ever added, add an authed-vs-logged-out
-journey here.
+logged-out-bounce journey to assert on web. If web auth is ever added (PENDING_OPS: server-quota-infra
+/ ROADMAP B3 — Clerk or Supabase), add an authed journey here: `web/e2e/authed-journeys.spec.ts` that
+signs in through the real UI against an EPHEMERAL auth backend and asserts the post-login screen
+renders real content (never an error boundary). It auto-runs in the REQUIRED `web-e2e` check
+(playwright testDir=e2e). The **authed-journey tripwire** (`web/src/lib/authed-journey-guard.test.ts`,
+in the required `web` check) FAILS the build the moment web auth is introduced without that spec — its
+header carries the full fix (ephemeral-backend seeding, evidence-based debugging, and the CSP
+`connect-src` local-origin fix that was the AptDesignerAI root cause).
 
 ## Next gaps (add as the product grows)
 - Web editor deeper flow (`/`): upload → detect → editor → export is currently stubbed/mocked on web
