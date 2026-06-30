@@ -197,15 +197,22 @@ Revenue = Pro subscribers × $14.99 (gross, before Apple's cut). MAU/subscriber 
 from the prior model; only the price moved from the reference $9.99 to the live $14.99 (×1.5 revenue).
 
 > **How the Pro-subscriber column is modeled (read before comparing to the assumptions).** Each row's
-> Pro count is a **steady-state 3% of that month's MAU** — the freemium conversion rate applied to the
-> *active base* — so the subscriber line tracks MAU's 10%/month exactly (M12 = 0.03 × 1,429 ≈ 43;
-> M36 = 0.03 × 14,110 ≈ 423). That is why the column does not appear to "compound": it is a fixed share
-> of MAU, **not** a separate accumulating-cohort waterfall (convert 3% of *new* users each month, then
-> decay the stock at 4.5% churn). The 4.5% churn assumption bounds the realism of *holding* that 3% share
-> rather than driving a distinct retention curve. A full cohort model can land somewhat above or below
-> this proxy depending on whether conversion is applied to new users or the whole base, but stays in the
-> same order of magnitude; the share model is used here for transparency, and real cohort data replaces it
-> at launch (Section 1 / F7). No number in the table changes — this note only explains the existing one.
+> Pro count is a **snapshot 3% share of that month's MAU** — the cited freemium "% of MAU" benchmark
+> (Section 2) applied to the *active base* — so the subscriber line grows at the same 10%/month as MAU
+> (M12 = 0.03 × 1,429 ≈ 43; M36 = 0.03 × 14,110 ≈ 423). It does **not** accumulate independently of MAU
+> as a cohort waterfall would. This matters for honesty, because the snapshot-share reading is **on the
+> optimistic side** of the cohort alternatives:
+> - A **new-user-only** waterfall (convert 3% of each month's *new* users, then decay the stock at 4.5%
+>   monthly churn) yields meaningfully **fewer** subscribers — ~24% below the share model at M12 and
+>   ~31% below by M36 under 10%/month MAU growth (≈32 vs 43 at M12; ≈292 vs 423 at M36).
+> - Applying 3% to the *entire* non-paying base every month would yield far **more**, but that re-converts
+>   already-active users and is not realistic.
+>
+> The snapshot share sits between these and is the standard reading of a "% of MAU" conversion benchmark,
+> so treat the base-case subscriber counts as the **optimistic end** of the new-user-cohort range. Real
+> per-cohort conversion/retention data replaces this estimate after launch (the living-document caveat at
+> the top of this file). No table number changes — this note only explains, and bounds the optimism of,
+> the existing one.
 
 | Month | MAU | Pro Subscribers | Monthly Revenue | Cumulative Revenue |
 |---|---|---|---|---|
