@@ -196,6 +196,17 @@ Assumptions (all stated; verify against real data once live):
 Revenue = Pro subscribers × $14.99 (gross, before Apple's cut). MAU/subscriber trajectory unchanged
 from the prior model; only the price moved from the reference $9.99 to the live $14.99 (×1.5 revenue).
 
+> **How the Pro-subscriber column is modeled (read before comparing to the assumptions).** Each row's
+> Pro count is a **steady-state 3% of that month's MAU** — the freemium conversion rate applied to the
+> *active base* — so the subscriber line tracks MAU's 10%/month exactly (M12 = 0.03 × 1,429 ≈ 43;
+> M36 = 0.03 × 14,110 ≈ 423). That is why the column does not appear to "compound": it is a fixed share
+> of MAU, **not** a separate accumulating-cohort waterfall (convert 3% of *new* users each month, then
+> decay the stock at 4.5% churn). The 4.5% churn assumption bounds the realism of *holding* that 3% share
+> rather than driving a distinct retention curve. A full cohort model can land somewhat above or below
+> this proxy depending on whether conversion is applied to new users or the whole base, but stays in the
+> same order of magnitude; the share model is used here for transparency, and real cohort data replaces it
+> at launch (Section 1 / F7). No number in the table changes — this note only explains the existing one.
+
 | Month | MAU | Pro Subscribers | Monthly Revenue | Cumulative Revenue |
 |---|---|---|---|---|
 | 1 | 500 | 15 | $225 | $225 |
