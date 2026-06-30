@@ -4,6 +4,77 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 33 — 2026-06-30 — KV-outage quota hardening (#214) + landing dormant-feature honesty (#215) + 2× wallet-drain/COGS test guards (#216/#217)
+Cold start; hard-reset local main to origin/main before each branch (stale-main + branch-contamination
+guards). NO DEEP AUDIT this run (Run 30/32 ran one same-day 2026-06-30, <24h). Consumed QUALITY_SCORECARD
+(as_of 2026-06-29, overall B, ship_gate_met=false) as DATA — its two ship-critical C's (correctness,
+store_readiness) remain STALE: the named correctness defects are already CLOSED (poll-manager now uses a
+waiters[] array, not the mutated resolve/reject pair the scorecard cites), and the privacy-manifest gap
+was closed #210. GROWTH_STATUS pre_launch, funnel 0/null — no funnel lever to weight. Baseline web gate
+green throughout (build + 661 tests + 0 lint). Ran a 4-scout Haiku sweep (backend correctness, test/eval
+coverage, artifact freshness, Track-H security). SELECTED 4 file-disjoint value-bar-clearing changes; 2
+Sonnet reviewers EACH approved all 4 (landing + the ceiling test each needed a 2nd cycle); ALL FOUR MERGED.
+
+### Shipped (merged, 2 Sonnet reviewers each APPROVED)
+- **#214 KV-outage quota hardening** (B6/H, ship-critical correctness) — VercelKVQuotaStore.get/incr did a
+  network round-trip with NO timeout + NO try/catch. In prod (KV configured) a transient KV failure threw
+  out of checkExportAllowed/consumeExport, UNCAUGHT in the 5 routes that call the gate with no outer try
+  (score, ios-score, plan, ios-plan, ios-validate) → a raw 500; and consumeExport (called AFTER the paid
+  run) turned a delivered, already-paid export into a 500 + double-spend on retry. Fix: KV_OP_TIMEOUT_MS=5s
+  (under the 30s shortest route budget); checkExportAllowed fails CLOSED on a read error (Pro returns BEFORE
+  the read → unaffected; only free-tier briefly deferred, reason "quota check unavailable"); consumeExport
+  swallows a write error (delivered export must not 500; daily spend ceiling still backstops). +11 tests.
+  Both reviewers verified the centralized catch genuinely stops the raw 500 + the Promise.race timer has no
+  dangling-timer/unhandled-rejection. This is the DEEP_DIAGNOSIS "DB call no-timeout/outside-try" class.
+- **#215 landing dormant-feature honesty** (D/store-FTC) — the landing page marketed AI Music, SFX,
+  Voiceover, Voice Clone as LIVE (2 feature cards + a hero word + included paid-tier pricing benefits), but
+  they're DORMANT in iOS v1 (#180 hard-disabled the ElevenLabs/AtlasCloud direct path; not yet
+  backend-routed — REMAINING_STEPS 0d). Removed the 2 cards + 2 pricing lines + softened the hero word +
+  dropped the now-unused Music/Mic icons. Reviewer B caught that 4 cards in lg:grid-cols-3 orphans one (3+1)
+  → reflowed to lg:grid-cols-4 (clean single row; sm stays even 2×2). No business-case impact (never a lever).
+- **#216 generation-ceiling wiring invariant** (H7/tests) — the spend-ceiling fns were unit-tested in
+  isolation but the WIRING into routes was unasserted (spend-ceiling.test.ts stays green even if every route
+  drops the guard). Source-scan mirroring route-maxduration.test.ts: discovers 19 provider routes, requires
+  enforceGenerationCeiling()|checkDailySpendCeiling() on 17, with a justified CEILING_EXEMPT allowlist
+  (animate/check = poll-only/no-userId; stems = no-userId/per-IP) + a >=15 discovery tripwire. Reviewer A
+  mutation-verified (removed a guard → test failed).
+- **#217 SFX library cache-hit coverage** (G/tests, COGS) — /api/sfx checks a pre-generated library BEFORE
+  the quota gate + paid generator (instant/free), but the route test's lookupSfxLibrary mock defaulted to a
+  MISS so the fast-path was never exercised → a reorder (gate ahead of the free lookup) or shape drift would
+  ship silently. Forces a hit; asserts 200/completed + library url/duration AND that generateSoundEffect +
+  checkExportAllowed are never called. Both reviewers mutation-verified.
+
+### Review lessons / process notes
+- **Inline diff substitution does NOT expand in an Agent prompt**: I passed `$(cat /tmp/diff_A.txt)` inside a
+  reviewer prompt and the reviewer received the LITERAL text. FIX that worked great all run: write the diff
+  to a STATIC file (git diff origin/main..HEAD > /tmp/diff_X.txt) and tell the reviewer to Read that path —
+  it's immune to the substitution bug AND to working-tree staleness when I switch branches for the next change.
+- **Reviewer B design-taste catch is load-bearing on UI removals**: removing list items without checking the
+  grid column count left a 3+1 orphan; the fix was a 1-class reflow. Always re-check container grid math when
+  changing the count of mapped cards.
+
+### Verified-and-DROPPED (skepticism paid; do not re-attempt without new evidence)
+- **Track-H security scout: ZERO real gaps** (re-confirmed this run) — all 19 provider routes rate-limited +
+  bounded + spend-ceilinged; the by-design fail-open items (validate/animate-check/stems) re-confirmed correct.
+- **Scorecard's named correctness C's are STALE**: poll-manager duplicate-predictionId race is already fixed
+  (waiters[] array, entitlement-style). Don't re-fix from the scorecard text — verify the live code first.
+- **SFX cache-RECORDING test** (cacheSfxResult fire-and-forget after generation): marginal (asserting a
+  best-effort write happened) — below the bar vs the 4 shipped. Skipped (padding territory).
+
+### Follow-ups noted (NOT owner-only; future loop work)
+- **iOS direct-provider dead code** (ElevenLabsService/AtlasCloudService ~1050 lines, apiKey nil /
+  isAvailable false): risk already neutralized by design; deleting the dormant network-call BODIES is the
+  scorecard's store_readiness #1 but it's unverifiable iOS surgery (Linux can't xcodebuild) — keep deferring
+  unless an owner or a safe minimal slice appears. The PROPER restoration (REMAINING_STEPS 0d.1: backend-route
+  music/sfx/voiceover for iOS so the #215-removed marketing can return) is the higher-value version.
+- **Two non-blocking reviewer nits (both APPROVED as-is)**: (a) consumeExport's swallow-path returns
+  FREE_EXPORT_LIMIT — inert today (all callers discard it) but a future caller trusting it as "at limit"
+  could be misled; consider a clearer sentinel. (b) the #216 ceiling source-scan can be fooled by a
+  commented-out call containing the literal `enforceGenerationCeiling(`; the realistic case (deleting the
+  line) IS caught — an AST/comment-stripping pass would harden it.
+- **COGS wins awaiting eval keys** (validator frame capping, dynamic batch size): still need G3 evals
+  (owner-funded keys) per B5. **G2 coverage provider** (@vitest/coverage-v8) still owner-only (.github).
+
 ## Run 32 — 2026-06-30 — privacy-manifest collected-data (#210) + music B6 timeout (#211) + 2× offline-AI honesty (#209/#212)
 Cold start; hard-reset local main to origin/main before cutting branches. NO DEEP AUDIT this run (Run 30
 ran one same-day 2026-06-30, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29, overall B,
