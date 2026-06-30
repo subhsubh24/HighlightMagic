@@ -4,7 +4,59 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Run 30 — 2026-06-30 — DEEP AUDIT + B6 reliability (maxDuration #195, ios-validate vision budget #196) + business-case honesty (#197)
+## Run 31 — 2026-06-30 — B6 timeout-inversion (#203) + maxDuration-guard broadening (#204) + business-case honesty (#205)
+Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. NO DEEP
+AUDIT this run (Run 30 ran one same-day 2026-06-30, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29,
+overall B, ship_gate_met=false) as DATA — its two ship-critical C's (correctness, store_readiness) remain
+STALE (closed by #179/#180 after grading, per Runs 27/28; re-verified nothing new). GROWTH_STATUS
+pre_launch, funnel 0/null — no funnel lever to weight. Worked the Run-30 follow-ups (the most concrete,
+fully web-verifiable leads on a mature repo). Baseline web gate green throughout (build + 652 tests + 0
+lint). SELECTED 3 file-disjoint value-bar-clearing changes; 2 Sonnet reviewers EACH approved all 3 (the
+docs one took a 2nd cycle); all merged.
+
+### Shipped (merged, 2 Sonnet reviewers each APPROVED)
+- **#203 AtlasCloud submit timeout-inversion** (B6/reliability) — the submit routes run maxDuration=60 but
+  submitTask used a 120s per-attempt AbortSignal + unbounded retry loop → the internal abort could NEVER
+  fire before Vercel's ~60s kill, so the timeout/retry was dead code and users got opaque "function timed
+  out". Cap each attempt at 50s + the whole call at a 55s budget via a pure, tested submitAttemptTimeoutMs()
+  helper; skip a retry that would blow the budget. No COGS change. Closes the Run-30 "timeout inversion" follow-up.
+- **#204 maxDuration-guard broadening** (B6/reliability) — added @/lib/kling + @/actions/detect to the
+  fleet-wide guard's PROVIDER_MARKERS so a future animate/* or plan/* route can't ship without a serverless
+  budget. The 4 existing such routes already declare one → guard stays green (16→20). Re-lands the Run-30
+  broadening that was lost to a fast-merge.
+- **#205 business-case subscriber-model note** (F/honesty) — closes the independent scorecard's
+  business_case_strength A→A+ gap. The §4 Pro-subscriber column is a snapshot 3%-of-MAU share (tracks
+  MAU's 10%/mo), NOT an accumulating cohort. Clarity-only, no table number changed, as_of unchanged.
+
+### Review lessons (recorded so they're not repeated)
+- **Honesty defect caught by Reviewer A** on the FIRST #205 draft: I'd written the cohort comparison as
+  "can land somewhat above or below" (false symmetry). Reviewer simulated it; I re-derived in-loop: a
+  new-user cohort waterfall (convert 3% of NEW users, decay 4.5%/mo) yields ~24% fewer subs at M12 and ~31%
+  by M36 under 10%/mo MAU growth (≈32 vs 43; ≈292 vs 423). The snapshot-share model is the OPTIMISTIC end,
+  not neutral. Fixed to say so. LESSON: when reconciling a model, COMPUTE the direction — never assert
+  symmetry to dodge the harder claim. Also removed an INVENTED "Section 1 / F7" cross-ref (F7 doesn't exist).
+- **BRANCH-CONTAMINATION gotcha** (root-caused this run): the #205 docs branch accidentally carried the
+  #204 route-maxduration.test.ts change too — both reviewers (correctly) blocked the docs PR for an
+  undisclosed out-of-scope code change. Cause: when cutting branch 3 from LOCAL main (which was STALE at
+  #202, behind origin/main), a working-tree edit rode along into the first commit. FIX APPLIED: restored
+  the file from origin/main, committed the removal, REBASED the branch onto origin/main, force-with-lease
+  pushed → docs-only diff; both reviewers' stated condition met → merged. PREVENTION: after `git checkout
+  main`, ALWAYS `git reset --hard origin/main` BEFORE cutting each branch, and `git diff --stat
+  origin/main..HEAD` each branch to confirm it touches ONLY its intended files before pushing.
+
+### Not done / follow-ups still open (future loop work, not owner-only)
+- **Fleet-wide B6 timeout inversion (the OTHER half)**: Atlas submitTask is now bounded, but the SUBMIT
+  routes' maxDuration (60) vs the Atlas POLL path and any generate*() submit+poll (POLL_TIMEOUT_MS=600s)
+  are separate; the generate*() functions are NOT called by any route (polling is client-side), so no live
+  inversion there — verified this run. Low priority.
+- **COGS wins awaiting eval keys** (validator frame capping, dynamic batch size): still need G3 evals
+  (owner-funded keys) to prove no quality loss before shipping (B5). Unchanged from Run 30.
+- **G2 coverage provider**: @vitest/coverage-v8 still not installed; CI enforcement is owner-only (.github).
+- **design_taste A→A+** (UploadStep Animate-disclosure glass-card): real but unverifiable-visually on Linux
+  + design_taste already A (not below ship bar). Deferred — not value-bar-critical, regression risk in a
+  721-line client file without a visual check.
+
+
 Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. Ran a
 DEEP AUDIT this run (last was Run 26 2026-06-29, >24h/3 runs ago). Consumed QUALITY_SCORECARD (as_of
 2026-06-29, overall B, ship_gate_met=false) as DATA — its two ship-critical C's (correctness, store)
