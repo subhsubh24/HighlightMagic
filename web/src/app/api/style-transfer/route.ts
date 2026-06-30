@@ -6,6 +6,11 @@ import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from 
 import { MAX_PROMPT_CHARS, MAX_VIDEO_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
+// B6 resilience: this route POSTs a (large, base64) video to Atlas Cloud's submit
+// endpoint. Without an explicit budget the function inherits the short platform
+// default and is killed mid-upload → silent "request failed", lost work. Match the
+// 60s budget of the sibling Atlas Cloud submit routes (animate/submit, talking-head).
+export const maxDuration = 60;
 
 /**
  * Submit a video-to-video style transfer task (Wan 2.6 V2V via Atlas Cloud).

@@ -6,6 +6,11 @@ import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from 
 import { MAX_IMAGE_B64_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
+// B6 resilience: this route POSTs a (large, base64) image to Atlas Cloud's submit
+// endpoint. Without an explicit budget the function inherits the short platform
+// default and is killed mid-upload → silent "request failed", lost work. Match the
+// 60s budget of the sibling Atlas Cloud submit routes (animate/submit, talking-head).
+export const maxDuration = 60;
 
 /** Max request body size: 20 MB (base64-encoded photos). */
 const MAX_BODY_SIZE = 20 * 1024 * 1024;
