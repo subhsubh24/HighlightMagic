@@ -4,7 +4,81 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
-## Run 31 — 2026-06-30 — B6 timeout-inversion (#203) + maxDuration-guard broadening (#204) + business-case honesty (#205)
+## Run 32 — 2026-06-30 — privacy-manifest collected-data (#210) + music B6 timeout (#211) + 2× offline-AI honesty (#209/#212)
+Cold start; hard-reset local main to origin/main before cutting branches. NO DEEP AUDIT this run (Run 30
+ran one same-day 2026-06-30, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29, overall B,
+ship_gate_met=false) as DATA — drove its store_readiness top_gap (under-declared privacy manifest) and a
+correctness/honesty sweep. GROWTH_STATUS pre_launch, funnel 0/null — no funnel lever to weight. Baseline
+web gate green throughout (build + 660 tests + 0 lint). Ran a 6-scout Haiku sweep (provider parsing,
+privacy manifest, test coverage, Track-H security, artifact freshness, web correctness/uncaught-throw).
+SELECTED 4 file-disjoint value-bar-clearing changes; 2 Sonnet reviewers EACH approved all 4 (privacy +
+music each took a 2nd cycle); ALL FOUR MERGED (#209 → #212, CI green incl. ios).
+
+### Shipped (merged, 2 Sonnet reviewers each APPROVED)
+- **#210 privacy manifest collected-data** (store_readiness, ship-critical) — NSPrivacyCollectedDataTypes
+  was an EMPTY array while the iOS app uploads data → App Store privacy-manifest rejection risk. Declared
+  the FOUR genuinely-transmitted types (code-verified by reviewer + audit): PhotosorVideos (video frames →
+  ios-score/ios-validate/ios-plan), UserID (anonymous Keychain id), OtherUserContent (userPrompt +
+  creativeDirection text), PurchaseHistory (StoreKit JWS signedTransaction on Pro requests). Each
+  Linked=true/Tracking=false/AppFunctionality (consistent with NSPrivacyTracking=false). Plist validated.
+- **#211 music B6 timeout-inversion** (reliability) — generateMusic used AbortSignal.timeout(120_000) on
+  the synchronous /api/music/submit route (maxDuration=60) → abort was dead code, stalled call = opaque
+  "function timed out". Extracted MUSIC_GENERATION_TIMEOUT_MS=55_000 + regression test (spies on
+  AbortSignal.timeout to prove the const reaches the live fetch). Same class as #203. No COGS change.
+- **#209 + #212 "offline AI" honesty** (App Store/FTC accuracy) — two surfaces falsely advertised offline/
+  on-device AI: the ExportStep "Go Pro on iOS" upsell ("offline AI" as a Pro benefit) and the PWA
+  offline page ("100% on-device processing"). All paid AI is server-side (README); on-device Vision is a
+  degraded fallback, not a Pro feature. Fixed to accurate copy ("premium effects" / "Prefer a native
+  experience?"). #212 was surfaced by #209's reviewers.
+
+### Review lessons (recorded so they're not repeated)
+- **Reviewer read the WRONG working-tree state (false REQUEST_CHANGES)**: the music re-review claimed "the
+  fix was never applied — line 64 still reads AbortSignal.timeout(120_000)" because it read the LOCAL
+  checkout (which was on main at the time), not the branch. The fix WAS on the branch (verified: const at
+  L26, used at L73, 25 tests pass; the REQUIRED `web` check later passed green, confirming). LESSON: when a
+  reviewer's objection is a factual claim about file state, verify objectively (git show origin/<branch>)
+  before churning; the deterministic `web` CI check is the backstop. Don't checkout other branches while a
+  reviewer may re-read the working tree — pass the explicit diff and tell it to judge the DIFF.
+- **Apple identifier casing — TRUST THE SPEC, NOT THE REVIEWER**: a reviewer asserted PhotosorVideos should
+  be "PhotosOrVideos" (capital O). WRONG — Apple's machine-readable JSON spec uses lowercase "or"
+  (NSPrivacyCollectedDataTypePhotosorVideos). Verified via WebSearch + a dedicated verification agent
+  against Apple's tutorials/data JSON. Kept lowercase. A typo-"correction" to the wrong casing would itself
+  fail manifest validation.
+- **Keychain is NOT an Apple required-reason API**: an audit (Haiku) flagged a "missing
+  NSPrivacyAccessedAPICategoryKeychain" — hallucination. The required-reason categories are only
+  UserDefaults / FileTimestamp / SystemBootTime / DiskSpace / ActiveKeyboards. Keychain access needs no
+  NSPrivacyAccessedAPITypes entry. Correctly omitted.
+- **Reviewer subagents spawning their OWN child agents = stuck reviews**: the privacy Reviewer-B instance
+  spawned a child audit and then kept returning "waiting for the audit agent" with NO verdict (twice). Had
+  to spawn a FRESH value-lens reviewer on the final diff (told explicitly: do NOT spawn sub-agents, judge
+  the diff text) to get a decisive APPROVE. Keep reviewer prompts self-contained; forbid sub-agents.
+
+### Verified-and-DROPPED (skepticism paid off — NOT padding; do not re-attempt without new evidence)
+- **Track-H security scout: ZERO real gaps** — all paid routes rate-limited + bounded + spend-ceilinged;
+  the "by design" items (stems/animate-check/render/validate fail-open) re-confirmed correct.
+- **Provider-response parsing scout: ZERO unguarded accesses** — optional chaining + length guards +
+  fail-open defaults throughout (atlascloud outputs[0], claude content[0], elevenlabs byteLength). Robust.
+- **SFX batch Promise.all → allSettled (correctness scout #3)**: generateSoundEffectBatch has NO live
+  route caller (only elevenlabs.test.ts imports it; the /api/sfx route uses generateSoundEffect singular).
+  Changing it = speculative churn. Skipped.
+- **validate/route.ts JSON.parse "uncaught" (correctness scout #1)**: already inside the route's outer
+  try/catch → fail-open by design (documented). Not an uncaught throw. Low value. Skipped.
+- **ios-score 90s→110s timeout bump (correctness scout #4)**: speculative ("Haiku often exceeds 90s") with
+  no data; 90s is already safely under the 120s budget. Skipped — needs evidence, not a guess.
+- **Audio-features OtherDataTypes privacy entry**: declared in v1, DROPPED in v2 — borderline derived
+  intermediate of the already-declared video; Reviewer B wanted it gone, Reviewer A didn't require it.
+  Four airtight standard types beat five with one contested catch-all. (If ever re-added, use OtherDataTypes,
+  NOT AudioData — the app sends 5 derived scalars/sec, not voice recordings.)
+
+### Follow-ups noted (NOT owner-only; future loop work)
+- **iOS services still contain dormant direct-provider code** (ElevenLabsService / AtlasCloudService:
+  apiKey nil, isAvailable false). Harmless today (guard-blocked) but the live network calls exist; a future
+  hardening could delete the dead provider-call bodies entirely so there is no path even if a key leaked in.
+- **COGS wins awaiting eval keys** (validator frame capping, dynamic batch size): still need G3 evals
+  (owner-funded keys) to prove no quality loss before shipping (B5). Unchanged from Run 30/31.
+- **G2 coverage provider**: @vitest/coverage-v8 still not installed; CI enforcement is owner-only (.github).
+
+
 Cold start; hard-reset local main to origin/main (stale-main gotcha) before cutting branches. NO DEEP
 AUDIT this run (Run 30 ran one same-day 2026-06-30, <24h). Consumed QUALITY_SCORECARD (as_of 2026-06-29,
 overall B, ship_gate_met=false) as DATA — its two ship-critical C's (correctness, store_readiness) remain
