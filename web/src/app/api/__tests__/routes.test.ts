@@ -93,6 +93,31 @@ describe("POST /api/sfx", () => {
     expect(data.upgrade).toBe(true);
   });
 
+  it("returns a pre-generated library SFX without touching the paid gate or generator", async () => {
+    // COGS fast-path: a library hit is instant + free. It MUST short-circuit before the
+    // quota gate and the paid generator — otherwise a free pre-canned asset would burn a
+    // user's quota and ElevenLabs COGS. This path was previously unexercised (the library
+    // mock defaulted to a miss), so a regression in ordering or response shape was silent.
+    const { lookupSfxLibrary } = await import("@/lib/sfx-library");
+    (lookupSfxLibrary as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      url: "https://cdn.example/sfx/whoosh.mp3",
+      duration: 1.5,
+    });
+    const { generateSoundEffect } = await import("@/lib/elevenlabs-sfx");
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+
+    const { POST } = await import("@/app/api/sfx/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "whoosh" }));
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.status).toBe("completed");
+    expect(data.audioUrl).toBe("https://cdn.example/sfx/whoosh.mp3");
+    expect(data.duration).toBe(1.5);
+    expect(generateSoundEffect).not.toHaveBeenCalled(); // no paid call
+    expect(checkExportAllowed).not.toHaveBeenCalled(); // no quota consumed for a free hit
+  });
+
   it("returns completed result on success", async () => {
     const { generateSoundEffect } = await import("@/lib/elevenlabs-sfx");
     (generateSoundEffect as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
