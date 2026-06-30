@@ -262,6 +262,10 @@ that lets an extracted key or modified client run up cost and bypass the free li
       side-effect, so the export still completes (not a silent critical break).)*
 
 ## Track C — Monetization (StoreKit 2)
+> The freemium-subscription model below is the current DEFAULT, not a fixed assumption — the
+> monetization MODEL itself is a first-class revenue lever (see F10 + FACTORY_STANDARD §9). If
+> evidence shows another model (usage/credits, hybrid, etc.) materially strengthens the case, that
+> re-opens building here (StoreKit product types, paywall, entitlement) per F10.
 - [x] C1. Pro subscription with SERVER-VERIFIED entitlement.
       *(client-side sync #31; server-side JWS verification #110; iOS sends the signed transaction to
       the gated routes #114 (ios CI green) — see P0 bullet 2. Code complete + wired end-to-end on
@@ -407,6 +411,21 @@ Not vibes — math, with cited inputs. It must contain:
       - POST-LAUNCH (owner activity): re-ground every assumption on the REAL conversion/retention/CPI
         data from the analytics you built — that's when it goes from a researched projection to a
         data-backed forecast.
+- [ ] F10. **The monetization MODEL itself is a first-class lever — NOT locked to freemium-subscription**
+      (FACTORY_STANDARD §9). Evaluate HOW we charge as a lever, never inherit it by default. Candidates
+      for THIS product (API-cost-bearing backend, shareable output): freemium-subscription (current
+      default); a USAGE / CREDIT / consumable-export model (ties revenue directly to per-export COGS and
+      removes the unlimited-free wallet-drain risk — heavy free users cost real Anthropic/ElevenLabs/
+      AtlasCloud money); free-trial→paid; one-time/lifetime; a HYBRID (sub + credit packs); a creator/
+      higher tier; team/B2B. SWITCH only on honest, benchmark-grounded evidence of materially higher
+      DEFENSIBLE revenue/LTV/margin (cite comps, source+date), reconciled with the real StoreKit product
+      TYPES (auto-renewable subscription vs consumable vs non-consumable) + current Apple payment rules;
+      no dark patterns. PMF-aware + bounded: pre-PMF keep the best-evidenced default and do NOT thrash —
+      decide any model pivot from real funnel/retention/ARPU once it exists, triggered by a NAMED
+      evidenced delta. A model change RE-OPENS building (paywall, StoreKit product types, entitlement,
+      in-app + marketing copy, recomputed unit economics) and is recorded as a dated decision in
+      docs/BUSINESS_CASE.md (models compared, evidence, why the winner). Readiness reconciles it — an
+      unbuilt, evidence-backed better model is a weak-case-loop-back GAP, same as any unbuilt revenue lever.
 
 ## Track G — World-class quality, validation & evals
 How quality is continuously re-validated IN DEPTH — enforced gates on every change + complete
