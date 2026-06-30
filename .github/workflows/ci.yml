@@ -100,6 +100,27 @@ jobs:
       - name: Capability manifest completeness (no unregistered external service can merge)
         run: npx vitest run src/lib/validation-manifest.test.ts
 
+  # ---- VALIDATE-GTM — GTM honesty gate (per-PR) — REQUIRED check ----
+  # Fails CLOSED if a GROWTH_STATUS funnel/acquisition/pmf/channels metric is non-zero with NO connected
+  # source declared (a real number with no source = fabrication risk), or if a present GTM_SCORECARD
+  # doesn't parse / has invalid grades. The GTM analog of validate-capabilities. Readiness mode (the
+  # GTM_SCORECARD-exists clause) is intentionally NOT wired into preflight: HighlightMagic has no GTM
+  # Auditor routine producing a scorecard, so requiring one would gate on an unbuilt dependency.
+  validate-gtm:
+    name: validate-gtm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web deps (provides the DECLARED js-yaml parser — not transitive)
+        run: npm ci --prefix web
+      - name: GTM honesty gate (metric-without-a-source tripwire + scorecard validity)
+        run: node scripts/validate-gtm.mjs
+
   # ---- iOS (Swift app) ----
   # Kept NON-required until reliably green, then promote `ios` to a required check.
   # The app builds as a SwiftPM package (Package.swift, target HighlightMagic +
