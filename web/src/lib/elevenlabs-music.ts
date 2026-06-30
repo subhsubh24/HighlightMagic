@@ -15,6 +15,15 @@ const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 const DEFAULT_MUSIC_LENGTH_MS = 60_000;
 /** Absolute max the API supports (5 min). */
 const MAX_MUSIC_LENGTH_MS = 300_000;
+/**
+ * Per-request abort budget (ms). MUST stay strictly under the /api/music/submit
+ * route's `maxDuration = 60`s — otherwise the AbortSignal can never fire before
+ * Vercel hard-kills the function, turning a clean 502 ("Music generation failed")
+ * into an opaque "function timed out" with no error surfaced (B6 timeout
+ * inversion, same class as the AtlasCloud submit fix in #203). 55s leaves ~5s of
+ * headroom for response handling inside the serverless budget.
+ */
+export const MUSIC_GENERATION_TIMEOUT_MS = 55_000;
 
 function getApiKey(): string {
   const key = process.env.ELEVENLABS_API_KEY;
@@ -61,7 +70,7 @@ export async function generateMusic(
       music_length_ms: clampedDuration,
       output_format: "mp3_44100_192",
     }),
-    signal: AbortSignal.timeout(120_000), // Music generation can take 30-60s
+    signal: AbortSignal.timeout(MUSIC_GENERATION_TIMEOUT_MS),
   });
 
   if (!response.ok) {
