@@ -224,6 +224,13 @@ echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
 ok "web build + tests green"
 
+# GTM honesty gate (the GTM analog of the capability gate). Fail CLOSED if a GROWTH_STATUS metric is
+# non-zero with no connected source declared, or a present GTM_SCORECARD is malformed. Run WITHOUT
+# --readiness: there is no GTM Auditor routine producing a GTM_SCORECARD, so requiring one would gate
+# on an unbuilt dependency loop. (web/node_modules — incl. the declared js-yaml — exists from §4.)
+node scripts/validate-gtm.mjs || fail "validate-gtm: a growth metric lacks a connected source (fabrication risk) or GTM_SCORECARD is malformed."
+ok "GTM honesty gate: every reported growth metric has a connected source"
+
 echo "== 5. BUILDS != WORKS — RUN the functional journey suite GREEN this attempt =="
 # A green build alone must NOT reach 'ready'. Actually RUN the real-browser, outcome-asserting
 # journeys against a freshly built+started app (Playwright's webServer builds + `next start`s it;
