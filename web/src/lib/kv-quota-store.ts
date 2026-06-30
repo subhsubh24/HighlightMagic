@@ -14,17 +14,36 @@ function kvKey(userId: string, period: string): string {
   return `quota:${period}:${userId}`;
 }
 
+/**
+ * Hard ceiling on any single KV round-trip. A hung KV must surface as a fast, catchable
+ * error — NOT sit and burn the function's whole serverless budget (the shortest paid-route
+ * budget is 30s; this is well under it). The entitlement gate catches the rejection and
+ * fails CLOSED on reads (no paid run on an unverifiable quota) per DEEP_DIAGNOSIS: every
+ * external call needs a timeout shorter than the serverless budget.
+ */
+export const KV_OP_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(op: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`KV ${label} timed out after ${KV_OP_TIMEOUT_MS}ms`)),
+      KV_OP_TIMEOUT_MS,
+    );
+  });
+  return Promise.race([op, timeout]).finally(() => clearTimeout(timer));
+}
+
 export class VercelKVQuotaStore {
   async get(userId: string, period: string): Promise<number> {
     const { kv } = await import("@vercel/kv");
-    const val = await kv.get<number>(kvKey(userId, period));
+    const val = await withTimeout(kv.get<number>(kvKey(userId, period)), "get");
     return val ?? 0;
   }
 
   async increment(userId: string, period: string): Promise<number> {
     const { kv } = await import("@vercel/kv");
-    const next = await kv.incr(kvKey(userId, period));
-    return next;
+    return withTimeout(kv.incr(kvKey(userId, period)), "incr");
   }
 }
 

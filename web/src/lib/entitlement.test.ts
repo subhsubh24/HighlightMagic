@@ -98,3 +98,35 @@ describe("consumeExport", () => {
     expect(await consumeExport({ userId: "free", store })).toBe(1);
   });
 });
+
+describe("quota-store outage resilience (KV transient failure)", () => {
+  // A store whose reads/writes always throw — models a Vercel KV blip in production.
+  const throwingStore = {
+    async get(): Promise<number> {
+      throw new Error("KV unreachable");
+    },
+    async increment(): Promise<number> {
+      throw new Error("KV unreachable");
+    },
+  };
+
+  it("checkExportAllowed fails CLOSED for a free user when the store read throws", async () => {
+    const d = await checkExportAllowed({ userId: "u1", store: throwingStore });
+    expect(d.allowed).toBe(false); // never start a paid run on an unverifiable quota
+    expect(d.isPro).toBe(false);
+    expect(d.reason).toBe("quota check unavailable");
+  });
+
+  it("checkExportAllowed does NOT throw when the store read throws (no uncaught 500)", async () => {
+    await expect(checkExportAllowed({ userId: "u1", store: throwingStore })).resolves.toBeDefined();
+  });
+
+  it("consumeExport swallows a store write failure (a delivered export must not 500)", async () => {
+    // The paid run already happened; recording it must not throw and re-bill the user on retry.
+    await expect(consumeExport({ userId: "u1", store: throwingStore })).resolves.toBeTypeOf("number");
+  });
+
+  it("consumeExport stays a no-op for Pro even if the store would throw", async () => {
+    expect(await consumeExport({ userId: "pro", isPro: true, store: throwingStore })).toBe(0);
+  });
+});

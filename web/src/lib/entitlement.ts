@@ -133,7 +133,24 @@ export async function checkExportAllowed(opts: {
   if (await verifyProEntitlement(signedTransaction)) {
     return { allowed: true, isPro: true, remaining: -1, limit: FREE_EXPORT_LIMIT, used: 0 };
   }
-  const used = await store.get(userId, currentPeriodKey(now));
+  let used: number;
+  try {
+    used = await store.get(userId, currentPeriodKey(now));
+  } catch (err) {
+    // Quota store (KV) transient failure → fail CLOSED: never start a paid run we cannot
+    // account for (Track H — protect the wallet over availability on the paid path). Pro
+    // users already returned above, so this only briefly defers FREE-tier exports during an
+    // outage; the route surfaces a clean retryable error instead of an uncaught 500.
+    console.error("[entitlement] quota store read failed; failing closed:", err);
+    return {
+      allowed: false,
+      isPro: false,
+      remaining: 0,
+      limit: FREE_EXPORT_LIMIT,
+      used: 0,
+      reason: "quota check unavailable",
+    };
+  }
   const remaining = Math.max(0, FREE_EXPORT_LIMIT - used);
   return {
     allowed: used < FREE_EXPORT_LIMIT,
@@ -157,5 +174,14 @@ export async function consumeExport(opts: {
 }): Promise<number> {
   const { userId, isPro = false, store = getQuotaStore(), now = new Date() } = opts;
   if (isPro) return 0;
-  return store.increment(userId, currentPeriodKey(now));
+  try {
+    return await store.increment(userId, currentPeriodKey(now));
+  } catch (err) {
+    // The paid run ALREADY completed when we reach here. A store-write failure must NOT turn
+    // a delivered export into a 500 (that would lose the result the user already paid COGS for
+    // and invite a double-spend on retry). Log and report best-effort; the per-user daily spend
+    // ceiling (independent of this monthly counter) still backstops abuse during a store outage.
+    console.error("[entitlement] quota store write failed; export delivered but not counted:", err);
+    return FREE_EXPORT_LIMIT;
+  }
 }
