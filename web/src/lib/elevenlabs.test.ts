@@ -130,14 +130,18 @@ describe("ElevenLabs Music", () => {
     const { MUSIC_GENERATION_TIMEOUT_MS } = await import("./elevenlabs-music");
     expect(MUSIC_GENERATION_TIMEOUT_MS).toBeLessThan(MUSIC_ROUTE_MAX_DURATION_S * 1000);
 
-    // And the const is actually wired into the outbound request's abort signal.
+    // Prove the const is the value ACTUALLY passed to the live fetch's abort signal —
+    // spying on AbortSignal.timeout catches a regression that reverts the fetch line to
+    // a bare literal (a plain `instanceof AbortSignal` check would not).
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
     });
     const { generateMusic } = await import("./elevenlabs-music");
     await generateMusic("test", 30_000);
-    expect(mockFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(timeoutSpy).toHaveBeenCalledWith(MUSIC_GENERATION_TIMEOUT_MS);
+    timeoutSpy.mockRestore();
   });
 
   it("clamps duration to valid range", async () => {
