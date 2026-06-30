@@ -1026,7 +1026,7 @@ export default function ExportStep() {
               <div>
                 <p className="text-sm font-semibold text-white">Go Pro on iOS</p>
                 <p className="text-xs text-[var(--text-tertiary)]">
-                  Unlimited exports, no watermark, offline AI
+                  Unlimited exports, no watermark, premium effects
                 </p>
               </div>
             </a>
