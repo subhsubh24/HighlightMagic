@@ -6,7 +6,11 @@ import { MAX_FILES } from "@/lib/constants";
 import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+// B6 resilience: the Haiku vision validation call below is bounded at 45s (parity with
+// the web /api/validate route — the same model + payload). The serverless budget must
+// exceed that so a slow call aborts into the fail-open path instead of being hard-killed
+// by the platform mid-request.
+export const maxDuration = 60;
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -224,7 +228,11 @@ export async function POST(req: Request) {
         system: systemPrompt,
         messages: [{ role: "user", content: userContent }],
       }),
-      signal: AbortSignal.timeout(hasFrames ? 20_000 : 15_000),
+      // Haiku vision under load routinely takes 15-25s; the old 20s ceiling aborted
+      // legitimate calls into fail-open (validation silently skipped). Match the web
+      // /api/validate budget (45s for the vision path) so the iOS export gets the same
+      // quality check rather than skipping it more often than the web path does.
+      signal: AbortSignal.timeout(hasFrames ? 45_000 : 30_000),
     });
 
     if (!response.ok) {
