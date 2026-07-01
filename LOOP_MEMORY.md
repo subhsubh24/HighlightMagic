@@ -4,6 +4,74 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 36 — 2026-07-01 — daily spend ceiling → KV (#232, H7) + AppStoreMetadata honesty (#233, 0e)
+Cold start; hard-reset local main to origin/main before each branch. NO DEEP AUDIT this run (Run 34 ran a
+full 8-lens audit same-day 2026-07-01, <24h prior; Run 35 also same-day). Consumed QUALITY_SCORECARD
+(as_of 2026-07-01, overall B, ship_gate_met=false; ship-critical dims below A: store_readiness C,
+functional_reality B, tests_evals B — all iOS-bound or .github-blocked for me) + GROWTH_STATUS
+(pre_launch, funnel 0/null — no lever to weight) + BUSINESS_CASE (base ARR y1 $7,740, floor_met_year1
+false) as DATA. Baseline web gate green throughout. Ran 2 Haiku scouts (marketing-honesty,
+web-correctness) — the security/COGS/test/monetization ground was freshly covered by Run 34's deep audit +
+Run 35's scouts, so I did NOT re-plow it (memory-driven). Shipped **2 merged PRs** (both file-DISJOINT:
+web routes/lib vs one Swift string file); abandoned 0. Both cleared 2 Sonnet reviewers + all 4 required
+checks. A focused, high-confidence run on a mature repo.
+
+### Shipped (both merged; each got 2 Sonnet reviewers — BOTH APPROVED the final diff)
+- **#232 daily spend ceiling → KV (Track H7, cross-instance wallet-drain closure)** — the daily
+  EXPORT/GENERATION ceilings were in-memory PER Vercel instance. The paid generation sub-calls
+  (intro/animate[Kling]/sfx/voiceover/…) are NOT covered by the KV-atomic monthly export quota, so the
+  daily ceiling was their ONLY per-user backstop — and per-instance it multiplied by Vercel's fan-out
+  (rotate IPs + hit different instances → cap × N paid calls/day). Moved to a Vercel-KV store (atomic INCR
+  + 2-day EXPIRE on a UTC calendar-day key; InMemory fallback when KV env absent → dev/tests hermetic; 5s
+  timeout; FAIL CLOSED on KV error like the entitlement gate). enforceGenerationCeiling now counts at
+  admission via atomic INCR (kills the check-then-act boundary race); first-write EXPIRE is best-effort
+  (Reviewer A caught: a TTL hiccup must not reject the whole INCR → spurious 429 on a legit user's first
+  call of the day). Public API → async; added `await` at all 17 paid-route call sites (grep-verified none
+  left sync). Semantics change rolling-24h → UTC calendar-day is REQUIRED for an atomic cross-instance
+  INCR (a rolling window can't be atomic); documented tradeoff = ~2× cap on a midnight-straddling burst
+  (bounded, rare; mirrors the calendar-month monthly quota). 721 tests / 0 lint / coverage above floor.
+- **#233 AppStoreMetadata honesty rewrite (closes REMAINING_STEPS 0e; store_readiness honesty)** — the
+  reference metadata's App Review Notes FALSELY told Apple's reviewer that music/SFX/voiceover are
+  ElevenLabs-generated and intro/outro cards AtlasCloud(Kling)-generated — all dormant in v1 (#180, 0d),
+  no music files ship (MusicTrack.bundleURL always nil). String-literal-only edits (iOS-conservative;
+  merged green through the required `ios` check — a pure-string Swift change is low compile-risk) aligned
+  to the already-vetted honest ASO/press copy: Review Notes → editor features are deterministic+on-device,
+  only server-side AI is frame-scoring; removed all "14/5 music tracks", "music mood", "cinematic LUTs",
+  "particle overlays" from description/whatsNew/plans/screenshots; "Unlimited exports" → "Unlimited
+  monthly exports (50/day fair-use)". Reviewer B verified every RETAINED claim vs source (8
+  templates=TemplateLibrary; kinetic/filter enums real; premium effects=real PremiumEffectRenderer; 7-pass
+  literal; iCloud wired) — NO new inaccuracy. Removes a concrete App-Store-rejection + FTC risk.
+
+### Scout findings EVALUATED (so future runs don't re-scout the same ground)
+- **web-correctness (Haiku): CLEAN.** Only finding was an untyped `signedTransaction` passed to
+  checkExportAllowed in a few routes (voiceover/music/sfx/voice-clone/score) — the scout ITSELF noted
+  verifyProEntitlement already `typeof`-guards it, so "no functional risk," pure style consistency.
+  REJECTED (Reviewer-B territory; doesn't clear the value bar). Confirms a mature, well-protected backend.
+- **marketing-honesty (Haiku): 2 HIGH findings.** (1) AppStoreMetadata.swift → SHIPPED as #233. (2)
+  content drafts post-batch-1.md + post-batch-2.md still contain pervasive false AI-music-generation
+  claims ("custom music scored to energy", "no copyright strikes") — DEFERRED (see follow-ups): these are
+  UNPUBLISHED internal drafts (lower urgency than the already-fixed public landing/ASO/press), and the
+  posts are BUILT AROUND music generation, so a partial fix is incoherent — needs a full feature-verified
+  rewrite (or removal of the music-centric posts) in a DEDICATED run, not rushed alongside other work.
+
+### Follow-ups (future loop work; NOT owner-only unless noted)
+- **Content-batch honesty sweep** (docs/content/post-batch-1.md + post-batch-2.md) — STILL PENDING
+  (carried Run 34/35). Full feature-verified rewrite or removal of the music-generation-centric posts.
+  FTC risk only if the owner publishes them as-is; unpublished today.
+- **Export-ceiling atomicity** (from #232 Reviewer B) — /api/score + /api/ios-score still do a separate
+  check-then-record (not the atomic INCR-then-compare the generation path now uses); a narrower,
+  pre-existing check-then-act race on exports, gated first by checkExportAllowed. Low urgency (exports are
+  low-frequency + already quota-gated). Can't collapse trivially (the export ceiling is checked BEFORE the
+  paid call and recorded only AFTER success — INCR-first would count failed exports).
+- **atlascloud.ts poll retry** (from QUALITY_SCORECARD correctness to-A+) — checkTaskResult retries only
+  on 502/503/504; a network fetch rejection / AbortSignal.timeout on a poll throws straight out. Absorb
+  transient socket/DNS blips like HTTP 5xx.
+- Carried unchanged: G2 iOS XCTest coverage floor (iOS-unverifiable); export-CREDIT-PACK SKU (revenue
+  lever — build web/backend half first: credit-balance KV store + entitlement extension + tests, then iOS
+  StoreKit consumable at submission); bundled-music assets (owner or hide picker — 0d/3); EditorView
+  dead-toggles guard (0d/2, iOS); "7 animation styles" mild overclaim; EditorView.swift:24 empty-array
+  edge case.
+
 ## Run 35 — 2026-07-01 — enforce the web coverage floor in CI (#229)
 Cold start; hard-reset local main to origin/main before the branch. NO DEEP AUDIT this run (Run 34 ran a
 full 8-lens audit same-day 2026-07-01, <24h prior). Consumed QUALITY_SCORECARD (as_of 2026-07-01, overall B,

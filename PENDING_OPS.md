@@ -109,6 +109,7 @@ OWNER_ACTIONS:
       status: open
       why: Free-tier enforcement is currently client-side in the iOS app and can be bypassed by reinstalling; the server must derive userId from a verified session, not a caller-supplied flag.
       how: Add an auth provider (Clerk or Supabase) + Vercel KV (KV_REST_API_URL / KV_REST_API_TOKEN), then wire the quota check/increment routes to the verified session. See the B3 section below.
+      note: "As of #232 (Run 36) the per-user DAILY spend ceiling (Track H7) also uses this same Vercel KV for CROSS-INSTANCE enforcement (atomic INCR per UTC-day key). Until KV is provisioned it falls back to an in-memory per-instance counter — correct on one instance but multiplied across Vercel's fan-out. Provisioning KV closes both the monthly quota AND the daily-ceiling cross-instance gaps at once."
       blocks: server-side-quota
     - id: storekit-products
       title: Create live StoreKit products + configure iOS signing in App Store Connect
