@@ -10,7 +10,7 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-06-29
+  as_of: 2026-07-01
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
@@ -96,6 +96,13 @@ OWNER_ACTIONS:
       why: Pro entitlement and revenue depend on real subscription products and a signed build.
       how: Create pro.monthly and pro.yearly subscriptions in App Store Connect, set up the distribution certificate/provisioning profile, and set DEVELOPMENT_TEAM. See the StoreKit / signing sections below.
       blocks: revenue
+    - id: bundle-music-assets
+      title: "Bundle licensed royalty-free music tracks (the in-app music picker is non-functional without them)"
+      priority: normal
+      status: open
+      why: "The iOS music picker + 14-track MusicLibrary reference audio fileNames, but NO audio files are committed anywhere in the repo (confirmed Run 34 DEEP AUDIT), so MusicTrack.bundleURL is always nil: exports get no music and beat-sync falls back to a synthetic grid (build-but-broken). Marketing was corrected (Run 34, #223/#224/#225) to stop claiming music until this is fixed."
+      how: "Add licensed royalty-free .mp3 files whose names match MusicLibrary.tracks fileName values (summer_vibes, golden_hour, peak_moment, happy_days, power_up + the 9 premium tracks) to the app bundle (SPM Sources/Resources or an Xcode resource group). Alternatively tell the loop to hide the music picker until assets exist. See REMAINING_STEPS 0d.3."
+      blocks: music-feature
 ```
 
 ## 🚨 URGENT — DO NOW (the backend is live on Vercel and calls PAID APIs)
