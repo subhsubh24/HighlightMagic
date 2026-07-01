@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       // H7: per-user daily generation ceiling — wallet-drain backstop on the paid Haiku
       // vision call. Only enforceable when a userId is supplied; anonymous web callers'
       // brake is the per-IP rate limiter above (same posture as /api/stems).
-      const genBlock = enforceGenerationCeiling(userId);
+      const genBlock = await enforceGenerationCeiling(userId);
       if (genBlock) return genBlock;
     }
 

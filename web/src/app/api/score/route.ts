@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   }
 
   // Track H7: daily spend ceiling (per-user circuit-breaker, applies to all tiers)
-  const ceiling = checkDailySpendCeiling(userId);
+  const ceiling = await checkDailySpendCeiling(userId);
   if (!ceiling.allowed) {
     return Response.json(
       { error: "Daily export limit reached. Please try again tomorrow." },
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
 
   // Paid call succeeded → consume one quota unit (no-op for Pro).
   await consumeExport({ userId, isPro: decision.isPro });
-  recordDailyExport(userId);
+  await recordDailyExport(userId);
 
   return Response.json({
     scores,
