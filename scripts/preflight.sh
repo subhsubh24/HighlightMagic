@@ -10,6 +10,12 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+# --- FACTORY_STANDARD §22: computation-integrity gate (fail-safe; vacuous until analysis/figures.json has entries) ---
+if [ -f scripts/validate-computation.mjs ] && ! node scripts/validate-computation.mjs; then
+  echo "PREFLIGHT FAIL: validate-computation (§22) — a committed figure is mis-computed or non-reproducible." >&2
+  exit 1
+fi
 fail() { echo "PREFLIGHT FAIL: $*" >&2; exit 1; }
 ok()   { echo "  ok: $*"; }
 
