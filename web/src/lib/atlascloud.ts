@@ -213,13 +213,29 @@ export async function checkTaskResult(
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    const response = await fetch(
-      `${ATLAS_API_BASE}/prediction/${predictionId}`,
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        signal: AbortSignal.timeout(POLL_TIMEOUT_FETCH_MS),
+    let response: Response;
+    try {
+      response = await fetch(
+        `${ATLAS_API_BASE}/prediction/${predictionId}`,
+        {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(POLL_TIMEOUT_FETCH_MS),
+        }
+      );
+    } catch (err) {
+      // A THROWN fetch — network/DNS/socket blip or the AbortSignal.timeout firing — is transient
+      // exactly like an HTTP 5xx, so retry it with the same backoff instead of letting it abort the
+      // whole poll loop (and with it the export) on the first hiccup. Only give up once retries are
+      // exhausted. Previously this threw straight out with no retry (QUALITY_SCORECARD to-A+ gap).
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        console.warn(
+          `[atlascloud] Poll fetch threw (${lastError.message}), will retry...`
+        );
+        continue;
       }
-    );
+      throw lastError;
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");

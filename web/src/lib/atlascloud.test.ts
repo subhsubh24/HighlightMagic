@@ -169,6 +169,48 @@ describe("Atlas Cloud API", () => {
       expect(result.status).toBe("failed");
       expect(result.error).toBe("Content policy violation");
     });
+
+    it("retries a THROWN fetch (network/DNS/timeout) instead of aborting the poll", async () => {
+      vi.useFakeTimers();
+      // First poll throws like a socket/DNS blip or the AbortSignal.timeout firing; the retry
+      // succeeds. Before the fix this threw straight out and killed the whole export.
+      mockFetch
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              message: "ok",
+              data: { id: "pred_r", status: "succeeded", outputs: ["https://cdn.example.com/r.mp4"] },
+            }),
+        });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const p = checkTaskResult("pred_r");
+      await vi.runAllTimersAsync(); // let the backoff sleep elapse
+      const result = await p;
+
+      expect(result.status).toBe("completed");
+      expect(result.outputUrl).toBe("https://cdn.example.com/r.mp4");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it("gives up (rejects) only after exhausting retries when the fetch keeps throwing", async () => {
+      vi.useFakeTimers();
+      mockFetch.mockRejectedValue(new Error("dns fail"));
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const p = checkTaskResult("pred_f");
+      const rejection = expect(p).rejects.toThrow("dns fail");
+      await vi.runAllTimersAsync();
+      await rejection;
+
+      // Initial attempt + MAX_RETRIES(3) = 4 total before giving up.
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      vi.useRealTimers();
+    });
   });
 
   describe("MODELS", () => {
