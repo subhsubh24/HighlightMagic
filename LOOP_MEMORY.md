@@ -4,6 +4,68 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 35 — 2026-07-01 — enforce the web coverage floor in CI (#229)
+Cold start; hard-reset local main to origin/main before the branch. NO DEEP AUDIT this run (Run 34 ran a
+full 8-lens audit same-day 2026-07-01, <24h prior). Consumed QUALITY_SCORECARD (as_of 2026-07-01, overall B,
+ship_gate_met=false) + GROWTH_STATUS (pre_launch, funnel 0/null — no lever to weight) as DATA. Baseline web
+gate green throughout. Ran 4 Haiku scouts (COGS/perf, Track-H security, test/eval coverage, monetization).
+Shipped 1 merged PR; abandoned 0. A focused, high-confidence run — the scouts confirmed a MATURE repo where
+most candidates did NOT clear the value bar (verified below), so I shipped the one clearly-ship-critical,
+fully-verifiable change rather than pad.
+
+### Shipped (merged; 2 Sonnet reviewers BOTH APPROVED the final diff before auto-merge was enabled)
+- **#229 enforce the web coverage floor (G2 web half, ship-critical tests_evals)** — the vitest.config.ts
+  thresholds (stmts/funcs 60, branches 50, lines 60) were DEAD CONFIG: @vitest/coverage-v8 was never
+  installed and CI's `npm test` ran `vitest run` with no --coverage (the exact gap the QUALITY_SCORECARD
+  names). Installed the provider (matches resolved vitest@4.1.9) + flipped the `test` script to
+  `vitest run --coverage`, so the required `web` job now FAILS a merge on a coverage regression — WITHOUT a
+  .github/ edit (a separate test:coverage script would never run in CI; flipping the default is the only
+  mechanism under the blast-radius rule). Added 24 genuine reducer tests (store.ts 37.5%→~85%) for margin.
+  Measured after: stmts 62.91/branch 58.2/func 75.77/lines 63.36. Reviewer A cross-checked every test vs the
+  reducer (no tautologies; no-op branches asserted via toBe reference-equality) + verified no peer-dep
+  conflict + only the `web` job runs `npm test`. G2 is NOT ticked: it also requires an iOS XCTest coverage
+  floor (unverifiable on Linux) — only the web half landed.
+
+### Scout findings EVALUATED AND REJECTED this run (so future runs don't re-scout the same ground)
+- **Security (Track-H): CLEAN, nothing new/ship-critical.** Scout flagged timing-safe compares for the
+  site-gate password (middleware.ts:102) + GROWTH_AGENT_SECRET (growth/stats:29). REJECTED as marginal:
+  both are high-entropy random secrets (or a soft pre-launch curtain that only fronts the app's own auth) —
+  a network timing side-channel against them is infeasible; Reviewer-B-reject territory. render/route.ts is
+  501-disabled (hardening deferred to activation). Ceiling/gate ORDER "suboptimalities" are not bugs (the
+  gate already fires BEFORE the paid call). All active paid routes remain rate-limited + spend-ceilinged +
+  entitlement-gated; CSP/HSTS/CORS/CAPTCHA intact.
+- **COGS/perf: no CLEAN positive win.** (1) "add ephemeral cache_control to /api/score" is INVALID — score
+  builds a DYNAMIC per-batch user-message prompt (embeds each batch's timeSec list + user prompt) with NO
+  system field, so there's no cacheable static prefix (ios-score DOES cache because its system prompt is
+  shared across a video's many frame batches → many hits). (2) "cache /api/validate + /api/ios-validate
+  system prompt" is RISKY at low volume: the validator runs ≤2 passes/export, and Anthropic prompt caching
+  costs 1.25x on write and only pays off on a hit within the 5-min TTL — at 1 use it's a NET LOSS. Skipped
+  (unproven, possibly negative). (3) max_tokens 2048→1024 on /api/score = churn (tiny). (4) stem-sep LRU =
+  rarely-hit path, marginal.
+- **Tests: validation-fixes.ts already covers the update-then-remove interaction** (validation-fixes.test.ts
+  "applies updates before removals") — no gap. store.ts was the real low-coverage target (taken by #229).
+- **Monetization: the export-CREDIT-PACK consumable SKU** (BUSINESS_CASE F10 / scorecard business_case
+  "to-A+") is a genuine unbuilt lever but is LARGE + touches load-bearing entitlement.ts + is half
+  iOS-blocked (StoreKit consumable def + receipt validation unverifiable on Linux). DEFERRED to a dedicated
+  run with careful design — do NOT rush it alongside other work. Its backend half (credit-balance KV store +
+  entitlement extension) IS web-verifiable and would be the place to start.
+
+### Follow-ups (future loop work; NOT owner-only unless noted)
+- **G2 iOS half** — add an XCTest coverage floor on iOS logic modules so ROADMAP G2 can be fully ticked
+  (currently only the web `--coverage` floor is enforced). iOS = unverifiable on Linux; conservative.
+- **Content-batch honesty sweep (docs/content/post-batch-1.md + post-batch-2.md)** — STILL PENDING (carried
+  from Run 34). Pervasive false claims: AI-generated MUSIC/SFX/voiceover (non-functional in v1) + a hard
+  "Unlimited exports" pricing line (post-batch-2:272) that contradicts the honest "removes the monthly cap"
+  paywall. These are UNPUBLISHED internal drafts (lower urgency than the already-fixed public landing/ASO/
+  press), but a partial one-line fix would be INCOHERENT (whole posts are built around music generation) — do
+  a full, feature-verified rewrite (or removal of the music-centric posts) in a dedicated run, not a rushed
+  pass. FTC risk if the owner posts them as-is.
+- **Export-credit-pack SKU** (see rejected-scout note) — build the web/backend half first (credit-balance
+  store + entitlement path + tests), then the iOS StoreKit consumable at submission.
+- Carried from Run 34 (unchanged): AppStoreMetadata.swift honesty rewrite (iOS submission-blocker, large,
+  string-only feature-verified pass), bundled-music assets missing (owner or hide picker — REMAINING_STEPS
+  0d), "7 animation styles" mild overclaim, EditorView.swift:24 empty-array crash edge case.
+
 ## Run 34 — 2026-07-01 — DEEP AUDIT + H7 ceiling behavioral test (#222) + marketing honesty sweep (#223/#224/#225)
 Cold start; hard-reset local main to origin/main before each branch. Ran a DEEP AUDIT (last was Run 30
 2026-06-30, ~4 runs prior). Consumed QUALITY_SCORECARD (as_of 2026-06-29, overall B) + GROWTH_STATUS
