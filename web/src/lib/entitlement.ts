@@ -11,9 +11,10 @@
  * Free tier: FREE_EXPORT_LIMIT paid generation runs per user per calendar month.
  * Pro: unlimited — but ONLY when verified server-side (never from a client-supplied flag).
  */
-import { FREE_EXPORT_LIMIT, PRO_PRODUCT_IDS } from "./constants";
+import { CREDIT_PACK_PRODUCTS, FREE_EXPORT_LIMIT, PRO_PRODUCT_IDS } from "./constants";
 import { isKVConfigured, VercelKVQuotaStore } from "./kv-quota-store";
 import { loadTrustedRootsFromEnv, verifyAppStoreJWS } from "./app-store-jws";
+import { consumeCredit, getCreditBalance, grantCredits, type GrantResult } from "./credit-store";
 
 /** Current monthly period key in UTC, e.g. "2026-06". Quotas reset per calendar month. */
 export function currentPeriodKey(date: Date = new Date()): string {
@@ -113,6 +114,10 @@ export interface ExportDecision {
   limit: number;
   used: number;
   reason?: string;
+  /** True when the export is authorized by a purchased credit (monthly free quota exhausted). */
+  viaCredit?: boolean;
+  /** Spendable credit balance when this export is credit-authorized (else omitted). */
+  creditsRemaining?: number;
 }
 
 /**
@@ -151,14 +156,44 @@ export async function checkExportAllowed(opts: {
       reason: "quota check unavailable",
     };
   }
-  const remaining = Math.max(0, FREE_EXPORT_LIMIT - used);
+  if (used < FREE_EXPORT_LIMIT) {
+    return {
+      allowed: true,
+      isPro: false,
+      remaining: Math.max(0, FREE_EXPORT_LIMIT - used),
+      limit: FREE_EXPORT_LIMIT,
+      used,
+    };
+  }
+
+  // Free monthly quota exhausted → fall back to purchased export credits (lever b). Only reached
+  // once a user is over the free limit, so the extra KV read never touches the common under-limit
+  // path. Fails CLOSED like the quota read: never authorize a paid run on an unverifiable balance.
+  let credits: number;
+  try {
+    credits = await getCreditBalance(userId);
+  } catch (err) {
+    console.error("[entitlement] credit balance read failed; failing closed:", err);
+    return { allowed: false, isPro: false, remaining: 0, limit: FREE_EXPORT_LIMIT, used, reason: "quota check unavailable" };
+  }
+  if (credits > 0) {
+    return {
+      allowed: true,
+      isPro: false,
+      remaining: 0,
+      limit: FREE_EXPORT_LIMIT,
+      used,
+      viaCredit: true,
+      creditsRemaining: credits,
+    };
+  }
   return {
-    allowed: used < FREE_EXPORT_LIMIT,
+    allowed: false,
     isPro: false,
-    remaining,
+    remaining: 0,
     limit: FREE_EXPORT_LIMIT,
     used,
-    reason: used < FREE_EXPORT_LIMIT ? undefined : "free monthly limit reached",
+    reason: "free monthly limit reached",
   };
 }
 
@@ -174,14 +209,109 @@ export async function consumeExport(opts: {
 }): Promise<number> {
   const { userId, isPro = false, store = getQuotaStore(), now = new Date() } = opts;
   if (isPro) return 0;
+  const period = currentPeriodKey(now);
+
+  // Decide free-quota vs purchased-credit the same way checkExportAllowed did: while under the
+  // free monthly limit, consume free quota; once exhausted, this export was credit-authorized, so
+  // spend one credit instead of bumping the (already-maxed) monthly counter.
+  let used: number;
   try {
-    return await store.increment(userId, currentPeriodKey(now));
+    used = await store.get(userId, period);
   } catch (err) {
-    // The paid run ALREADY completed when we reach here. A store-write failure must NOT turn
-    // a delivered export into a 500 (that would lose the result the user already paid COGS for
-    // and invite a double-spend on retry). Log and report best-effort; the per-user daily spend
-    // ceiling (independent of this monthly counter) still backstops abuse during a store outage.
-    console.error("[entitlement] quota store write failed; export delivered but not counted:", err);
-    return FREE_EXPORT_LIMIT;
+    // Can't tell which bucket to charge → best-effort bump the monthly counter (the historical
+    // behavior) rather than silently spend a credit we can't confirm the user needed.
+    console.error("[entitlement] quota read failed on consume; bumping monthly best-effort:", err);
+    used = 0;
   }
+
+  if (used < FREE_EXPORT_LIMIT) {
+    try {
+      return await store.increment(userId, period);
+    } catch (err) {
+      // The paid run ALREADY completed when we reach here. A store-write failure must NOT turn
+      // a delivered export into a 500 (that would lose the result the user already paid COGS for
+      // and invite a double-spend on retry). Log and report best-effort; the per-user daily spend
+      // ceiling (independent of this monthly counter) still backstops abuse during a store outage.
+      console.error("[entitlement] quota store write failed; export delivered but not counted:", err);
+      return FREE_EXPORT_LIMIT;
+    }
+  }
+
+  // Monthly free quota exhausted → charge one purchased export credit. Best-effort for the same
+  // reason as above: the export already succeeded, so a KV blip here must not 500 the user.
+  try {
+    await consumeCredit(userId);
+  } catch (err) {
+    console.error("[entitlement] credit spend failed; export delivered but credit not charged:", err);
+  }
+  return FREE_EXPORT_LIMIT;
+}
+
+export interface RedeemResult {
+  ok: boolean;
+  granted: number;
+  balance: number;
+  /** True when this transaction was already redeemed (idempotent replay) — grant is 0. */
+  duplicate?: boolean;
+  reason?: string;
+}
+
+/**
+ * Redeem a StoreKit consumable "export credit pack" purchase (business-case lever b).
+ *
+ * Cryptographically verifies the signed transaction (same Apple-anchored JWS path as Pro),
+ * confirms the product is a known credit pack (CREDIT_PACK_PRODUCTS is the server-side source of
+ * truth for the credit COUNT), rejects refunded purchases, and idempotently grants the credits
+ * keyed on the Apple transactionId — a replayed transaction can NEVER mint credits twice. Like
+ * verifyProEntitlement, this trusts nothing the client asserts beyond Apple's signature.
+ *
+ * Consumables carry no expiresDate, so (unlike the Pro subscription check) there is no expiry
+ * window to validate — a consumable purchase is permanent once made.
+ */
+export async function redeemCreditPack(opts: {
+  userId: string;
+  signedTransaction?: string | null;
+}): Promise<RedeemResult> {
+  const { userId, signedTransaction } = opts;
+  if (!userId || typeof userId !== "string") {
+    return { ok: false, granted: 0, balance: 0, reason: "missing userId" };
+  }
+  if (!signedTransaction || typeof signedTransaction !== "string") {
+    return { ok: false, granted: 0, balance: 0, reason: "missing signedTransaction" };
+  }
+
+  const trustedRootDer = loadTrustedRootsFromEnv();
+  if (trustedRootDer.length === 0) {
+    // No trusted Apple root configured → cannot verify → grant nothing (secure default).
+    return { ok: false, granted: 0, balance: 0, reason: "purchase verification unavailable" };
+  }
+
+  const txn = verifyAppStoreJWS(signedTransaction, { trustedRootDer });
+  if (!txn) return { ok: false, granted: 0, balance: 0, reason: "invalid transaction" };
+
+  const amount = txn.productId ? CREDIT_PACK_PRODUCTS[txn.productId] : undefined;
+  if (!amount) return { ok: false, granted: 0, balance: 0, reason: "not a credit-pack product" };
+
+  // Defence-in-depth: reject a transaction minted for another app when we know our bundle id.
+  const expectedBundleId = process.env.APP_STORE_BUNDLE_ID;
+  if (expectedBundleId && txn.bundleId !== expectedBundleId) {
+    return { ok: false, granted: 0, balance: 0, reason: "invalid transaction" };
+  }
+  // A refunded / revoked purchase grants nothing.
+  if (typeof txn.revocationDate === "number") {
+    return { ok: false, granted: 0, balance: 0, reason: "purchase refunded" };
+  }
+  // The transactionId is the idempotency key; without it we cannot guard against replay.
+  if (!txn.transactionId || typeof txn.transactionId !== "string") {
+    return { ok: false, granted: 0, balance: 0, reason: "invalid transaction" };
+  }
+
+  let result: GrantResult;
+  try {
+    result = await grantCredits(userId, amount, txn.transactionId);
+  } catch (err) {
+    console.error("[entitlement] credit grant failed:", err);
+    return { ok: false, granted: 0, balance: 0, reason: "credit store unavailable" };
+  }
+  return { ok: true, granted: result.granted, balance: result.balance, duplicate: result.duplicate };
 }

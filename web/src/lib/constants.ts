@@ -12,6 +12,25 @@ export const FREE_EXPORT_LIMIT = 5;
  * Used server-side to confirm a verified App Store transaction actually grants Pro.
  */
 export const PRO_PRODUCT_IDS = ["pro.monthly", "pro.yearly"] as const;
+
+/**
+ * Consumable "export credit pack" StoreKit products (ROADMAP F/business-case lever b).
+ *
+ * A free user who hits the monthly {@link FREE_EXPORT_LIMIT} can buy a one-off credit pack
+ * instead of committing to a subscription — each pack grants N extra exports that never expire.
+ * This directly couples revenue to per-export COGS and captures users who won't subscribe.
+ *
+ * The map is the SERVER-SIDE source of truth for how many credits each product grants; a
+ * verified consumable transaction for one of these product IDs adds that many credits. The
+ * matching StoreKit consumable products + their prices are configured by the owner in App Store
+ * Connect at submission (see REMAINING_STEPS.md) — pricing lives there, credit COUNT lives here.
+ */
+export const CREDIT_PACK_PRODUCTS: Readonly<Record<string, number>> = {
+  "credits.small": 10,
+  "credits.medium": 30,
+  "credits.large": 100,
+} as const;
+
 export const MAX_CLIP_DURATION = 60;
 export const EXPORT_WIDTH = 1080;
 export const EXPORT_HEIGHT = 1920;
