@@ -9,7 +9,7 @@ App Store / TestFlight).
 
 ## How it works
 
-`import / capture → detect highlights → edit (trim, captions, filters, music/SFX/voiceover) → 1080×1920 export → share`
+`import / capture → detect highlights → edit (trim, captions, filters) → 1080×1920 export → share`
 
 ## Two components
 
@@ -27,8 +27,10 @@ routes calls through `web/` and ships with **no embedded API keys**:
   lightweight on-device Vision classification fallback for offline/degraded scenarios; the
   optional CoreML model is not bundled in the shipped build).
 - **Planning / effects** — Claude Sonnet planner.
-- **Audio** — ElevenLabs (music / SFX / voiceover / voice clone).
-- **Photo→video / intro-outro** — AtlasCloud (Kling).
+- **Audio (backend integration, not enabled in v1)** — ElevenLabs (music / SFX / voiceover /
+  voice clone). The routes exist server-side but are dormant in the shipped v1 app; v1 audio is the
+  user's original clip audio.
+- **Photo→video / intro-outro (backend integration, not enabled in v1)** — AtlasCloud (Kling).
 
 The free quota and Pro entitlement are enforced **server-side, before any paid call** (StoreKit 2
 signed-transaction / App Store Server API verification — never trusting a client flag), behind rate

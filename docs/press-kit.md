@@ -122,7 +122,7 @@ Screenshots and app icon will be available on request once finalized.
 **Palette**: deep violet-black (`#0F0A1A`) background; purple-to-pink gradient accent (`#7C3AED → #EC4899`). Dark-mode only.  
 **Voice**: direct, peer-to-creator. Lead with the outcome. Short sentences. No hype.
 
-The AI detection and audio generation use third-party AI services (Anthropic, ElevenLabs, AtlasCloud) processed server-side. All user video data is handled per the privacy policy at highlightmagic.app/privacy; raw footage is not stored after processing.
+AI highlight detection uses a third-party AI service (Anthropic / Claude) processed server-side. (Additional audio and video-generation integrations — ElevenLabs, AtlasCloud — exist in the backend but are not enabled in the shipped v1 app.) All user video data is handled per the privacy policy at highlightmagic.app/privacy; raw footage is not stored after processing.
 
 ---
 

@@ -80,8 +80,7 @@ export default function SupportPage() {
               <h3 className="font-semibold text-white">What video formats can I import?</h3>
               <p className="mt-1">
                 Highlight Magic supports standard iOS video formats including MP4, MOV, and M4V.
-                Maximum video length is 10 minutes per clip. Photos (JPEG, PNG, HEIC) are also
-                supported for animated photo highlights.
+                Maximum video length is 10 minutes per clip.
               </p>
             </div>
 

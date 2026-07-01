@@ -27,20 +27,30 @@ export default function PrivacyPage() {
               to our server and then to <strong>Anthropic Claude</strong> for AI highlight
               detection. Full video files are not uploaded.
             </li>
+          </ul>
+          <p className="mt-2">
+            In the current version of the app, AI highlight detection (video frames → Anthropic
+            Claude, above) is the <strong>only</strong> data flow to a third-party AI provider. The
+            audio and video-generation integrations below are built into our backend but are{" "}
+            <strong>not enabled in the current version</strong>, so no data is sent to these
+            providers today. They are documented here so this policy stays accurate if they are
+            turned on in a future release:
+          </p>
+          <ul className="list-disc space-y-2 pl-5 mt-2">
             <li>
-              <strong className="text-white">Photos</strong> — if you enable photo animation, your
-              uploaded images are sent to <strong>AtlasCloud (Kling)</strong> to generate animated
-              video clips.
+              <strong className="text-white">Photos</strong> — if photo animation is enabled in a
+              future release, uploaded images would be sent to <strong>AtlasCloud (Kling)</strong>{" "}
+              to generate animated video clips.
             </li>
             <li>
-              <strong className="text-white">Text prompts</strong> — the AI-generated music, sound
-              effects, and voiceover scripts (text only, no audio from you) are sent to{" "}
-              <strong>ElevenLabs</strong> to generate audio. If you enable voice cloning, a short
-              audio sample you provide is sent to ElevenLabs to create a temporary voice model.
+              <strong className="text-white">Text prompts</strong> — if AI music, sound effects, or
+              voiceover are enabled, text-only prompts (no audio from you) would be sent to{" "}
+              <strong>ElevenLabs</strong> to generate audio. If voice cloning is enabled, a short
+              audio sample you provide would be sent to ElevenLabs to create a temporary voice model.
             </li>
             <li>
-              <strong className="text-white">AI-generated clips</strong> — for intro/outro card
-              generation, a text prompt and style description are sent to{" "}
+              <strong className="text-white">AI-generated clips</strong> — if intro/outro card
+              generation is enabled, a text prompt and style description would be sent to{" "}
               <strong>AtlasCloud</strong> for video generation.
             </li>
           </ul>
@@ -94,9 +104,11 @@ export default function PrivacyPage() {
               </a>
             </li>
             <li>
-              <strong className="text-white">ElevenLabs</strong> — receives text prompts to
-              generate music, sound effects, and voiceover audio. If voice cloning is used, a
-              short audio sample is sent; ElevenLabs deletes cloned voices after generation.{" "}
+              <strong className="text-white">ElevenLabs</strong> —{" "}
+              <em>not enabled in the current version.</em> When the audio features are turned on it
+              would receive text prompts to generate music, sound effects, and voiceover audio; if
+              voice cloning is used, a short audio sample is sent and ElevenLabs deletes cloned
+              voices after generation.{" "}
               <a
                 href="https://elevenlabs.io/privacy"
                 className="text-[var(--accent)] underline"
@@ -107,8 +119,10 @@ export default function PrivacyPage() {
               </a>
             </li>
             <li>
-              <strong className="text-white">AtlasCloud</strong> — receives images and text
-              prompts for photo animation and AI video generation (intro/outro cards).{" "}
+              <strong className="text-white">AtlasCloud</strong> —{" "}
+              <em>not enabled in the current version.</em> When photo animation / AI video
+              generation (intro/outro cards) is turned on it would receive images and text
+              prompts.{" "}
               <a
                 href="https://atlascloud.ai/privacy"
                 className="text-[var(--accent)] underline"
@@ -125,10 +139,10 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-white">Data retention</h2>
           <p>
             Video frames sent for analysis are processed in real-time and not retained on our
-            servers after the AI response is returned. Generated audio and video assets are held
-            temporarily (typically minutes) while you complete your export, then discarded.
-            Your anonymous ID and export count remain on your device until you delete the app or
-            clear your browser data.
+            servers after the AI response is returned. (If the audio and video-generation features
+            are enabled in a future release, any assets they generate would be held only temporarily
+            while you complete your export, then discarded.) Your anonymous ID and export count
+            remain on your device until you delete the app or clear your browser data.
           </p>
         </section>
 
