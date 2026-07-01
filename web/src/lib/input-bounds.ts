@@ -24,6 +24,9 @@ export const MAX_AUDIO_B64_CHARS = 60_000_000;
 export const MAX_VIDEO_B64_CHARS = 600_000_000;
 /** One vision frame's base64 JPEG (~9MB). The frame COUNT is bounded separately. */
 export const MAX_FRAME_B64_CHARS = 12_000_000;
+/** A StoreKit signed transaction (compact JWS incl. the x5c cert chain) — a few KB in practice;
+ *  cap generously so the crypto verifier never touches an oversized payload. */
+export const MAX_JWS_CHARS = 20_000;
 
 /** True when `value` is a string longer than `max`. Absent / non-string values pass (other
  *  validation handles required-ness); this check is only about size. */
