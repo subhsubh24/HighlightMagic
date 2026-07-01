@@ -421,4 +421,28 @@ LTV improves 65–70%, and upfront cash helps cover COGS on the business-paid mo
 the annual tier below $119.99 — at $99.99/year with heavy users (15 exp/month), gross margin
 collapses to 20% and becomes negative above ~18 exports/month.
 
-*Last updated: 2026-06-30 (Run 30) — consistency/honesty fix only: corrected the last two stale references to a non-existent "50-export/MONTH cap" that Run 25's Lever-4 correction missed — the §5 $99.99/yr viability sentence and the §9 annual-tier checklist item 4. Both now describe the ACTUAL shipped control (the 50/user/DAY anti-abuse ceiling in spend-ceiling.ts) and state plainly that Pro is unlimited-monthly with no monthly quota, so the thin $99.99/yr heavy-usage margin is unbounded — which is why $149.99/yr is recommended. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-29 (Run 26) — added the §3 "Now instrumented (PR #170)" note: audio/video provider calls now emit `[CostMeter]` usage-unit lines so the "verify per-export cost from Vercel logs" guidance is actually actionable. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
+## 10. Export credit packs (lever b) — backend SHIPPED (#237, Run 37)
+
+The consumable **export-credit-pack** lever named in the mandate (b) now has its full server side
+built + tested (`web/src/lib/credit-store.ts`, `redeemCreditPack` in `entitlement.ts`,
+`POST /api/credits/redeem`, `CREDIT_PACK_PRODUCTS` = 10/30/100 exports). A free user who exhausts
+the 5/month free limit can buy a one-off pack instead of subscribing; each credit = one export,
+never expiring, and the redemption is Apple-JWS-verified + idempotent by transactionId.
+
+**Why it strengthens the case (qualitatively — NOT yet in the ARR numbers):** it monetizes the
+segment that hits the free wall but won't commit to a $14.99/mo subscription (the classic freemium
+"considerers"), and because a credit maps 1:1 to an export it is *structurally* margin-safe —
+revenue is coupled to per-export COGS by construction. It also gives the paywall a second,
+lower-friction offer at the highest-intent moment (the finished-highlight / limit-hit screen).
+
+**Honesty guard — no ARR change booked yet.** The summary block's `arr_*` figures are UNCHANGED and
+`as_of` stays 2026-06-27, because (i) the iOS StoreKit consumable purchase UI is not built yet
+(owner + loop, at submission — see REMAINING_STEPS.md), so it is not yet user-purchasable, and (ii)
+there is no defensible pack attach-rate benchmark to model without inventing one. Once the iOS half
+ships AND a real (or credibly benchmarked) attach rate exists, RE-COMPUTE base/optimistic ARR with
+the credit-pack contribution and stamp a new `as_of`. Pricing is owner-set in App Store Connect (the
+credit COUNTS are fixed server-side); it must be priced to value/benchmarks and never below
+per-export COGS — Reviewer B / the readiness auditors reject any credit-pack ARR line whose adoption
+% is chosen merely to clear the floor.
+
+*Last updated: 2026-07-01 (Run 37) — recorded the export-credit-pack lever (b) backend shipping (#237): added Section 10 above. NO model recompute and `as_of` stays 2026-06-27 — the lever is backend-only (not yet user-purchasable; no honest attach-rate to model), so arr_* and floor_met_year1 are deliberately UNCHANGED (anti-gaming: no ARR booked for a lever users can't yet buy). Prior: 2026-06-30 (Run 30) — consistency/honesty fix only: corrected the last two stale references to a non-existent "50-export/MONTH cap" that Run 25's Lever-4 correction missed — the §5 $99.99/yr viability sentence and the §9 annual-tier checklist item 4. Both now describe the ACTUAL shipped control (the 50/user/DAY anti-abuse ceiling in spend-ceiling.ts) and state plainly that Pro is unlimited-monthly with no monthly quota, so the thin $99.99/yr heavy-usage margin is unbounded — which is why $149.99/yr is recommended. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-29 (Run 26) — added the §3 "Now instrumented (PR #170)" note: audio/video provider calls now emit `[CostMeter]` usage-unit lines so the "verify per-export cost from Vercel logs" guidance is actually actionable. No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior: 2026-06-28 (Run 25) — consistency fix only: reconciled the export-limit wording to the ACTUAL code — "unlimited exports" → "unlimited MONTHLY exports", and Lever 4 corrected from a (never-built) "50/month cap → $15.50 COGS bound" to the SHIPPED H7 control: a 50/user/DAY anti-abuse ceiling (spend-ceiling.ts), which is not a monthly quota and doesn't change the §3 margins (built on ~15 exports/mo typical usage). No model recompute; pricing/COGS/levers/revenue unchanged, so `as_of` stays 2026-06-27. Prior (Run 24): §6 Year-1 cumulative corrected $3,400 → $5,130 to match §5. Sources cited inline above. Model pricing: verify at console.anthropic.com and elevenlabs.io/pricing.*
