@@ -58,19 +58,18 @@ Character count: ~480 ✓
 ```
 Turn raw footage into share-ready highlights in seconds with HighlightMagic.
 
-Our AI watches every frame of your video to find the most exciting, emotional, and visually strong moments — then assembles them into a polished vertical clip with captions, music, and transitions. No editing experience needed.
+Our AI watches every frame of your video to find the most exciting, emotional, and visually strong moments — then assembles them into a polished vertical clip with captions and smooth transitions. No editing experience needed.
 
 WHAT IT DOES:
 • Analyzes your footage frame-by-frame to find peak moments
 • Assembles a highlight reel automatically — no manual scrubbing
-• Syncs beat-matched background music to your clip's energy
+• Stitches the best moments together with smooth transitions
 • Writes and animates captions synced to the action
 • Exports a perfect 1080×1920 MP4 ready for TikTok, Instagram Reels, and YouTube Shorts
 
 THE FULL CREATIVE STUDIO:
-• Kinetic captions with 15+ animation styles
-• 20+ color filters (cinematic, warm, cool, B&W, and more)
-• A curated royalty-free music library, auto-matched to your footage
+• Kinetic captions with 7 animation styles
+• 10 color filters (cinematic, warm, cool, B&W, and more)
 • Trim and reorder clips in the built-in editor
 • One-tap share to any platform
 
@@ -100,7 +99,7 @@ Character count: ~1,650 (well within 4000-char limit — room for localization)
 Character count: 119 ✓
 
 **Post-launch A/B candidates**:
-- `New: 15+ kinetic caption styles — make every word pop, automatically.`
+- `New: 7 kinetic caption styles — make every word pop, automatically.`
 - `Summer update: 5 new filters + improved AI detection for sports & action footage.`
 
 ---
@@ -114,7 +113,7 @@ Required: 5 screenshots (6.9-inch format: 1320×2868). Captions appear below scr
 |---|---|---|---|
 | 1 | Home / Import screen | **Your footage. AI magic.** | Import any video — AI finds the best moments automatically |
 | 2 | Detection progress screen | **AI watches every frame** | Scores emotion, action, and energy — no scrubbing needed |
-| 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, and music — all in one timeline |
+| 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, and transitions — all in one timeline |
 | 4 | Export preview (vertical clip) | **Vertical-perfect export** | 1080×1920 MP4 ready for TikTok, Reels, and Shorts |
 | 5 | Paywall / Pro screen | **Go unlimited with Pro** | Unlimited exports, no watermark — $14.99/month or $149.99/year |
 
@@ -124,12 +123,12 @@ Required: 5 screenshots (6.9-inch format: 1320×2868). Captions appear below scr
 
 1. **0:00–0:04** — Start on a messy pile of raw clips (home screen, multiple imported videos). Text overlay: "Hours of footage..."
 2. **0:04–0:08** — AI detection animation playing (progress bar, highlighted frame indicators). Text overlay: "AI finds the best moments."
-3. **0:08–0:14** — Scrub through the editor: trim handles, caption animations, filter being applied, music waveform syncing. Text overlay: "Edit. In seconds."
+3. **0:08–0:14** — Scrub through the editor: trim handles, caption animations, and a filter being applied. Text overlay: "Edit. In seconds."
 4. **0:14–0:20** — Export animation → reveal the finished vertical clip playing (sports goal, travel moment, or concert drop). No text — let the clip speak.
 5. **0:20–0:26** — Share sheet appearing → "Posted to TikTok" success state. Text overlay: "Viral-ready in 30 seconds."
 6. **0:26–0:30** — App icon + tagline: "Highlight Magic. Free on the App Store." Fade to logo.
 
-**Music**: use one of the AI-generated tracks from the app itself — demonstrates the feature.
+**Music**: use a royalty-free track for the promo's background audio (the video's own soundtrack, not an in-app feature demo).
 
 ---
 
