@@ -120,9 +120,16 @@ class VercelKVDailyCeilingStore implements DailyCeilingStore {
     const key = this.kvKey(kind, userId, period);
     const next = await withTimeout(kv.incr(key), "incr");
     // Set the TTL once, on the first write of the day, so an actively-hammered key still
-    // expires ~2 days after the day it belongs to rather than living forever.
+    // expires ~2 days after the day it belongs to rather than living forever. Best-effort:
+    // the INCR already durably bumped the count, so a transient EXPIRE hiccup must NOT reject
+    // the whole increment (that would fail the caller closed → a spurious 429 on a legit
+    // user's first call of the day). Worst case the key just lacks a TTL for one day.
     if (next === 1) {
-      await withTimeout(kv.expire(key, KEY_TTL_SECONDS), "expire");
+      try {
+        await withTimeout(kv.expire(key, KEY_TTL_SECONDS), "expire");
+      } catch {
+        // ignore — TTL is a cleanup nicety, not a correctness requirement
+      }
     }
     return next;
   }
