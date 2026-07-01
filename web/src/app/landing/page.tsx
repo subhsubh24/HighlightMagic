@@ -247,7 +247,7 @@ const FAQ = [
   },
   {
     q: "How does the AI work?",
-    a: "We analyze your footage frame-by-frame using Claude AI to score each moment for energy, emotion, and visual quality. The highest-scoring moments are assembled into a highlight reel with transitions, captions, and synced audio.",
+    a: "We analyze your footage frame-by-frame using Claude AI to score each moment for energy, emotion, and visual quality. The highest-scoring moments are assembled into a highlight reel with smooth transitions, animated captions, and color filters.",
   },
   {
     q: "What platforms is it for?",
