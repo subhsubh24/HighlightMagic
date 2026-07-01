@@ -116,7 +116,7 @@ export async function POST(req: Request) {
       try {
         // H7: per-user daily generation ceiling — wallet-drain backstop independent of the
         // per-IP rate limit and the monthly export quota (this sub-call does not consume it).
-        const genBlock = enforceGenerationCeiling(userId);
+        const genBlock = await enforceGenerationCeiling(userId);
         if (genBlock) {
           clearInterval(keepalive);
           try {

@@ -335,7 +335,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const ceiling = checkDailySpendCeiling(userId);
+  const ceiling = await checkDailySpendCeiling(userId);
   if (!ceiling.allowed) {
     return Response.json(
       { error: "Daily export limit reached. Please try again tomorrow." },
@@ -368,7 +368,7 @@ export async function POST(req: Request) {
 
   // Consume quota now that the paid call succeeded
   await consumeExport({ userId, isPro: decision.isPro });
-  recordDailyExport(userId);
+  await recordDailyExport(userId);
 
   const remaining = decision.isPro ? -1 : Math.max(0, decision.remaining - 1);
 
