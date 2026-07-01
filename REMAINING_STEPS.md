@@ -199,11 +199,25 @@ In App Store Connect → your app → In-App Purchases, create:
 |---|---|---|---|
 | `pro.monthly` | Auto-Renewable Subscription | $14.99/month | Pro tier |
 | `pro.yearly` | Auto-Renewable Subscription | $149.99/year | Annual plan (2 months free, ~17% off monthly) |
+| `credits.small` | Consumable | owner-set (suggest ~$2.99) | Export credit pack — grants **10** extra exports |
+| `credits.medium` | Consumable | owner-set (suggest ~$6.99) | Export credit pack — grants **30** extra exports |
+| `credits.large` | Consumable | owner-set (suggest ~$14.99) | Export credit pack — grants **100** extra exports |
 
-The iOS app references these product IDs via StoreKit 2. These prices are the live, business-case
-price (matched across `Sources/Resources/StoreKitConfiguration.storekit`, the web landing page, and
-`docs/aso-package.md`); configure the App Store Connect products at exactly these prices. Verify the
-IDs match `Sources/Services/StoreKitService.swift`.
+The iOS app references the subscription product IDs via StoreKit 2. The subscription prices are the
+live, business-case price (matched across `Sources/Resources/StoreKitConfiguration.storekit`, the web
+landing page, and `docs/aso-package.md`); configure the App Store Connect products at exactly these
+prices. Verify the IDs match `Sources/Services/StoreKitService.swift`.
+
+**Export credit packs (consumables) — backend DONE (#237), iOS half is the remaining work.** The
+server-side redemption is built + fully tested: `web/src/lib/constants.ts` `CREDIT_PACK_PRODUCTS` is
+the authoritative credits-per-pack map (10/30/100), and `POST /api/credits/redeem` cryptographically
+verifies the StoreKit consumable transaction (Apple-anchored JWS, idempotent by transactionId) and
+grants durable credits that `checkExportAllowed`/`consumeExport` spend once the free monthly limit is
+hit. To finish the lever: **(owner)** create the three consumable products above in App Store Connect
+at your chosen prices (the credit COUNTS are fixed server-side; only PRICE is owner-set — price to
+value/benchmarks, don't undercut the per-export COGS). **(loop, at submission)** build the iOS
+StoreKit consumable purchase UI (offered at the free-limit paywall moment) and POST the signed
+transaction to `/api/credits/redeem`; keep the product IDs in sync with `CREDIT_PACK_PRODUCTS`.
 
 ---
 

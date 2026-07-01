@@ -4,6 +4,69 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 37 — 2026-07-01 — credit-pack revenue lever backend (#237) + atlascloud poll retry→A+ (#238) + all-surface honesty (#239)
+Cold start; hard-reset local main to origin/main before each branch. NO DEEP AUDIT this run (Run 34 ran a
+full 8-lens audit same-day 2026-07-01; Runs 35/36/37 all same-day, <24h). Consumed QUALITY_SCORECARD
+(as_of 2026-07-01, overall B, ship_gate_met=false; ship-critical below A: store_readiness C,
+functional_reality B, tests_evals B) + GROWTH_STATUS (pre_launch, funnel 0/null — no lever to weight) +
+BUSINESS_CASE (base y1 $7,740, floor_met_year1 false — levers are the priority) as DATA. Ran 4 Haiku scouts
+(revenue-lever feasibility, content-honesty, reliability/COGS, security/functional-reality). Shipped **3
+merged PRs** (all file-DISJOINT); abandoned 0. Baseline web gate green throughout (747 tests after #237).
+
+### Shipped (all merged; each cleared its reviewers + all 4 required checks)
+- **#237 export credit-pack lever — BACKEND HALF (Track F8 revenue lever b).** The highest-value item:
+  BUSINESS_CASE names "consumable export packs" as lever (b) (couples revenue to per-export COGS, captures
+  non-subscribers). New credit-store.ts (durable KV balance, atomic INCRBY/DECR + SET-NX idempotency,
+  in-memory fallback, 5s timeout, fail-closed). entitlement.ts: redeemCreditPack() verifies the StoreKit
+  CONSUMABLE JWS (reuses the generic verifyAppStoreJWS — consumables have NO expiresDate, so skip the expiry
+  check; DO check revocationDate; idempotent grant keyed on transactionId). checkExportAllowed() falls back
+  to credits once monthly quota exhausted (extra KV read only on the over-limit path); consumeExport() spends
+  a credit over the limit. New /api/credits/redeem route (H1/H2/H3). 26 new tests (full JWS chain via the
+  app-store-jws.test PKI). 2 Sonnet reviewers APPROVED. **Non-blocking follow-ups they flagged (see below).**
+  Verified score+ios-score are the ONLY consumeExport call sites → 1 credit = 1 export (generation sub-calls
+  gate via checkExportAllowed but don't consumeExport; bounded by the daily gen ceiling). iOS half = owner.
+- **#238 atlascloud poll retry (QUALITY_SCORECARD correctness→A+).** checkTaskResult() retried only on HTTP
+  502/503/504; a THROWN fetch (socket/DNS/AbortSignal.timeout) threw straight out, killing the export on the
+  first blip. Wrapped ONLY the fetch() (kept the HTTP-status fail-fast OUTSIDE the catch, so non-retryable
+  statuses still fail fast). +2 fake-timer tests. Both reviewers APPROVED.
+- **#239 all-surface honesty sweep (store_readiness/FTC).** Started as README+press-kit; Reviewer B twice
+  (correctly) escalated the blast radius to EVERY public surface that pointed to or contradicted the fix:
+  the PRIVACY POLICY (web/src/app/privacy/page.tsx — the URL README/press-kit cite, direct legal weight),
+  TERMS §2/§6, and the SUPPORT FAQ. All reframed so v1's ONLY live third-party AI flow is Anthropic/Claude
+  detection; ElevenLabs/AtlasCloud audio+video-gen are "not enabled in the current version". Discovered the
+  import picker is `matching: .videos` → NO photo import in v1, so the support "animated photo highlights"
+  claim was doubly false (removed). Final confirmation review verified all vs source + a full web/src/app
+  sweep = no remaining un-hedged overclaim. (LESSON: an honesty fix's blast radius is every surface that
+  cross-references the claim — privacy/terms carry the most weight; sweep ALL of them up front next time.)
+
+### Scout findings EVALUATED / REJECTED (so future runs don't re-plow)
+- **Reliability scout FINDING 2 (planner fetch in actions/detect.ts:2728 lacks an overall timeout): REJECTED
+  as risky.** The planner STREAMS and already has a per-CHUNK STREAM_READ_TIMEOUT_MS (90s) — the correct
+  pattern for a streaming call. An overall 55s abort would kill a healthy long stream (regression). A
+  per-chunk timeout already bounds a true hang. Left as-is (do NOT "fix" this without deeper streaming analysis).
+- **Security/functional-reality scout: CLEAN.** Re-confirmed the backend is well-hardened — rate limiting on
+  every paid/public route, input bounds before provider calls, error hygiene, CORS+CSP+headers, Turnstile on
+  waitlist, KV-durable quota + daily ceiling, consumeExport only at score/ios-score. No Track-H regressions.
+- **Content-honesty scout: batch drafts DEFERRED again** (see follow-ups) — #239 fixed the PUBLIC surfaces.
+
+### Follow-ups (future loop work; NOT owner-only unless noted)
+- **Credit-pack hardening (from #237 reviewers, non-blocking):** (1) credit-store.ts `consumeOne` decr-then-
+  clamp isn't atomic with a concurrent grant — a narrow race can clamp away a just-granted credit (can only
+  ever COST a user a credit, never mint one; mirrors the existing best-effort quota-write pattern). Consider a
+  Lua/atomic CAS. (2) entitlement.ts `redeemCreditPack` uses `if (!amount)` which would also reject a
+  hypothetical 0-credit promo SKU — harden to `typeof amount !== "number"` if such a SKU is ever added. No
+  current impact (all packs positive).
+- **Content-batch honesty rewrite** (docs/content/post-batch-{1,2}.md) — STILL PENDING (carried 34/35/36/37).
+  Unpublished, owner-gated, music-CENTRIC drafts needing a full feature-verified rewrite (or removal). No live
+  exposure today. Reviewer noted the "voiceover" refs there are a human narrator over the demo, not the AI
+  feature — so lower urgency than assumed, but the music-generation claims still need rewriting before publish.
+- **Export-CREDIT-PACK iOS half (owner + loop):** owner configures the StoreKit consumable products
+  (credits.small/medium/large) + prices in App Store Connect; loop builds the iOS consumable purchase UI +
+  wires it to POST /api/credits/redeem at submission. Backend is DONE + tested (#237). See REMAINING_STEPS.
+- Carried unchanged: export-ceiling atomicity (score/ios-score check-then-record); G2 iOS XCTest coverage
+  floor (iOS-unverifiable); bundled-music assets (owner or hide picker — 0d/3); EditorView dead-toggles
+  guard (0d/2, iOS).
+
 ## Run 36 — 2026-07-01 — daily spend ceiling → KV (#232, H7) + AppStoreMetadata honesty (#233, 0e)
 Cold start; hard-reset local main to origin/main before each branch. NO DEEP AUDIT this run (Run 34 ran a
 full 8-lens audit same-day 2026-07-01, <24h prior; Run 35 also same-day). Consumed QUALITY_SCORECARD
