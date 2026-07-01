@@ -63,15 +63,14 @@ Our AI watches every frame of your video to find the most exciting, emotional, a
 WHAT IT DOES:
 • Analyzes your footage frame-by-frame to find peak moments
 • Assembles a highlight reel automatically — no manual scrubbing
-• Adds AI-generated music that matches your clip's energy
+• Syncs beat-matched background music to your clip's energy
 • Writes and animates captions synced to the action
 • Exports a perfect 1080×1920 MP4 ready for TikTok, Instagram Reels, and YouTube Shorts
 
 THE FULL CREATIVE STUDIO:
 • Kinetic captions with 15+ animation styles
 • 20+ color filters (cinematic, warm, cool, B&W, and more)
-• Sound effects that match what's happening on screen
-• Voiceover: AI narration or clone your own voice
+• A curated royalty-free music library, auto-matched to your footage
 • Trim and reorder clips in the built-in editor
 • One-tap share to any platform
 
@@ -79,7 +78,7 @@ MADE FOR:
 Sports players who want to relive the best plays · Travel vloggers turning hours of GoPro footage into 60-second stories · Concert-goers capturing the drop · Parents preserving birthday party magic · Athletes building a highlight reel for scouts · Anyone who wants to post consistently without spending hours editing
 
 FREE TIER:
-5 full AI-powered exports per month. Every feature included. A small watermark is added — remove it with Pro.
+5 full AI-powered exports per month. All core features included. A small watermark is added — remove it with Pro.
 
 PRO SUBSCRIPTION:
 Unlimited monthly exports (a 50-per-day fair-use ceiling applies to all tiers) + no watermark. $14.99/month or $149.99/year (2 months free), cancel anytime.
@@ -101,7 +100,7 @@ Character count: ~1,650 (well within 4000-char limit — room for localization)
 Character count: 119 ✓
 
 **Post-launch A/B candidates**:
-- `New: Voice Clone — add your own voice to every highlight reel, automatically.`
+- `New: 15+ kinetic caption styles — make every word pop, automatically.`
 - `Summer update: 5 new filters + improved AI detection for sports & action footage.`
 
 ---
@@ -115,7 +114,7 @@ Required: 5 screenshots (6.9-inch format: 1320×2868). Captions appear below scr
 |---|---|---|---|
 | 1 | Home / Import screen | **Your footage. AI magic.** | Import any video — AI finds the best moments automatically |
 | 2 | Detection progress screen | **AI watches every frame** | Scores emotion, action, and energy — no scrubbing needed |
-| 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, music, SFX — all in one timeline |
+| 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, and music — all in one timeline |
 | 4 | Export preview (vertical clip) | **Vertical-perfect export** | 1080×1920 MP4 ready for TikTok, Reels, and Shorts |
 | 5 | Paywall / Pro screen | **Go unlimited with Pro** | Unlimited exports, no watermark — $14.99/month or $149.99/year |
 

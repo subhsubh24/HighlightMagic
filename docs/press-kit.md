@@ -33,8 +33,8 @@ Highlight Magic automates the workflow most creators spend hours completing manu
 
 1. **Import** — bring in raw footage from your iPhone camera roll: games, trips, concerts, events
 2. **AI detection** — AI samples and scores frames across your footage, evaluating emotion, action intensity, and visual quality to find the moments worth keeping
-3. **Auto-assembly** — top-scored moments assembled into a polished vertical clip, synced to AI-generated music
-4. **Edit** — trim clips, swap captions (15+ animation styles), apply color filters (20+), add sound effects, or add AI voiceover narration
+3. **Auto-assembly** — top-scored moments assembled into a polished vertical clip, synced to beat-matched music
+4. **Edit** — trim clips, swap captions (15+ animation styles), apply color filters (20+), and pick a beat-matched track in the built-in editor
 5. **Export** — 1080×1920 MP4 ready for TikTok, Instagram Reels, or YouTube Shorts; share via the iOS share sheet
 
 ---
@@ -69,13 +69,12 @@ Highlight Magic's Pro tier ($14.99/month or $149.99/year) sits at the mid-market
 
 **Auto-assembly**
 - Top-scored moments assembled into a single vertical clip
-- Synced to AI-generated music matched to the clip's energy
+- Synced to beat-matched music from a curated royalty-free library
 
 **Creative studio**
 - 15+ kinetic caption animation styles
 - 20+ color filters (cinematic, warm, cool, B&W, and more)
-- Sound effects matched to on-screen action
-- AI voiceover narration
+- Beat-matched background music, auto-suggested to fit your footage
 - Trim and reorder clips in a built-in timeline editor
 
 **Export and share**

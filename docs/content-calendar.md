@@ -32,11 +32,11 @@ Drive organic App Store installs via short-form demo content. Target: 10%/month 
 |---|---|---|---|---|
 | 1 (Launch) | Demo: app walkthrough (screen record) | Before/After: sports highlight | Niche: travel vlog | Launch week — cross-post to all platforms |
 | 2 | Demo: import → detect → export in 60 sec | Niche: concert footage | Tips: "3 settings to make your TikTok look cinematic" | Start responding to every comment |
-| 3 | Before/After: birthday party footage | Demo: voiceover + music auto-sync | Niche: workout highlight | Re-share any organic reposts |
+| 3 | Before/After: birthday party footage | Demo: caption styles + beat-matched music | Niche: workout highlight | Re-share any organic reposts |
 | 4 | Tips: "Why your highlights don't go viral" | Before/After: travel vlog | Demo: caption styles A/B comparison | Check analytics: which niche performs best → double down |
 | 5 | Niche: (top performer from Week 1–4) | Demo: editor features — trim + filter | Before/After: sports (different sport) | Introduce the Pro vs Free framing |
 | 6 | Tips: "How to make TikTok's algorithm love your posts" | Niche: pet / family content | Demo: 30-second export challenge | Paywall CTA: "Go unlimited with Pro" |
-| 7 | Before/After: wedding footage → highlights | Demo: AI music + SFX feature | Tips: "Best 3 camera settings for highlight-worthy footage" | Repurpose best-performing post as a Reel |
+| 7 | Before/After: wedding footage → highlights | Demo: 20+ color filters + auto music match | Tips: "Best 3 camera settings for highlight-worthy footage" | Repurpose best-performing post as a Reel |
 | 8 | Niche: (highest-performing niche) | Demo: side-by-side iPhone vs Highlight Magic | Tips + CTA: "Link in bio to download free" | 8-week review: pivot calendar based on data |
 
 ---
