@@ -143,6 +143,222 @@ describe("reducer", () => {
     expect(state.validationStatus).toBe("passed");
     expect(state.sfxStatus).toBe("completed");
   });
+
+  it("SET_VIDEO adds the video to mediaFiles once (deduped by url)", () => {
+    const file = new File([], "v.mp4");
+    let state = reducer(initialState, { type: "SET_VIDEO", file, url: "blob:v", duration: 12 });
+    expect(state.videoUrl).toBe("blob:v");
+    expect(state.mediaFiles).toHaveLength(1);
+    // Dispatching the same url again must not duplicate the media entry
+    state = reducer(state, { type: "SET_VIDEO", file, url: "blob:v", duration: 12 });
+    expect(state.mediaFiles).toHaveLength(1);
+  });
+
+  it("ADD_MEDIA derives the legacy video from the first video", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo", url: "blob:p" });
+    const video = makeMediaFile({ id: "v1", type: "video", url: "blob:v", duration: 20 });
+    const state = reducer(initialState, { type: "ADD_MEDIA", files: [photo, video] });
+    expect(state.videoUrl).toBe("blob:v");
+    expect(state.videoDuration).toBe(20);
+  });
+
+  it("ADD_MEDIA falls back to a completed animated photo when no video exists", () => {
+    const photo = makeMediaFile({
+      id: "p1",
+      type: "photo",
+      url: "blob:p",
+      animationStatus: "completed",
+      animatedVideoUrl: "blob:anim",
+      duration: 8,
+    });
+    const state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    expect(state.videoUrl).toBe("blob:anim");
+    expect(state.videoDuration).toBe(8);
+  });
+
+  it("REMOVE_MEDIA clears photo-animation flags when no photos remain", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo" });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    state = reducer(state, { type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: true });
+    expect(state.animatePhotosEnabled).toBe(true);
+    state = reducer(state, { type: "REMOVE_MEDIA", fileId: "p1" });
+    expect(state.mediaFiles).toHaveLength(0);
+    expect(state.animatePhotosEnabled).toBe(false);
+    expect(state.aiDecideAnimations).toBe(false);
+  });
+
+  it("REORDER_MEDIA moves an item and ignores out-of-bounds indices", () => {
+    const a = makeMediaFile({ id: "a", url: "blob:a" });
+    const b = makeMediaFile({ id: "b", url: "blob:b" });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [a, b] });
+    state = reducer(state, { type: "REORDER_MEDIA", fromIndex: 0, toIndex: 1 });
+    expect(state.mediaFiles.map((f) => f.id)).toEqual(["b", "a"]);
+    // Out-of-bounds is a no-op (same reference back)
+    const before = state;
+    const after = reducer(state, { type: "REORDER_MEDIA", fromIndex: 5, toIndex: 0 });
+    expect(after).toBe(before);
+  });
+
+  it("CLEAR_MEDIA empties media and resets legacy + animation flags", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo" });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    state = reducer(state, { type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: true });
+    state = reducer(state, { type: "CLEAR_MEDIA" });
+    expect(state.mediaFiles).toHaveLength(0);
+    expect(state.videoUrl).toBeNull();
+    expect(state.videoDuration).toBe(0);
+    expect(state.animatePhotosEnabled).toBe(false);
+  });
+
+  it("SET_ACTIVE_CLIP sets the active clip id", () => {
+    const clips = [{ id: "c1", order: 0 }, { id: "c2", order: 1 }] as AppState["clips"];
+    let state = reducer(initialState, { type: "SET_CLIPS", clips });
+    state = reducer(state, { type: "SET_ACTIVE_CLIP", clipId: "c2" });
+    expect(state.activeClipId).toBe("c2");
+  });
+
+  it("SET_CLIPS preserves the active clip id when it still exists", () => {
+    const clips = [{ id: "c1", order: 0 }, { id: "c2", order: 1 }] as AppState["clips"];
+    let state = reducer(initialState, { type: "SET_CLIPS", clips });
+    state = reducer(state, { type: "SET_ACTIVE_CLIP", clipId: "c2" });
+    state = reducer(state, { type: "SET_CLIPS", clips });
+    expect(state.activeClipId).toBe("c2");
+  });
+
+  it("UPDATE_CLIP merges partial updates into the matching clip only", () => {
+    const clips = [{ id: "c1", order: 0, trimStart: 0 }, { id: "c2", order: 1, trimStart: 0 }] as AppState["clips"];
+    let state = reducer(initialState, { type: "SET_CLIPS", clips });
+    state = reducer(state, { type: "UPDATE_CLIP", clipId: "c2", updates: { trimStart: 3 } as AppState["clips"][number] });
+    expect(state.clips.find((c) => c.id === "c1")!.trimStart).toBe(0);
+    expect(state.clips.find((c) => c.id === "c2")!.trimStart).toBe(3);
+  });
+
+  it("REORDER_CLIPS reorders by visual order and reindexes", () => {
+    const clips = [{ id: "c1", order: 0 }, { id: "c2", order: 1 }, { id: "c3", order: 2 }] as AppState["clips"];
+    let state = reducer(initialState, { type: "SET_CLIPS", clips });
+    state = reducer(state, { type: "REORDER_CLIPS", fromIndex: 2, toIndex: 0 });
+    expect(state.clips.map((c) => c.id)).toEqual(["c3", "c1", "c2"]);
+    expect(state.clips.map((c) => c.order)).toEqual([0, 1, 2]);
+    // Out-of-bounds is a no-op
+    const before = state;
+    expect(reducer(state, { type: "REORDER_CLIPS", fromIndex: 9, toIndex: 0 })).toBe(before);
+  });
+
+  it("SET_VIRAL_OPTIONS merges partial options", () => {
+    const state = reducer(initialState, { type: "SET_VIRAL_OPTIONS", options: { seamlessLoop: true } });
+    expect(state.viralOptions.seamlessLoop).toBe(true);
+    expect(state.viralOptions.beatSync).toBe(initialState.viralOptions.beatSync);
+  });
+
+  it("SET_ANIMATION_RESULT stores the animated url and derives legacy video from it", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo", url: "blob:p", duration: 6 });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    state = reducer(state, {
+      type: "SET_ANIMATION_RESULT",
+      fileId: "p1",
+      animatedVideoUrl: "blob:anim",
+      animationStatus: "completed",
+    });
+    expect(state.mediaFiles[0].animatedVideoUrl).toBe("blob:anim");
+    expect(state.videoUrl).toBe("blob:anim");
+  });
+
+  it("SET_ANIMATE_PHOTOS_ENABLED toggles every photo's animatePhoto flag", () => {
+    const p1 = makeMediaFile({ id: "p1", type: "photo", url: "blob:p1" });
+    const p2 = makeMediaFile({ id: "p2", type: "photo", url: "blob:p2" });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [p1, p2] });
+    state = reducer(state, { type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: true });
+    expect(state.mediaFiles.every((f) => f.animatePhoto)).toBe(true);
+    state = reducer(state, { type: "SET_ANIMATE_PHOTOS_ENABLED", enabled: false });
+    expect(state.mediaFiles.some((f) => f.animatePhoto)).toBe(false);
+    expect(state.aiDecideAnimations).toBe(false);
+  });
+
+  it("SET_AI_DECIDE_ANIMATIONS enables global animation and clears per-photo flags", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo", url: "blob:p", animatePhoto: true });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    state = reducer(state, { type: "SET_AI_DECIDE_ANIMATIONS", enabled: true });
+    expect(state.aiDecideAnimations).toBe(true);
+    expect(state.animatePhotosEnabled).toBe(true);
+    expect(state.mediaFiles[0].animatePhoto).toBe(false);
+  });
+
+  it("TOGGLE_PHOTO_ANIMATE derives animatePhotosEnabled from any animated photo", () => {
+    const photo = makeMediaFile({ id: "p1", type: "photo", url: "blob:p", animatePhoto: false });
+    let state = reducer(initialState, { type: "ADD_MEDIA", files: [photo] });
+    state = reducer(state, { type: "TOGGLE_PHOTO_ANIMATE", fileId: "p1" });
+    expect(state.mediaFiles[0].animatePhoto).toBe(true);
+    expect(state.animatePhotosEnabled).toBe(true);
+    state = reducer(state, { type: "TOGGLE_PHOTO_ANIMATE", fileId: "p1" });
+    expect(state.animatePhotosEnabled).toBe(false);
+  });
+
+  it("SET_SFX_ENABLED clears sfx state when toggled off", () => {
+    let state = reducer(initialState, { type: "SET_SFX_TRACKS", tracks: [{ clipIndex: 0 }] as AppState["sfxTracks"] });
+    state = reducer(state, { type: "SET_SFX_STATUS", status: "completed" });
+    state = reducer(state, { type: "SET_SFX_ENABLED", enabled: false });
+    expect(state.sfxTracks).toHaveLength(0);
+    expect(state.sfxStatus).toBe("idle");
+  });
+
+  it("SET_INTRO_OUTRO_ENABLED clears cards when toggled off", () => {
+    let state = reducer(initialState, { type: "SET_INTRO_CARD", card: { text: "hi" } as AppState["introCard"] });
+    state = reducer(state, { type: "SET_INTRO_OUTRO_ENABLED", enabled: false });
+    expect(state.introCard).toBeNull();
+    expect(state.outroCard).toBeNull();
+  });
+
+  it("SET_AI_MUSIC_RESULT nulls the url on failure but keeps it on success", () => {
+    let state = reducer(initialState, { type: "SET_AI_MUSIC_RESULT", status: "completed", audioUrl: "blob:m" });
+    expect(state.aiMusicUrl).toBe("blob:m");
+    state = reducer(state, { type: "SET_AI_MUSIC_RESULT", status: "failed" });
+    expect(state.aiMusicUrl).toBeNull();
+  });
+
+  it("UPDATE_SFX_TRACK updates only the matching clip index", () => {
+    let state = reducer(initialState, {
+      type: "SET_SFX_TRACKS",
+      tracks: [{ clipIndex: 0 }, { clipIndex: 1 }] as AppState["sfxTracks"],
+    });
+    state = reducer(state, { type: "UPDATE_SFX_TRACK", clipIndex: 1, audioUrl: "blob:sfx", status: "completed" });
+    expect(state.sfxTracks[0].audioUrl).toBeUndefined();
+    expect(state.sfxTracks[1].audioUrl).toBe("blob:sfx");
+    expect(state.sfxTracks[1].status).toBe("completed");
+  });
+
+  it("UPDATE_VOICEOVER_SEGMENT updates only the matching clip index", () => {
+    let state = reducer(initialState, {
+      type: "SET_VOICEOVER_SEGMENTS",
+      segments: [{ clipIndex: 0 }, { clipIndex: 1 }] as AppState["voiceoverSegments"],
+    });
+    state = reducer(state, { type: "UPDATE_VOICEOVER_SEGMENT", clipIndex: 0, audioUrl: "blob:vo", duration: 4, status: "completed" });
+    expect(state.voiceoverSegments[0].audioUrl).toBe("blob:vo");
+    expect(state.voiceoverSegments[0].duration).toBe(4);
+    expect(state.voiceoverSegments[1].audioUrl).toBeUndefined();
+  });
+
+  it("SET_CLONED_VOICE stores the voice id and status together", () => {
+    const state = reducer(initialState, { type: "SET_CLONED_VOICE", voiceId: "vid-1", status: "completed" });
+    expect(state.clonedVoiceId).toBe("vid-1");
+    expect(state.voiceCloneStatus).toBe("completed");
+  });
+
+  it("SET_INSTRUMENTAL_MUSIC stores url and stem-separation status together", () => {
+    const state = reducer(initialState, { type: "SET_INSTRUMENTAL_MUSIC", url: "blob:inst", status: "completed" });
+    expect(state.instrumentalMusicUrl).toBe("blob:inst");
+    expect(state.stemSeparationStatus).toBe("completed");
+  });
+
+  it("SET_STYLE_TRANSFER_PROMPT defaults strength to null when omitted", () => {
+    const state = reducer(initialState, { type: "SET_STYLE_TRANSFER_PROMPT", prompt: "vhs" });
+    expect(state.styleTransferPrompt).toBe("vhs");
+    expect(state.styleTransferStrength).toBeNull();
+  });
+
+  it("unknown action returns the same state reference", () => {
+    const state = reducer(initialState, { type: "__UNKNOWN__" } as unknown as Parameters<typeof reducer>[1]);
+    expect(state).toBe(initialState);
+  });
 });
 
 describe("canExportFree", () => {
