@@ -140,3 +140,39 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
 2. Check whether Sam Gutelle draft was sent (owner-reported) and update outreach.owner_sent_7d accordingly
 3. If still no connections: short PREPARE asset — landing page H1 copy variants (A/B test copy design staged for when the experiments engine is built)
 4. Do NOT build another video script batch or repeat press kit work — both are done
+
+---
+
+## 2026-07-01 — Run 4
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged)
+- Channels connected: none — **4th consecutive run** with connect-channels open (circuit breaker fired at Run 3, still unresolved; owner has not acted on Resend/KV/site-gate between Run 3 and Run 4)
+- site_gate_up: false (unchanged — HARD BLOCK on execute mode)
+- New this run: an independent **GTM Auditor** routine had bootstrapped (2026-06-30) and graded the factory overall A but `ship_gate_met: false` — `self_validation_honesty` graded **B** (ship-critical), filed as GitHub issue #208. This was the run's top-priority signal per GTM_STANDARD §8 (a ship-critical dimension below A is the highest-priority work, ahead of new PREPARE assets).
+
+### What I built this run
+- **Closed the ship-critical audit gap (issue #208):** added a structured `validation:`/`sources:` block to `docs/growth/GROWTH_STATUS.md` enumerating all 9 real external dependencies (in_app_analytics/Plausible, the internal `/api/growth/stats` pull, billing/StoreKit, email/Resend, datastore/Vercel KV, and the 4 social channels), each independently verified against the actual code this run (exact `web/src/lib/validation-manifest.ts` line numbers; grep-confirmed the Plausible `<script>` tag is absent from `web/src/app/layout.tsx`) and correctly marked `unavailable`. This is the missing machine-readable self-validation contract the auditor named — nothing was fabricated, it closes a structural gap.
+- **Split `PENDING_OPS.md`'s generic `connect-channels` item** into `gtm-connect-email`, `gtm-connect-datastore`, `gtm-connect-analytics`, `gtm-connect-social` per the `gtm-connect-<source>` naming GTM_STANDARD §4 mandates. Did NOT duplicate the pre-existing `storekit-products` item for the billing source — the validation block's `billing` entry points its `owner_action` at that existing id instead.
+- **Fixed one artifact-freshness nit** the auditor also flagged (low severity): `docs/aso-package.md` screenshot-caption table said "Unlimited exports" without the "monthly" qualifier used everywhere else in the same doc (line 83) — one-word fix for consistency.
+- **Designed (did not run) the first landing-page experiment**: H1 copy variant (benefit/time-to-value framing vs. the live aspirational "Turn Your Best Moments Into Viral Highlights") with a real two-proportion power calc (~4420 total visitors to detect a 5%→7% lift at 80% power) — recorded in `experiments[]` as `status: designed` since neither the experiment engine (ROADMAP E8) nor any traffic exists yet. This is exactly what ANALYSIS_PLAYBOOK step 4 prescribes when the engine isn't built: record the fully-designed test rather than fabricate a result.
+- Ran an independent adversarial reviewer subagent (maker≠checker) on all of the above before committing — verdict APPROVE, zero blocking issues; it independently re-verified every line-number citation and recomputed the power calc.
+
+### Learnings
+- **The independent GTM Auditor is now live and is a real, high-value signal** — its first grade (A overall, gate not met) named a genuinely missing structural piece (the validation/sources block), not a fabrication. Read `docs/growth/GTM_SCORECARD.md` + `docs/growth/GTM_AUDIT_MEMORY.md` FIRST every run going forward, alongside GROWTH_MEMORY — a ship-critical dimension below A/A+ is now the run's top priority, ahead of new PREPARE assets, per GTM_STANDARD §8.
+- Self-validation honesty was already substantively correct (0/null metrics, no claimed-but-unconnected channel) — the gap was purely the missing MACHINE-READABLE contract, not a dishonesty problem. Worth distinguishing: "honest but structurally incomplete" still caps the grade below A.
+- Circuit-breaker discipline held: with connect-channels open a 4th consecutive run and nothing new to say, this run did NOT re-write the same escalation prose — it named the fact plainly (4 runs, no new owner action, no new ask) and spent the run's effort on the two above concrete, real deliverables instead of padding.
+- No new strategic outreach target was researched this run (the Sam Gutelle draft from Run 3 is still awaiting the owner's send) — zero new outreach drafts is the correct, non-forced outcome per OUTREACH.md.
+
+### Dead ends / what NOT to repeat
+- Do NOT re-draft the H1 experiment design again — it now exists in `GROWTH_STATUS.experiments[]`; when E8 + traffic land, RUN it, don't redesign it.
+- Do NOT re-escalate connect-channels with new prose when nothing has changed — state the run count plainly and move on to other value-bar-clearing work (this run's approach).
+
+### Circuit-breaker status
+- **Still open at Run 4 (4 consecutive runs).** No owner action taken between Run 3 and Run 4. The ask is unchanged: connect Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free, no credit card) — the single highest-leverage unlock. Next run: if still unconnected, do not add new escalation language; just note the incremented run count and keep any PREPARE work short.
+
+### Next run priorities (Run 5)
+1. Check for channel connections + whether `docs/growth/GTM_SCORECARD.md` was re-graded (did `self_validation_honesty` move to A? diff every dimension vs the Run-1 audit table in `GTM_AUDIT_MEMORY.md`)
+2. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`
+3. If a ship-critical GTM dimension is still below A, that stays top priority over new PREPARE assets
+4. If still no channel connections and the scorecard is clean: consider a second designed experiment (e.g. paywall-copy variant) or fresh outreach research — but only if a genuinely new, non-duplicative opportunity exists

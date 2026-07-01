@@ -26,12 +26,33 @@ OWNER_ACTIONS:
       why: The backend is live on Vercel and calls paid APIs (Anthropic, ElevenLabs, AtlasCloud); a single export fires multiple expensive calls, so an abuse spike or runaway loop can run up cost. A spend cap is the only hard backstop a code-level ceiling cannot replace.
       how: Set hard daily/monthly caps + 50%-of-cap alerts in console.anthropic.com, elevenlabs.io billing, and the AtlasCloud dashboard. Regenerate any key ever suspected exposed.
       blocks: launch-safety
-    - id: connect-channels
-      title: Connect + authorize marketing channels to switch the Growth Agent into execute mode
+    - id: gtm-connect-email
+      title: "Connect Resend (email) so the Growth Agent can run the transactional + lifecycle email loop"
       priority: high
       status: open
-      why: The Growth Agent stays in honest prepare-only mode until the owner connects their own authorized channels.
-      how: Connect your own accounts/keys to the deployed app's growth settings (server-side). The agent never holds live secrets; the deployed app sends.
+      why: "RESEND_API_KEY is unset, so web/src/lib/email/ stays in dry-run — no confirmation, welcome, or lifecycle email fires. Reconciles GROWTH_STATUS validation.sources[email] (unavailable)."
+      how: "Per docs/growth/CONNECT.md Step 1 (~5 min, free tier, no credit card): create a Resend account, verify the highlightmagic.app domain, create an API key, set RESEND_API_KEY in Vercel env, redeploy."
+      blocks: growth-execution
+    - id: gtm-connect-datastore
+      title: "Provision Vercel KV so waitlist signups persist and the Growth Agent can pull real numbers"
+      priority: high
+      status: open
+      why: "KV_REST_API_URL / KV_REST_API_TOKEN are unset — signups exist only in ~7-day Vercel function logs, and /api/growth/stats has nothing durable to read. Reconciles GROWTH_STATUS validation.sources[datastore] (unavailable)."
+      how: "Per docs/growth/CONNECT.md Step 3: Vercel dashboard -> Storage -> Create Database -> KV, name it, redeploy (Vercel auto-sets the env vars)."
+      blocks: growth-execution
+    - id: gtm-connect-analytics
+      title: "Add the Plausible script to the landing page + set GROWTH_AGENT_SECRET"
+      priority: high
+      status: open
+      why: "web/src/lib/analytics.ts implements trackEvent() but no Plausible <script> tag exists in web/src/app/layout.tsx, so zero page/funnel events are ever captured; separately GROWTH_AGENT_SECRET is unset so /api/growth/stats (E6d) returns 503. Reconciles GROWTH_STATUS validation.sources[in_app_analytics, analytics_pull_api] (both unavailable)."
+      how: "(1) Create a free/paid plausible.io account, add <script defer data-domain=\"highlightmagic.app\" src=\"https://plausible.io/js/script.js\" /> to web/src/app/layout.tsx (or tell the product loop to wire it — it's a one-line change). (2) Set GROWTH_AGENT_SECRET in Vercel to any random 32-char string per CONNECT.md Step 3."
+      blocks: growth-execution
+    - id: gtm-connect-social
+      title: "Connect at least one social channel (X / Instagram / TikTok / Reddit) API credentials"
+      priority: normal
+      status: open
+      why: "The publishing queue (web/src/lib/social/queue.ts) is built and dry-run-safe but refuses to post without a channel's API key/OAuth token. Reconciles GROWTH_STATUS validation.sources[social_x, social_instagram, social_tiktok, social_reddit] (all unavailable)."
+      how: "Set one of X_API_BEARER_TOKEN, INSTAGRAM_ACCESS_TOKEN, TIKTOK_ACCESS_TOKEN, or REDDIT_ACCESS_TOKEN in Vercel env per the platform's developer portal. Start with whichever platform the owner already has an account on."
       blocks: growth-execution
     - id: site-gate
       title: "Set SITE_GATE_PASSWORD pre-launch (password-protect the unfinished web app); UNSET at launch"

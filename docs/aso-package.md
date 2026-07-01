@@ -115,7 +115,7 @@ Required: 5 screenshots (6.9-inch format: 1320×2868). Captions appear below scr
 | 2 | Detection progress screen | **AI watches every frame** | Scores emotion, action, and energy — no scrubbing needed |
 | 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, and transitions — all in one timeline |
 | 4 | Export preview (vertical clip) | **Vertical-perfect export** | 1080×1920 MP4 ready for TikTok, Reels, and Shorts |
-| 5 | Paywall / Pro screen | **Go unlimited with Pro** | Unlimited exports, no watermark — $14.99/month or $149.99/year |
+| 5 | Paywall / Pro screen | **Go unlimited with Pro** | Unlimited monthly exports, no watermark — $14.99/month or $149.99/year |
 
 ---
 
