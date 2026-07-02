@@ -131,4 +131,24 @@ describe("POST /api/ios-score", () => {
     expect(calls).toBeGreaterThanOrEqual(2);
     vi.useRealTimers();
   });
+
+  it("retries a 200 with an unparseable body and then succeeds (transient corruption ≠ export failure)", async () => {
+    // Before the fix, response.json() on a corrupt 200 threw uncaught out of the batch scorer.
+    // Now it is treated like a thrown fetch: retry, and only fail after retries are exhausted.
+    let calls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      calls++;
+      if (calls === 1) return new Response("<<not json>>", { status: 200 });
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: '[{"index":0,"score":0.7,"role":"HERO","label":"x"}]' }],
+          usage: { input_tokens: 10, output_tokens: 2 },
+        }),
+        { status: 200 },
+      );
+    });
+    const res = await POST(req({ userId: "ios-score-parse-retry-user", frames: [frame] }));
+    expect(res.status).toBe(200);
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
 });

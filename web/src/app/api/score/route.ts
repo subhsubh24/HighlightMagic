@@ -123,7 +123,14 @@ export async function POST(req: Request) {
     return Response.json({ error: `scoring failed (${resp.status})` }, { status: 502 });
   }
 
-  const data = await resp.json();
+  let data: { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+  try {
+    data = await resp.json();
+  } catch {
+    // A 200 with an unparseable body (truncated stream / proxy corruption) must not throw out of
+    // the handler as a 500 — return the same graceful 502 the fetch/!ok paths use.
+    return Response.json({ error: "scoring upstream unavailable" }, { status: 502 });
+  }
   const text: string = data?.content?.[0]?.text ?? "";
   const usageIn = data?.usage?.input_tokens ?? 0;
   const usageOut = data?.usage?.output_tokens ?? 0;
