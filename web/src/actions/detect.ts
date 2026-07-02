@@ -2686,10 +2686,17 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
   });
 
   for (const frame of plannerFrames) {
-    userContent.push({
-      type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
-    });
+    // Only attach an image when we actually have one. The planner reads the TEXT scores/labels for
+    // ALL frames (images are supplementary "visual verification"), so a frame with no image bytes is
+    // fine to send as text-only. Sending an empty base64 image is rejected by the API
+    // (400: "image.source.base64: image cannot be empty") and would fail the WHOLE planning call —
+    // so a single failed frame-extraction (empty base64) must never take down the plan.
+    if (frame.base64) {
+      userContent.push({
+        type: "image",
+        source: { type: "base64", media_type: "image/jpeg", data: frame.base64 },
+      });
+    }
 
     const scoreData = scoreLookup.get(frameKey(frame.sourceFileId, frame.timestamp));
     const approxDuration = (sourceDurations.get(frame.sourceFileId) ?? 0) + 2;
