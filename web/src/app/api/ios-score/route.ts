@@ -1,5 +1,5 @@
 import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
-import { CLAUDE_FRAME_SCORER } from "@/lib/ai-models";
+import { CLAUDE_FRAME_SCORER, estimateCostUSD } from "@/lib/ai-models";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
 import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
@@ -196,7 +196,7 @@ async function scoreBatchWithHaiku(
   batch: FrameInput[],
   batchOffset: number,
   systemPrompt: string
-): Promise<ScoredFrameOutput[]> {
+): Promise<{ scored: ScoredFrameOutput[]; usageIn: number; usageOut: number }> {
   const content = buildBatchContent(batch, batchOffset);
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -237,12 +237,15 @@ async function scoreBatchWithHaiku(
     if (!response.ok) {
       throw new Error(`Haiku scoring failed: HTTP ${response.status}`);
     }
-    const json = await response.json() as { content?: Array<{ type: string; text?: string }> };
+    const json = await response.json() as {
+      content?: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
     const textBlock = json.content?.find((b) => b.type === "text");
     const text = textBlock?.text ?? "";
     const parsed = parseBatchResponse(text);
 
-    return parsed
+    const scored = parsed
       .filter((r) => r.index >= 0 && r.index < batch.length)
       .map((r) => ({
         timeSec: batch[r.index].timeSec,
@@ -250,6 +253,11 @@ async function scoreBatchWithHaiku(
         label: r.label,
         role: r.role,
       }));
+    return {
+      scored,
+      usageIn: json.usage?.input_tokens ?? 0,
+      usageOut: json.usage?.output_tokens ?? 0,
+    };
   }
   throw lastError ?? new Error("Haiku scoring failed after retries");
 }
@@ -351,17 +359,29 @@ export async function POST(req: Request) {
 
   // Split into batches of 35 and score sequentially
   const allResults: ScoredFrameOutput[] = [];
+  let usageIn = 0;
+  let usageOut = 0;
   try {
     for (let i = 0; i < typedFrames.length; i += MAX_FRAMES_PER_BATCH) {
       const batch = typedFrames.slice(i, i + MAX_FRAMES_PER_BATCH);
-      const batchResults = await scoreBatchWithHaiku(batch, i, systemPrompt);
-      allResults.push(...batchResults);
+      const { scored, usageIn: bi, usageOut: bo } = await scoreBatchWithHaiku(batch, i, systemPrompt);
+      allResults.push(...scored);
+      usageIn += bi;
+      usageOut += bo;
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[ios-score] Haiku scoring error:", message);
     return Response.json({ error: "Scoring failed" }, { status: 502 });
   }
+
+  // COGS observability: ios-score is the PRIMARY paid Anthropic call on the iOS launch path.
+  // Log the per-export token cost the same way web /api/score does (summed across frame
+  // batches) so spend is monitorable from Vercel logs without parsing the provider dashboard.
+  console.log(
+    `[CostMeter] ios-score: user=${userId} model=${CLAUDE_FRAME_SCORER} in=${usageIn} out=${usageOut} ` +
+      `est=$${estimateCostUSD(CLAUDE_FRAME_SCORER, usageIn, usageOut).toFixed(4)}`,
+  );
 
   // Z-score normalize across all batches (matches web + iOS pipeline)
   const normalized = zScoreNormalize(allResults);
