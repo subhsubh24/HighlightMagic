@@ -4,6 +4,59 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 41 — 2026-07-02 — 1 change (H3 error-hygiene sweep #283) — a deliberately QUIET, coherent run
+Cold start; branched from `origin/main` (applied the stale-local-main lesson). NO DEEP AUDIT this run (Run 38
+ran one 2026-07-02, same day, <24h/<4 runs). Consumed QUALITY_SCORECARD (overall B; ship-critical sub-A dims =
+store_readiness C [owner Mac work: archivable Xcode target + screenshots], functional_reality B [iOS export
+test — Linux-unverifiable + client-side export-count gate], tests_evals B) + GROWTH_STATUS (pre_launch, funnel
+0/null — no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor met ~y3.2 on modeled path) as DATA.
+Baseline web gate green (build + 829→830 tests + 0 lint, coverage above floors). Shipped **1 merged PR (#283)**;
+abandoned 0. Both Sonnet reviewers APPROVED (2 review cycles — B requested + re-approved the score addition).
+
+### 4-scout sweep → SELECT (only 1 candidate cleared the bar; the rest were correctly dropped, NOT padded)
+- **Security scout (Track H)** found a REAL H3 gap → #283 (see below). The one genuine value-bar-clearing item.
+- **Export-count-gate scout** → the scorecard's "free limit resettable by reinstall" is LARGELY A NON-ISSUE:
+  the iOS `userID` is Keychain-backed (`user_anonymous_id`, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`) which
+  PERSISTS across app reinstall on-device, so the authoritative server KV counter (consumed at `/api/ios-score`)
+  holds across reinstall. Only the COSMETIC client-side `appState.canExportFree` (UserDefaults) resets; the server
+  gate is robust. `deleteAccountData()` regenerating the ID (UserAccountService.swift:156-158) is the INTENDED
+  privacy reset, not an abuse vector. A new `/api/export/commit` endpoint that no iOS client calls yet would be a
+  DEAD PATH (BUILDS≠WORKS) — DEFERRED. The real gap (iOS export-to-file test + wiring export to the server) is
+  iOS-side/Linux-unverifiable + owner Mac work; carried, not built.
+- **Coverage scout** flagged `entitlement.ts` (41%) + `sfx-library.ts` (29%) — BOTH DROPPED as would-be padding:
+  `verifyProEntitlement` happy-path + all edge cases are ALREADY covered in `app-store-jws.test.ts`
+  (`describe("verifyProEntitlement (end-to-end, env-configured trusted root)")`, 127-181); `sfx-library`'s live
+  behavior (runtime-cache round-trip, case-insensitivity, null-library miss) is ALREADY covered in
+  `sfx-library.test.ts` — the uncovered 29% is the DEAD fuzzy-scoring branch (every LIBRARY entry has `url:null`,
+  so `if (!entry.url) continue` skips all; untestable without populating CDN urls = a source change). Testing dead
+  code = padding. DROPPED.
+- **Monetization scout** → 5 levers (creator tier, web credit checkout, add-on pack, referral, paywall credit CTA)
+  — ALL DEFERRED: owner-blocked (new StoreKit product TYPES), store-acceptance-risky (web Stripe payments to unlock
+  an iOS app's digital goods = Apple IAP-rule risk), or speculative pre-PMF (referral needs a web identity system
+  that doesn't exist — waitlist ≠ auth). Advertising an unpurchasable tier on the landing page = dishonest/dead.
+  No NEW buildable web-side lever gap. Pricing consistent across all surfaces ($14.99/$149.99). No new lever built.
+
+### Shipped (merged; both Sonnet reviewers APPROVED the final diff)
+- **#283 H3 error-hygiene sweep** — `voiceover`/`sfx`/`music/submit`/`animate/check` returned the provider client's
+  raw failure text (`"ElevenLabs TTS API error (429)"`, AtlasCloud/Kling detail) to unauthenticated clients →
+  vendor + upstream-status enumeration. Reviewer B caught the SAME class on `/api/score` (`scoring failed
+  (${resp.status})`; its iOS twin `/api/ios-score` already generalizes). Fix: log raw error server-side, return a
+  generic message (same 502/failed shape; poller keys off `status`). +tests on all 5 routes (fail-on-revert).
+
+### Process notes / lessons
+- **REVIEWER-WORKTREE HAZARD (new, important):** Reviewer A used `git worktree add/remove` to check out the branch
+  in isolation; in THIS sandbox that MUTATED the main checkout's HEAD (switched my working branch to a
+  recreated-and-previously-deleted `claude/sfx-library-tests` at origin/main) and left my uncommitted `/api/score`
+  fix on the wrong branch. Recovered via `git stash` → `git checkout claude/h3-error-hygiene` → `git stash pop` →
+  commit → push. NEXT TIME: (a) tell reviewer subagents NOT to use `git worktree` (use `git diff` / `git show
+  <ref>:<path>` / plain reads) — I did this for the re-review and it was clean; (b) after any reviewer runs,
+  `git branch --show-current` + `git status` BEFORE committing, in case the checkout moved.
+- Only 1 candidate cleared the value bar this run → shipped 1. This is the value discipline working (ship what
+  clears the bar, drop the rest), NOT under-delivery. The repo is very mature; remaining DoD blockers are owner-only
+  (store_readiness — archivable Xcode build + screenshots) or iOS-Linux-unverifiable (export-to-file test). A quiet
+  coherent run is a success. No ROADMAP box flipped; no BUSINESS_CASE recompute (no pricing/COGS change); no new
+  owner-only items.
+
 ## Run 40 — 2026-07-02 — 5 file-disjoint changes (paid-module coverage x4 / detect scoring timeout)
 Cold start; hard-reset local main to origin/main + branched every PR from `origin/main` (recurring stale-local-main
 gotcha — applied the Run 39 lesson). NO DEEP AUDIT this run (Run 38 ran one 2026-07-02, <24h/<4 runs). Consumed
