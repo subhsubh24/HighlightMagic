@@ -1035,7 +1035,13 @@ async function analyzeMultiBatch(
           messages: [{ role: "user", content }],
         }),
       },
-      "Scoring batch"
+      "Scoring batch",
+      // Bound the frame-scoring call so a stalled upstream connection can't hang
+      // the whole detection until the serverless function is opaquely killed. 45s
+      // matches the sibling /api/score route (maxDuration 60), which makes the
+      // identical Haiku vision-scoring call; a timeout is caught by fetchWithRetry
+      // and retried, then by analyzeMultiBatch's batch-level retry after that.
+      45_000
     );
 
     if (!response.ok) {
