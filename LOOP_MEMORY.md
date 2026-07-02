@@ -4,6 +4,51 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 40 — 2026-07-02 — 5 file-disjoint changes (paid-module coverage x4 / detect scoring timeout)
+Cold start; hard-reset local main to origin/main + branched every PR from `origin/main` (recurring stale-local-main
+gotcha — applied the Run 39 lesson). NO DEEP AUDIT this run (Run 38 ran one 2026-07-02, <24h/<4 runs). Consumed
+QUALITY_SCORECARD (overall B; ship-critical sub-A: store_readiness C [owner Mac work], functional_reality B [iOS
+export test — Linux-unverifiable + client-side export-count gate], tests_evals B) + GROWTH_STATUS (pre_launch,
+funnel 0/null — no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2 on modeled path) as DATA.
+Baseline web gate green (build + coverage tests + 0 lint). Shipped **5 merged PRs (#276–#280)**, all file-DISJOINT,
+all web (zero iOS-compile risk); abandoned 0. Each cleared 2 Sonnet reviewers (both reverted detect.ts to confirm
+the regression test fails pre-fix) + all 4 required checks.
+
+### 4-scout sweep → SELECT
+- **Test-coverage scout** flagged validate/score/plan routes as "0% covered" — FALSE ALARM: score-route.test.ts,
+  h-hardening.test.ts, paid-routes-rate-limit.test.ts, ios-score-route.test.ts etc. already exist; frame-extractor
+  (40%)+audio-mux (8.5%) now have tests. Genuine 0%-covered = the remaining paid ElevenLabs clients.
+- **Security scout** flagged /api/render (SSRF/rate-limit/entitlement) — DROPPED: render is a 501 STUB gated by
+  RENDER_ENABLED (unset in prod); returns 501 BEFORE parsing the body, never fetches sourceUrl, never calls a paid
+  API. Hardening goes in WHEN the FFmpeg worker is built (G3 export rung).
+- **COGS/reliability scout** → analyzeMultiBatch scoring fetch had NO timeout (#280). DROPPED validateTape parse-guard
+  (dead code), frame-extractor decodeVideoAudio timeout (best-effort browser fetch of a local blob), detect.ts:1064
+  parse-guard (retrying a corrupt-200 is arguably correct — transient recovery).
+- **Monetization/artifacts scout** → NO pricing drift (all surfaces agree $14.99/$149.99); NO new buildable lever gap
+  (credit-pack backend built, iOS UI pending = tracked). Suggested ticking ROADMAP F1-F10 — DEFERRED (F8 levers not
+  fully built, F9 living, mass-ticking cautioned by DONE GUARD).
+
+### Shipped (all merged; each 2 Sonnet reviewers APPROVED)
+- **#276 elevenlabs-sfx tests (G2)** — clamp [500ms,10s], NaN→2000ms, COGS by duration, non-OK/empty fail-closed (no
+  cost metered), missing-key throw, batch ordering. Test-only.
+- **#277 elevenlabs-music tests (G2)** — clamp [3s,300s], NaN→60s, COGS by track length, the bad_prompt
+  single-retry-with-suggestion recursion (bounded to 1 retry — infinite-loop guard), API-error/empty fail. Test-only.
+- **#278 elevenlabs-stems tests (G2)** — multipart isolation, instrumental aliased across stem slots, Blob+Buffer,
+  malformed-data-URI short-circuit (no network), failure propagation. Test-only.
+- **#279 elevenlabs-voice-clone tests (G2)** — voices/add + voice_id, missing-voice_id fail, DELETE cleanup swallows
+  network errors (never masks export), cloned-voice TTS model_id (eleven_flash_v2_5). Test-only. Merged directly
+  (checks green first).
+- **#280 detect scoring timeout (B/reliability)** — analyzeMultiBatch (web scoring server action from DetectingStep)
+  called Anthropic with NO AbortSignal → a stall could hang detection until opaque serverless kill. Added 45s timeout
+  matching sibling /api/score (maxDuration 60, identical Haiku call); fetchWithRetry catches+retries, then batch-level
+  retry. Regression test asserts the fetch now gets an AbortSignal (undefined pre-fix; both reviewers reverted to confirm).
+
+### Process notes
+- #279 reached "clean" mergeable_state first → merged directly (equivalent to auto-merge once checks pass; branch
+  protection enforce_admins gates it regardless; NOT an --admin/force merge). Others auto-merged.
+- No ROADMAP box flipped (G2 PARTIAL/ongoing). No BUSINESS_CASE recompute (no pricing/COGS-input change). No new
+  owner-only items.
+
 ## Run 39 — 2026-07-02 — 6 file-disjoint changes (credit-store KV tests / tts+scribe tests / atlascloud+scoring parse-guards / paywall annual)
 Cold start. **GOTCHA (recurring — cost me time): local `main` ref was STALE at #186 while origin/main was #268.**
 The initial HEAD was DETACHED at origin/main, so `git reset --hard origin/main` reset the detached HEAD (fine) but
@@ -1977,6 +2022,11 @@ Full read-only codebase sweep performed. Findings by lens:
 - [ ] G5 — DEEP AUDIT done this run (2026-06-25); CRITICAL findings actioned (PRs #61, #62, #66)
 
 ### What NOT to re-do
+- Do not re-create elevenlabs-{sfx,music,stems,voice-clone}.test.ts — done #276–#279 (Run 40). ALL paid ElevenLabs clients are now covered (tts/scribe #270/#271; music/sfx/stems/voice-clone #276-279).
+- Do not re-add a timeout to analyzeMultiBatch's frame-scoring fetch — done #280 (Run 40): 45s, matches /api/score (maxDuration 60, identical Haiku call). The regression test (detect-scoring-timeout.test.ts) asserts the fetch gets an AbortSignal.
+- Do not harden /api/render (rate-limit/SSRF/entitlement) while it is a RENDER_ENABLED 501 stub — it returns 501 BEFORE parsing the body, never fetches sourceUrl, never calls a paid API. Add those controls WITH the FFmpeg render worker (G3 export rung), not before.
+- Do not add a timeout to frame-extractor decodeVideoAudio — best-effort browser fetch of a local blob URL (returns null on any error); the serverless-timeout rule doesn't apply. Marginal.
+- Do not parse-guard detect.ts analyzeMultiBatch's success `response.json()` (~:1064) or validateTape — retrying a corrupt-200 is arguably correct (transient truncation recovers) and validateTape is exported-but-unused dead code.
 - Do not re-fix ElevenLabsService URL force-unwraps — done in #37
 - Do not add a separate CLAUDE_VALIDATOR entry to MODEL_PRICES_USD_PER_MILLION — duplicate causes TypeScript error
 - Do not re-add MODEL_COSTS.md — done in #10
