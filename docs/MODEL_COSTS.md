@@ -76,7 +76,7 @@ The gated real evals (`web/src/evals/*.eval.ts`, run only in `.github/workflows/
 |---|---|---|
 | Detection / planning (`detect.eval.ts`) | ~$0.28 (4 fixtures × ~$0.07) | weekly + on-signal |
 | Frame scoring (`score.eval.ts`) | a few cents (Haiku vision, 3 small JPEGs) | weekly + on-signal |
-| **Video-gen (future, `RUN_VIDEO_EVAL`)** | **$0.10–$1+/clip — the expensive one** | **monthly / on-model-change / manual ONLY — gated, NEVER the weekly cadence** |
+| **Video-gen (future, `RUN_VIDEO_EVAL`)** | **$0.10–$1+/clip — the expensive one (~$10–20+/mo if weekly)** | **owner-approved WEEKLY (2026-07-02) — but ONLY once the per-run cost ceiling is IN CODE + the provider spend cap is set; until then manual/on-change only** |
 
 Rules: **weekly + on-signal** (owner-directed monthly→weekly 2026-07-02; cheap evals ~$0.30/run ≈ ~$1.2/mo;
 the loop also triggers `live-eval` via workflow_dispatch when it changes a model id or the

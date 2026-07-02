@@ -484,11 +484,16 @@ this quality track is G.
           ≈ ~$1.2/mo). "On-signal" = the loop triggers `live-eval` (workflow_dispatch) when it changes a
           model id or the detect/score/plan/gen code — validate the change immediately, don't wait for the
           weekly timer. Never wire the paid evals as a per-PR required check.
-        - CHEAP vs EXPENSIVE split: planning/scoring (cheap) run on the weekly+on-signal cadence; the
-          VIDEO-GEN eval is GATED behind its own flag (`RUN_VIDEO_EVAL=1`) + runs only monthly / on
-          model-change / manual — NEVER on the normal cadence.
-        - PER-RUN CEILING: each eval estimates cost (CostMeter) and ABORTS if a run would exceed a cap
-          (`EVAL_MAX_USD`, default ~$1) — a runaway (e.g. a regen loop) can't rack up spend.
+        - CHEAP vs EXPENSIVE: planning/scoring (cheap, ~$0.30) run weekly+on-signal. The VIDEO-GEN eval
+          (`RUN_VIDEO_EVAL=1`; $0.10–$1+/clip → ~$10–20+/mo weekly) is OWNER-APPROVED to also run WEEKLY
+          (2026-07-02) — but ONLY once BOTH safety prerequisites are real: (a) the PER-RUN COST CEILING is
+          IMPLEMENTED IN CODE (not just documented) and (b) the provider SPEND CAP is set (PENDING_OPS
+          `spend-caps`). UNTIL BOTH ARE IN PLACE, keep video-gen gated to manual/on-change only — do NOT
+          put the priciest call on an unattended weekly timer without a working ceiling + provider cap.
+        - PER-RUN CEILING: each eval MUST estimate cost (CostMeter) and ABORT if a run would exceed a cap
+          (`EVAL_MAX_USD`, default ~$1) — a runaway (e.g. a regen loop) can't rack up spend. STATUS: today
+          this is DOCUMENTED policy only (CostMeter logs cost; no abort yet) — implement the abort IN CODE
+          as part of building the video-gen eval, and it is a HARD PREREQUISITE for video-gen going weekly.
         - MINIMIZE: smallest/fewest fixtures that still test the behavior (JPEG, downscaled), cheapest
           capable model per task (scoring = Haiku), cache identical requests, cap regeneration. Verify eval
           code locally/structurally (type-check, lint) BEFORE spending a real run; never iterate via
