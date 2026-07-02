@@ -219,12 +219,17 @@ except Exception as e: print("UNPARSEABLE:", e); sys.exit(1)
 v = d.get("validation")
 if not isinstance(v, dict): print("no validation sub-block in LOOP_HEALTH (capability surfacing missing)"); sys.exit(1)
 if v.get("enforced_in_ci") is not True: print("validation.enforced_in_ci must be true"); sys.exit(1)
+# A capability is validated only when its REAL eval passes. Readiness blocks on BOTH:
+#   unmet             = OWNER-blocked (a key/secret the owner must provide) — the dashboard's "needs your key"
+#   awaiting_loop_eval = key PROVIDED, the LOOP must still BUILD the eval (ROADMAP G3)
 unmet = v.get("unmet") or []
-if unmet: print("UNMET capabilities block readiness (provide the owner secret + validate, or it's a stub):", unmet); sys.exit(1)
-print("ok validation: enforced_in_ci=true, 0 unmet")
+awaiting = v.get("awaiting_loop_eval") or []
+blocked = list(unmet) + list(awaiting)
+if blocked: print("readiness blocked — capabilities not yet real-validated (owner_blocked:", unmet, "| loop_blocked/awaiting_loop_eval:", awaiting, ")"); sys.exit(1)
+print("ok validation: enforced_in_ci=true; 0 owner-blocked, 0 awaiting-loop-eval")
 PY
-then ok "VALIDATION: capability gate enforced in CI; 0 unmet capabilities"
-else fail "VALIDATION: gate not enforced, validation block missing, or unmet capabilities remain (see LOOP_HEALTH validation.unmet + OWNER_ACTIONS validation-capability-*)"; fi
+then ok "VALIDATION: capability gate enforced in CI; 0 owner-blocked + 0 awaiting-eval"
+else fail "VALIDATION: gate not enforced, block missing, or capabilities unvalidated (LOOP_HEALTH validation.unmet=owner-blocked + .awaiting_loop_eval=loop-blocked)"; fi
 
 echo "== 4. Re-run the full web gate (the required CI check) IN THIS RUN =="
 ( cd web && npm ci && npm run build && npm test ) || fail "web gate (npm ci && build && test) failed."
