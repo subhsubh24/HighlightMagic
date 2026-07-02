@@ -182,7 +182,20 @@ export async function submitTask(
       throw lastError;
     }
 
-    const data = (await response.json()) as { data?: { id?: string } };
+    let data: { data?: { id?: string } };
+    try {
+      data = (await response.json()) as { data?: { id?: string } };
+    } catch (err) {
+      // A 200 with an unparseable body (CDN/proxy corruption, a truncated stream) is transient
+      // exactly like an HTTP 5xx or a thrown fetch — retry it with the same backoff instead of
+      // letting the parse throw straight out of the loop and abort the whole submit (and export).
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[atlascloud] Submit response parse failed (${lastError.message}), will retry...`);
+        continue;
+      }
+      throw lastError;
+    }
     console.log(`[atlascloud] submit response: model=${modelId}, id=${data?.data?.id ?? "none"}, ${((Date.now() - fetchStart) / 1000).toFixed(1)}s`);
     if (!data?.data?.id) {
       throw new Error("Atlas Cloud API returned no prediction ID");
@@ -269,7 +282,18 @@ export async function checkTaskResult(
       throw lastError;
     }
 
-    envelope = (await response.json()) as AtlasEnvelope<PredictionData>;
+    try {
+      envelope = (await response.json()) as AtlasEnvelope<PredictionData>;
+    } catch (err) {
+      // A 200 with an unparseable body is transient like a 5xx/thrown fetch — retry rather than
+      // letting the parse throw out of the poll loop and leave the task looking permanently stuck.
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[atlascloud] Poll response parse failed (${lastError.message}), will retry...`);
+        continue;
+      }
+      throw lastError;
+    }
     break;
   }
 

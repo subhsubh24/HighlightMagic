@@ -107,6 +107,24 @@ describe("Atlas Cloud API", () => {
       expect(mockFetch).toHaveBeenCalledTimes(4);
       vi.useRealTimers();
     });
+
+    it("retries a 200 with an unparseable body (CDN/proxy corruption) instead of aborting", async () => {
+      vi.useFakeTimers();
+      // A 200 whose body cannot be parsed is transient like a thrown fetch — before the fix the
+      // parse threw straight out of the loop with no retry.
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.reject(new SyntaxError("Unexpected end of JSON")) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: { id: "pred_parsed" } }) });
+
+      const { submitTask, MODELS } = await import("./atlascloud");
+      const p = submitTask(MODELS.KLING_I2V, { image: "test" });
+      await vi.runAllTimersAsync();
+      const result = await p;
+
+      expect(result).toBe("pred_parsed");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
   });
 
   describe("submitAttemptTimeoutMs (B6 budget invariant)", () => {
@@ -246,6 +264,31 @@ describe("Atlas Cloud API", () => {
 
       // Initial attempt + MAX_RETRIES(3) = 4 total before giving up.
       expect(mockFetch).toHaveBeenCalledTimes(4);
+      vi.useRealTimers();
+    });
+
+    it("retries a poll 200 with an unparseable body, then returns the parsed result", async () => {
+      vi.useFakeTimers();
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.reject(new SyntaxError("truncated")) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              message: "ok",
+              data: { id: "pred_p", status: "succeeded", outputs: ["https://cdn.example.com/p.mp4"] },
+            }),
+        });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const p = checkTaskResult("pred_p");
+      await vi.runAllTimersAsync();
+      const result = await p;
+
+      expect(result.status).toBe("completed");
+      expect(result.outputUrl).toBe("https://cdn.example.com/p.mp4");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
       vi.useRealTimers();
     });
   });
