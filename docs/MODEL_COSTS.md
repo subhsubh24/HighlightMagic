@@ -74,12 +74,14 @@ The gated real evals (`web/src/evals/*.eval.ts`, run only in `.github/workflows/
 
 | Eval | Measured / expected cost per run | Cadence |
 |---|---|---|
-| Detection / planning (`detect.eval.ts`) | ~$0.28 (4 fixtures × ~$0.07) | monthly + on-signal |
-| Frame scoring (`score.eval.ts`) | a few cents (Haiku vision, 3 small JPEGs) | monthly + on-signal |
-| **Video-gen (future, `RUN_VIDEO_EVAL`)** | **$0.10–$1+/clip — the expensive one** | **monthly / on-model-change / manual ONLY — gated, never the normal cadence** |
+| Detection / planning (`detect.eval.ts`) | ~$0.28 (4 fixtures × ~$0.07) | weekly + on-signal |
+| Frame scoring (`score.eval.ts`) | a few cents (Haiku vision, 3 small JPEGs) | weekly + on-signal |
+| **Video-gen (future, `RUN_VIDEO_EVAL`)** | **$0.10–$1+/clip — the expensive one** | **monthly / on-model-change / manual ONLY — gated, NEVER the weekly cadence** |
 
-Rules: **monthly safety net + on-signal** (the loop triggers `live-eval` via workflow_dispatch when it
-changes a model id or the detect/score/plan/gen code) — not weekly, never a per-PR check. Each eval
+Rules: **weekly + on-signal** (owner-directed monthly→weekly 2026-07-02; cheap evals ~$0.30/run ≈ ~$1.2/mo;
+the loop also triggers `live-eval` via workflow_dispatch when it changes a model id or the
+detect/score/plan/gen code) — never a per-PR check. The EXPENSIVE video-gen eval stays gated (never
+weekly). Each eval
 **estimates cost (CostMeter) and ABORTS if a run would exceed `EVAL_MAX_USD` (~$1 default)**. Minimize:
 smallest/fewest fixtures, cheapest capable model, cache, cap regeneration; verify eval code
 locally/structurally BEFORE a paid run (don't iterate via repeated real runs). Provider `spend-caps`

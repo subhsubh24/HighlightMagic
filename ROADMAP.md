@@ -480,11 +480,11 @@ this quality track is G.
       COST GOVERNANCE (STANDING — the loop must UNDERSTAND eval cost and run accordingly):
         - MEASURED cost today: detection/planning ~$0.28/run (4 fixtures × ~$0.07); frame-scoring a few
           cents; a full cheap live-eval run ≈ ~$0.30. VIDEO-GEN is the expensive rung ($0.10–$1+/clip).
-        - CADENCE = **monthly safety net + on-signal** (owner-directed 2026-07-01), NOT weekly. "On-signal"
-          = the loop triggers `live-eval` (workflow_dispatch) when it changes a model id or the
-          detect/score/plan/gen code — validate the change, don't run on a timer for nothing. Never wire
-          the paid evals as a per-PR required check.
-        - CHEAP vs EXPENSIVE split: planning/scoring (cheap) may run on the monthly+on-signal cadence; the
+        - CADENCE = **weekly + on-signal** (owner-directed: monthly→weekly 2026-07-02; cheap evals ~$0.30/run
+          ≈ ~$1.2/mo). "On-signal" = the loop triggers `live-eval` (workflow_dispatch) when it changes a
+          model id or the detect/score/plan/gen code — validate the change immediately, don't wait for the
+          weekly timer. Never wire the paid evals as a per-PR required check.
+        - CHEAP vs EXPENSIVE split: planning/scoring (cheap) run on the weekly+on-signal cadence; the
           VIDEO-GEN eval is GATED behind its own flag (`RUN_VIDEO_EVAL=1`) + runs only monthly / on
           model-change / manual — NEVER on the normal cadence.
         - PER-RUN CEILING: each eval estimates cost (CostMeter) and ABORTS if a run would exceed a cap
