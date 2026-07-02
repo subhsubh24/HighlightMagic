@@ -141,15 +141,30 @@ export async function submitTask(
     if (attemptTimeout <= 0) break; // budget spent — don't fire a doomed request
 
     const fetchStart = Date.now();
-    const response = await fetch(`${ATLAS_API_BASE}/${endpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: requestBody,
-      signal: AbortSignal.timeout(attemptTimeout),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${ATLAS_API_BASE}/${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: requestBody,
+        signal: AbortSignal.timeout(attemptTimeout),
+      });
+    } catch (err) {
+      // A THROWN fetch — network/DNS/socket blip or the AbortSignal.timeout firing — is transient
+      // exactly like an HTTP 5xx, so retry it with the same backoff (subject to the overall budget)
+      // instead of aborting the whole submit (and with it the export) on the first hiccup. This
+      // mirrors the poll path (checkTaskResult, #238); previously a thrown submit fetch propagated
+      // straight out of the retry loop with no retry.
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[atlascloud] Submit fetch threw (${lastError.message}), will retry...`);
+        continue;
+      }
+      throw lastError;
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");

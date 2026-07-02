@@ -70,6 +70,43 @@ describe("Atlas Cloud API", () => {
         submitTask(MODELS.KLING_I2V, { image: "test" })
       ).rejects.toThrow("no prediction ID");
     });
+
+    it("retries a THROWN submit fetch (network/DNS/timeout) instead of aborting the export", async () => {
+      vi.useFakeTimers();
+      // First submit throws like a socket/DNS blip or the AbortSignal.timeout firing; the retry
+      // succeeds. Before the fix a thrown submit fetch propagated straight out with no retry —
+      // the poll path already retried (#238), the submit path did not.
+      mockFetch
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ data: { id: "pred_retry" } }),
+        });
+
+      const { submitTask, MODELS } = await import("./atlascloud");
+      const p = submitTask(MODELS.KLING_I2V, { image: "test" });
+      await vi.runAllTimersAsync(); // let the backoff sleep elapse
+      const result = await p;
+
+      expect(result).toBe("pred_retry");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it("gives up (rejects) only after exhausting retries when the submit fetch keeps throwing", async () => {
+      vi.useFakeTimers();
+      mockFetch.mockRejectedValue(new Error("dns fail"));
+
+      const { submitTask, MODELS } = await import("./atlascloud");
+      const p = submitTask(MODELS.KLING_I2V, { image: "test" });
+      const rejection = expect(p).rejects.toThrow("dns fail");
+      await vi.runAllTimersAsync();
+      await rejection;
+
+      // Initial attempt + MAX_RETRIES(3) = 4 total before giving up (within the 55s budget).
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      vi.useRealTimers();
+    });
   });
 
   describe("submitAttemptTimeoutMs (B6 budget invariant)", () => {
