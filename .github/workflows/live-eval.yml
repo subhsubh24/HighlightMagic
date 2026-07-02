@@ -12,9 +12,9 @@ on:
   workflow_dispatch: # run manually / ON-SIGNAL (the loop triggers this when it changes a model id or
                      # the detect/score/plan/gen code, to validate that change — see ROADMAP G3)
   schedule:
-    - cron: "0 9 1 * *" # MONTHLY safety net (1st of month, 09:00 UTC). Cheap real evals cost ~$0.30/run;
-                        # monthly + on-signal keeps spend low. The expensive video-gen eval is gated
-                        # separately (RUN_VIDEO_EVAL) so it never runs on this cadence. See ROADMAP G3 COST.
+    - cron: "0 9 * * 1" # WEEKLY (Mondays 09:00 UTC). Cheap real evals cost ~$0.30/run (~$1.2/mo weekly);
+                        # weekly + on-signal. The expensive video-gen eval is gated separately
+                        # (RUN_VIDEO_EVAL) so it NEVER runs on this weekly cadence. See ROADMAP G3 COST.
 
 permissions:
   contents: read
