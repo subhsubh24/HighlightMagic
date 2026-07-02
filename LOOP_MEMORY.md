@@ -4,6 +4,69 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 39 — 2026-07-02 — 6 file-disjoint changes (credit-store KV tests / tts+scribe tests / atlascloud+scoring parse-guards / paywall annual)
+Cold start. **GOTCHA (recurring — cost me time): local `main` ref was STALE at #186 while origin/main was #268.**
+The initial HEAD was DETACHED at origin/main, so `git reset --hard origin/main` reset the detached HEAD (fine) but
+did NOT move the local `main` branch ref — my first branch `git checkout -b … main` was based on the stale #186 and
+files were "missing" + QUALITY_SCORECARD looked "reverted". FIX applied every branch after: `git checkout -b <b>
+origin/main` (base on the REMOTE ref, not local `main`), and `git branch -f main origin/main` to realign. **Lesson
+for next run: always branch from `origin/main`, never local `main`.** No DEEP AUDIT this run (Run 38 ran one <24h prior,
+2026-07-02). Consumed QUALITY_SCORECARD (overall B; ship-critical sub-A dims = store_readiness C [owner Mac work:
+archivable Xcode target + screenshots], functional_reality B [iOS export test — Linux-unverifiable], tests_evals B —
+**but the tests_evals coverage-floor gap is now STALE/CLOSED: `npm test`=`vitest run --coverage` + @vitest/coverage-v8
+installed + vitest.config thresholds 60/60/50/60 enforced in CI; baseline this run 64%st/59%br/76%fn/64%ln**) +
+GROWTH_STATUS (pre_launch, funnel 0/null — no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2)
+as DATA. Baseline web gate green throughout (build + coverage-enforced tests + 0 lint). Shipped **6 merged PRs
+(#269–#274)**, all file-DISJOINT, all web/docs (zero iOS-compile risk); abandoned 0. Each cleared 2 Sonnet reviewers +
+all 4 required checks.
+
+### 8-scout sweep → SELECT (maximal disjoint set)
+- **Security scout** flagged missing pre-parse Content-Length checks on the 4 vision routes (score/ios-score/validate/
+  ios-validate) — REAL gap but **DROPPED**: the sibling 20MB cap would BREAK the vision routes (up to 120 frames legit),
+  a provably-non-regressing cap would be ~1.4GB (weak), and Vercel already enforces a platform body limit. Kept only the
+  safe half (the upstream-parse guard, via the correctness scout).
+- **Correctness scout** → unguarded `response.json()` on the SUCCESS path in atlascloud (#272) + score/ios-score (#273).
+- **Tests scout** → 0%-covered paid modules elevenlabs-tts (#270), elevenlabs-scribe (#271); credit-store KV path (#269,
+  security-critical, was sub-60%). Deferred lower-value utils/kinetic/sfx tests.
+- **COGS scout** → planner result-cache / ios-score dedup / frame-annotation trim: DROPPED (touch the huge shared
+  `detect.ts` or the planner prompt [needs eval validation not run this cycle], or add weak in-memory caches; regenerate-
+  caching would also hurt "regenerate for variety" UX). validateTape() confirmed exported-but-unused (defer).
+- **Analytics/E7-E8 scout** → E7 ~40% built (analytics.ts + growth/metrics.ts + /api/growth/stats), E8 0%. **DEFERRED the
+  experiment engine** as pre-PMF speculative infra with no live consumer (FACTORY: pre-PMF prioritize product over growth
+  scaling) — a named future item, not built.
+- **Marketing scout** → paywall annual (#274); surfaces very clean otherwise.
+
+### Shipped (all merged; each 2 Sonnet reviewers APPROVED the final diff)
+- **#269 credit-store KV tests (H/security)** — VercelKVCreditStore: SET-NX idempotency (anti-mint), negative-decr clamp
+  (incl. clamp-SET-throws), timeout fail-closed. Test-only.
+- **#270 elevenlabs-tts tests (G2)** — voice fallback, API-error→failed-not-throw, 0-byte reject, COGS-per-char metering,
+  no-metering-on-failure, missing-key throw. Reviewer A mutation-tested (5 regressions each caught). Test-only.
+- **#271 elevenlabs-scribe tests (G2)** — >1s-pause segment split, confidence default, empty-words, data.text fallback,
+  API-error, missing-key. Test-only.
+- **#272 atlascloud parse-retry (B6)** — wrap the success-path `response.json()` in submit + poll → retry a corrupt 200
+  like a 5xx/thrown-fetch. +2 fake-timer tests.
+- **#273 scoring parse-guard (B/reliability)** — score→502, ios-score→retry-then-throw on a corrupt 200. +2 regression
+  tests; reviewers reverted-to-confirm-fail + verified no quota burn on failure.
+- **#274 paywall annual (Monetization/F8)** — surface $149.99/yr (2 months free) at the free-limit paywall; prices
+  verified vs 3 config sources.
+
+### Process notes
+- Accidentally committed #272 onto the #271 branch (forgot to branch first) → split it out via `git checkout -b …
+  origin/main` + `git cherry-pick`, then `git branch -f` the scribe branch back (the mixed push had failed, so #271 remote
+  stayed clean). Lesson: `git branch --show-current` before every commit.
+- Merges: 5 merged directly (checks already green); #274's `ios` re-ran after main advanced → used auto-merge, landed 07:39.
+- No ROADMAP box flipped (nothing newly COMPLETE); no BUSINESS_CASE recompute (paywall surfaces an EXISTING tier, not a
+  model-input change); no new owner-only items.
+
+### Follow-ups (carried; NOT owner-only unless noted)
+- credit-store.ts consumeOne atomicity (Lua/CAS) — narrow zero-boundary race, DEFERRED again.
+- atlascloud submit has NO idempotency key → a retry after a server-accepted-but-corrupt-response could double-bill a job
+  (pre-existing, same as #238's accepted risk) — worth an Idempotency-Key header if AtlasCloud supports one.
+- E8 experiment engine (assignment + lift) — real ROADMAP item, deferred as pre-PMF infra; build when there's a consumer.
+- Carried from Run 38: iOS export-to-file roundtrip test + server-side export-COUNT gate (functional_reality, iOS);
+  archivable Xcode app target + screenshots (store_readiness C, A6/D5 — owner/Mac); bundled-music assets OR hide the
+  picker (iOS); export-CREDIT-PACK iOS half (owner + loop at submission).
+
 ## Run 38 — 2026-07-02 — DEEP AUDIT + 6 file-disjoint changes (proxy-video H1 / landing honesty+a11y / atlascloud submit-retry / ios-score COGS / plan tests / content honesty)
 Cold start; hard-reset local main to origin/main before each branch. Ran a DEEP AUDIT (last was Run 34
 2026-07-01, >24h + 4 runs prior). Consumed QUALITY_SCORECARD (as_of 2026-07-01 but graded at commit
