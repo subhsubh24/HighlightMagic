@@ -13,10 +13,10 @@ the only channel by which the loop's own rules improve, since it can't edit its 
 ```yaml
 LOOP_HEALTH:
   project: HighlightMagic
-  as_of: 2026-06-29
+  as_of: 2026-07-02
   enforced_in_ci: true           # quality gates are REQUIRED checks [web, ios, web-e2e, web-lint] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass
-  last_run: 2026-06-29
-  last_deep_audit: 2026-06-29
+  last_run: 2026-07-02
+  last_deep_audit: 2026-07-02
   validation:                    # self-validation capability gate (ROADMAP G8) — surfaced HERE + as OWNER_ACTIONS (must be in BOTH)
     enforced_in_ci: true         # `validate-capabilities` is a REQUIRED check; a new unregistered external service CANNOT merge
     capabilities_total: 12       # distinct external services in web/src/lib/validation-manifest.ts
@@ -28,15 +28,14 @@ LOOP_HEALTH:
       - validation-capability-elevenlabs
       - validation-capability-atlascloud
   this_run:
-    changes_shipped: 2          # #170 provider cost metering, #171 landing a11y
-    changes_abandoned: 1
-    abandoned_reasons:           # [{change, reason}] reason ∈ gate_web_build|gate_web_test|gate_lint|gate_ios_ci|review_value|review_correctness|circuit_breaker|conflict|dead_end|blocked_owner
-      - {change: "beat-sync buildBeatGrid invalid-BPM guard (#168)", reason: review_value}  # both reviewers: defensive guard for an UNREACHABLE input (music BPMs come from a static curated array asserted >0) → below the value bar
+    changes_shipped: 6          # #243 proxy-video H1, #244 landing honesty+a11y, #245 atlascloud submit-retry, #246 ios-score COGS, #247 plan tests, #248 content honesty
+    changes_abandoned: 0
+    abandoned_reasons: []        # [{change, reason}] reason ∈ gate_web_build|gate_web_test|gate_lint|gate_ios_ci|review_value|review_correctness|circuit_breaker|conflict|dead_end|blocked_owner
     verify_cycle_failures: 0
-    review_rejections: 4         # #168 ×2 (→abandoned), #171 ×2 first round (aria-controls→fixed+re-approved)
+    review_rejections: 1         # #248 Rev B first pass (claimed music library is "live" — factually wrong; verified via git that no audio is committed → picker non-functional; note tightened + fresh reviewer APPROVED). All other 11 reviewer verdicts APPROVE first pass.
     circuit_breaker_trips: 0
   rolling_7d:
-    merged_prs: 54
+    merged_prs: 56
     reverts: 0
     readiness_attempts: 0
     readiness_rejected: 0
