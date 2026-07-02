@@ -120,7 +120,11 @@ export async function POST(req: Request) {
   }
 
   if (!resp.ok) {
-    return Response.json({ error: `scoring failed (${resp.status})` }, { status: 502 });
+    // H3 error hygiene: don't echo the upstream (Anthropic) HTTP status to the client — it
+    // enables provider/rate-limit enumeration. Log it server-side; return a generic message
+    // (mirrors the iOS twin at /api/ios-score).
+    console.error("[score] upstream scoring error:", resp.status);
+    return Response.json({ error: "scoring failed" }, { status: 502 });
   }
 
   let data: { content?: Array<{ text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
