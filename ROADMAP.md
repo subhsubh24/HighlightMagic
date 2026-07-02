@@ -452,10 +452,24 @@ this quality track is G.
       LADDER (advance in order; each its own eval gated behind `EVAL_MODE=1` + owner-funded keys, run in
       the weekly `.github/workflows/live-eval.yml` — NOT per-PR, to bound cost):
         1. Detection/planning — DONE (real Anthropic round-trip vs fixtures; `web/src/evals/detect.eval.ts`).
-        2. Real FRAME SCORING on real pixels (vision) — not pre-supplied scores.
-        3. EXPORT ROUND-TRIP — render a real 1080×1920 MP4 from a plan + assets and ASSERT the file exists,
-           correct dimensions/duration, and plays (the strongest BUILDS≠WORKS proof; confirm the renderer
-           runs headlessly in CI — browser-canvas via Playwright or ffmpeg).
+        2. Real FRAME SCORING on real pixels (vision) — BUILT (`web/src/evals/score.eval.ts` runs the real
+           license-free fixtures in `fixtures/media/` through the real Anthropic vision scorer; verified
+           green via live-eval, PR #256). Grow with realistic CC0 footage + scoring-quality assertions.
+        3. ⚑ EXPORT ROUND-TRIP — render a real 1080×1920 MP4 and ASSERT the file (exists, dims, duration,
+           decodable) — the strongest BUILDS≠WORKS proof. **PRIORITIZED NEXT (owner-directed 2026-07-01).**
+           FINDING: the server render is a STUB — `/api/render` validates the EDL then returns 501 ("render
+           worker not deployed yet"); the REAL render today is CLIENT-SIDE (browser Canvas + MediaRecorder),
+           which a Linux loop cannot drive headlessly. CHOSEN PATH: **build the server-side FFmpeg render
+           worker** (replace the 501) — both a real product upgrade (per the route's own docstring: 5-10x
+           faster, tab-closable, consistent quality) AND the only clean way to validate export headlessly.
+           Subtasks: (a) implement the ffmpeg filter-graph render behind `RENDER_ENABLED` — clip trim/order,
+           transitions, CSS→ffmpeg filter mapping, caption overlays, audio mix/mux (music+SFX+voiceover) →
+           1080×1920 H.264 MP4; job create + poll (reuse the /api/animate/check pattern); (b) install ffmpeg
+           in the live-eval job; (c) EXPORT EVAL: build an EDL from the fixture media, render via the worker,
+           ffprobe-assert the output. ANTI-THEATER: the eval MUST exercise the product's REAL render path —
+           NOT a parallel ffmpeg script written just for the test. (Fallback only if the worker proves
+           infeasible: a Playwright headless-browser export capture — but headless MediaRecorder/WebCodecs is
+           limited, so the server worker is the chosen path.)
         4. TTS / voiceover round-trip (ElevenLabs) — real audio; assert valid, non-silent, right duration.
         5. Music / SFX round-trip.
         6. VIDEO-GENERATION round-trip (AtlasCloud/Kling) + a QUALITY RUBRIC (prompt-adherence, motion/
