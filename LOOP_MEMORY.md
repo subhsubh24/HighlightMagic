@@ -4,6 +4,78 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 38 — 2026-07-02 — DEEP AUDIT + 6 file-disjoint changes (proxy-video H1 / landing honesty+a11y / atlascloud submit-retry / ios-score COGS / plan tests / content honesty)
+Cold start; hard-reset local main to origin/main before each branch. Ran a DEEP AUDIT (last was Run 34
+2026-07-01, >24h + 4 runs prior). Consumed QUALITY_SCORECARD (as_of 2026-07-01 but graded at commit
+bff8d15 = #223-era, so STALE: its named to-A+ gaps for correctness/security/business_case/tests are
+already CLOSED by #238/#232/#237/#229 — do NOT re-plow them from the scorecard text; verify live code) +
+GROWTH_STATUS (pre_launch, funnel 0/null — no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740,
+floor met on the modeled path ~y3.2) as DATA. Baseline web gate green throughout (build + 749 tests + 0
+lint; coverage above floor). Shipped **6 merged PRs** (#243–#248, all file-DISJOINT, all web/docs — zero
+iOS-compile risk); abandoned 0. Each cleared 2 Sonnet reviewers + all required checks.
+
+### DEEP AUDIT — 2026-07-02 (6 read-only Haiku lenses: functional-reality, correctness/credit-store,
+security/Track-H, artifact/honesty, perf-COGS/tests, design/a11y)
+- **Security lens found a REAL new gap (jumped the queue) → #243**: `/api/proxy-video` (public,
+  unauthenticated GET, buffers ≤100MB/req) had SSRF defenses but NO rate limiting — the one paid/expensive
+  route the H1 sweep missed. Fixed with POLL_RATE_LIMIT (60/min GET tier).
+- **Correctness/credit-store lens — 2 findings REJECTED/DEFERRED after verifying live code**: (1)
+  entitlement.ts:224 "consumeExport assumes used=0 on a quota-read failure" is a DOCUMENTED deliberate
+  tradeoff (fail in the user's favor, don't spend an unconfirmed credit); the scout's "fail-closed" fix
+  would WRONGLY charge a credit on any KV blip — worse. REJECTED. (2) credit-store.ts consumeOne
+  decr-then-clamp race: the scout's "drop the clamp" fix REINTRODUCES the negative-hole-eats-next-grant
+  bug the clamp prevents; a correct fix needs an atomic Lua CAS; severity minimal (concurrent consume+grant
+  at the exact zero boundary). DEFERRED (as prior runs did).
+- **atlascloud submitTask had the SAME unwrapped-fetch bug #238 fixed in checkTaskResult → #245.**
+- **ios-score lacked the [CostMeter] log web /api/score has → #246** (COGS blind spot on the PRIMARY
+  paid path).
+- **perf/COGS: ios-validate prompt-cache candidate DEFERRED** (low-volume ≤2 passes/export → the same
+  net-loss-at-1-hit logic Run 35 rejected for validate). web /api/plan had NO dedicated tests while
+  ios-plan does → #247 (quota-gate regression guard).
+- **artifact/honesty: landing page had a LIVE false "or photos" import claim** (picker is `.videos`) → #244;
+  the long-carried content-batch music-honesty rewrite → #248.
+- **design/a11y: footer links lacked focus rings → folded into #244.** UploadStep PRO-badge contrast/9px +
+  mobile-nav-hidden findings = marginal/subjective (Reviewer-B-reject territory) → not shipped.
+- NO CRITICAL findings survived beyond the (fixed) proxy-video rate-limit gap → deep audit clean after #243.
+
+### Shipped (all merged; each 2 Sonnet reviewers APPROVED the final diff before merge)
+- **#243 proxy-video rate limit (H1)** — per-IP POLL_RATE_LIMIT before any work; +2 tests. Both reviewers
+  noted the residual systemic caveats (in-memory per-instance; XFF spoofable) are pre-existing to rate-limit.ts.
+- **#244 landing honesty + a11y** — "or photos"→"videos" (import is `.videos`, HomeView.swift:52) + focus
+  rings on the 4 footer links matching the nav links.
+- **#245 atlascloud submit-retry (B6)** — mirror of #238 on the submit path; +2 fake-timer tests (2 calls / 4 calls).
+- **#246 ios-score [CostMeter] (B2/COGS)** — sum token usage across frame batches, log per-export cost like
+  web score; scoreBatchWithHaiku return type → {scored,usageIn,usageOut}; +metering test +429-retry test.
+- **#247 web /api/plan tests (G2)** — new plan-route.test.ts: 402-gate-before-paid-call (planFromScores AND
+  enforceGenerationCeiling never reached), 413 bounds, 429 rate-limit, SSE success, H3 generic-error-no-leak,
+  H7 ceiling. A reviewer mutation-verified the 402 test fails if the gate is removed.
+- **#248 content-batch honesty (FTC)** — closes the 4-run-carried follow-up. Removed all AI-music/SFX/"no
+  copyright strikes"/bare-"Unlimited" claims from post-batch-{1,2}.md; rewrote Batch-1 POST 04 (fictional
+  "Music+SFX Auto-Sync") → real frame-scoring demo, POST 06 reason 2 → captions/sound-off; "15+ caption
+  styles"→7.
+
+### REVIEW LESSON (important — a Sonnet reviewer was factually WRONG; verified objectively and overrode)
+- #248 Rev B REQUEST_CHANGES claimed the bundled music library is "LIVE" (MusicLibrary 14 tracks +
+  MusicPickerSheet + ClipGenerationService:469 mixes bundleURL) and asked to reintroduce a music-library
+  marketing claim. That inference was from CODE STRUCTURE without checking the ASSETS exist. Verified
+  objectively: `git log --all --diff-filter=A` = ZERO audio files ever committed + none in the working tree
+  → `MusicTrack.bundleURL` (Bundle.main.url(forResource:)) is ALWAYS nil → isAvailable false → the mix
+  branch is unreachable (exactly REMAINING_STEPS 0d.3). Following the reviewer would have REINTRODUCED the
+  false claim I was removing. Applied the "trust the objectively-verified fact over the reviewer" rule:
+  tightened the accuracy note to say the picker EXISTS in the UI but is non-functional (no bundled audio),
+  then got a FRESH value reviewer armed with the git evidence → APPROVE. LESSON: a code-structure read is
+  NOT proof a feature works — check the assets/round-trip; and a reviewer's factual claim can be checked
+  objectively before churning.
+
+### Follow-ups (future loop work; NOT owner-only unless noted)
+- **credit-store.ts consumeOne atomicity** — needs an atomic Lua/CAS decr-with-floor to close the narrow
+  consume-vs-grant zero-boundary race without the negative-hole regression; low severity, DEFERRED again.
+- **entitlement.ts export-ceiling check-then-record** (score/ios-score) — pre-existing narrow race; unchanged.
+- **G2 iOS XCTest coverage floor** — iOS-unverifiable on Linux; web coverage floor enforced (#229).
+- Carried: iOS export-to-file roundtrip test + server-side export-COUNT gate (functional_reality B, iOS);
+  archivable Xcode app target + screenshots (store_readiness C, A6/D5 — owner/Mac); bundled-music assets
+  (owner, 0d/3) OR hide the picker (iOS); export-CREDIT-PACK iOS half (owner + loop at submission).
+
 ## Run 37 — 2026-07-01 — credit-pack revenue lever backend (#237) + atlascloud poll retry→A+ (#238) + all-surface honesty (#239)
 Cold start; hard-reset local main to origin/main before each branch. NO DEEP AUDIT this run (Run 34 ran a
 full 8-lens audit same-day 2026-07-01; Runs 35/36/37 all same-day, <24h). Consumed QUALITY_SCORECARD
