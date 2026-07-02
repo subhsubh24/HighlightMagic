@@ -31,13 +31,19 @@ export async function POST(req: Request) {
     }
 
     const result = await checkAnimationResult(predictionId);
+    // H3 error hygiene: the provider's raw failure text (result.error) can name the vendor
+    // and expose upstream status/queue detail. Log it server-side; hand the client only a
+    // generic failure message. The client's poller keys off `status`, not the error text.
+    if (result.error) {
+      console.error(`[animate/check] provider error for predictionId=${predictionId}:`, result.error);
+    }
     // Map outputUrl → videoUrl for backward compatibility with client code
     const clientResult = {
       status: result.status,
       videoUrl: result.outputUrl,
-      error: result.error,
+      error: result.error ? "Animation generation failed" : undefined,
     };
-    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl.slice(0, 80)}...` : ""}${clientResult.error ? ` error=${clientResult.error}` : ""}`);
+    console.log(`[animate/check] predictionId=${predictionId} → status=${clientResult.status}${clientResult.videoUrl ? ` videoUrl=${clientResult.videoUrl.slice(0, 80)}...` : ""}${clientResult.error ? " (failed)" : ""}`);
     return Response.json(clientResult);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

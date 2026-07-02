@@ -51,8 +51,11 @@ export async function POST(req: Request) {
     const result = await generateMusic(prompt, durationMs);
 
     if (result.status === "failed") {
+      // H3 error hygiene: log the provider's raw failure server-side only (it names the
+      // vendor / exposes upstream status codes); return a generic message to the client.
+      console.error("[music/submit] provider error:", result.error);
       return Response.json(
-        { error: result.error ?? "Music generation failed" },
+        { error: "Music generation failed" },
         { status: 502 }
       );
     }

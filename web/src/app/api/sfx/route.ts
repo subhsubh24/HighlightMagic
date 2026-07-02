@@ -67,8 +67,11 @@ export async function POST(req: Request) {
     );
 
     if (result.status === "failed") {
+      // H3 error hygiene: log the provider's raw failure server-side only (it names the
+      // vendor / exposes upstream status codes); return a generic message to the client.
+      console.error("[sfx] provider error:", result.error);
       return Response.json(
-        { error: result.error ?? "SFX generation failed" },
+        { error: "SFX generation failed" },
         { status: 502 }
       );
     }

@@ -55,6 +55,17 @@ describe("/api/score", () => {
     expect(res.status).toBe(503);
   });
 
+  it("returns a generic 502 without leaking the upstream status (H3 error hygiene)", async () => {
+    // A non-OK upstream (e.g. 503/429) must not have its HTTP status echoed to the client —
+    // that enables provider/rate-limit enumeration. The route returns a generic message.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("rate limited", { status: 503 }));
+    const res = await POST(req({ userId: "h3-upstream-status-user", frames: [frame] }));
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.error).toBe("scoring failed");
+    expect(JSON.stringify(body)).not.toContain("503");
+  });
+
   it("returns 502 (not an uncaught 500) when the upstream 200 body is unparseable", async () => {
     // A 200 whose body isn't JSON must not throw out of the handler — it returns the same
     // graceful 502 as the fetch/!ok paths.
