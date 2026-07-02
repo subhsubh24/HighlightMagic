@@ -24,7 +24,7 @@ All posts are for TikTok/Reels/Shorts unless noted. Cross-post to all platforms.
 [Show: AI detection animation, frame scoring progress bar]
 [Voiceover] "AI watched every frame to find the best moments —"
 
-[Show: finished highlight reel playing — 60-second clip with music and captions]
+[Show: finished highlight reel playing — 60-second clip with kinetic captions and transitions]
 [Voiceover] "— and gave me this. I didn't touch the edit. This is straight from the AI."
 
 [Show: share sheet → "Share to TikTok"]
@@ -56,7 +56,7 @@ Try it free → link in bio
 "Raw footage → highlight. Same clip. AI did the edit."
 
 [Left side: shaky raw 8-minute travel video]
-[Right side / cut to: polished 60-second highlight with music, captions, transitions]
+[Right side / cut to: polished 60-second highlight with captions and transitions]
 
 [End card — text overlay]
 "Highlight Magic — Free on the App Store"
@@ -92,8 +92,8 @@ Free app — link in bio 🔗
 [Cut to: importing workout footage into app]
 "I imported my gym session. AI found every peak rep, every form breakthrough —"
 
-[Show: AI-generated highlight with energy music auto-synced]
-"— built this highlight in 30 seconds with music that matched the intensity."
+[Show: finished highlight with kinetic captions and clean cuts]
+"— built this highlight in 30 seconds, cut straight to the best moments."
 
 [Direct to camera]
 "Athletes and coaches: this is how you build a highlight reel for scouts without paying a video editor. Link in bio."
@@ -106,7 +106,7 @@ Every athlete/coach needs this 🏋️‍♂️
 Stop paying video editors to make your highlight reels — AI does it in 30 seconds
 
 ✅ Finds your best reps/plays automatically
-✅ Adds music that matches the energy
+✅ Auto captions + clean cuts, no timeline scrubbing
 ✅ 1080×1920 vertical — perfect for Instagram/TikTok
 
 Free → link in bio
@@ -116,41 +116,40 @@ Free → link in bio
 
 ---
 
-## POST 04 — Demo: Music + SFX Auto-Sync (Week 2, Monday)
+## POST 04 — Demo: How the AI Actually Picks Your Best Moments (Week 2, Monday)
 
-**Format**: Screen record showing music generation  
+**Format**: Screen record showing the detection step  
 **Length**: 30–45 sec  
 **Platform**: All  
 
 **Script**:
 ```
 [HOOK — text overlay on top of the screen recording]
-"The AI doesn't just cut the clip. It makes the music too."
+"This app watches every single frame of your video. Here's what it's looking for."
 
-[Show: the music generation step in the DetectingStep UI]
-[Voiceover] "After AI finds your highlights, it generates a custom music track based on what's in the video —"
+[Show: the AI detection step scoring frames as the progress bar fills]
+[Voiceover] "It scores every frame for the stuff that stops a scroll — peak action, real emotion, the moment everyone reacts to —"
 
-[Show: finished clip playing with perfectly synced music and SFX]
-[Voiceover] "— energy score, mood, pacing — all matched. Every song is original, generated just for your clip."
+[Show: finished highlight assembled from the top-scoring moments, kinetic captions on]
+[Voiceover] "— then builds your highlight from only the highest-scoring moments. No scrubbing a 3-hour timeline yourself."
 
 [End card]
-"No royalty issues. No copyright strikes. Free to post anywhere."
-"Highlight Magic — Free on the App Store"
+"Frame-by-frame AI. Highlight Magic — Free on the App Store."
 ```
 
 **Caption**:
 ```
-The AI makes a custom song for your highlight reel 🎵
+The AI watches every frame so you don't have to 🎯
 
-• Analyzes the vibe of your footage
-• Generates original music (no copyright issues)
-• Auto-syncs to the beat
+• Scores each moment for scroll-stopping power, emotion, and action
+• Keeps only the highest-scoring moments
+• Cuts them into a vertical highlight with auto captions
 
-No two songs are the same. Every highlight gets its own track.
+No scrubbing. No guessing. Import and go.
 
 Free app → link in bio
 
-#AIMusic #VideoEditing #ContentCreator #NoCopyright #HighlightMagic #AIVideo #CreatorTools
+#AIVideo #VideoEditing #ContentCreator #HighlightMagic #CreatorTools #TikTokTips
 ```
 
 ---
@@ -167,7 +166,7 @@ Free app → link in bio
 "4 days in [destination]. 6 hours of footage. 45 seconds of highlights."
 
 [Show: phone photo roll / raw clips messy and long]
-[Cut to: polished 45-second highlight with travel music and caption overlays]
+[Cut to: polished 45-second highlight with caption overlays and clean transitions]
 
 [Direct to camera — end]
 "AI watched all 6 hours so I didn't have to. Posted it the same day I landed. Highlight Magic — Free."
@@ -179,7 +178,7 @@ Free app → link in bio
 
 I haven't had time to edit travel videos in years. This app changed that.
 
-Imports video → AI finds the best moments → adds music + captions → done
+Imports video → AI finds the best moments → adds captions + transitions → done
 
 Link in bio (free to try) 🔗
 
@@ -204,8 +203,8 @@ Link in bio (free to try) 🔗
 [Voiceover] "AI starts with the highest-energy moment. Every time."
 
 [Beat 2 — text overlay]
-"Reason 2: the music doesn't match the energy."
-[Voiceover] "If you're manually picking royalty-free music, it never quite fits. AI generates music scored to your specific clip."
+"Reason 2: no captions."
+[Voiceover] "Most people watch on mute. No captions and they scroll right past. AI auto-writes and animates captions on every clip."
 
 [Beat 3 — text overlay]
 "Reason 3: it's too long."
@@ -220,7 +219,7 @@ Link in bio (free to try) 🔗
 Why your highlight reels don't go viral (and how to fix it) 👇
 
 1/ Your best moment isn't first — AI fixes this automatically
-2/ Music doesn't match the energy — AI generates it scored to your footage
+2/ No captions — most people watch on mute; AI auto-adds kinetic captions
 3/ Too long — AI keeps it under 90 seconds
 
 The app I use is called Highlight Magic. Free to try → link in bio
@@ -248,7 +247,7 @@ The app I use is called Highlight Magic. Free to try → link in bio
 "Every word is written by AI based on what's happening in the clip. Kinetic animations auto-applied. No typing required."
 
 [End card]
-"15+ caption styles. All automatic. Highlight Magic."
+"7 kinetic caption styles. All automatic. Highlight Magic."
 ```
 
 **Caption**:
@@ -257,7 +256,7 @@ AI writes the captions AND animates them 🤯
 
 No typing. No timing. It watches your video and generates text that matches what's happening.
 
-15+ kinetic caption styles included (auto-applied based on the vibe of your clip).
+7 kinetic caption styles included (auto-applied based on the vibe of your clip).
 
 Try free → link in bio
 
@@ -282,15 +281,15 @@ Try free → link in bio
 [Show: highlight with the best 60 seconds — beat drops, crowd energy, stage shots]
 
 [Direct to camera]
-"AI found every drop, every crowd moment, every stage shot. Made a 60-second highlight I actually wanted to share. The background music in the highlight is AI-generated so there are zero copyright strikes."
+"AI found every drop, every crowd moment, every stage shot — using the audio energy in your clips to spot the peaks. Made a 60-second highlight I actually wanted to share, straight from the footage I already had."
 ```
 
 **Caption**:
 ```
 Filmed an entire concert. AI turned it into 60 seconds of magic 🎵🎤
 
-✅ AI finds the best drops and crowd moments automatically
-✅ AI-generated background music = no copyright strikes
+✅ AI finds the best drops and crowd moments automatically (it listens to the audio energy)
+✅ Auto kinetic captions + clean cuts
 ✅ Ready to post same night you get home
 
 For every concert-goer who films everything and shares nothing
@@ -314,7 +313,7 @@ Free → link in bio
 "I filmed my daughter's birthday. 90 minutes. AI made this in under a minute."
 
 [Raw footage: long candid clips, chaos, blurry moments]
-[Cut to: polished 45-second birthday highlight with upbeat music, captions like "5 YEARS OLD!", transitions]
+[Cut to: polished 45-second birthday highlight with captions like "5 YEARS OLD!" and transitions]
 
 [End]
 "Best moments. Auto-found. All I had to do was import. Highlight Magic — link in bio."
