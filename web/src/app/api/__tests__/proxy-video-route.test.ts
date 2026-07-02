@@ -3,14 +3,16 @@
  * client-supplied URL, so its SSRF defenses (HTTPS-only + domain allowlist + size cap) are
  * security-critical and must not regress.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/proxy-video/route";
+import { _resetBuckets, POLL_RATE_LIMIT } from "@/lib/rate-limit";
 
-function get(url: string | null): Request {
+function get(url: string | null, ip = "1.2.3.4"): Request {
   const u = url === null ? "http://localhost/api/proxy-video" : `http://localhost/api/proxy-video?url=${encodeURIComponent(url)}`;
-  return new Request(u);
+  return new Request(u, { headers: { "x-forwarded-for": ip } });
 }
 
+beforeEach(() => _resetBuckets());
 afterEach(() => vi.restoreAllMocks());
 
 describe("GET /api/proxy-video", () => {
@@ -80,5 +82,24 @@ describe("GET /api/proxy-video", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
     const res = await GET(get("https://replicate.delivery/x.mp4"));
     expect(res.status).toBe(502);
+  });
+
+  it("429s once the per-IP rate limit is exceeded (Track H1 — bandwidth/egress drain guard)", async () => {
+    // A validation error (missing url) is enough to prove the limiter runs BEFORE any work —
+    // no upstream fetch needed, and it isolates the throttle from the SSRF/size paths.
+    for (let i = 0; i < POLL_RATE_LIMIT.limit; i++) {
+      const ok = await GET(get(null, "9.9.9.9"));
+      expect(ok.status).toBe(400); // allowed through to the url-missing check
+    }
+    const blocked = await GET(get(null, "9.9.9.9"));
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("Retry-After")).toBeTruthy();
+  });
+
+  it("throttles per-IP, so a different client is unaffected by another's flood", async () => {
+    for (let i = 0; i < POLL_RATE_LIMIT.limit; i++) await GET(get(null, "8.8.8.8"));
+    expect((await GET(get(null, "8.8.8.8"))).status).toBe(429);
+    // A separate IP still gets through.
+    expect((await GET(get(null, "7.7.7.7"))).status).toBe(400);
   });
 });

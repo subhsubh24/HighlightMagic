@@ -1,3 +1,10 @@
+import {
+  checkRateLimit,
+  getClientIP,
+  rateLimitResponse,
+  POLL_RATE_LIMIT,
+} from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -24,6 +31,13 @@ const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
  * via drawImage() during client-side export rendering.
  */
 export async function GET(req: Request) {
+  // Track H1: this is a PUBLIC, unauthenticated GET that buffers up to 100 MB of upstream
+  // bytes per request in the serverless function — an unthrottled flood is a bandwidth/egress
+  // + memory drain. Throttle per-IP (GET amplification tier, not the tight PAID tier) so a
+  // legitimate export (a handful of proxied clips) never trips while a flood is bounded.
+  const rl = checkRateLimit(`proxy-video:${getClientIP(req)}`, POLL_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl);
+
   const { searchParams } = new URL(req.url);
   const url = searchParams.get("url");
 
