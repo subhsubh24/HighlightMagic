@@ -85,4 +85,50 @@ describe("POST /api/ios-score", () => {
     expect(typeof body.frames[0].score).toBe("number");
     expect(body.remaining).toBe(FREE_EXPORT_LIMIT - 1);
   });
+
+  it("logs a [CostMeter] line with the per-export Anthropic token usage (COGS observability)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: '[{"index":0,"score":0.5,"role":"HERO","label":"x"}]' }],
+          usage: { input_tokens: 1234, output_tokens: 56 },
+        }),
+        { status: 200 },
+      ),
+    );
+    const res = await POST(req({ userId: "ios-score-meter-user", frames: [frame] }));
+    expect(res.status).toBe(200);
+    const meterLine = logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.includes("[CostMeter] ios-score:"));
+    expect(meterLine).toBeTruthy();
+    expect(meterLine).toContain("in=1234");
+    expect(meterLine).toContain("out=56");
+    expect(meterLine).toMatch(/est=\$\d/); // a real dollar estimate, not NaN/undefined
+  });
+
+  it("retries a transient 429 from Anthropic and then succeeds (no permanent export failure)", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      calls++;
+      if (calls === 1) {
+        return new Response("", { status: 429, headers: { "retry-after": "1" } });
+      }
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: '[{"index":0,"score":0.7,"role":"HERO","label":"x"}]' }],
+          usage: { input_tokens: 10, output_tokens: 2 },
+        }),
+        { status: 200 },
+      );
+    });
+    const p = POST(req({ userId: "ios-score-retry-user", frames: [frame] }));
+    await vi.runAllTimersAsync(); // let the backoff sleep elapse
+    const res = await p;
+    expect(res.status).toBe(200);
+    expect(calls).toBeGreaterThanOrEqual(2);
+    vi.useRealTimers();
+  });
 });
