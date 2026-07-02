@@ -85,21 +85,24 @@ OWNER_ACTIONS:
     - id: validation-capability-anthropic
       title: "Set ANTHROPIC_API_KEY as a GitHub Actions secret so the loop validates the REAL detection round-trip"
       priority: urgent
-      status: open
+      status: done
+      done_on: 2026-07-01   # owner set the GH secret; the REAL detect eval ran GREEN 4/4 (~$0.07/fixture) — detection/planning is now real-validated
       why: "Anthropic frame-scoring + edit-planning is the detection CORE. Until the key is a GH secret it's only mock-validated; the detect eval (web/src/evals/detect.eval.ts) skips + warns, so 'detection works' is unproven and the capability cannot be ticked done."
       how: "GitHub → Settings → Secrets and variables → Actions → add ANTHROPIC_API_KEY (separate low-budget, HARD-capped key). Enables the detect eval in live-eval.yml now. NEVER commit a key value."
       blocks: live-round-trip-validation
     - id: validation-capability-elevenlabs
       title: "Set ELEVENLABS_API_KEY as a GitHub Actions secret so the loop validates the REAL voiceover round-trip"
       priority: urgent
-      status: open
+      status: done
+      done_on: 2026-07-01   # owner set the GH secret (owner part COMPLETE). Real validation now awaits the TTS eval being BUILT (ROADMAP G3 rung 4) — loop work, not owner.
       why: "ElevenLabs TTS (voiceover) is a paid capability validated only with a real key. Until set, it stays mock-validated and cannot be ticked done."
       how: "GitHub → Settings → Secrets and variables → Actions → add ELEVENLABS_API_KEY (separate low-budget, HARD-capped key). Activates once the TTS eval lands (ROADMAP G3). NEVER commit a key value."
       blocks: live-round-trip-validation
     - id: validation-capability-atlascloud
       title: "Set ATLASCLOUD_API_KEY as a GitHub Actions secret so the loop validates the REAL video-generation round-trip"
       priority: urgent
-      status: open
+      status: done
+      done_on: 2026-07-01   # owner set the GH secret (owner part COMPLETE). Real validation now awaits the video-gen eval being BUILT (ROADMAP G3 rung 6) — loop work, not owner.
       why: "AtlasCloud/Kling video generation is the most expensive paid call and is validated only with a real key. Until set, it stays mock-validated and cannot be ticked done."
       how: "GitHub → Settings → Secrets and variables → Actions → add ATLASCLOUD_API_KEY (separate low-budget, HARD-capped key). Activates once the video-gen eval lands (ROADMAP G3). NEVER commit a key value."
       blocks: live-round-trip-validation

@@ -21,12 +21,11 @@ LOOP_HEALTH:
     enforced_in_ci: true         # `validate-capabilities` is a REQUIRED check; a new unregistered external service CANNOT merge
     capabilities_total: 12       # distinct external services in web/src/lib/validation-manifest.ts
     ci_validated_keyless: 3      # mock, green every PR: Resend (flow), Turnstile, Vercel KV
-    live_eval: 3                 # Anthropic, ElevenLabs, AtlasCloud — real round-trip needs owner-funded GH Actions secrets
+    live_eval: 3                 # Anthropic = VALIDATED 2026-07-01 (real detect eval 4/4 GREEN, ~$0.07/fixture). ElevenLabs + AtlasCloud = keys SET; awaiting their G3 evals being built.
     owner_only: 6                # Apple StoreKit receipt, site-gate, Instagram/Reddit/TikTok/X — validated at launch (existing OWNER_ACTIONs)
-    unmet:                       # blocks readiness (preflight) until validated; each is ALSO an urgent OWNER_ACTION in PENDING_OPS
-      - validation-capability-anthropic
-      - validation-capability-elevenlabs
-      - validation-capability-atlascloud
+    unmet:                       # blocks readiness (preflight) until validated. Anthropic CLEARED (validated). Remaining are now LOOP-blocked (build the eval — ROADMAP G3), NOT owner-key-blocked.
+      - validation-capability-elevenlabs   # key set; TTS round-trip eval not built yet (G3 rung 4)
+      - validation-capability-atlascloud   # key set; video-gen round-trip eval not built yet (G3 rung 6)
   this_run:
     changes_shipped: 6          # #243 proxy-video H1, #244 landing honesty+a11y, #245 atlascloud submit-retry, #246 ios-score COGS, #247 plan tests, #248 content honesty
     changes_abandoned: 0
