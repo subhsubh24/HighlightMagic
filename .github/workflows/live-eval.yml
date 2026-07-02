@@ -9,9 +9,12 @@ name: live-eval
 # Provider spend caps (PENDING_OPS: spend-caps) are the backstop; keep the eval set small + cheap.
 
 on:
-  workflow_dispatch: # run manually from the Actions tab any time
+  workflow_dispatch: # run manually / ON-SIGNAL (the loop triggers this when it changes a model id or
+                     # the detect/score/plan/gen code, to validate that change — see ROADMAP G3)
   schedule:
-    - cron: "0 9 * * 1" # weekly, Mondays 09:00 UTC
+    - cron: "0 9 1 * *" # MONTHLY safety net (1st of month, 09:00 UTC). Cheap real evals cost ~$0.30/run;
+                        # monthly + on-signal keeps spend low. The expensive video-gen eval is gated
+                        # separately (RUN_VIDEO_EVAL) so it never runs on this cadence. See ROADMAP G3 COST.
 
 permissions:
   contents: read
@@ -37,15 +40,19 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
 
-      - name: Detection eval (Anthropic — real round-trip vs gold fixtures)
+      - name: Detection eval (Anthropic — real planning round-trip vs gold fixtures)
         if: ${{ env.ANTHROPIC_API_KEY != '' }}
         run: npx tsx src/evals/detect.eval.ts
 
-      - name: Detection eval SKIPPED (ANTHROPIC_API_KEY not set)
+      - name: Frame-scoring eval (Anthropic vision — REAL pixels through the real scorer) [G3 rung 2]
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        run: npx tsx src/evals/score.eval.ts
+
+      - name: Anthropic evals SKIPPED (ANTHROPIC_API_KEY not set)
         if: ${{ env.ANTHROPIC_API_KEY == '' }}
         run: |
-          echo "::warning::ANTHROPIC_API_KEY not set — the real detection round-trip was NOT validated."
-          echo "Set it as a GitHub Actions secret (low-budget + capped) to enable. See OWNER_ACTIONS: validation-eval-keys."
+          echo "::warning::ANTHROPIC_API_KEY not set — the real detection + frame-scoring round-trips were NOT validated."
+          echo "Set it as a GitHub Actions secret (low-budget + capped) to enable. See OWNER_ACTIONS: validation-capability-anthropic."
 
       # ElevenLabs (TTS) + AtlasCloud (video) evals are tracked in ROADMAP G3. Once those eval scripts
       # exist, add steps here guarded the same way (`if: env.<KEY> != ''`) so they validate the real
