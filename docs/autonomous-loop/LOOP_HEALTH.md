@@ -17,13 +17,18 @@ LOOP_HEALTH:
   enforced_in_ci: true           # quality gates are REQUIRED checks [web, ios, web-e2e, web-lint] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass
   last_run: 2026-07-02
   last_deep_audit: 2026-07-02
-  validation:                    # self-validation capability gate (ROADMAP G8) — surfaced HERE + as OWNER_ACTIONS (must be in BOTH)
+  validation:                    # self-validation capability gate (ROADMAP G8). TWO DISTINCT blocked-states — do NOT conflate:
+                                 #   owner_blocked / `unmet` = the OWNER must provide a key/secret (this is what the dashboard shows as "needs your key").
+                                 #   awaiting_loop_eval      = key/prereq ALREADY PROVIDED; the LOOP must BUILD the eval (loop work, ROADMAP G3) — NOT owner-blocked.
+                                 # RULE: never list a capability whose key is already set in `unmet` — it belongs in awaiting_loop_eval.
     enforced_in_ci: true         # `validate-capabilities` is a REQUIRED check; a new unregistered external service CANNOT merge
     capabilities_total: 12       # distinct external services in web/src/lib/validation-manifest.ts
     ci_validated_keyless: 3      # mock, green every PR: Resend (flow), Turnstile, Vercel KV
     live_eval: 3                 # Anthropic = VALIDATED 2026-07-01 (real detect eval 4/4 GREEN, ~$0.07/fixture). ElevenLabs + AtlasCloud = keys SET; awaiting their G3 evals being built.
     owner_only: 6                # Apple StoreKit receipt, site-gate, Instagram/Reddit/TikTok/X — validated at launch (existing OWNER_ACTIONs)
-    unmet:                       # blocks readiness (preflight) until validated. Anthropic CLEARED (validated). Remaining are now LOOP-blocked (build the eval — ROADMAP G3), NOT owner-key-blocked.
+    owner_blocked: 0             # capabilities the OWNER must still act on (key/secret) — NONE: all three AI keys were set 2026-07-01 (validation-capability-* OWNER_ACTIONS are done)
+    unmet: []                    # = owner_blocked ids the dashboard renders as "needs your key". EMPTY — every AI key is provided; do NOT put a key-provided capability here.
+    awaiting_loop_eval:          # key PROVIDED; the LOOP must BUILD the eval before these validate (ROADMAP G3) — NOT owner-blocked, NOT "needs your key"
       - validation-capability-elevenlabs   # key set; TTS round-trip eval not built yet (G3 rung 4)
       - validation-capability-atlascloud   # key set; video-gen round-trip eval not built yet (G3 rung 6)
   this_run:
