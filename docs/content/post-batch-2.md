@@ -25,7 +25,7 @@ Conversion posts (08, 09) suit Week 5–6+ of the content calendar.
 [Show: importing long gaming screen-record into Highlight Magic]
 [Voiceover] "Just imported my session — AI scored every moment for intensity, speed, reaction time —"
 
-[Show: finished gaming highlight with punchy SFX, clean cuts, energy music]
+[Show: finished gaming highlight with punchy transitions and clean cuts]
 [Voiceover] "— and built this. Every clutch play, every comeback. I didn't touch the timeline."
 
 [End card]
@@ -95,7 +95,7 @@ Free on the App Store (5 exports/month) → link in bio
 [Show: weeks of raw, unedited gym clips loading into app]
 [Voiceover] "Imported clips from 3 months of training. AI scored each rep, each progression —"
 
-[Show: finished motivational montage — peak lifts, form milestones, energy music]
+[Show: finished motivational montage — peak lifts, form milestones, clean cuts]
 [Voiceover] "— and built this. Every personal record. Every form improvement. Chronological, automatic."
 
 [Direct to camera]
@@ -106,7 +106,7 @@ Free on the App Store (5 exports/month) → link in bio
 ```
 3 months of training footage. AI built the transformation reel. I just imported the clips 💪
 
-Every PR moment found automatically. Custom music generated for the energy level.
+Every PR moment found automatically. Cut chronologically with clean transitions and captions.
 
 Free app → link in bio
 
@@ -129,7 +129,7 @@ Free app → link in bio
 [Show: large folder of pet videos imported into app]
 [Voiceover] "AI watched all of them. Found every funny moment, every zoom, every trick —"
 
-[Show: finished pet compilation playing — upbeat music, perfect cuts]
+[Show: finished pet compilation playing — perfect cuts, kinetic captions]
 [Voiceover] "— built this in under a minute. I have a dog content account now."
 
 [End card — light tone]
@@ -197,7 +197,7 @@ Free → link in bio
 [Show: importing multiple angles of cars — static shots, drive-bys, revs, crowds]
 [Voiceover] "AI watches every clip. It finds the good revs, the clean drive-bys, the crowd reactions —"
 
-[Show: polished car meet highlight with punchy music, dynamic cuts, sound design]
+[Show: polished car meet highlight with dynamic cuts and punchy transitions]
 [Voiceover] "— and builds something that actually does the event justice."
 
 [End card]
@@ -233,7 +233,7 @@ Free app → link in bio
 [Show: long recital recording — warmups, waiting, full performances]
 [Voiceover] "AI scores every frame — finds peak choreography, expression, energy —"
 
-[Show: finished 60-second performance highlight with music generated to match the routine]
+[Show: finished 60-second performance highlight cut to the peak moments, kinetic captions]
 [Voiceover] "— and builds the reel. The teacher. The parents. Everyone gets a shareable version."
 
 [Direct to camera]
@@ -269,7 +269,7 @@ Free on the App Store → link in bio
 [Voiceover] "Free tier: 5 exports a month. Watermark in the corner."
 
 [Show: Pro export → same video, no watermark, clean]
-[Voiceover] "Pro: no watermark. Unlimited exports. $14.99/month — or $149.99 for the year."
+[Voiceover] "Pro: no watermark, no monthly export cap. $14.99/month — or $149.99 for the year."
 
 [Direct to camera]
 "If you're posting more than 5 videos a month, or you need clean exports for clients — Pro pays for itself in one edit. Link in bio."
@@ -280,7 +280,7 @@ Free on the App Store → link in bio
 The honest Free vs Pro breakdown for Highlight Magic 📊
 
 Free: 5 exports/month, watermark on exports
-Pro ($14.99/mo or $149.99/yr): unlimited exports, no watermark
+Pro ($14.99/mo or $149.99/yr): no monthly export cap, no watermark
 
 If you're creating content regularly, the math is easy. One clean client video pays for a month.
 
@@ -306,7 +306,7 @@ Get Pro → link in bio
 [Beat — smile]
 "Not complaining. I went Pro."
 
-[Show: Pro subscription screen, or show creating an unlimited export]
+[Show: Pro subscription screen, or show creating a clean, watermark-free export]
 [Voiceover] "14.99 a month. I made that back from one sponsored post that I made with the app."
 
 [Direct to camera]
@@ -317,7 +317,7 @@ Get Pro → link in bio
 ```
 Used all 5 free exports in one week. Upgraded to Pro. Zero regrets 👏
 
-$14.99/month = unlimited highlights, no watermark
+$14.99/month = no monthly export cap, no watermark
 
 One client video. One brand deal. One good week of content. Pays for itself.
 
@@ -342,8 +342,8 @@ Try free first → link in bio
 [Show: long, raw cooking session footage — chopping, stirring, plating, messy kitchen]
 [Voiceover] "AI watched every frame. Found the best moments — the flip, the plating, the finished dish —"
 
-[Show: finished food highlight with mouth-watering music and clean cuts]
-[Voiceover] "— and made the edit. Custom background music that matched the vibe. Clean captions. Done."
+[Show: finished food highlight with clean cuts and kinetic captions]
+[Voiceover] "— and made the edit. Tight cuts on the best moments. Clean captions. Done."
 
 [End card]
 "Highlight Magic — Free on the App Store."
@@ -376,7 +376,7 @@ Food creators: your time is worth more than editing. Free app → link in bio
 [Show: importing a long pitch/training session into app]
 [Voiceover] "I brought my phone to training. Imported an hour of footage. AI scored every touch, every skill, every shot —"
 
-[Show: finished soccer skills highlight — clean cuts, punchy transitions, dynamic music]
+[Show: finished soccer skills highlight — clean cuts, punchy transitions, kinetic captions]
 [Voiceover] "— and made this. Scouts-ready. Posted-ready. Done in under a minute."
 
 [Direct to camera]
@@ -410,8 +410,8 @@ Free on the App Store — scouts don't wait for a polished tape; give them one �
 [Show: importing a large folder of mountain/surf footage into app — GoPro, phone clips mixed]
 [Voiceover] "AI scored every run by speed, movement, terrain — found the lines I'd actually want to watch back —"
 
-[Show: finished adventure highlight reel — big turns, jumps, spray, clean music sync, dynamic cuts]
-[Voiceover] "— and built this. Custom music that matched the intensity. The whole trip in 90 seconds."
+[Show: finished adventure highlight reel — big turns, jumps, spray, dynamic cuts, kinetic captions]
+[Voiceover] "— and built this. Every best run, cut tight. The whole trip in 90 seconds."
 
 [Direct to camera]
 "Anyone shooting action sports: your footage is worth more than a camera roll. Link in bio — Highlight Magic."
@@ -434,9 +434,9 @@ Free app → link in bio
 
 ## Usage Notes
 
-- **Posts 08 & 09** (conversion posts): schedule for Week 5–6+ per the content calendar, after the audience has seen value from the free tier. Week 5 intro to Pro framing; Week 6 "Go unlimited" CTA aligns with these.
-- **Post 08 accuracy**: free exports carry a watermark; Pro removes it — stated accurately. Do NOT imply watermark-free on the free tier.
-- **Energy-matched music (Posts 03, 07, 10, 12)**: these posts claim AI music is generated to match footage energy/vibe. Verify this against the actual app before recording — Batch 1 Post 04 establishes this as a product feature ("energy score, mood, pacing — all matched"). If the actual implementation differs (e.g., fixed-style generation without energy matching), change claim to "AI-generated royalty-free music."
+- **Posts 08 & 09** (conversion posts): schedule for Week 5–6+ per the content calendar, after the audience has seen value from the free tier. Week 5 intro to Pro framing; Week 6 "Go Pro" CTA aligns with these.
+- **Post 08 accuracy**: free exports carry a watermark; Pro removes it — stated accurately. Do NOT imply watermark-free on the free tier. Pro lifts the monthly export cap (a 50/day fair-use ceiling still applies) — say "no monthly export cap", never the bare word "unlimited".
+- **NO AI-generated music/SFX/voiceover in v1** (verified against the shipped app): HighlightMagic v1 does highlight DETECTION + auto-assembly (trim, kinetic captions, transitions, color filters, templates, vertical 1080×1920 export). It does NOT generate music, sound effects, or voiceover, and no music tracks are bundled — an export keeps the SOURCE clip's own audio. So NONE of these scripts claim AI music; the b-roll shows captions/cuts/transitions, not generated audio. If a real AI-music feature ships later (backend-routed, see ROADMAP 0d), music-demo posts can be added then — do not claim it before it exists.
 - **Post 09 accuracy**: $14.99/month pricing as of live config. Annual: $149.99/year. Verify these match the live StoreKit products before recording.
 - **All posts**: the "5 free exports/month" reset and watermark facts must match live product config at time of recording. If pricing changes, update before recording.
 - **Hashtags**: review and update before posting; remove any that become off-trend or violate platform guidelines.
