@@ -56,6 +56,23 @@ describe("POST /api/animate/check", () => {
     expect("videoUrl" in body).toBe(false);
   });
 
+  it("sanitizes a failed job's provider error text (H3 — no vendor/status leak)", async () => {
+    mockCheck.mockResolvedValue({
+      status: "failed",
+      error: "AtlasCloud/Kling 429 rate limit: queue overflow",
+    });
+    const res = await POST(req({ predictionId: "abc123" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("failed");
+    // Generic message only — the raw provider text must not reach the client.
+    expect(body.error).toBe("Animation generation failed");
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain("Kling");
+    expect(serialized).not.toContain("429");
+    expect(serialized).not.toContain("queue");
+  });
+
   it("500s with a generic message when the upstream check throws (error hygiene)", async () => {
     mockCheck.mockRejectedValue(new Error("kling 503 internal queue detail"));
     const res = await POST(req({ predictionId: "abc123" }));

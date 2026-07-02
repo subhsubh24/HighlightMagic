@@ -55,8 +55,12 @@ export async function POST(req: Request) {
     );
 
     if (result.status === "failed") {
+      // H3 error hygiene: never return the provider's raw failure text — it names the
+      // vendor and exposes upstream HTTP status codes (vendor + rate-limit enumeration).
+      // Log it server-side only; the client gets a generic message.
+      console.error("[voiceover] provider error:", result.error);
       return Response.json(
-        { error: result.error ?? "Voiceover generation failed" },
+        { error: "Voiceover generation failed" },
         { status: 502 }
       );
     }
