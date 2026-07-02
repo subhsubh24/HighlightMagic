@@ -1108,8 +1108,17 @@ export default function ExportStep() {
             className="btn-primary flex items-center gap-2 w-full max-w-xs justify-center"
           >
             <Sparkles className="h-5 w-5" />
-            Upgrade to Pro — $14.99/mo
+            Upgrade to Pro
           </a>
+
+          {/* Both price options at the highest-intent moment — annual surfaces the higher-LTV
+              tier (2 months free) and matches the landing pricing. */}
+          <p className="-mt-5 text-xs text-[var(--text-tertiary)]">
+            <span className="font-medium text-[var(--text-secondary)]">$14.99</span>/mo
+            {" · "}
+            <span className="font-medium text-[var(--text-secondary)]">$149.99</span>/yr
+            <span className="text-[var(--text-tertiary)]"> (2 months free)</span>
+          </p>
 
           <button
             onClick={() => dispatch({ type: "SET_STEP", step: "editor" })}
