@@ -438,14 +438,34 @@ this quality track is G.
       `enforce_admins: true` makes it un-bypassable. (Swift lint not yet wired — tracked separately.)
 - [ ] G2. Coverage floor — enforce a meaningful test-coverage threshold on web/backend critical
       paths (Vitest `--coverage`) and on iOS logic modules (XCTest); a drop below the floor FAILS.
-- [ ] G3. Detection/generation EVAL coverage COMPLETE — a live eval per CORE PIPELINE STAGE
-      (highlight-detection accuracy, clip selection, music/SFX/voiceover quality, VIDEO-GENERATION
-      quality [intro/outro/photo-animation] scored by a RUBRIC, export correctness) against a GROWING
-      gold set of real video fixtures, gated behind an env flag (e.g. `RUN_EVALS=1`) so normal CI
-      doesn't spend; wire a SCHEDULED eval run so AI-output quality regressions are caught. Live eval
-      API spend is approved. The VIDEO-GENERATION quality rubric is what makes the priciest call
-      gate-able for the B5 model re-bench (prompt-adherence, motion/temporal coherence, artifact-free,
-      correct aspect/duration) — see docs/MODEL_BENCH_PLAYBOOK.md.
+- [~] G3. EVAL COVERAGE — a real live eval per CORE PIPELINE STAGE, GROWN OVER TIME (STANDING; advance a rung every cadence).
+      MANDATE (owner-directed 2026-07-01 — "grow eval coverage over time as roadmap work"): continuously
+      expand REAL round-trip eval coverage — this track never "finishes"; each cadence adds a stage,
+      a fixture, or a tighter assertion until every ship-critical stage has a green REAL eval, then keeps
+      broadening. A stage is NOT "validated" until its REAL round-trip passes — mock/synthetic input does
+      NOT count (ties to the validation-capability gate + `LOOP_HEALTH.validation.unmet`).
+      FIXTURES: a GROWING gold set of **CC0 / public-domain** media (owner decision 2026-07-01), each file
+      committed WITH its cited license + source URL in a provenance note under `web/src/evals/fixtures/`
+      — NEVER commit media whose license you can't verify. The pipeline/export rungs may bootstrap on
+      programmatically-generated, license-free real-pixel test media (e.g. a synthesized test clip) so
+      file-integrity/export is validated immediately; realistic CC0 footage layers in for the QUALITY rungs.
+      LADDER (advance in order; each its own eval gated behind `EVAL_MODE=1` + owner-funded keys, run in
+      the weekly `.github/workflows/live-eval.yml` — NOT per-PR, to bound cost):
+        1. Detection/planning — DONE (real Anthropic round-trip vs fixtures; `web/src/evals/detect.eval.ts`).
+        2. Real FRAME SCORING on real pixels (vision) — not pre-supplied scores.
+        3. EXPORT ROUND-TRIP — render a real 1080×1920 MP4 from a plan + assets and ASSERT the file exists,
+           correct dimensions/duration, and plays (the strongest BUILDS≠WORKS proof; confirm the renderer
+           runs headlessly in CI — browser-canvas via Playwright or ffmpeg).
+        4. TTS / voiceover round-trip (ElevenLabs) — real audio; assert valid, non-silent, right duration.
+        5. Music / SFX round-trip.
+        6. VIDEO-GENERATION round-trip (AtlasCloud/Kling) + a QUALITY RUBRIC (prompt-adherence, motion/
+           temporal coherence, artifact-free, correct aspect/duration) — this rubric also makes the
+           priciest call gate-able for the B5 re-bench (docs/MODEL_BENCH_PLAYBOOK.md).
+        7. BROADEN over time — more fixtures/themes, tighter assertion bounds, and a media-quality judge
+           (deterministic file checks as the floor; a vision/audio model scoring vs the rubric as the ceiling).
+      COST: real evals spend real money (video gen most) — keep the set small, run on cadence, respect the
+      provider spend caps (PENDING_OPS `spend-caps`). DoD for this box: every ship-critical stage has a
+      green REAL eval; the track then stays STANDING (coverage keeps growing).
 - [ ] G4. FUNCTIONAL E2E suite (BUILDS ≠ WORKS) + a11y + visual + perf gates — a REAL end-to-end
       functional suite that RUNS every journey as a user against a running app/backend with a SEEDED
       test env and asserts the intended user-visible OUTCOME (not an HTTP status, not "the handler
