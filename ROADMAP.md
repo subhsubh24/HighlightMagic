@@ -477,9 +477,26 @@ this quality track is G.
            priciest call gate-able for the B5 re-bench (docs/MODEL_BENCH_PLAYBOOK.md).
         7. BROADEN over time — more fixtures/themes, tighter assertion bounds, and a media-quality judge
            (deterministic file checks as the floor; a vision/audio model scoring vs the rubric as the ceiling).
-      COST: real evals spend real money (video gen most) — keep the set small, run on cadence, respect the
-      provider spend caps (PENDING_OPS `spend-caps`). DoD for this box: every ship-critical stage has a
-      green REAL eval; the track then stays STANDING (coverage keeps growing).
+      COST GOVERNANCE (STANDING — the loop must UNDERSTAND eval cost and run accordingly):
+        - MEASURED cost today: detection/planning ~$0.28/run (4 fixtures × ~$0.07); frame-scoring a few
+          cents; a full cheap live-eval run ≈ ~$0.30. VIDEO-GEN is the expensive rung ($0.10–$1+/clip).
+        - CADENCE = **monthly safety net + on-signal** (owner-directed 2026-07-01), NOT weekly. "On-signal"
+          = the loop triggers `live-eval` (workflow_dispatch) when it changes a model id or the
+          detect/score/plan/gen code — validate the change, don't run on a timer for nothing. Never wire
+          the paid evals as a per-PR required check.
+        - CHEAP vs EXPENSIVE split: planning/scoring (cheap) may run on the monthly+on-signal cadence; the
+          VIDEO-GEN eval is GATED behind its own flag (`RUN_VIDEO_EVAL=1`) + runs only monthly / on
+          model-change / manual — NEVER on the normal cadence.
+        - PER-RUN CEILING: each eval estimates cost (CostMeter) and ABORTS if a run would exceed a cap
+          (`EVAL_MAX_USD`, default ~$1) — a runaway (e.g. a regen loop) can't rack up spend.
+        - MINIMIZE: smallest/fewest fixtures that still test the behavior (JPEG, downscaled), cheapest
+          capable model per task (scoring = Haiku), cache identical requests, cap regeneration. Verify eval
+          code locally/structurally (type-check, lint) BEFORE spending a real run; never iterate via
+          repeated paid runs.
+        - The provider `spend-caps` (PENDING_OPS) remain the hard backstop; this governance is the soft
+          layer that keeps normal spend near zero.
+      DoD for this box: every ship-critical stage has a green REAL eval; the track then stays STANDING
+      (coverage keeps growing) — within the cost governance above.
 - [ ] G4. FUNCTIONAL E2E suite (BUILDS ≠ WORKS) + a11y + visual + perf gates — a REAL end-to-end
       functional suite that RUNS every journey as a user against a running app/backend with a SEEDED
       test env and asserts the intended user-visible OUTCOME (not an HTTP status, not "the handler

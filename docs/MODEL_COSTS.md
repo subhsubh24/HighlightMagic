@@ -67,6 +67,24 @@ maintained by the autonomous loop (ROADMAP **B4**) and is a standing reference, 
    the measured per-task cost delta. If not → log why and keep the incumbent.
 6. Re-run this for the next-most-expensive task. Re-evaluate periodically as prices change.
 
+## Eval run cost & cadence (real evals spend real money)
+
+The gated real evals (`web/src/evals/*.eval.ts`, run only in `.github/workflows/live-eval.yml` with
+`EVAL_MODE=1` + owner-funded keys) cost real API tokens. Governance (see ROADMAP G3 "COST GOVERNANCE"):
+
+| Eval | Measured / expected cost per run | Cadence |
+|---|---|---|
+| Detection / planning (`detect.eval.ts`) | ~$0.28 (4 fixtures × ~$0.07) | monthly + on-signal |
+| Frame scoring (`score.eval.ts`) | a few cents (Haiku vision, 3 small JPEGs) | monthly + on-signal |
+| **Video-gen (future, `RUN_VIDEO_EVAL`)** | **$0.10–$1+/clip — the expensive one** | **monthly / on-model-change / manual ONLY — gated, never the normal cadence** |
+
+Rules: **monthly safety net + on-signal** (the loop triggers `live-eval` via workflow_dispatch when it
+changes a model id or the detect/score/plan/gen code) — not weekly, never a per-PR check. Each eval
+**estimates cost (CostMeter) and ABORTS if a run would exceed `EVAL_MAX_USD` (~$1 default)**. Minimize:
+smallest/fewest fixtures, cheapest capable model, cache, cap regeneration; verify eval code
+locally/structurally BEFORE a paid run (don't iterate via repeated real runs). Provider `spend-caps`
+(PENDING_OPS) are the hard backstop.
+
 ## Decision log
 
 | Date | Task | From → To | Quality result | Cost delta | Notes / source |
