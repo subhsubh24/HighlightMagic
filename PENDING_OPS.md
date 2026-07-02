@@ -22,9 +22,11 @@ OWNER_ACTIONS:
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
       priority: urgent
-      status: open
+      status: done
+      done_on: 2026-07-02
+      verification: owner-attested (provider-dashboard setting — cannot be verified from the repo). Owner confirmed caps set 2026-07-02.
       why: The backend is live on Vercel and calls paid APIs (Anthropic, ElevenLabs, AtlasCloud); a single export fires multiple expensive calls, so an abuse spike or runaway loop can run up cost. A spend cap is the only hard backstop a code-level ceiling cannot replace.
-      how: Set hard daily/monthly caps + 50%-of-cap alerts in console.anthropic.com, elevenlabs.io billing, and the AtlasCloud dashboard. Regenerate any key ever suspected exposed.
+      how: "DONE (owner-attested 2026-07-02): hard daily/monthly caps + alerts set in console.anthropic.com, elevenlabs.io billing, and the AtlasCloud dashboard. This is the hard backstop for unattended real-eval + live-backend spend — it satisfies prerequisite (b) for video-gen eval going weekly (see ROADMAP G3 COST GOVERNANCE); the remaining prereq (a) is the in-code per-run cost ceiling, built with the video-gen eval. If any key is ever suspected exposed, regenerate it."
       blocks: launch-safety
     - id: gtm-connect-email
       title: "Connect Resend (email) so the Growth Agent can run the transactional + lifecycle email loop"
