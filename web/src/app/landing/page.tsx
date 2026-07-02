@@ -144,7 +144,7 @@ const HOW_IT_WORKS = [
     step: "01",
     title: "Import your footage",
     description:
-      "Pick videos or photos from your camera roll — sports clips, travel vlogs, concerts, family moments. Any length.",
+      "Pick videos from your camera roll — sports clips, travel vlogs, concerts, family moments. Any length.",
     icon: Film,
   },
   {
@@ -596,20 +596,20 @@ export default function LandingPage() {
           </p>
 
           <div className="flex items-center gap-5 text-sm text-[var(--text-tertiary)]">
-            <a href="/privacy" className="hover:text-white transition-colors">
+            <a href="/privacy" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Privacy Policy
             </a>
-            <a href="/terms" className="hover:text-white transition-colors">
+            <a href="/terms" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Terms of Use
             </a>
-            <a href="/support" className="hover:text-white transition-colors">
+            <a href="/support" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Support
             </a>
             <a
               href={IOS_APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-white transition-colors"
+              className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               iOS App
             </a>
