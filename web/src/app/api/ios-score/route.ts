@@ -237,10 +237,19 @@ async function scoreBatchWithHaiku(
     if (!response.ok) {
       throw new Error(`Haiku scoring failed: HTTP ${response.status}`);
     }
-    const json = await response.json() as {
+    let json: {
       content?: Array<{ type: string; text?: string }>;
       usage?: { input_tokens?: number; output_tokens?: number };
     };
+    try {
+      json = await response.json();
+    } catch (err) {
+      // A 200 with an unparseable body is transient like a thrown fetch — retry it (continue)
+      // instead of letting the parse throw uncaught out of the batch scorer. On the last attempt
+      // continue falls through to `throw lastError` below for a clean failure.
+      lastError = err instanceof Error ? err : new Error(String(err));
+      continue;
+    }
     const textBlock = json.content?.find((b) => b.type === "text");
     const text = textBlock?.text ?? "";
     const parsed = parseBatchResponse(text);

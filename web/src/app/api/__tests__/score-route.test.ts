@@ -55,6 +55,14 @@ describe("/api/score", () => {
     expect(res.status).toBe(503);
   });
 
+  it("returns 502 (not an uncaught 500) when the upstream 200 body is unparseable", async () => {
+    // A 200 whose body isn't JSON must not throw out of the handler — it returns the same
+    // graceful 502 as the fetch/!ok paths.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<<not json>>", { status: 200 }));
+    const res = await POST(req({ userId: "corrupt-body-user", frames: [frame] }));
+    expect(res.status).toBe(502);
+  });
+
   it("scores a fresh user and decrements remaining", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
