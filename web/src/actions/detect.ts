@@ -2743,7 +2743,13 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       },
       body: JSON.stringify({
         model: CLAUDE_PLANNER,
-        max_tokens: 32000,
+        // max_tokens caps thinking + response text COMBINED. Medium-effort adaptive thinking can
+        // consume tens of thousands of tokens on its own, so at 32000 the plan JSON was getting
+        // truncated (stop_reason=max_tokens → empty/invalid JSON, failing the whole plan). 64000
+        // gives thinking + a full plan comfortable room; it's well under the model's 128k output
+        // ceiling and you only pay for tokens actually generated, so a higher ceiling adds no cost
+        // unless used. (Surfaced by the detection eval running for real; see docs/MODEL_COSTS.md.)
+        max_tokens: 64000,
         stream: true,
         thinking: {
           type: "adaptive",
