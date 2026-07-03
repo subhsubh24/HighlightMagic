@@ -42,7 +42,8 @@ export default function TermsPage() {
               exported clips include a Highlight Magic watermark. No account or payment required.
             </li>
             <li>
-              <strong className="text-white">Pro Plan</strong> &mdash; unlimited exports, no
+              <strong className="text-white">Pro Plan</strong> &mdash; unlimited monthly exports
+              (a 50-per-day fair-use ceiling applies to all plans), no
               watermark, and access to premium features. Available as a monthly or yearly
               auto-renewable subscription via the Apple App Store. Subscription terms are governed
               by Apple&apos;s standard subscription policies. Cancel anytime via your Apple ID
