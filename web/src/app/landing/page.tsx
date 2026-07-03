@@ -151,7 +151,7 @@ const HOW_IT_WORKS = [
     step: "02",
     title: "AI finds the magic",
     description:
-      "Our AI analyzes every frame to detect peak moments: the goal, the laugh, the drop. No scrubbing required.",
+      "Our AI samples and scores frames across your footage to detect peak moments: the goal, the laugh, the drop. No scrubbing required.",
     icon: Sparkles,
   },
   {
@@ -168,7 +168,7 @@ const FEATURES = [
     icon: Sparkles,
     title: "AI Highlight Detection",
     description:
-      "Automatically finds the most engaging moments in your footage, frame by frame.",
+      "Automatically finds the most engaging moments across your footage — no manual scrubbing.",
   },
   {
     icon: Zap,
@@ -247,7 +247,7 @@ const FAQ = [
   },
   {
     q: "How does the AI work?",
-    a: "We analyze your footage frame-by-frame using Claude AI to score each moment for energy, emotion, and visual quality. The highest-scoring moments are assembled into a highlight reel with smooth transitions, animated captions, and color filters.",
+    a: "We sample frames across your footage and score each moment for energy, emotion, and visual quality using Claude AI. The highest-scoring moments are assembled into a highlight reel with smooth transitions, animated captions, and color filters.",
   },
   {
     q: "What platforms is it for?",
