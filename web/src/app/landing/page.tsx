@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect, useRef } from "react";
 import {
   Sparkles,
   Zap,
@@ -332,6 +332,28 @@ function Nav() {
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const pricingRef = useRef<HTMLElement>(null);
+
+  // Funnel instrumentation: fire `pricing_view` once when the pricing section first scrolls into
+  // view. This is the visitor→pricing step of the acquisition funnel that analytics.ts already
+  // defines but nothing emitted. Fires at most once, then disconnects; a no-op when analytics is
+  // not loaded (trackEvent guards window/Plausible) or when IntersectionObserver is unavailable.
+  useEffect(() => {
+    const el = pricingRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackEvent("pricing_view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="min-h-screen bg-app-gradient text-[var(--text-primary)]">
       <Nav />
@@ -456,7 +478,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Pricing ── */}
-      <section id="pricing" className="px-6 py-20">
+      <section id="pricing" ref={pricingRef} className="px-6 py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mb-14 text-center">
             <h2 className="mb-3 text-3xl font-bold md:text-4xl">
