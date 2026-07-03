@@ -18,6 +18,8 @@ import {
   checkDailyGenerationCeiling,
   recordDailyGeneration,
   enforceGenerationCeiling,
+  enforceGlobalGenerationCeiling,
+  GLOBAL_STEMS_DAILY_CAP,
   DAILY_GENERATION_CAP,
   dailyPeriodKey,
   __resetCeilingStoreForTests,
@@ -25,6 +27,10 @@ import {
 
 function uniqueUser(): string {
   return `user-${Math.random().toString(36).slice(2)}`;
+}
+
+function uniqueBucket(): string {
+  return `bucket-${Math.random().toString(36).slice(2)}`;
 }
 
 describe("dailyPeriodKey", () => {
@@ -152,6 +158,57 @@ describe("enforceGenerationCeiling", () => {
   });
 });
 
+// The GLOBAL ceiling backstops an ANONYMOUS paid route (no userId, e.g. /api/stems): all callers
+// of one bucket share a single daily counter, so it caps aggregate spend regardless of IP.
+describe("enforceGlobalGenerationCeiling", () => {
+  it("returns null while under the cap and shares ONE counter across callers", async () => {
+    const bucket = uniqueBucket();
+    // Two calls to the same bucket accumulate on one shared counter → the 3rd trips a cap of 2.
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeNull();
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeNull();
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeInstanceOf(Response);
+  });
+
+  // Security regression (Reviewer A, #318): the global counter must live in a keyspace the
+  // per-user "gen" routes cannot reach. `userId` is client-supplied, unvalidated free text on
+  // sfx/intro/voiceover/…, so if the global ceiling shared the "gen" kind a caller could POST
+  // {userId:"stems"} (or the old "__global:stems" sentinel) to an unrelated route and drain the
+  // global stems bucket. A dedicated "global-gen" kind makes that structurally impossible.
+  it("does NOT share a keyspace with the per-user 'gen' ceiling (collision-proof)", async () => {
+    // Hammer the per-user "gen" counter under the bucket name AND the old sentinel string.
+    for (let i = 0; i < 20; i++) await enforceGenerationCeiling("stems");
+    await enforceGenerationCeiling("__global:stems");
+    // The global "stems" bucket is untouched → a cap of 1 still admits the first global call.
+    expect(await enforceGlobalGenerationCeiling("stems", 1)).toBeNull();
+    // …and the SECOND global call trips it, proving the global counter started fresh at 0.
+    expect(await enforceGlobalGenerationCeiling("stems", 1)).toBeInstanceOf(Response);
+  });
+
+  it("returns a 429 Response once the shared cap is reached", async () => {
+    const bucket = uniqueBucket();
+    for (let i = 0; i < 3; i++) {
+      expect(await enforceGlobalGenerationCeiling(bucket, 3)).toBeNull();
+    }
+    const blocked = await enforceGlobalGenerationCeiling(bucket, 3);
+    expect(blocked).toBeInstanceOf(Response);
+    expect(blocked?.status).toBe(429);
+    const body = await blocked?.json();
+    expect(body.error).toMatch(/daily generation limit/i);
+  });
+
+  it("isolates the cap per bucket", async () => {
+    const a = uniqueBucket();
+    const b = uniqueBucket();
+    for (let i = 0; i < 2; i++) await enforceGlobalGenerationCeiling(a, 2);
+    expect(await enforceGlobalGenerationCeiling(a, 2)).toBeInstanceOf(Response);
+    expect(await enforceGlobalGenerationCeiling(b, 2)).toBeNull();
+  });
+
+  it("ships a positive default cap for the stems bucket", () => {
+    expect(GLOBAL_STEMS_DAILY_CAP).toBeGreaterThan(0);
+  });
+});
+
 // The ceiling is the wallet-drain backstop: an attacker rotating IPs with a valid userId is
 // bounded by it. Its protective value depends on the per-day bucket RESETTING at the UTC day
 // boundary (not permanently locking out a heavy-but-legitimate user) AND not resetting EARLY
@@ -218,6 +275,13 @@ describe("fail-closed on KV error", () => {
   it("returns 429 from enforceGenerationCeiling when KV throws", async () => {
     selectFailingKVStore();
     const blocked = await enforceGenerationCeiling(uniqueUser());
+    expect(blocked).toBeInstanceOf(Response);
+    expect(blocked?.status).toBe(429);
+  });
+
+  it("returns 429 from enforceGlobalGenerationCeiling when KV throws (anonymous fail-closed)", async () => {
+    selectFailingKVStore();
+    const blocked = await enforceGlobalGenerationCeiling(uniqueBucket(), GLOBAL_STEMS_DAILY_CAP);
     expect(blocked).toBeInstanceOf(Response);
     expect(blocked?.status).toBe(429);
   });

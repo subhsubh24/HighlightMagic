@@ -1,4 +1,5 @@
 import { isolateInstrumental } from "@/lib/elevenlabs-stems";
+import { enforceGlobalGenerationCeiling, GLOBAL_STEMS_DAILY_CAP } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 
@@ -30,6 +31,13 @@ export async function POST(req: Request) {
     if (musicDataUri.length > MAX_DATA_URI_LENGTH) {
       return Response.json({ error: "musicDataUri exceeds maximum size" }, { status: 400 });
     }
+
+    // H7 (anonymous variant): this route has no userId, so a per-user ceiling can't apply. Bound
+    // the ElevenLabs spend with a GLOBAL daily cap — the rotation-proof backstop the per-IP rate
+    // limit alone cannot give (see spend-ceiling.ts). Counted only after input validation so a
+    // flood of malformed requests can't burn the budget without a real paid call behind it.
+    const ceilingBlock = await enforceGlobalGenerationCeiling("stems", GLOBAL_STEMS_DAILY_CAP);
+    if (ceilingBlock) return ceilingBlock;
 
     const result = await isolateInstrumental(musicDataUri);
     return Response.json(result);

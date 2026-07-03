@@ -449,6 +449,8 @@ describe("POST /api/stems", () => {
   });
 
   it("returns instrumental URL on success", async () => {
+    const { __resetCeilingStoreForTests } = await import("@/lib/spend-ceiling");
+    __resetCeilingStoreForTests(); // start under the global stems ceiling
     const { isolateInstrumental } = await import("@/lib/elevenlabs-stems");
     (isolateInstrumental as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       status: "completed",
@@ -460,6 +462,25 @@ describe("POST /api/stems", () => {
     const data = await res.json();
     expect(data.status).toBe("completed");
     expect(data.instrumentalUrl).toContain("instrumental");
+  });
+
+  it("returns 429 once the GLOBAL daily stems ceiling is exhausted (anonymous wallet backstop)", async () => {
+    const { __resetCeilingStoreForTests, enforceGlobalGenerationCeiling, GLOBAL_STEMS_DAILY_CAP } =
+      await import("@/lib/spend-ceiling");
+    __resetCeilingStoreForTests();
+    // Fill the shared "stems" bucket to its cap via the same function the route calls.
+    for (let i = 0; i < GLOBAL_STEMS_DAILY_CAP; i++) {
+      await enforceGlobalGenerationCeiling("stems", GLOBAL_STEMS_DAILY_CAP);
+    }
+
+    const { isolateInstrumental } = await import("@/lib/elevenlabs-stems");
+    const { POST } = await import("@/app/api/stems/route");
+    const res = await POST(jsonRequest({ musicDataUri: "data:audio/mpeg;base64,abc" }));
+
+    expect(res.status).toBe(429);
+    // The paid provider call must NOT fire once the ceiling is hit.
+    expect(isolateInstrumental as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    __resetCeilingStoreForTests(); // don't leak the exhausted counter to later tests
   });
 });
 
