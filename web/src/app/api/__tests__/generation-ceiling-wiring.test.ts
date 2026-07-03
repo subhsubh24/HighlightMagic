@@ -39,8 +39,10 @@ const CEILING_EXEMPT: Record<string, string> = {
   // Status-poll endpoint: no userId, no new generation — it reads an already-submitted job.
   // Bounded instead by its own POLL_RATE_LIMIT (60/min/IP) — see animate/check/route.ts (#189).
   "animate/check/route.ts": "poll-only status read; rate-limited, starts no new paid work",
-  // Stem separation runs without a userId; bounded by the per-IP PAID_RATE_LIMIT only (by design).
-  "stems/route.ts": "no userId available; per-IP rate limit is the authoritative bound",
+  // Stem separation runs without a userId, so a PER-USER ceiling can't apply. It is instead
+  // bounded by the per-IP PAID_RATE_LIMIT + a GLOBAL daily cap (enforceGlobalGenerationCeiling,
+  // GLOBAL_STEMS_DAILY_CAP) — the rotation-proof wallet backstop for an anonymous paid route.
+  "stems/route.ts": "no userId; per-IP rate limit + global daily generation ceiling are the bounds",
 };
 
 /** Recursively collect every route.ts under the api tree. */

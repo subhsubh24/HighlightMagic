@@ -44,6 +44,21 @@ export const DAILY_EXPORT_CAP = 50;
  */
 export const DAILY_GENERATION_CAP = 500;
 
+/**
+ * GLOBAL (userId-less) daily cap for the anonymous web-editor stem-separation route. Unlike its
+ * sibling audio sub-calls (sfx/music/voiceover), /api/stems runs with NO userId — the browser
+ * sends none — so it has no per-user identity to meter, and a per-user ceiling cannot apply.
+ * Its only per-actor brake is the per-IP PAID_RATE_LIMIT (10/min), which this module's own
+ * header notes is NOT rotation-proof: "an attacker ... who rotates IPs can still drain the
+ * wallet over a day." For an anonymous paid route the one rotation-proof wallet backstop is a
+ * single SHARED daily counter, so this cap bounds TOTAL daily stems generations across all
+ * callers. Trade-off (deliberate): sustained abuse can exhaust it and disable stem separation
+ * for the rest of the UTC day — but that only degrades a nice-to-have sub-step (instrumental
+ * ducking under voiceover; the export still completes without it), which is far preferable to
+ * an unbounded ElevenLabs spend. Set well above legitimate aggregate use so it trips only on abuse.
+ */
+export const GLOBAL_STEMS_DAILY_CAP = 200;
+
 /** Two-day TTL on each per-day key so buckets self-clean in KV (yesterday's expires). */
 const KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
 
@@ -210,6 +225,35 @@ export async function enforceGenerationCeiling(userId: string): Promise<Response
     return ceilingResponse();
   }
   if (count > DAILY_GENERATION_CAP) {
+    return ceilingResponse();
+  }
+  return null;
+}
+
+/**
+ * Enforce a GLOBAL (userId-less) daily generation ceiling for an anonymous paid route that has
+ * no per-user identity to meter (see {@link GLOBAL_STEMS_DAILY_CAP}). All callers of the same
+ * `bucket` share ONE daily counter, so this is the rotation-proof aggregate wallet backstop the
+ * per-IP rate limiter cannot provide. Counts at admission (atomic INCR BEFORE the paid call) so
+ * a call that reaches the provider but then fails still counts — the protective choice for a
+ * wallet-drain backstop — and so two concurrent calls at the boundary cannot both slip through.
+ *
+ * Returns a 429 Response when the ceiling is hit (or when KV is unverifiable — fail closed), or
+ * `null` to proceed. Uses the "gen" kind with a fixed `__global:{bucket}` sentinel key, distinct
+ * from every real (UUID) userId, so its counter never collides with a per-user one.
+ */
+export async function enforceGlobalGenerationCeiling(
+  bucket: string,
+  cap: number,
+): Promise<Response | null> {
+  let count: number;
+  try {
+    count = await getStore().increment("gen", `__global:${bucket}`, dailyPeriodKey());
+  } catch {
+    // Fail closed: cannot verify the ceiling → do not fire the paid call.
+    return ceilingResponse();
+  }
+  if (count > cap) {
     return ceilingResponse();
   }
   return null;
