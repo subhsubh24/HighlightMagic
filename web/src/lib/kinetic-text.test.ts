@@ -1,8 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { getKineticTransform, type KineticTransform } from "./kinetic-text";
+import { getKineticTransform, drawKineticCaption, type KineticTransform } from "./kinetic-text";
 import type { CaptionStyle } from "./types";
 
 const STYLES: CaptionStyle[] = ["Bold", "Minimal", "Neon", "Classic"];
+
+// ── Minimal canvas mock for drawKineticCaption ──
+// It draws only onto the passed 2D context (measureText drives word-wrap; fillText draws
+// each line/char), so a recording stub is enough to assert real render behaviour without a DOM.
+interface TextCall { text: string; x: number; y: number; font: string; fillStyle: unknown; alpha: number }
+function makeTextCtx(charWidth = 10) {
+  const texts: TextCall[] = [];
+  const translates: [number, number][] = [];
+  let saves = 0;
+  let restores = 0;
+  const ctx = {
+    globalAlpha: 1,
+    font: "",
+    textAlign: "start",
+    fillStyle: "" as unknown,
+    shadowColor: "",
+    shadowBlur: 0,
+    save() { saves++; },
+    restore() { restores++; },
+    translate(x: number, y: number) { translates.push([x, y]); },
+    scale() {},
+    rotate() {},
+    measureText(s: string) { return { width: s.length * charWidth } as TextMetrics; },
+    fillText(text: string, x: number, y: number) {
+      texts.push({ text, x, y, font: ctx.font, fillStyle: ctx.fillStyle, alpha: ctx.globalAlpha });
+    },
+  };
+  return {
+    ctx: ctx as unknown as CanvasRenderingContext2D,
+    texts, translates,
+    get saves() { return saves; },
+    get restores() { return restores; },
+  };
+}
+
+/** A fully-visible transform with no glow/spacing embellishment (baseline draw). */
+function plainTransform(over: Partial<KineticTransform> = {}): KineticTransform {
+  return { scale: 1, offsetY: 0, alpha: 1, rotation: 0, letterSpacing: 1, glowRadius: 0, glowAlpha: 0, ...over };
+}
 
 describe("getKineticTransform", () => {
   describe("entrance animation (first 0.5s)", () => {
@@ -113,5 +152,77 @@ describe("getKineticTransform", () => {
         }
       }
     });
+  });
+});
+
+describe("drawKineticCaption", () => {
+  it("draws nothing for empty text or a fully-transparent caption", () => {
+    const empty = makeTextCtx();
+    drawKineticCaption(empty.ctx, "", "Bold", plainTransform(), 1080, 1920, 48);
+    expect(empty.texts).toHaveLength(0);
+    expect(empty.saves).toBe(0);
+
+    const invisible = makeTextCtx();
+    drawKineticCaption(invisible.ctx, "Hello", "Bold", plainTransform({ alpha: 0 }), 1080, 1920, 48);
+    expect(invisible.texts).toHaveLength(0);
+    expect(invisible.saves).toBe(0);
+  });
+
+  it("renders a short caption once, save/restore balanced", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(m.ctx, "Nice shot", "Bold", plainTransform(), 1080, 1920, 48);
+    expect(m.saves).toBe(1);
+    expect(m.restores).toBe(1);
+    const drawn = m.texts.filter((t) => t.text === "Nice shot");
+    expect(drawn.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("positions the caption at the AI-chosen vertical fraction (+ offsetY)", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(m.ctx, "Hi", "Bold", plainTransform({ offsetY: 10 }), 1080, 1920, 48, undefined, 0.5);
+    // x centered, y = canvasHeight * verticalPosition + offsetY = 1920*0.5 + 10 = 970.
+    expect(m.translates[0]).toEqual([540, 970]);
+  });
+
+  it("word-wraps a long caption into multiple lines", () => {
+    // Narrow canvas → small maxTextWidth → forces wrapping.
+    const m = makeTextCtx();
+    drawKineticCaption(m.ctx, "one two three four five six seven", "Bold", plainTransform(), 200, 400, 24);
+    const lines = new Set(m.texts.map((t) => t.text));
+    expect(lines.size).toBeGreaterThan(1);
+    // Every original word survives across the wrapped lines.
+    expect([...lines].join(" ").split(/\s+/).sort()).toEqual(
+      "one two three four five six seven".split(" ").sort(),
+    );
+  });
+
+  it("selects a distinct font per named style", () => {
+    const fontFor = (style: CaptionStyle) => {
+      const m = makeTextCtx();
+      drawKineticCaption(m.ctx, "x", style, plainTransform(), 1080, 1920, 48);
+      return m.texts[0].font;
+    };
+    expect(fontFor("Bold")).toMatch(/^900 /);
+    expect(fontFor("Minimal")).toMatch(/^300 /);
+    expect(fontFor("Classic")).toMatch(/italic .*Georgia/);
+  });
+
+  it("honours a custom color and font override", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(
+      m.ctx, "x", "Bold", plainTransform(), 1080, 1920, 48,
+      { color: "#ff00aa", fontWeight: 400, fontFamily: "serif", fontStyle: "italic" },
+    );
+    expect(m.texts[0].fillStyle).toBe("#ff00aa");
+    expect(m.texts[0].font).toMatch(/italic 400 .*Georgia/);
+  });
+
+  it("draws characters individually when letter-spacing diverges from 1", () => {
+    const m = makeTextCtx();
+    // glow off so we only get the single spaced-text pass (one fillText per char).
+    drawKineticCaption(m.ctx, "Hey", "Bold", plainTransform({ letterSpacing: 1.5 }), 1080, 1920, 48);
+    // "Hey" → 3 chars drawn separately, not one "Hey" fillText.
+    expect(m.texts).toHaveLength(3);
+    expect(m.texts.map((t) => t.text)).toEqual(["H", "e", "y"]);
   });
 });
