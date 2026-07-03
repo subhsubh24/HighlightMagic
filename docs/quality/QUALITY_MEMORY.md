@@ -107,3 +107,63 @@ still not installed (coverage floors unenforced) — confirmed by re-running.
 **Issues:** #175 (correctness) and #178 (artifact_integrity) closed — both re-graded A. #174 (store_readiness)
 updated with the app-target/screenshots blockers. #176 (functional_reality), #177 (tests_evals) updated with
 current evidence.
+
+---
+
+## 2026-07-03 — third grade, commit 709b3b7
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → **859 tests passed (68 files)** (up from 694/55),
+coverage now ENFORCED and passing (v8: stmts 77.57 / branch 73.26 / funcs 81.87 / lines 78.49, all above the 60/60/50/60
+floor), **0 lint warnings**, build ok. Required CI (web, web-lint, web-e2e, validate-capabilities, validate-gtm, ios)
+green on 709b3b7 (latest main run: success). Graded with 9 fresh, adversarial per-dimension subagents (none wrote the
+code), each backing its letter with a mechanical signal it ran + file/line evidence.
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-01 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (both iOS gaps unchanged for two cycles) |
+| correctness_reliability | ✅ | A | = (atlascloud retry residual CLOSED; new credit-store non-atomic-grant residual) |
+| security | ✅ | A | = (spend daily-ceiling → KV-atomic CLOSED; per-IP throttle in-memory holds it at A) |
+| design_taste | ✅ | A | = (both to-A+ items — mobile screenshots, Turnstile aria-label — still open) |
+| store_readiness | ✅ | C | = (both blockers open; new: consumable SKU absent from .storekit, placeholder team/app IDs) |
+| artifact_integrity | ✅ | A | = (BUSINESS_CASE_SUMMARY namespace nit still open) |
+| business_case_strength | ✅ | A | = (credit-pack lever now backend-built + tested; StoreKit consumable SKU still unshipped) |
+| tests_evals | ✅ | B | = (coverage floor now ENFORCED — real lift; eval breadth + skip-green + no iOS roundtrip hold at B) |
+| performance | ⬜ | B | = (both to-A residuals open two cycles) |
+
+**What changed (real within-grade progress, no letter moved):**
+- **tests_evals — coverage floor ENFORCED (the largest prior gap, closed).** `@vitest/coverage-v8` ^4.1.9 installed;
+  `test` = `vitest run --coverage`; the required `web` CI job runs it; v8 thresholds hard-fail below 60/60/50/60. Held at
+  **B** only because the eval suite still covers just Anthropic (ElevenLabs/AtlasCloud missing), live-eval.yml still
+  skips-green when keyless (#289), and there's no iOS export roundtrip test.
+- **security — spend daily-ceiling → KV-atomic + fail-closed** (spend-ceiling.ts:108-136), closing the spend half of the
+  prior named residual. Held at **A** (not A+): the per-IP throttle is still in-memory per-instance
+  (rate-limit.ts:28 `new Map`) — the other half of the SAME prior residual — a defense-in-depth (not wallet-drain) but
+  real named finding.
+- **correctness — atlascloud poll-fetch/timeout retry** (atlascloud.ts:253-266) now absorbs transient blips, closing the
+  prior to-A+ item. A NEW low-severity residual is the successor: credit-store.ts:118-131 writes the SET-NX idempotency
+  marker BEFORE incrby, so a mid-grant KV failure can silently lose a paid credit pack (safety-biased, never double-grants).
+- **business_case — export-credit-pack now a tested, wired BACKEND lever** (credit-store.ts, redeemCreditPack,
+  /api/credits/redeem, consumption in the export gate; 33 tests pass). Real advance from docs-only. Held at **A**: the
+  StoreKit CONSUMABLE SKU is still absent (`products:[]`), so credits aren't user-purchasable and revenue can't flow.
+
+**Auditor reconciliations (recorded for transparency):**
+- security: subagent returned **A+**; overrode to **A**. The per-IP rate-limit in-memory piece was explicitly part of the
+  2026-07-01 named residual ("rate-limit.ts and spend-ceiling.ts daily ceiling remain in-memory"); the spend half moved to
+  KV but the rate-limit.ts half did not (verified: rate-limit.ts:28 `const buckets = new Map`). One named residual ⇒ not
+  zero-findings A+. Not goalpost-moving — the item was named last cycle and remains open.
+- tests_evals: subagent returned **B+**; our discrete scale has no B+ — mapped to **B**. Coverage enforcement is a genuine
+  lift, but gap 2 is open on all three sub-parts, so the letter stays B.
+
+**Ship gate NOT met:** needs A/A+ on every ship-critical dim; `store_readiness` (C), `functional_reality` (B),
+`tests_evals` (B) are below the A bar.
+
+**Top gaps (ordered; issues updated):**
+1. `store_readiness` C — no archivable Xcode app target (can't produce a submittable IPA); missing 6.9" screenshots + preview; placeholder team/app IDs; consumable SKU absent from .storekit.
+2. `functional_reality` B — no executing iOS export-to-file test; export-COUNT quota still client-side (reset by reinstall). Unchanged two cycles.
+3. `tests_evals` B — coverage floor now enforced (closed); eval breadth (ElevenLabs/AtlasCloud missing) + skip-green keyless (#289) + no iOS export roundtrip remain.
+4. `performance` B (non-ship-critical) — iOS thumbnail full-clear at 50; base64 frame transfer.
+
+**Issues:** #174 (store_readiness), #176 (functional_reality), #177 (tests_evals) all still open — updated with
+current evidence (esp. #177: coverage enforcement now CLOSED; remaining gaps are eval breadth + skip-green + iOS roundtrip).
