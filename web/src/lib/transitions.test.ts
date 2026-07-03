@@ -3,8 +3,47 @@ import {
   getClipAlpha,
   getTransitionTransform,
   getClipEntryScale,
+  drawTransitionOverlay,
   type TransitionType,
 } from "./transitions";
+
+// ── Minimal canvas mock ──
+// drawTransitionOverlay draws only onto the passed 2D context (plus createLinearGradient
+// for light_leak), so a small recording stub is enough to assert the real render behaviour
+// without a DOM. Each fillRect snapshots the fillStyle/globalAlpha in effect at draw time.
+interface RectCall { x: number; y: number; w: number; h: number; fillStyle: unknown; alpha: number }
+function makeCtx() {
+  const rects: RectCall[] = [];
+  const gradients: { stops: [number, string][] }[] = [];
+  let saves = 0;
+  let restores = 0;
+  const ctx = {
+    fillStyle: "" as unknown,
+    globalAlpha: 1,
+    save() { saves++; },
+    restore() { restores++; },
+    fillRect(x: number, y: number, w: number, h: number) {
+      rects.push({ x, y, w, h, fillStyle: ctx.fillStyle, alpha: ctx.globalAlpha });
+    },
+    createLinearGradient() {
+      const g = { stops: [] as [number, string][], addColorStop(o: number, c: string) { g.stops.push([o, c]); } };
+      gradients.push(g);
+      return g;
+    },
+  };
+  return {
+    ctx: ctx as unknown as CanvasRenderingContext2D,
+    rects,
+    gradients,
+    get saves() { return saves; },
+    get restores() { return restores; },
+  };
+}
+
+/** Full-frame rects (the overlay wash) drawn for a 100x200 canvas. */
+function fullFrameRects(rects: RectCall[]): RectCall[] {
+  return rects.filter((r) => r.x === 0 && r.y === 0 && r.w === 100 && r.h === 200);
+}
 
 const ALL_TYPES: TransitionType[] = [
   "flash", "zoom_punch", "whip", "hard_flash", "glitch",
@@ -109,5 +148,101 @@ describe("getClipEntryScale", () => {
     const mid = getClipEntryScale(0.1, 1.05, 0.2);
     expect(mid).toBeGreaterThan(1);
     expect(mid).toBeLessThan(1.05);
+  });
+});
+
+describe("drawTransitionOverlay", () => {
+  const W = 100;
+  const H = 200;
+
+  it("always balances save/restore for every transition type", () => {
+    for (const type of ALL_TYPES) {
+      const c = makeCtx();
+      drawTransitionOverlay(c.ctx, W, H, type, 0.5);
+      expect(c.saves, `${type} should call save once`).toBe(1);
+      expect(c.restores, `${type} should call restore once`).toBe(1);
+    }
+  });
+
+  it("transitions with no overlay (crossfade, soft_zoom, dip_to_black) draw nothing", () => {
+    for (const type of ["crossfade", "soft_zoom", "dip_to_black"] as TransitionType[]) {
+      const { ctx, rects, gradients } = makeCtx();
+      drawTransitionOverlay(ctx, W, H, type, 0.5);
+      expect(rects, `${type} should not fill any rect`).toHaveLength(0);
+      expect(gradients, `${type} should not build a gradient`).toHaveLength(0);
+    }
+  });
+
+  it("flash washes the full frame white, peaking in intensity at the midpoint", () => {
+    const alphaAt = (progress: number) => {
+      const { ctx, rects } = makeCtx();
+      drawTransitionOverlay(ctx, W, H, "flash", progress);
+      const frame = fullFrameRects(rects);
+      expect(frame).toHaveLength(1);
+      expect(String(frame[0].fillStyle)).toMatch(/^rgba\(255,255,255,/);
+      return Number(String(frame[0].fillStyle).match(/,([^,)]+)\)$/)![1]);
+    };
+    // sin(pi*progress): 0 at the ends, max at 0.5.
+    expect(alphaAt(0)).toBeCloseTo(0, 5);
+    expect(alphaAt(1)).toBeCloseTo(0, 5);
+    expect(alphaAt(0.5)).toBeGreaterThan(alphaAt(0.25));
+    expect(alphaAt(0.5)).toBeCloseTo(0.85, 2); // default flashOverlayAlpha
+  });
+
+  it("scales all overlay alphas by transitionIntensity (0 → invisible wash)", () => {
+    const { ctx, rects } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "flash", 0.5, 0, undefined, undefined, 0);
+    const frame = fullFrameRects(rects);
+    expect(frame).toHaveLength(1);
+    expect(Number(String(frame[0].fillStyle).match(/,([^,)]+)\)$/)![1])).toBeCloseTo(0, 5);
+  });
+
+  it("hard_flash runs dark → white-blast → fade across its three phases", () => {
+    const rectFor = (progress: number) => {
+      const { ctx, rects } = makeCtx();
+      drawTransitionOverlay(ctx, W, H, "hard_flash", progress);
+      return fullFrameRects(rects)[0];
+    };
+    // Phase 1 (progress < 0.3): darken with black.
+    expect(String(rectFor(0.15).fillStyle)).toMatch(/^rgba\(0,0,0,/);
+    // Phase 2 (0.3–0.55): solid white blast at full intensity.
+    const blast = rectFor(0.45);
+    expect(String(blast.fillStyle)).toBe("white");
+    expect(blast.alpha).toBeCloseTo(1, 5);
+    // Phase 3 (> 0.55): white fade-out.
+    expect(String(rectFor(0.8).fillStyle)).toMatch(/^rgba\(255,255,255,/);
+  });
+
+  it("color_flash uses the AI-provided neon color", () => {
+    const { ctx, rects } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "color_flash", 0.5, 0, ["#ff0000"]);
+    const frame = fullFrameRects(rects);
+    expect(frame).toHaveLength(1);
+    expect(String(frame[0].fillStyle)).toMatch(/^rgba\(255,0,0,/);
+  });
+
+  it("light_leak builds a 3-stop gradient wash", () => {
+    const { ctx, rects, gradients } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "light_leak", 0.5);
+    expect(gradients).toHaveLength(1);
+    expect(gradients[0].stops).toHaveLength(3);
+    expect(fullFrameRects(rects)).toHaveLength(1);
+  });
+
+  it("hard_cut only bumps brightness inside the cut window", () => {
+    const outside = makeCtx();
+    drawTransitionOverlay(outside.ctx, W, H, "hard_cut", 0.1);
+    expect(fullFrameRects(outside.rects)).toHaveLength(0); // no wash outside 0.4–0.6
+
+    const inside = makeCtx();
+    drawTransitionOverlay(inside.ctx, W, H, "hard_cut", 0.5);
+    expect(fullFrameRects(inside.rects)).toHaveLength(1); // a brief white bump at the seam
+  });
+
+  it("renderOptions override the default flash opacity", () => {
+    const { ctx, rects } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "flash", 0.5, 0, undefined, { flashOverlayAlpha: 0.5 });
+    const a = Number(String(fullFrameRects(rects)[0].fillStyle).match(/,([^,)]+)\)$/)![1]);
+    expect(a).toBeCloseTo(0.5, 2); // sin(pi/2)=1 * 0.5
   });
 });
