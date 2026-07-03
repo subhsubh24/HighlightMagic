@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   addPendingSignup,
+  addConfirmedSignup,
   confirmSignup,
   getWaitlistCounts,
   isWaitlistStoreConfigured,
@@ -51,5 +52,55 @@ describe("waitlist store (E6a) — in-memory fallback", () => {
     expect(t1).not.toBe(t2);
     const counts = await getWaitlistCounts();
     expect(counts.signups).toBe(2);
+  });
+});
+
+// addConfirmedSignup is the DECISION-COROLLARY path used when NO email provider is
+// wired (the default pre-launch state): the signup is recorded as confirmed directly
+// so the user is never dead-ended awaiting a confirmation email that can't be sent.
+describe("waitlist store (E6a) — addConfirmedSignup (no-email-provider path)", () => {
+  beforeEach(() => {
+    _resetWaitlistMemory();
+  });
+
+  it("records a signup as both a raw signup AND confirmed immediately", async () => {
+    await addConfirmedSignup("direct@b.com");
+    const counts = await getWaitlistCounts();
+    expect(counts.signups).toBe(1);
+    expect(counts.confirmed).toBe(1);
+  });
+
+  it("is idempotent for a repeated email (Set-deduped, no double count)", async () => {
+    await addConfirmedSignup("dup@b.com");
+    await addConfirmedSignup("dup@b.com");
+    const counts = await getWaitlistCounts();
+    expect(counts.signups).toBe(1);
+    expect(counts.confirmed).toBe(1);
+  });
+
+  it("confirms an email that first arrived as pending, without needing its token", async () => {
+    await addPendingSignup("both@b.com");
+    let counts = await getWaitlistCounts();
+    expect(counts.signups).toBe(1);
+    expect(counts.confirmed).toBe(0);
+
+    await addConfirmedSignup("both@b.com");
+    counts = await getWaitlistCounts();
+    // Same email in both the emails and confirmed sets — still one distinct signup.
+    expect(counts.signups).toBe(1);
+    expect(counts.confirmed).toBe(1);
+  });
+
+  it("does not consume unrelated pending tokens (orthogonal to double-opt-in)", async () => {
+    const token = await addPendingSignup("pending@b.com");
+    await addConfirmedSignup("direct@b.com");
+    // The direct confirm must not confirm or invalidate the separate pending signup.
+    let counts = await getWaitlistCounts();
+    expect(counts.signups).toBe(2);
+    expect(counts.confirmed).toBe(1);
+    // The pending token is still valid and confirmable.
+    expect(await confirmSignup(token)).toBe("pending@b.com");
+    counts = await getWaitlistCounts();
+    expect(counts.confirmed).toBe(2);
   });
 });
