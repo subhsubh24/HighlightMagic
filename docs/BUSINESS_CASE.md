@@ -23,9 +23,10 @@ Living document. Updated each loop run as tracks land and real data replaces est
 > ARR is ~$7,740. To pull base year-1 above $100K (or pull the timeline in further), the
 > highest-return levers for HighlightMagic are, in order: (a) **per-export API COGS reduction**
 > (Claude/ElevenLabs/AtlasCloud) — margin is the crux; (b) **pricing/tiers** beyond the base
-> $14.99/$149.99 (export-credit packs, a higher/creator tier); (c) **free→paid conversion**. Build the
-> high-return ones and RECOMPUTE this summary block when they ship. Every number honest/researched —
-> anti-gaming holds.
+> $14.99/$149.99 (export-credit packs — backend already SHIPPED, see §10; ARR deliberately not yet
+> modeled until the iOS purchase UI lands and a defensible attach-rate exists — plus a higher/creator
+> tier); (c) **free→paid conversion**. Build the high-return ones and RECOMPUTE this summary block when
+> they ship. Every number honest/researched — anti-gaming holds.
 
 > **Monetization MODEL considered (2026-06-30; ROADMAP F10 / FACTORY_STANDARD §9).** The model itself
 > is a first-class lever, not a fixed assumption. Current default = **freemium auto-renewable
