@@ -22,7 +22,7 @@ All posts are for TikTok/Reels/Shorts unless noted. Cross-post to all platforms.
 [Voiceover] "Opened the app, picked my clips —"
 
 [Show: AI detection animation, frame scoring progress bar]
-[Voiceover] "AI watched every frame to find the best moments —"
+[Voiceover] "AI scored the footage to find the best moments —"
 
 [Show: finished highlight reel playing — 60-second clip with kinetic captions and transitions]
 [Voiceover] "— and gave me this. I didn't touch the edit. This is straight from the AI."
@@ -125,21 +125,21 @@ Free → link in bio
 **Script**:
 ```
 [HOOK — text overlay on top of the screen recording]
-"This app watches every single frame of your video. Here's what it's looking for."
+"This app samples and scores frames across your whole video. Here's what it's looking for."
 
 [Show: the AI detection step scoring frames as the progress bar fills]
-[Voiceover] "It scores every frame for the stuff that stops a scroll — peak action, real emotion, the moment everyone reacts to —"
+[Voiceover] "It scores your footage for the stuff that stops a scroll — peak action, real emotion, the moment everyone reacts to —"
 
 [Show: finished highlight assembled from the top-scoring moments, kinetic captions on]
 [Voiceover] "— then builds your highlight from only the highest-scoring moments. No scrubbing a 3-hour timeline yourself."
 
 [End card]
-"Frame-by-frame AI. Highlight Magic — Free on the App Store."
+"AI highlight detection. Highlight Magic — Free on the App Store."
 ```
 
 **Caption**:
 ```
-The AI watches every frame so you don't have to 🎯
+The AI scans your footage so you don't have to 🎯
 
 • Scores each moment for scroll-stopping power, emotion, and action
 • Keeps only the highest-scoring moments
@@ -169,7 +169,7 @@ Free app → link in bio
 [Cut to: polished 45-second highlight with caption overlays and clean transitions]
 
 [Direct to camera — end]
-"AI watched all 6 hours so I didn't have to. Posted it the same day I landed. Highlight Magic — Free."
+"AI scanned the whole 6 hours so I didn't have to. Posted it the same day I landed. Highlight Magic — Free."
 ```
 
 **Caption**:

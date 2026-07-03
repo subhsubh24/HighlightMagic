@@ -60,7 +60,7 @@ Most video editing apps make you find the moments yourself. You scrub. You mark.
 
 Highlight Magic doesn't work that way.
 
-The AI watches every frame of your footage — looking for the moments that matter: the score, the crowd, the drop, the laugh. Then it builds the highlight.
+The AI samples and scores frames across your footage — looking for the moments that matter: the score, the crowd, the drop, the laugh. Then it builds the highlight.
 
 You don't touch the timeline.
 
