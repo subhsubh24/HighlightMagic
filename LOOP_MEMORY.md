@@ -4,6 +4,44 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 43 — 2026-07-03 — 1 file-disjoint change (validate route wallet-drain guard tests) + honesty doc fix
+Cold start; branched from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago). Consumed
+QUALITY_SCORECARD (as_of 2026-07-01, commit bff8d15, overall B) + GROWTH_STATUS (pre_launch, funnel 0/null — no lever
+to weight) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2) as DATA. Baseline web gate green (build + 859 tests + 0 lint;
+coverage 66.45/61.84/78.75/66.98% — all above the 60/50/60/60 floors, ENFORCED via `test`="vitest run --coverage" + the
+required `web` check).
+- **KEY FINDING — the scorecard's top_gaps are largely STALE (closed since as_of 2026-07-01):** (1) security gap "daily
+  ceiling in-memory per-instance" is CLOSED — `spend-ceiling.ts` is fully KV-backed (`VercelKVDailyCeilingStore`, atomic
+  INCR + 2-day TTL, fail-closed); (2) tests_evals gap "coverage floor unenforced (@vitest/coverage-v8 not installed; CI
+  runs no --coverage)" is CLOSED — `@vitest/coverage-v8`@^4.1.9 IS a devDep and `package.json` `test` script IS
+  `vitest run --coverage`, so the required `web` check enforces the vitest.config.ts thresholds WITHOUT any `.github`
+  edit (baseline gate exit 0 proves the floor is met+enforced); (3) business_case_strength gap "credit-pack lever is
+  docs-only" is CLOSED — backend fully SHIPPED (#237: `credit-store.ts` KV-durable, `redeemCreditPack` in entitlement.ts,
+  JWS-verified idempotent `POST /api/credits/redeem`, `CREDIT_PACK_PRODUCTS`), and BUSINESS_CASE §10 documents it
+  honestly (ARR correctly deferred — no user-purchasable UI yet, no defensible attach-rate). The GENUINELY-remaining
+  ship-critical gaps are ALL iOS/Mac-bound + Linux-unverifiable: store_readiness C (archivable Xcode target A6/D5 +
+  6.9" screenshots — owner Mac only), functional_reality B (iOS export-to-file test + iOS export-COUNT server gate).
+  NOTE: the scorecard is owned by the separate Quality Auditor routine — I CONSUME it, never edit it; these stale gaps
+  will reconcile when it re-grades.
+- **Scouts (4 Haiku)** consistently OVERSTATED gaps on this mature codebase: security scout's #1 (KV rate-limiting) is a
+  documented, KV-spend-ceiling-BACKSTOPPED tradeoff (adds a KV round-trip to every paid request — DROPPED); correctness
+  scout's client-side fetch-timeout findings (poll-manager/frame-extractor/audio-mux/ExportStep) are EXPLICITLY
+  out-of-scope per ROADMAP B6 + prior loop-memory (browser fetches have no serverless budget) — DROPPED; test scout
+  claimed `/api/validate` "untested" + `lib/email` "zero coverage" — both WRONG (email.test.ts exists; validate has 3
+  suites). BUT the test scout surfaced the ONE real gap: validate's H1/P0/H7 GUARDS were untested (its existing suites
+  only cover no-key fail-open / empty-clips / H2 bounds; validate is absent from paid-routes-rate-limit + generation-
+  ceiling-block — 0 grep matches). → **#309 (BUILT)**.
+- **#309** — `web/src/app/api/__tests__/validate-route-guards.test.ts` (4 tests): per-IP flood→429, over-quota→402
+  (`upgrade:true`), ceiling→429 (quota→ceiling ordering), anonymous→skip-guards + fail-OPEN `{passed:true}` on rejected
+  fetch (control against vacuous `fetch`-not-called). Each spies `globalThis.fetch`. Both Sonnet reviewers APPROVED.
+- **Housekeeping** also made a SURGICAL living-artifact fix to `docs/BUSINESS_CASE.md` mandate intro lever (b): it read
+  as if export-credit packs were unbuilt while §10 documents the backend as shipped — added a parenthetical pointing to
+  §10 + the deliberate ARR-deferral. No SUMMARY-block/number change, no recompute, `as_of` unchanged (anti-gaming holds).
+- **Do NOT re-do:** don't re-add `validate-route-guards.test.ts` (#309). Don't re-flag the scorecard's stale
+  security/tests_evals/business_case gaps as work — they're closed in code (see KEY FINDING above); wait for the Quality
+  Auditor to re-grade. Don't migrate `rate-limit.ts` to KV (backstopped by the KV daily spend ceiling; adds hot-path
+  latency/cost — a documented accepted tradeoff). Don't add timeouts to browser-side fetches (ROADMAP B6 out-of-scope).
+
 ## Run 42 — 2026-07-03 — DEEP AUDIT + 4 file-disjoint changes (3 export-visual coverage tests / email+KV route budgets)
 Cold start; branched every PR from `origin/main`. Ran a DEEP AUDIT (last was Run 38 2026-07-02, now >24h + 3 runs
 prior). Consumed QUALITY_SCORECARD (overall B; ship-critical sub-A dims = store_readiness C [owner Mac: archivable
