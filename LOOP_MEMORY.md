@@ -4,6 +4,57 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 45 — 2026-07-03 — 2 file-disjoint changes (stems global spend ceiling [Track H7] + pricing_view funnel wiring [E5])
+Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago).
+Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
+store_readiness C [owner-Mac: archivable Xcode target A6/D5 + screenshots], functional_reality B [iOS export-to-file test +
+iOS export-count server gate — Linux-unverifiable], tests_evals B) + GROWTH_STATUS (pre_launch, funnel 0/null — no lever to
+weight) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2) as DATA. Baseline web gate green (build + 859 tests + 0 lint; coverage
+77.57/73.26/81.87/78.49% above floors). Shipped **2 merged PRs (#318, #319)**, both file-DISJOINT, both web (zero iOS-compile
+risk); abandoned 0. Each cleared 2 Sonnet reviewers + all 4 required checks.
+- **#318 (Track H7 — the run's core, a REAL wallet-drain gap):** `/api/stems` (paid ElevenLabs instrumental isolation) is the
+  ONE paid sub-op route reachable from the PUBLIC web editor with NO userId (`/api/*` is site-gate-exempt per middleware.ts), so
+  a per-user ceiling can't apply. Its ONLY brake was per-IP `PAID_RATE_LIMIT`, which spend-ceiling.ts's own header says is NOT
+  rotation-proof. Its siblings (sfx/music/voiceover) all carry the H7 per-user daily ceiling; stems had nothing rotation-proof.
+  NOTE: a prior loop DELIBERATELY exempted stems in `generation-ceiling-wiring.test.ts`'s CEILING_EXEMPT ("per-IP rate limit is
+  the authoritative bound") — I OVERRODE that documented decision because the module's own docstring contradicts the exemption
+  reason (per-IP ≠ rotation-proof). Fix: `enforceGlobalGenerationCeiling(bucket, cap)` — a single SHARED daily counter under a
+  DEDICATED `"global-gen"` CeilingKind + `GLOBAL_STEMS_DAILY_CAP=200`. Trade-off (documented): abuse can exhaust the global cap
+  and disable stems for the UTC day, but that only degrades a nice-to-have sub-step (instrumental ducking; export still
+  completes) — far better than draining spend. **LESSON — Reviewer A cycle-1 caught a REAL keyspace-collision bug:** my first
+  cut used the `"gen"` kind with a `__global:{bucket}` sentinel; because `userId` is client-supplied UNVALIDATED free text on ~10
+  sibling "gen" routes, a forged `{userId:"__global:stems"}` POST to e.g. /api/sfx would increment the EXACT key the stems global
+  ceiling reads → amplification drain via an unrelated route. Cycle-2 moved it to a distinct `"global-gen"` kind (key
+  `spend:global-gen:{period}:{bucket}` structurally unreachable from any "gen" call) + a collision-proof regression test. When
+  adding a userId-less/global counter, NEVER share a keyspace/kind with a counter whose id segment is client-controlled.
+- **#319 (E5 analytics wiring):** `analytics.ts` defined+documented a `pricing_view` event that NOTHING emitted (dead defined
+  event) → visitor→pricing funnel step uninstrumented. Wired via IntersectionObserver on the pricing `<section>` (fires once at
+  ≥30% visibility, then disconnects); no-op when analytics/IO absent. No React/component test infra exists (vitest include is
+  `.test.ts` only, no jsdom/testing-library, coverage scoped to src/lib) → verified by lint/build + mirroring the page's existing
+  trackEvent pattern; not proportionate to stand up render-test infra for one event. Both reviewers APPROVED.
+- **CONFIRMED (independent trace + scout) — the functional_reality "export-count leak" is CONVERSION-FRICTION, NOT wallet-drain:**
+  the expensive COGS (Haiku scoring + Opus planning) IS server-gated at DETECTION — `/api/ios-score` fires `consumeExport` once
+  per detection (route.ts:399), authoritative in KV. The iOS EXPORT itself is 100% on-device AVFoundation (ClipGenerationService),
+  ZERO server COGS; the client `exportsUsedThisMonth` (UserDefaults) is a resettable SECONDARY UX counter. So a reinstall dodges
+  the paywall PROMPT but (a) costs the business nothing (on-device), (b) still yields a WATERMARKED export, (c) new highlights
+  still need server-gated detections (free-capped at 5/mo). The genuine fix (client trusts server `remaining` + Keychain-stable
+  userId + gate export via a server call) is ENTIRELY iOS-side (Linux-unverifiable) — correctly in the iOS/owner lane. Don't
+  re-flag this as a wallet-drain; it isn't one.
+- **SCOUTS (3 Explore/Haiku) OVERSTATED again** (per Run 43/44 warnings). DROPPED: poll-manager `/api/animate/check` fetch
+  "timeout" (browser-side; each task already reaped by a 10-min `deadline` at the top of every tick → no real hang); audio-mux
+  render fetches "timeout" (browser-side render, serverless-timeout rule N/A — same precedent as frame-extractor); cross-user
+  frame-scoring cache (invented 20-30% hit-rate — users upload UNIQUE personal videos → ~0 cross-user hits for THIS product);
+  higher/creator tier + credit-stats endpoint (premature — no purchasable StoreKit product / zero redemptions yet, iOS/owner-bound).
+  The one real find was #318 (stems, from the test-coverage scout's #2). credit-store A→A+ atomicity (marker-before-incrby) —
+  HELD: it's a genuine double-grant-vs-silent-loss tradeoff on a MONEY path; the naive marker-delete introduces a double-grant
+  regression, the clean fix needs a Lua/eval refactor on the deprecated @vercel/kv client. Not clearly value-bar-clearing; skip
+  unless a safe formulation emerges.
+- **Do NOT re-do:** #318 stems global ceiling (grep `enforceGlobalGenerationCeiling`); don't revert it to the `"gen"` kind (keyspace
+  collision — see LESSON above). #319 pricing_view wiring (don't re-add). Don't re-flag the iOS export-count "leak" as a
+  wallet-drain (it's conversion-friction, iOS-side, in the owner lane). Don't add timeouts to poll-manager/audio-mux browser
+  fetches (marginal). Don't build a cross-user frame cache (unique-video hit-rate ≈ 0). Don't build higher-tier/credit-stats web
+  surfaces yet (premature until iOS purchase UI + real data).
+
 ## Run 44 — 2026-07-03 — 5 file-disjoint changes (frame-sampling honesty sweep across ALL surfaces + SEO sitemap + waitlist coverage)
 Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago).
 Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
