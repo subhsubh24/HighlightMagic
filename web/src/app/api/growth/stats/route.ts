@@ -11,6 +11,9 @@ import { getGrowthMetrics } from "@/lib/growth/metrics";
 // (503) so it cannot leak even dry-run shape to the public. Track H1 rate-limited.
 
 export const runtime = "nodejs";
+// Fans out several KV aggregate reads (getGrowthMetrics). An explicit budget keeps a slow
+// KV round-trip from being killed at the short platform default before the read completes.
+export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
   const ip = getClientIP(req);
