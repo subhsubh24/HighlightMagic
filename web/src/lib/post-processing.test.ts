@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { applyEasing, getMicroSettle, getExitDeceleration, getWarmthShiftCSS } from "./post-processing";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  applyEasing,
+  getMicroSettle,
+  getExitDeceleration,
+  getWarmthShiftCSS,
+  drawFilmGrain,
+  drawVignette,
+  applyFilmStock,
+} from "./post-processing";
 
 describe("applyEasing", () => {
   it("returns 0 at t=0 for all easings", () => {
@@ -173,5 +181,160 @@ describe("getWarmthShiftCSS", () => {
     const css = getWarmthShiftCSS(9.5, 10, true)!;
     const sat = parseFloat(css.match(/saturate\(([^)]+)\)/)![1]);
     expect(sat).toBeGreaterThan(1);
+  });
+});
+
+// ── Canvas render paths (drawFilmGrain / drawVignette / applyFilmStock) ──
+// These run on every exported frame with a film-stock / grade applied. They draw
+// onto the passed 2D context and spin up cached offscreen canvases via
+// document.createElement — so we stub a minimal DOM canvas (node env has none) and
+// a recording main context, then assert the real render behaviour.
+
+interface DrawCall { image: unknown; args: number[]; composite: string; alpha: number }
+interface FillCall { fillStyle: unknown; composite: string; x: number; y: number; w: number; h: number }
+
+function makeMainCtx() {
+  const draws: DrawCall[] = [];
+  const fills: FillCall[] = [];
+  const filters: string[] = [];
+  let saves = 0;
+  let restores = 0;
+  const ctx = {
+    canvas: { width: 100, height: 200 },
+    globalAlpha: 1,
+    globalCompositeOperation: "source-over",
+    imageSmoothingEnabled: true,
+    fillStyle: "" as unknown,
+    _filter: "none",
+    get filter() { return this._filter; },
+    set filter(v: string) { this._filter = v; filters.push(v); },
+    save() { saves++; },
+    restore() { restores++; },
+    drawImage(image: unknown, ...args: number[]) {
+      draws.push({ image, args, composite: ctx.globalCompositeOperation, alpha: ctx.globalAlpha });
+    },
+    fillRect(x: number, y: number, w: number, h: number) {
+      fills.push({ fillStyle: ctx.fillStyle, composite: ctx.globalCompositeOperation, x, y, w, h });
+    },
+  };
+  return {
+    ctx: ctx as unknown as CanvasRenderingContext2D,
+    draws, fills, filters,
+    get saves() { return saves; },
+    get restores() { return restores; },
+  };
+}
+
+// Minimal offscreen 2D context for the cached grain/vignette canvases.
+function makeOffscreenCtx() {
+  return {
+    fillStyle: "" as unknown,
+    createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
+    putImageData: () => {},
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    createLinearGradient: () => ({ addColorStop: () => {} }),
+    fillRect: () => {},
+  };
+}
+
+let restoreDocument: () => void;
+beforeAll(() => {
+  const g = globalThis as { document?: unknown };
+  const had = "document" in g;
+  const prev = g.document;
+  g.document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => makeOffscreenCtx() }),
+  };
+  restoreDocument = () => { if (had) g.document = prev; else delete g.document; };
+});
+afterAll(() => restoreDocument());
+
+describe("drawFilmGrain", () => {
+  it("is a no-op when opacity is zero", () => {
+    const m = makeMainCtx();
+    drawFilmGrain(m.ctx, 100, 200, 0);
+    expect(m.draws).toHaveLength(0);
+    expect(m.saves).toBe(0);
+  });
+
+  it("draws the grain layer in 'overlay' composite at the given opacity", () => {
+    const m = makeMainCtx();
+    drawFilmGrain(m.ctx, 100, 200, 0.05);
+    expect(m.saves).toBe(1);
+    expect(m.restores).toBe(1);
+    expect(m.draws).toHaveLength(1);
+    // Grain is composited as "overlay" at the requested opacity, scaled to the frame.
+    expect(m.draws[0].composite).toBe("overlay");
+    expect(m.draws[0].alpha).toBeCloseTo(0.05, 6);
+    expect(m.draws[0].args).toEqual([0, 0, 100, 200]);
+  });
+});
+
+describe("drawVignette", () => {
+  it("is a no-op when intensity is zero", () => {
+    const m = makeMainCtx();
+    drawVignette(m.ctx, 100, 200, 0);
+    expect(m.draws).toHaveLength(0);
+    expect(m.saves).toBe(0);
+  });
+
+  it("draws the vignette layer at the given intensity", () => {
+    const m = makeMainCtx();
+    drawVignette(m.ctx, 100, 200, 0.2);
+    expect(m.saves).toBe(1);
+    expect(m.restores).toBe(1);
+    expect(m.draws).toHaveLength(1);
+    expect(m.draws[0].alpha).toBeCloseTo(0.2, 6);
+  });
+});
+
+describe("applyFilmStock", () => {
+  it("is a no-op when no stock is provided", () => {
+    const m = makeMainCtx();
+    applyFilmStock(m.ctx, 100, 200, undefined);
+    expect(m.draws).toHaveLength(0);
+    expect(m.fills).toHaveLength(0);
+    expect(m.filters).toHaveLength(0);
+  });
+
+  it("applies a warm (sepia) filter for positive warmth and resets it", () => {
+    const m = makeMainCtx();
+    applyFilmStock(m.ctx, 100, 200, { grain: 0, warmth: 0.3, contrast: 1.0, fadedBlacks: 0 });
+    expect(m.filters.some((f) => f.includes("sepia(0.300"))).toBe(true);
+    // The filter must be reset so it doesn't bleed into later draws.
+    expect(m.filters[m.filters.length - 1]).toBe("none");
+  });
+
+  it("uses hue-rotate for negative warmth (cool cast)", () => {
+    const m = makeMainCtx();
+    applyFilmStock(m.ctx, 100, 200, { grain: 0, warmth: -0.5, contrast: 1.0, fadedBlacks: 0 });
+    expect(m.filters.some((f) => f.includes("hue-rotate"))).toBe(true);
+    expect(m.filters.some((f) => f.includes("sepia"))).toBe(false);
+  });
+
+  it("includes a contrast term only when contrast diverges from 1.0", () => {
+    const none = makeMainCtx();
+    applyFilmStock(none.ctx, 100, 200, { grain: 0, warmth: 0, contrast: 1.0, fadedBlacks: 0 });
+    expect(none.filters).toHaveLength(0); // nothing to apply → no filter set at all
+
+    const some = makeMainCtx();
+    applyFilmStock(some.ctx, 100, 200, { grain: 0, warmth: 0, contrast: 1.2, fadedBlacks: 0 });
+    expect(some.filters.some((f) => f.includes("contrast(1.200"))).toBe(true);
+  });
+
+  it("lifts blacks with a 'lighten' gray wash scaled by fadedBlacks", () => {
+    const m = makeMainCtx();
+    applyFilmStock(m.ctx, 100, 200, { grain: 0, warmth: 0, contrast: 1.0, fadedBlacks: 0.1 });
+    const wash = m.fills.find((f) => f.composite === "lighten");
+    expect(wash).toBeDefined();
+    // gray = round(0.1 * 255) = 26 (0x1A).
+    expect(wash!.fillStyle).toBe("rgb(26,26,26)");
+  });
+
+  it("adds film grain when the stock requests it", () => {
+    const m = makeMainCtx();
+    applyFilmStock(m.ctx, 100, 200, { grain: 0.04, warmth: 0, contrast: 1.0, fadedBlacks: 0 });
+    // The grain overlay draw is the tell-tale of drawFilmGrain being invoked.
+    expect(m.draws.some((d) => d.composite === "overlay")).toBe(true);
   });
 });
