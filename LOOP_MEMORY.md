@@ -4,6 +4,77 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 42 — 2026-07-03 — DEEP AUDIT + 4 file-disjoint changes (3 export-visual coverage tests / email+KV route budgets)
+Cold start; branched every PR from `origin/main`. Ran a DEEP AUDIT (last was Run 38 2026-07-02, now >24h + 3 runs
+prior). Consumed QUALITY_SCORECARD (overall B; ship-critical sub-A dims = store_readiness C [owner Mac: archivable
+Xcode target + 6.9" screenshots], functional_reality B [iOS export test — Linux-unverifiable], tests_evals B) +
+GROWTH_STATUS (pre_launch, funnel 0/null — no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor
+~y3.2 on modeled path) as DATA. Baseline web gate green (build + 830 tests + 0 lint; coverage 66/62/79/67% above
+floors). Shipped **4 merged PRs (#299–#302)**, all file-DISJOINT, all web (zero iOS-compile risk); abandoned 0.
+Each cleared 2 Sonnet reviewers + all 4 required checks.
+
+### DEEP AUDIT — 2026-07-03 (6 read-only Haiku lenses: security/Track-H, correctness/reliability, COGS/model,
+### monetization/business-case, design/a11y/marketing, tests/evals/artifacts)
+- **Security (Track H)** — backend well-hardened; ONLY finding was `/api/render` missing gates when `RENDER_ENABLED=true`.
+  DROPPED (consistent with prior runs): it's a 501 STUB gated by `RENDER_ENABLED` (unset in prod), returns 501 before
+  parsing the body, never calls a paid API; the exploit needs env access (a bigger compromise). Gates go in WHEN the
+  FFmpeg worker is built (they must match the real request shape, not a dead stub).
+- **Correctness/reliability** — REAL findings: (a) 3 email/KV routes missing `maxDuration` → **#302 (BUILT)**; (b) planner
+  `fetchWithRetry` in detect.ts has no timeout → **DROPPED as too risky**: the planner deliberately uses `stream:true`
+  ("streaming prevents HTTP timeout on long thinking") and medium-effort adaptive thinking runs legitimately long; a
+  blunt `AbortSignal.timeout` could abort valid plans mid-stream AND interacts badly with the retry loop (BUILDS≠WORKS
+  risk on a paid path). The route's own maxDuration already bounds it (opaque but bounded). NOT built.
+- **COGS/model** — caching candidates (music/voiceover/video) rest on `asset-cache.ts`, which is **localStorage-based
+  (CLIENT-only)** → NOT usable in serverless API routes; and within-export regeneration is intentional VARIETY, not
+  waste (matches prior-run reasoning that dropped planner result-caching). DROPPED. Model selection already optimal
+  (Haiku scorer/validator, Sonnet planner at effort=medium); frame payload already downscaled 480p/0.6q/batch-35.
+- **Monetization/business-case** — pricing CONSISTENT across all surfaces ($14.99/$149.99); business case HONEST (y1
+  explicitly below floor, no gamed adoption %). Buildable web levers all DROPPED: H1 A/B test needs E8 engine + has NO
+  traffic pre-launch (speculative); credit-pack web marketing would advertise an unpurchasable thing (iOS UI unbuilt,
+  app unlaunched = dishonest/dead); web-to-app funnel is launch-dependent. No new buildable lever gap.
+- **Design/a11y/marketing** — landing is tasteful/mature. The "missing Plausible script in layout.tsx" is INTENTIONAL
+  (documented owner setup E5: owner must create a plausible.io account first; `trackEvent` safely no-ops until then).
+  Hard-coding `data-domain` would be wrong; an env-gated script is possible but needs a CSP (Track H6 strict-dynamic)
+  update to allowlist plausible.io script-src + connect-src — DEFERRED (owner-gated on the account anyway; not
+  value-bar-clearing to wire a script that can't fire pre-account). The duplicate-CTA / placeholder-contrast notes are
+  low-impact/subjective — DROPPED.
+- **Tests/evals** — REAL coverage holes on LIVE export-visual code: transitions.ts (16%), post-processing.ts canvas
+  fns (33%), kinetic-text.ts (31%) → **#299/#300/#301 (BUILT)**. frame-extractor `extractFrames` orchestration (40%)
+  DROPPED (needs heavy video-element mocking, low ROI). Realistic CC0 eval fixtures = acknowledged future work (needs
+  media sourcing). Artifacts fresh — no stale claims found.
+
+### Shipped (all merged; each 2 Sonnet reviewers APPROVED the final diff)
+- **#299 transitions test (G2)** — `drawTransitionOverlay` behavioural-invariant tests via a recording ctx stub.
+- **#300 post-processing test (G2)** — `drawFilmGrain`/`drawVignette`/`applyFilmStock` (post-processing 33%→100% st/ln).
+- **#301 kinetic-text test (G2)** — `drawKineticCaption` render + word-wrap tests.
+- **#302 email/KV route budgets (B6)** — `maxDuration=30` on waitlist/confirm/growth-stats + fail-on-revert test.
+
+### Process notes / lessons
+- **CONDENSED-DIFF REVIEW HAZARD (new):** I passed Reviewer A a HAND-CONDENSED diff of #299 (stripped the mock's type
+  annotations for brevity) → it flagged 12 phantom implicit-any tsc errors that do NOT exist in the committed file.
+  Wasted a review cycle. NEXT TIME: pass reviewers the ACTUAL committed diff (`git diff origin/main...<branch>`
+  captured verbatim), never a hand-abridged version — abridging can invent or hide defects. Re-verified the real file
+  is tsc-clean and re-confirmed APPROVE.
+- **REVIEWER-WORKTREE HAZARD (recurring, Run 41):** Sonnet reviewers used `git checkout`/`git worktree` to inspect
+  branches; in this shared sandbox that repeatedly dirtied my `main` working tree (stray partial `transitions.test.ts`).
+  Harmless to the committed branches (merges go via the GitHub API on the remote), but I had to `git checkout -- <file>`
+  to clean main several times. Told reviewers not to use `git worktree`; some still used `git checkout`. Mitigation held:
+  clean main before any bookkeeping commit; never commit a stray reviewer artifact.
+- The `web` CI check (`next build`) does NOT gate on test-file tsc errors — pre-existing test files on main
+  (`provider-usage-metering.test.ts`, `rate-limit.test.ts`) carry implicit-any/ProcessEnv tsc errors yet main's build is
+  green. Test-file type cleanliness is a code-quality nicety here, not a merge gate (lint via `next lint` + vitest are).
+- No ROADMAP box flipped (G2 is ongoing coverage work, not newly COMPLETE); no BUSINESS_CASE recompute (no pricing/COGS
+  change); no new owner-only items.
+
+### Follow-ups (carried; NOT owner-only unless noted)
+- transitions.ts: `zoom_punch`/`whip`/`glitch`/`strobe` overlays are covered only by the generic save/restore test;
+  their specific alpha/band math is untested (Reviewer A's non-blocking note). A future coverage top-up.
+- Planner streaming timeout — a SAFE bound would need to distinguish a genuine hang from legitimate long thinking (e.g.
+  a per-SSE-event idle watchdog, not a total-fetch abort). Deferred until designed carefully.
+- Carried: iOS export-to-file roundtrip test + server-side export-COUNT gate (functional_reality, iOS-Linux-unverifiable);
+  archivable Xcode app target + 6.9" screenshots (store_readiness C, A6/D5 — owner/Mac); env-gated Plausible + CSP
+  allowlist (owner-gated on plausible.io account); realistic CC0 eval fixtures (G3, needs media sourcing).
+
 ## Run 41 — 2026-07-02 — 1 change (H3 error-hygiene sweep #283) — a deliberately QUIET, coherent run
 Cold start; branched from `origin/main` (applied the stale-local-main lesson). NO DEEP AUDIT this run (Run 38
 ran one 2026-07-02, same day, <24h/<4 runs). Consumed QUALITY_SCORECARD (overall B; ship-critical sub-A dims =
