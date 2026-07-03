@@ -176,3 +176,111 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
 2. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`
 3. If a ship-critical GTM dimension is still below A, that stays top priority over new PREPARE assets
 4. If still no channel connections and the scorecard is clean: consider a second designed experiment (e.g. paywall-copy variant) or fresh outreach research — but only if a genuinely new, non-duplicative opportunity exists
+
+---
+
+## 2026-07-03 — Run 5
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged)
+- Channels connected: none — **5th consecutive run** with connect-channels open. One real change since
+  Run 4: `spend-caps` flipped to `status: done` (owner-attested 2026-07-02) in a separate commit (#266)
+  — the "🚨 URGENT — DO NOW" prose banner in `PENDING_OPS.md` still read as open/urgent, contradicting
+  the YAML's `status: done`; fixed this run (a real living-artifact consistency bug, not padding).
+- `GTM_SCORECARD.md` has NOT been re-graded since Run 1 (as_of 2026-06-30) — still shows the pre-fix
+  `self_validation_honesty: B`, even though Run 4 (2026-07-01) added the structured validation/sources
+  block the Auditor asked for. Nothing further for the Growth Agent to do here; it's the Auditor's turn.
+- Sam Gutelle (Tubefilter) draft from Run 3 is still sitting unsent in Gmail drafts; no reply (confirmed
+  via `search_threads` for sam@tubefilter.com — zero results).
+- **NEW STANDARD REQUIREMENT FOUND**: `GTM_STANDARD.md` §10 (pre-launch demand validation — mine real
+  public pain signal) was added to the canonical standard on 2026-07-02 (commit cfc9207/#261, after
+  Run 4). This repo's `GROWTH_STATUS.md` had NO `demand_signal` block yet — a genuine, newly-created gap,
+  not a miss by prior runs (the requirement didn't exist when they ran).
+
+### What I built this run
+- **`demand_signal` block in `docs/growth/GROWTH_STATUS.md`** (new, per GTM_STANDARD §10): WebSearch
+  research (primary platform pages — Reddit, Trustpilot, App Store reviews, a journalist muckrack bio —
+  all returned HTTP 403 to WebFetch this run, so citations are 2026-dated review-aggregator articles that
+  quote/summarize the underlying reviews) surfaced 4 themes, each with real cited URLs + quotes:
+  1. Manual highlight editing is a real, durable 4–6 hr/video time cost (high confidence) — directly
+     validates the core JTBD.
+  2. Established AI clip tools (Opus Clip, Vizard) are audio/transcript-first and mis-select on
+     low-dialogue visual content (gaming/sports) — validates HighlightMagic's frame-based visual-scoring
+     architecture, BUT with an important counter-signal: **Eklipse** is an established, dedicated
+     gaming-clip AI competitor (1,000+ game titles trained, claims 1M+ streamers) — so this is NOT white
+     space; the honest differentiator is multi-vertical breadth (gaming+sports+events+family in one
+     iOS-native app), not category exclusivity.
+  3. Existing tools carry real, current trust friction (Opus Clip processing failures, CapCut's 1.2★
+     Trustpilot + hard-to-cancel billing, Descript's "predatory" credit system) — HighlightMagic's flat
+     pricing structurally avoids this pattern, but it's an unproven pre-launch claim, not a guarantee.
+  4. The youth-sports-highlight niche is contested (FullCourt.ai, XbotGo, Athlete AI, MOJO Sports already
+     exist) — counter-signal against assuming that sub-vertical is uncontested.
+  Explicit `disconfirming_notes` + a `limitation` field logging the WebFetch 403s. Labeled throughout as
+  a LEADING indicator, never PMF.
+- **`docs/BUSINESS_CASE.md` Section 2 addendum** ("Demand-signal addendum, 2026-07-03"): logs the same
+  competitive-landscape gap (Eklipse + sports-specific tools missing from the comp table) and the
+  core-JTBD validation, qualitatively — **zero numbers changed** (arr_year1/floor_met_year1/as_of in the
+  machine-readable summary block untouched; verified by an independent reviewer).
+- **Fixed the stale `PENDING_OPS.md` spend-caps banner** (prose said "🚨 URGENT — DO NOW", YAML said
+  `status: done` since #266) — a real contradiction, now consistent.
+- **Checked for a new strategic-outreach target**: the Eklipse finding suggested a gaming/esports
+  journalist angle (Titas Khan — bylines at Dot Esports/Sportskeeda/Dexerto/CharlieIntel/Gfinity per a
+  muckrack search hit), but the muckrack bio-page fetch (WebFetch) 403'd, so I could not verify their
+  actual beat (tool coverage vs match/tournament reporting) to clear OUTREACH.md's "name the target + why
+  + anticipated reply" bar. **Correctly drafted ZERO new outreach** rather than guess — OUTREACH.md is
+  explicit that zero is the correct outcome absent verified fit.
+- Ran an independent adversarial reviewer subagent (maker≠checker) on the full diff before committing.
+  **First pass: REQUEST_CHANGES** — it caught 3 malformed YAML lines (a quoted string followed by
+  unquoted trailing text on the same `quote:` line — a genuine syntax bug that would have broken any
+  YAML parser, confirmed via `python3 -c "import yaml; ..."`). Fixed all 3 (wrapped the full value in one
+  quoted string, converted inner double-quotes to single-quotes). Re-verified with the same parser +
+  `node scripts/validate-gtm.mjs` (passes) before committing. The reviewer also spot-verified 9 of 10
+  cited URLs (via WebFetch/WebSearch, hitting the same 403s but corroborating via search) and found no
+  fabricated citation.
+
+### Learnings
+- **Read the canonical GTM_STANDARD.md fresh every run, don't assume it's unchanged** — §10 landed
+  between Run 4 and Run 5 and introduced a real, previously-nonexistent required artifact
+  (`demand_signal`). A stale mental model of "what the standard requires" would have missed this.
+- **WebFetch is heavily blocked by anti-bot protection on review/social platforms** (Reddit, Trustpilot,
+  Apple App Store review pages, Muckrack all returned 403 this run) — real evidence is still reachable
+  via WebSearch's synthesized summaries (which cite dated, real aggregator-article URLs that in turn
+  quote the underlying reviews), but a future run should try alternate access paths (App Store RSS review
+  feeds, an official Reddit-friendly endpoint) if it wants PRIMARY platform citations instead of
+  secondary aggregator ones.
+- **The adversarial reviewer earned its keep again**: a YAML syntax bug (unquoted trailing text after a
+  quoted scalar) is exactly the kind of self-review blind spot GTM_STANDARD's maker≠checker rule exists
+  to catch — I would not have caught it without an independent parse-and-check pass.
+- **Demand-signal counter-signal matters as much as the confirming signal**: the "gaming/visual content
+  is underserved" wedge felt strong until I found Eklipse — an established, dedicated competitor with a
+  real claimed user base. Reporting that honestly (rather than only citing the confirming Opus Clip/Vizard
+  weakness) is what GTM_STANDARD §10 explicitly demands ("flag counter-signal too").
+- Circuit breaker discipline held again: 5th consecutive run with connect-channels open, no new
+  escalation prose — stated the run count plainly and put the run's effort into the two genuinely new,
+  real deliverables above instead.
+
+### Dead ends / what NOT to repeat
+- Do NOT re-run the same demand_signal research verbatim next time it's due for a refresh — it's now
+  recorded with citations; a future refresh should look for NEW evidence/dates, not re-derive the same 4 themes.
+- Do NOT draft outreach to a target whose specific beat/fit can't be verified (the Titas Khan / gaming
+  journalist lead is unconfirmed — do not draft to them without independently confirming they cover
+  tools/software, not just match/tournament news, via a source WebFetch can actually reach).
+- Do NOT write a `quote:` YAML value as `"quoted text" + trailing unquoted text` on one line — wrap the
+  ENTIRE value in one pair of quotes (convert inner double-quotes to single-quotes) or use a block scalar.
+
+### Circuit-breaker status
+- **Still open at Run 5 (5 consecutive runs).** `spend-caps` closed (owner-attested 2026-07-02) but the
+  four `gtm-connect-*` items (email/datastore/analytics/social) plus `site-gate` remain open. The ask is
+  unchanged: connect Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free) is still the single
+  highest-leverage unlock. Next run: if still unconnected, do not add new escalation language.
+
+### Next run priorities (Run 6)
+1. Check for channel connections — if any connected, pull real data and switch toward execute mode
+   (still gated by `site_gate_up` per the marketing maturity gate).
+2. Check whether `docs/growth/GTM_SCORECARD.md` was re-graded — did `self_validation_honesty` move to A
+   now that the validation block (Run 4) has had two cycles to be picked up by the Auditor?
+3. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`.
+4. Re-read `GTM_STANDARD.md` in full again (not from memory) — it changed once between Run 4 and Run 5;
+   it can change again.
+5. If a future run can reach primary review platforms (Reddit/Trustpilot/App Store), deepen the
+   `demand_signal` citations with direct quotes instead of aggregator-article summaries.
