@@ -4,6 +4,45 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 44 — 2026-07-03 — 5 file-disjoint changes (frame-sampling honesty sweep across ALL surfaces + SEO sitemap + waitlist coverage)
+Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago).
+Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
+store_readiness C [owner-Mac: archivable Xcode target A6/D5 + 6.9" screenshots], functional_reality B [iOS export-to-file
+test + iOS export-count server gate — Linux-unverifiable], tests_evals B) + GROWTH_STATUS (pre_launch, funnel 0/null — no
+lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2) as DATA. Baseline web gate green (build + 859 tests
++ 0 lint; coverage 77.57/73.26/81.87/78.49% above floors). Shipped **5 merged PRs (#312–#316)**, all file-DISJOINT, all
+web/docs (zero iOS-compile risk); abandoned 0. Each cleared 2 Sonnet reviewers + all 4 required checks.
+- **CONFIRMED P0 items from stale "Next priorities" are DONE, not open:** (1) iOS service-layer key removal — `ElevenLabsService`
+  + `AtlasCloudService` already hard-disable the direct path (`apiKey → nil`, guard-and-throw); only `BackendConfig.swift`
+  mentions anthropic (a comment). (2) consumeExport "gap" is INTENTIONAL: the single export is metered once at the `ios-score`
+  gate (`consumeExport` fires there); `/api/plan|sfx|voiceover|music|...` are sub-operations of one export that only
+  `checkExportAllowed` — by design, not a bug. Don't re-flag either.
+- **THE FRAME-SAMPLING HONESTY THEME (the run's core):** marketing/docs across MANY surfaces claimed the AI "watches/analyzes
+  every frame" / "frame-by-frame" / "watched all N hours". FALSE — the detector samples ~1fps up to `MAX_BASE_FRAMES_PER_VIDEO=120`
+  base frames (+ adaptive bonus frames near interest points), spanning the whole duration but SPARSELY. Fixed on: the LIVE landing
+  page (#312 — 3 strings; the marketing scout MISSED this, found via my repo-wide grep), ASO listing + screenshot caption + 2
+  content batches + marketing email (#316). **LESSON: a single-keyword grep ("every frame") UNDER-catches** — Reviewer A caught an
+  incomplete sweep (end-card "Frame-by-frame AI", "watched all 6 hours", "watched all of them", "watches every clip" all survived
+  the first pass). Cycle-2 amend + re-review closed it. When doing an honesty sweep, grep the WHOLE family:
+  `frame-by-frame|frame by frame|every frame|watched all|watches every|watched every|scores every|watched .* hours`.
+  Accurate replacement verbs: "samples and scores frames across", "scored the footage", "scanned the whole N hours" (spans full
+  duration), "scans every clip" (clip-level coverage, not frame-level). Press-kit was ALREADY clean (audited Run 3).
+- **#313 (terms)** — Pro was "unlimited exports"; added "monthly" + the `DAILY_EXPORT_CAP=50` fair-use ceiling to match ASO/
+  landing/press-kit. **#314 (sitemap)** — only `/` + `/privacy` were listed; added `/landing` `/support` `/terms` (real public
+  routes; `/offline` excluded). **#315 (waitlist test)** — covered `addConfirmedSignup` (the default no-email-provider path), 0
+  prior coverage → 4 outcome-asserting cases (10/10 pass).
+- **SCOUTS (4 Haiku) again OVERSTATED on this mature codebase** (per Run 43's warning): backend scout's #1/#2 (clipIndex bounds
+  in validate/ios-validate vision-content) — DROPPED as marginal (frame count already MAX_FILES-bounded + per-frame size
+  MAX_FRAME_B64_CHARS-bounded, optional-chaining already prevents crashes → no real wallet-drain/crash vector; making it testable
+  needs exporting internals = churn; Reviewer-B reject risk). Test scout's sfx-library fuzzy-match — DROPPED: all LIBRARY entries
+  have `url:null`, so the scoring loop is UNREACHABLE-in-prod dead code (testing it = impossible-case filler). Design scout: landing
+  is tasteful, nothing to do. #289's validate "synthetic-green" (no-key → `{passed:true}`) — CONFIRMED intentional fail-open (the
+  validate step is an OPTIONAL internal auto-fix pass, NOT a user QA gate); a 503 would break the pipeline for exactly the case
+  fail-open handles. Don't re-flag. The marketing/docs-freshness scout was the high-value one (found the honesty drift).
+- **Do NOT re-do:** the frame-sampling honesty fixes (#312/#316 — grep the family, it should be clean now). Don't re-flag the P0
+  key-removal or consumeExport as open. Don't add clipIndex bounds to validate/ios-validate (marginal). Don't test sfx-library
+  fuzzy-match (dead until CDN URLs configured). Don't turn validate's no-key fail-open into a 503 (#289 — intentional).
+
 ## Run 43 — 2026-07-03 — 1 file-disjoint change (validate route wallet-drain guard tests) + honesty doc fix
 Cold start; branched from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago). Consumed
 QUALITY_SCORECARD (as_of 2026-07-01, commit bff8d15, overall B) + GROWTH_STATUS (pre_launch, funnel 0/null — no lever
