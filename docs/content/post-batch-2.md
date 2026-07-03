@@ -127,7 +127,7 @@ Free app → link in bio
 "My dog does hilarious things. I never have time to edit the clips. Until now."
 
 [Show: large folder of pet videos imported into app]
-[Voiceover] "AI watched all of them. Found every funny moment, every zoom, every trick —"
+[Voiceover] "AI scanned all of them. Found the funny moments, the zooms, the tricks —"
 
 [Show: finished pet compilation playing — perfect cuts, kinetic captions]
 [Voiceover] "— built this in under a minute. I have a dog content account now."
@@ -195,7 +195,7 @@ Free → link in bio
 "Car meet footage used to take me 3 hours to edit. Now: 40 seconds."
 
 [Show: importing multiple angles of cars — static shots, drive-bys, revs, crowds]
-[Voiceover] "AI watches every clip. It finds the good revs, the clean drive-bys, the crowd reactions —"
+[Voiceover] "AI scans every clip. It finds the good revs, the clean drive-bys, the crowd reactions —"
 
 [Show: polished car meet highlight with dynamic cuts and punchy transitions]
 [Voiceover] "— and builds something that actually does the event justice."
@@ -231,7 +231,7 @@ Free app → link in bio
 "Every parent films the whole recital. Almost no one has a highlight reel."
 
 [Show: long recital recording — warmups, waiting, full performances]
-[Voiceover] "AI scores every frame — finds peak choreography, expression, energy —"
+[Voiceover] "AI scores the footage — finds peak choreography, expression, energy —"
 
 [Show: finished 60-second performance highlight cut to the peak moments, kinetic captions]
 [Voiceover] "— and builds the reel. The teacher. The parents. Everyone gets a shareable version."
@@ -340,7 +340,7 @@ Try free first → link in bio
 "I filmed cooking all day. AI turned it into this in 35 seconds."
 
 [Show: long, raw cooking session footage — chopping, stirring, plating, messy kitchen]
-[Voiceover] "AI watched every frame. Found the best moments — the flip, the plating, the finished dish —"
+[Voiceover] "AI scored the footage. Found the best moments — the flip, the plating, the finished dish —"
 
 [Show: finished food highlight with clean cuts and kinetic captions]
 [Voiceover] "— and made the edit. Tight cuts on the best moments. Clean captions. Done."
