@@ -62,7 +62,12 @@ export const GLOBAL_STEMS_DAILY_CAP = 200;
 /** Two-day TTL on each per-day key so buckets self-clean in KV (yesterday's expires). */
 const KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
 
-type CeilingKind = "export" | "gen";
+// "global-gen" is a SEPARATE keyspace for the anonymous global ceiling (see
+// enforceGlobalGenerationCeiling). It must NOT share the "gen" kind: `userId` is client-supplied,
+// unvalidated free text on the per-user "gen" routes (sfx/intro/voiceover/…), so a shared keyspace
+// would let a caller forge a userId that collides with the global counter and zero it out via an
+// unrelated route. A distinct kind makes the global key structurally unreachable from any "gen" call.
+type CeilingKind = "export" | "gen" | "global-gen";
 
 /** Current UTC calendar-day key, e.g. "2026-07-01". Ceilings reset at 00:00 UTC. */
 export function dailyPeriodKey(date: Date = new Date()): string {
@@ -239,8 +244,10 @@ export async function enforceGenerationCeiling(userId: string): Promise<Response
  * wallet-drain backstop — and so two concurrent calls at the boundary cannot both slip through.
  *
  * Returns a 429 Response when the ceiling is hit (or when KV is unverifiable — fail closed), or
- * `null` to proceed. Uses the "gen" kind with a fixed `__global:{bucket}` sentinel key, distinct
- * from every real (UUID) userId, so its counter never collides with a per-user one.
+ * `null` to proceed. Uses the DEDICATED "global-gen" kind (NOT "gen"), so its key
+ * ("spend:global-gen:{period}:{bucket}") is structurally unreachable from the per-user "gen"
+ * routes — a caller cannot forge a `userId` that lands on this counter and drain it via an
+ * unrelated route (the per-user "gen" userId is client-supplied, unvalidated free text).
  */
 export async function enforceGlobalGenerationCeiling(
   bucket: string,
@@ -248,7 +255,7 @@ export async function enforceGlobalGenerationCeiling(
 ): Promise<Response | null> {
   let count: number;
   try {
-    count = await getStore().increment("gen", `__global:${bucket}`, dailyPeriodKey());
+    count = await getStore().increment("global-gen", bucket, dailyPeriodKey());
   } catch {
     // Fail closed: cannot verify the ceiling → do not fire the paid call.
     return ceilingResponse();

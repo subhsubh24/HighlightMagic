@@ -163,10 +163,25 @@ describe("enforceGenerationCeiling", () => {
 describe("enforceGlobalGenerationCeiling", () => {
   it("returns null while under the cap and shares ONE counter across callers", async () => {
     const bucket = uniqueBucket();
-    expect(await enforceGlobalGenerationCeiling(bucket, 5)).toBeNull();
-    expect(await enforceGlobalGenerationCeiling(bucket, 5)).toBeNull();
-    // The counter lives under the "gen" kind at the "__global:{bucket}" sentinel key.
-    expect((await checkDailyGenerationCeiling(`__global:${bucket}`)).usage).toBe(2);
+    // Two calls to the same bucket accumulate on one shared counter → the 3rd trips a cap of 2.
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeNull();
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeNull();
+    expect(await enforceGlobalGenerationCeiling(bucket, 2)).toBeInstanceOf(Response);
+  });
+
+  // Security regression (Reviewer A, #318): the global counter must live in a keyspace the
+  // per-user "gen" routes cannot reach. `userId` is client-supplied, unvalidated free text on
+  // sfx/intro/voiceover/…, so if the global ceiling shared the "gen" kind a caller could POST
+  // {userId:"stems"} (or the old "__global:stems" sentinel) to an unrelated route and drain the
+  // global stems bucket. A dedicated "global-gen" kind makes that structurally impossible.
+  it("does NOT share a keyspace with the per-user 'gen' ceiling (collision-proof)", async () => {
+    // Hammer the per-user "gen" counter under the bucket name AND the old sentinel string.
+    for (let i = 0; i < 20; i++) await enforceGenerationCeiling("stems");
+    await enforceGenerationCeiling("__global:stems");
+    // The global "stems" bucket is untouched → a cap of 1 still admits the first global call.
+    expect(await enforceGlobalGenerationCeiling("stems", 1)).toBeNull();
+    // …and the SECOND global call trips it, proving the global counter started fresh at 0.
+    expect(await enforceGlobalGenerationCeiling("stems", 1)).toBeInstanceOf(Response);
   });
 
   it("returns a 429 Response once the shared cap is reached", async () => {
