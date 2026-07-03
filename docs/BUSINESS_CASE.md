@@ -95,6 +95,28 @@ All inputs researched via web sources; dates noted.
 direct competitor (short-form video). Moving to $14.99 at launch would be mid-market and
 reasonable given HighlightMagic's AI-automated positioning.
 
+### Demand-signal addendum (2026-07-03) — competitive landscape + JTBD validation
+
+Per GTM_STANDARD §10 (pre-launch demand validation), the Growth Agent mined real public
+complaints/reviews this run (full citations + quotes in `docs/growth/GROWTH_STATUS.md`
+`demand_signal`). Two findings sharpen this section without changing any modeled number (a
+qualitative signal never becomes an invented figure — anti-gaming holds):
+- **The core JTBD is real and durable**: manual highlight editing is repeatedly cited (across
+  independent 2026 sources) as a 4–6 hour/video time cost — this directly validates the product's
+  core value proposition. Confidence: high.
+- **Two competitors were missing from the table above and should inform positioning**: **Eklipse**
+  (eklipse.gg) is an established, dedicated AI gaming-clip tool ("trained on 1,000+ game titles",
+  claims 1M+ streamers) — so "AI editing for gaming footage" is already served, not white space.
+  Separately, the youth-sports-highlight moment has dedicated competitors (FullCourt.ai, XbotGo,
+  Athlete AI, MOJO Sports). HighlightMagic's honest differentiation is **breadth** — one iOS-native
+  app spanning gaming, sports, events, and family footage, with no special hardware — not category
+  exclusivity in any single vertical. Marketing copy should not claim "the only tool for gaming
+  highlights" (see disconfirming notes in GROWTH_STATUS).
+- **Existing tools carry real trust friction** (processing failures, opaque credit systems,
+  hard-to-cancel billing — Opus Clip, CapCut, Descript). HighlightMagic's flat pricing (no
+  credit-expiry traps) structurally avoids this pattern, which is a real differentiator to earn
+  post-launch, not a launch-day claim to make.
+
 ### Market size (fetched 2026-06-24)
 - Mobile video editing market: **$7.8B (2026) → $22.4B (2034), 12.4% CAGR** — Straits Research
 - Video editing market overall: **$3.75B (2026), 5.88% CAGR** — Mordor Intelligence

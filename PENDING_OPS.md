@@ -10,7 +10,7 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-01
+  as_of: 2026-07-03
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
@@ -132,15 +132,12 @@ OWNER_ACTIONS:
       blocks: music-feature
 ```
 
-## 🚨 URGENT — DO NOW (the backend is live on Vercel and calls PAID APIs)
-A code-level spend ceiling (Track H7) CANNOT override a provider that itself has no cap. Set HARD
-DAILY SPEND CAPS + 50%-of-cap ALERTS in EACH provider dashboard immediately:
-- **Anthropic** — console.anthropic.com → Billing/Limits: hard monthly+daily cap + usage alert.
-- **ElevenLabs** — elevenlabs.io account/billing: usage cap + alert (or a metered-plan ceiling).
-- **AtlasCloud** — provider dashboard: spend cap + alert.
-Rationale: a single export fires multiple expensive generation calls; an unthrottled/abused public
-endpoint is the fastest possible wallet drain. If any key is ever suspected exposed, regenerate it
-immediately (and note it here).
+## ✅ Spend caps — DONE (owner-attested 2026-07-02)
+Hard daily/monthly spend caps + 50%-of-cap alerts are set in console.anthropic.com, elevenlabs.io
+billing, and the AtlasCloud dashboard (see the `spend-caps` item in OWNER_ACTIONS above). This was
+the hard backstop against an unthrottled/abused public endpoint racking up cost via a single
+export's multiple expensive generation calls. If any key is ever suspected exposed, regenerate it
+immediately and note it here.
 
 ## Backend API Keys (Vercel Environment Variables)
 
