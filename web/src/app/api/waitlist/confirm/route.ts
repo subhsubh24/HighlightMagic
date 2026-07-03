@@ -10,6 +10,9 @@ import { sendEmail, buildWelcomeEmail } from "@/lib/email";
 // only generic messages (Track H3 — no token/email enumeration).
 
 export const runtime = "nodejs";
+// KV read + a welcome-email send (email client has its own 10s timeout). An explicit budget
+// keeps the confirm click from being killed at the short platform default mid-send.
+export const maxDuration = 30;
 
 function page(title: string, body: string, status: number): NextResponse {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">` +

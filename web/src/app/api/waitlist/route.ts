@@ -4,6 +4,11 @@ import { addPendingSignup, addConfirmedSignup } from "@/lib/growth/waitlist-stor
 import { sendEmail, buildConfirmationEmail, isEmailConfigured } from "@/lib/email";
 
 export const runtime = "nodejs";
+// Signup does KV writes + a confirmation-email send (the email client has its own 10s
+// timeout). Without an explicit budget the function inherits the short platform default
+// (~10-15s) and can be killed mid-flow — a signup persisted with no email sent, dead-ending
+// the funnel. 30s comfortably covers the email + KV round-trips.
+export const maxDuration = 30;
 
 // E6a — Waitlist capture with double-opt-in.
 // Persists each signup to the datastore (Vercel KV when configured; in-memory otherwise),
