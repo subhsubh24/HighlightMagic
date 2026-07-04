@@ -256,12 +256,19 @@ describe("constants", () => {
 
 const FIXED_BASE64 = "QUJD"; // "ABC" — what toDataURL(...).split(",")[1] yields
 
+/** Toggles whether captured frames differ frame-to-frame (drives scene-change detection). */
+const canvasOpts = { sceneChange: false };
+
 class FakeCanvasCtx {
+  private call = 0;
   drawImage() { /* no-op */ }
   getImageData() {
-    // Constant frame → frameDifference() === 0 → no scene changes (kept out of
-    // the way so audio onsets are the sole, deterministic interest-point source).
-    return { data: new Uint8ClampedArray(256) } as unknown as ImageData;
+    // Default: a constant frame → frameDifference() === 0 → no scene changes, so
+    // audio onsets are the sole, deterministic interest-point source. When
+    // sceneChange is on, alternate 0x00/0xFF fills so every consecutive pair is
+    // maximally different (frameDifference === 1.0 >= SCENE_CHANGE_THRESHOLD).
+    const fill = canvasOpts.sceneChange ? (this.call++ % 2 === 0 ? 0 : 255) : 0;
+    return { data: new Uint8ClampedArray(256).fill(fill) } as unknown as ImageData;
   }
 }
 class FakeCanvas {
@@ -329,6 +336,7 @@ const fakeDocument = {
 beforeEach(() => {
   FakeAudioContext.decodeThrows = false;
   FakeAudioContext.audioBurst = true;
+  canvasOpts.sceneChange = false;
   vi.stubGlobal("document", fakeDocument);
   vi.stubGlobal("window", { AudioContext: FakeAudioContext, Image: FakeImage });
   vi.stubGlobal("AudioContext", FakeAudioContext);
@@ -360,9 +368,6 @@ describe("extractFrames", () => {
     expect(frames).toHaveLength(5);
     expect(frames.map((f) => f.timestamp)).toEqual([0, 1, 2, 3, 4]);
     expect(frames.every((f) => f.base64 === FIXED_BASE64)).toBe(true);
-    // No audio decoded content requested → no energy tags on this path... audio
-    // WAS decoded (burst off but buffer present) so energy fields exist but are 0-ish.
-    expect(frames.every((f) => f.timestamp >= 0)).toBe(true);
   });
 
   it("caps base frames at MAX_BASE_FRAMES_PER_VIDEO for long videos", async () => {
@@ -392,8 +397,32 @@ describe("extractFrames", () => {
     }
   });
 
+  it("adds bonus frames from VISUAL scene changes (the non-audio interest-point source)", async () => {
+    // No audio interest points (decode throws), but every consecutive frame
+    // differs → a scene change at each interval → bonus frames anchored at the
+    // midpoint (time - effectiveInterval/2). This exercises the other half of
+    // "audio onset peaks ∪ visual scene changes".
+    FakeAudioContext.decodeThrows = true;
+    canvasOpts.sceneChange = true;
+    const frames = await extractFrames("blob:video", 4);
+    // 5 base frames (0..4) plus bonus frames around the scene-change midpoints.
+    expect(frames.length).toBeGreaterThan(5);
+    // A midpoint anchor sits at a non-integer timestamp like x.5 / x.25 / x.75
+    // (base frames are all integers here), proving a scene-change bonus frame landed.
+    expect(frames.some((f) => !Number.isInteger(f.timestamp))).toBe(true);
+  });
+
   it("degrades gracefully with no audio (decode throws): frames still returned untagged", async () => {
     FakeAudioContext.decodeThrows = true;
+    const frames = await extractFrames("blob:video", 3);
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((f) => f.audioEnergy === undefined)).toBe(true);
+  });
+
+  it("survives the video audio fetch throwing (decodeVideoAudio outer catch)", async () => {
+    // The whole audio decode pipeline fails at fetch — frames must still return,
+    // just without audio tags (frame-extractor.ts decodeVideoAudio outer catch).
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("blob fetch failed"); }) as unknown as typeof fetch);
     const frames = await extractFrames("blob:video", 3);
     expect(frames.length).toBeGreaterThan(0);
     expect(frames.every((f) => f.audioEnergy === undefined)).toBe(true);
@@ -463,6 +492,27 @@ describe("extractFramesFromMultiple", () => {
     expect(photos).toHaveLength(1);
     expect(videos.length).toBeGreaterThan(0);
     expect(pcts[pcts.length - 1]).toBe(100);
+    // Progress never goes backwards across the batch.
+    for (let i = 1; i < pcts.length; i++) {
+      expect(pcts[i]).toBeGreaterThanOrEqual(pcts[i - 1]);
+    }
+  });
+
+  it("rejects when a photo fails to load", async () => {
+    // Image whose load errors instead of firing onload — imageFileToBase64 rejects.
+    const errDoc = {
+      createElement: (tag: string) => (tag === "canvas" ? new FakeCanvas() : new FakeVideo()),
+    };
+    class ErrImage extends FakeImage {
+      set src(_v: string) { queueMicrotask(() => this.onerror?.()); }
+      get src() { return ""; }
+    }
+    vi.stubGlobal("document", errDoc);
+    vi.stubGlobal("window", { AudioContext: FakeAudioContext, Image: ErrImage });
+    vi.stubGlobal("Image", ErrImage);
+    await expect(
+      extractFramesFromMultiple([mediaFile({ id: "p1", type: "photo", duration: 0, url: "blob:bad" })]),
+    ).rejects.toThrow(/Failed to load image/);
   });
 
   it("returns an empty array for no media", async () => {
