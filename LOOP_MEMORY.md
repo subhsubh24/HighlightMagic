@@ -4,6 +4,67 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 46 — 2026-07-04 — 4 merged PRs: closed BOTH QUALITY_SCORECARD-named ship-critical low-coverage files (tests_evals)
+Cold start; branched every PR from `origin/main`. Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B,
+ship_gate false) + GROWTH_STATUS (pre_launch, funnel/pmf 0/null — no lever to weight) + BUSINESS_CASE (base y1 $7,740, floor
+~y3.2) as DATA. Baseline web gate green (build + 874 tests + 0 lint, coverage 77.64% above floors). Shipped **4 merged PRs
+(#322, #323, #324, #325)** — all file-DISJOINT, all web test-only (ZERO iOS-compile risk, zero source change), each cleared
+2 Sonnet reviewers + all 4 required checks. Abandoned 0.
+
+**What shipped (the tests_evals `gap_to_a` named audio-mux.ts + frame-extractor.ts specifically as ship-critical low files
+"masked by the healthy aggregate" — closed BOTH this run):**
+- **#322 + #324 (audio-mux.ts 8.52% → 99.22% stmts / 100% lines):** ship-critical render path (mixes clip audio + music +
+  voiceover/SFX into the export MediaStream). Built a Web Audio API test double recording gain-automation/source-lifecycle/node
+  calls → asserts REAL scheduling (ducking envelopes 0.5×0.3=0.15, fades, layer timing = renderStart+offset, breaths, connectVideo
+  volume defaults 1.0/0.45, CORS-fallback mute, cleanup). #324 added the reviewer-requested resilience trio: inline-music-fetch
+  throw, per-layer-fetch throw (isolation), and a fake-timer assertion that connectVideo's deferred setTimeout(100) really
+  disconnects the nodes.
+- **#323 + #325 (frame-extractor.ts 40.21% → 97.82% stmts / 99.15% lines):** core import→detect entry. DOM + Web Audio fakes
+  (FakeVideo queueMicrotask seeking, FakeCanvas, FakeAudioContext decode-with-onset-burst, FakeImage) drive REAL orchestration:
+  MAX_BASE_FRAMES_PER_VIDEO adaptive cap (121@600s / 11@10s), audio-onset bonus frames + tagging, no-audio degradation, progress
+  0→100, load-error reject. #325 closed the reviewer-flagged gap: the VISUAL scene-change interest-point branch was dark →
+  controllable `canvasOpts.sceneChange` (alternating pixel fills) + a test proving scene changes alone produce non-integer
+  midpoint bonus frames; plus monotonic-progress + photo-load-error + decodeVideoAudio-outer-catch.
+
+### DEEP AUDIT — 2026-07-04 (Run 46) — 4-lens read-only scout sweep (last full audit was Run 42, 2026-07-03, ~4 runs/~24h prior)
+Spawned 4 Haiku read-only scouts across DIFFERENT lenses; distilled + actioned. **No CRITICAL findings; nothing jumped the queue.**
+- **Track H security/abuse — CLEAN.** All 25+ paid routes carry rate-limit (H1) + server-side validation/input-bounds (H2) +
+  error-hygiene (H3, no upstream-body echo) + CORS/headers (H6) + code-level daily spend ceiling (H7, KV-atomic, fail-closed) +
+  entitlement gate before the paid call. Every provider/LLM fetch has an AbortSignal timeout < serverless budget. No leaked secrets.
+  (Reconciles with QUALITY_SCORECARD security=A.)
+- **Correctness / dead-code — CLEAN.** No TODO/FIXME/stub on live paths; error handling consistent; all serverless routes' external
+  calls are timeout-guarded; no bare env/auth reads outside try. (Reconciles with correctness=A.)
+- **Artifact freshness — CLEAN.** Pricing ($14.99/$149.99), FREE_EXPORT_LIMIT=5, "no embedded API keys", 1080×1920, frame-SAMPLING
+  (not "every frame"), 50/user/DAY ceiling — all consistent README/BUSINESS_CASE/aso/brand vs code. No stale contradictions.
+- **Test coverage — the run's work.** audio-mux (8.52%) + frame-extractor (40.21%) were the named ship-critical low files → LIFTED
+  to ~99% / ~98% this run. Scout's OTHER candidates re-verified and correctly NOT taken: kinetic-text is **74%** (scout's "44.88%"
+  was STALE) — above the 60 floor, non-ship-critical caption math, already has a fake-ctx test → lifting it would be padding, not
+  value-bar work; sfx-library's fuzzy-match branch is DEAD until CDN URLs are configured (all LIBRARY urls null — an owner action)
+  → covering it needs a testability refactor Reviewer B would reject; transitions was just done (#299); redeemCreditPack already
+  has credit-redemption.test.ts. So the run correctly STOPPED at the two named files rather than pad to a count.
+
+### PROCESS LESSON (Run 46) — enable auto-merge ONLY AFTER both loop-reviewers approve
+GitHub auto-merge fires on CI-green ALONE; the loop's 2-reviewer gate is NOT a GitHub required check, so enabling auto-merge
+BEFORE the reviewers finish silently bypasses it. This run I enabled auto-merge immediately on #322/#323 → both merged on CI-green
+(~2-4 min) BEFORE Reviewer B's REQUEST_CHANGES landed, stranding the requested fixes. They were CORRECT + green merges (Reviewer
+B's asks were completeness gaps, not bugs — main was never broken), and I landed the fixes cleanly as follow-ups #324/#325.
+CORRECT SEQUENCE (used for #325): push branch → create PR WITHOUT auto-merge → run the 2 reviewers → only after BOTH approve,
+enable auto-merge (or merge directly if CI already green). Do NOT `enable_pr_auto_merge` at PR-creation time. Not opening a
+harness-proposal issue (single occurrence, fix is my own sequencing which the routine already implies); escalate only if it recurs.
+
+### What NOT to re-do (Run 46)
+- Do NOT re-lift audio-mux.test.ts — done #322 (loadTrackAudio + createAudioPipeline) + #324 (resilience/teardown); now 99.22%/100%.
+- Do NOT re-lift frame-extractor.test.ts — done #323 (orchestration) + #325 (scene-change branch + nits); now 97.82%/99.15%.
+- Do NOT lift kinetic-text.ts just for a number — it's 74% (above floor), non-ship-critical, already fake-ctx-tested; a coverage
+  scout may report a stale 44.88% — that's wrong. Only touch it if a REAL caption-render bug/regression surfaces.
+- Do NOT try to test sfx-library's fuzzy-match scoring without first making LIBRARY injectable — all entries have url:null so the
+  fuzzy branch is unreachable dead code until the owner configures CDN URLs; a testability-only refactor is Reviewer-B-reject churn.
+- Next tests_evals moves that ACTUALLY move the grade toward A (NOT more web coverage — the aggregate is now ~78%+ with the two
+  named files closed): (1) ElevenLabs/AtlasCloud round-trip evals (G3 rung 4/5 — costs real API $, needs keys; live-eval only);
+  (2) an iOS export-to-file roundtrip test (Linux-unverifiable — gated by `ios` check); (3) make live-eval.yml FAIL not skip-green
+  when keyless (#289 — but .github/ is owner/interactive-only, cannot edit). These are the remaining tests_evals gaps; all three
+  are outside the Linux-web lane, so the tests_evals dim likely stays B until an owner/macOS/keyed action lands.
+
 ## Run 45 — 2026-07-03 — 2 file-disjoint changes (stems global spend ceiling [Track H7] + pricing_view funnel wiring [E5])
 Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 42's was 2026-07-03, <24h/<4 runs ago).
 Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
