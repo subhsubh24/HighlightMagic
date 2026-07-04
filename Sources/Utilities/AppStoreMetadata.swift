@@ -43,7 +43,6 @@ enum AppStoreMetadata {
     • Advanced multi-pass AI detection
     • Premium filters & effects
     • iCloud project sync across devices
-    • Priority processing
     """
 
     // Max 100 chars — high-volume, no spaces after commas to maximize keyword density

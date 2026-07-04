@@ -233,7 +233,6 @@ const PRICING: PricingPlan[] = [
       "AI highlight detection",
       "Auto captions & transitions",
       "1080×1920 MP4 export",
-      "Priority processing",
     ],
     cta: "Join the Waitlist",
     ctaHref: null,
