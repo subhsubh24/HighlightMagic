@@ -180,7 +180,11 @@ export default function ResultsStep() {
 
       {/* Failed animation banner */}
       {failedAnimations.length > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 animate-fade-in">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 animate-fade-in"
+        >
           <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-400" />
           <div className="flex-1">
             <p className="text-sm font-medium text-red-300">

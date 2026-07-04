@@ -123,5 +123,12 @@ export function Turnstile({ siteKey, onVerify, onExpire, className }: TurnstileP
     };
   }, [siteKey]);
 
-  return <div ref={containerRef} className={className} />;
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      role="group"
+      aria-label="CAPTCHA verification challenge"
+    />
+  );
 }
