@@ -93,12 +93,14 @@ BCS_TMP="$(mktemp)"; printf '%s\n' "$BCS" > "$BCS_TMP"
 if python3 -c 'import yaml' >/dev/null 2>&1; then
   python3 - "$BCS_TMP" <<'PY' || { rm -f "$BCS_TMP"; fail "BUSINESS_CASE_SUMMARY does not parse as YAML, or arr_year1.base is missing."; }
 import sys, yaml
-d = yaml.safe_load(open(sys.argv[1]))
-assert isinstance(d, dict), "summary block is not a YAML mapping"
+top = yaml.safe_load(open(sys.argv[1]))
+assert isinstance(top, dict), "summary block is not a YAML mapping"
+d = top.get("BUSINESS_CASE_SUMMARY")
+assert isinstance(d, dict), "BUSINESS_CASE_SUMMARY top-level key missing or not a mapping"
 assert d.get("arr_year1", {}).get("base") is not None, "arr_year1.base missing"
 PY
 elif [ -f web/node_modules/js-yaml/package.json ]; then
-  node -e 'const y=require("./web/node_modules/js-yaml"),fs=require("fs");const d=y.load(fs.readFileSync(process.argv[1],"utf8"));if(!d||typeof d!=="object"||d.arr_year1==null||d.arr_year1.base==null)process.exit(1);' "$BCS_TMP" \
+  node -e 'const y=require("./web/node_modules/js-yaml"),fs=require("fs");const t=y.load(fs.readFileSync(process.argv[1],"utf8"));const d=t&&t.BUSINESS_CASE_SUMMARY;if(!d||typeof d!=="object"||d.arr_year1==null||d.arr_year1.base==null)process.exit(1);' "$BCS_TMP" \
     || { rm -f "$BCS_TMP"; fail "BUSINESS_CASE_SUMMARY does not parse as YAML, or arr_year1.base is missing."; }
 else
   rm -f "$BCS_TMP"; fail "no YAML parser available (need python3+PyYAML or web js-yaml) to verify the summary block."
