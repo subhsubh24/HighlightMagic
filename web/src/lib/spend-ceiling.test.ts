@@ -24,6 +24,15 @@ import {
   dailyPeriodKey,
   __resetCeilingStoreForTests,
 } from "./spend-ceiling";
+import { kv } from "@vercel/kv";
+import { KV_OP_TIMEOUT_MS } from "./kv-quota-store";
+
+// The file-wide @vercel/kv mock (top of file) exposes vi.fn()s we can re-program per test.
+const mockKv = kv as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  incr: ReturnType<typeof vi.fn>;
+  expire: ReturnType<typeof vi.fn>;
+};
 
 function uniqueUser(): string {
   return `user-${Math.random().toString(36).slice(2)}`;
@@ -282,6 +291,60 @@ describe("fail-closed on KV error", () => {
   it("returns 429 from enforceGlobalGenerationCeiling when KV throws (anonymous fail-closed)", async () => {
     selectFailingKVStore();
     const blocked = await enforceGlobalGenerationCeiling(uniqueBucket(), GLOBAL_STEMS_DAILY_CAP);
+    expect(blocked).toBeInstanceOf(Response);
+    expect(blocked?.status).toBe(429);
+  });
+});
+
+// The KV store sets a 2-day TTL on the FIRST write of the day so a hammered counter still
+// expires (a key without a TTL lives forever → the day's ceiling never resets), and wraps every
+// KV op in withTimeout so a hung KV round-trip fails fast + closed rather than burning the whole
+// serverless budget. These paths were previously unexercised.
+describe("VercelKVDailyCeilingStore — TTL + timeout behavior", () => {
+  function selectKVStore(): void {
+    vi.stubEnv("KV_REST_API_URL", "https://kv.example");
+    vi.stubEnv("KV_REST_API_TOKEN", "token");
+    __resetCeilingStoreForTests();
+  }
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    __resetCeilingStoreForTests();
+    vi.useRealTimers();
+    // Restore the file-wide rejecting defaults so no later test is affected.
+    mockKv.get.mockReset().mockRejectedValue(new Error("KV down"));
+    mockKv.incr.mockReset().mockRejectedValue(new Error("KV down"));
+    mockKv.expire.mockReset().mockRejectedValue(new Error("KV down"));
+  });
+
+  it("sets the 2-day TTL only on the FIRST write of the day (INCR → 1), never on later writes", async () => {
+    selectKVStore();
+    mockKv.incr.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    mockKv.expire.mockResolvedValue(1);
+    const user = uniqueUser();
+    const expectedKey = `spend:gen:${dailyPeriodKey()}:${user}`;
+
+    expect(await recordDailyGeneration(user)).toBe(1);
+    expect(await recordDailyGeneration(user)).toBe(2);
+
+    expect(mockKv.expire).toHaveBeenCalledTimes(1);
+    expect(mockKv.expire).toHaveBeenCalledWith(expectedKey, 2 * 24 * 60 * 60);
+  });
+
+  it("still returns the incremented count when the best-effort EXPIRE fails (no spurious fail-closed)", async () => {
+    selectKVStore();
+    mockKv.incr.mockResolvedValueOnce(1);
+    mockKv.expire.mockRejectedValueOnce(new Error("EXPIRE blip"));
+    // INCR already durably bumped the count; a TTL hiccup must not throw / fail the caller closed.
+    expect(await recordDailyGeneration(uniqueUser())).toBe(1);
+  });
+
+  it("a hung KV INCR rejects fast via withTimeout, failing the generation gate CLOSED (429)", async () => {
+    vi.useFakeTimers();
+    selectKVStore();
+    mockKv.incr.mockReturnValue(new Promise<number>(() => {})); // never resolves
+    const blockedP = enforceGenerationCeiling(uniqueUser());
+    await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 10);
+    const blocked = await blockedP;
     expect(blocked).toBeInstanceOf(Response);
     expect(blocked?.status).toBe(429);
   });
