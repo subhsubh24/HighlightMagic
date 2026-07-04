@@ -369,6 +369,19 @@ describe("createAudioPipeline", () => {
     expect(ctx.gains).toHaveLength(0);
   });
 
+  it("degrades gracefully when the music fetch throws (no music, render still builds)", async () => {
+    // createAudioPipeline has its OWN inline fetch/decode for music (it does NOT
+    // call loadTrackAudio) — a network blip on the music file must not abort the
+    // whole render; it should just proceed without a music layer.
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("music host down"); }) as unknown as typeof fetch);
+    const pipeline = await createAudioPipeline(canvasStream(), musicTrack());
+    const ctx = FakeAudioContext.instances.at(-1)!;
+    expect(ctx.bufferSources).toHaveLength(0); // no music source created
+    // Pipeline is still usable: canvas video + mixed-audio destination present.
+    expect(pipeline.stream.getAudioTracks()).toHaveLength(1);
+    expect(() => pipeline.cleanup()).not.toThrow();
+  });
+
   it("uses a bare AI music URL when no track object is given", async () => {
     const fetchMock = okFetch();
     vi.stubGlobal("fetch", fetchMock);
@@ -400,6 +413,24 @@ describe("createAudioPipeline", () => {
     const ctx = FakeAudioContext.instances.at(-1)!;
     expect(ctx.bufferSources).toHaveLength(0);
     // Still returns a usable pipeline.
+    expect(pipeline.stream.getAudioTracks()).toHaveLength(1);
+  });
+
+  it("skips a scheduled layer whose fetch throws, keeping other layers", async () => {
+    // Music loads fine; only the layer marked "throw" rejects — it is dropped
+    // while the sibling layer still schedules (the per-layer try/catch path).
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("throw")) throw new Error("layer host down");
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
+    }) as unknown as typeof fetch);
+    const layers: ScheduledAudioLayer[] = [
+      { url: "/throw-vo.mp3", startTime: 1, volume: 0.9, layerType: "voiceover" },
+      { url: "/good-sfx.mp3", startTime: 2, volume: 0.7, layerType: "sfx" },
+    ];
+    const pipeline = await createAudioPipeline(canvasStream(), musicTrack(), null, layers);
+    const ctx = FakeAudioContext.instances.at(-1)!;
+    // Music source + the one good layer = 2 buffer sources; the throwing layer is skipped.
+    expect(ctx.bufferSources).toHaveLength(2);
     expect(pipeline.stream.getAudioTracks()).toHaveLength(1);
   });
 
@@ -457,6 +488,27 @@ describe("createAudioPipeline", () => {
       expect(typeof disconnect).toBe("function");
       disconnect(); // schedules a fade-out; must not throw
       expect(clipGain.calls.some((c) => c.value === 0)).toBe(true);
+    });
+
+    it("actually disconnects the audio nodes after the fade-out settles", async () => {
+      const pipeline = await createAudioPipeline(canvasStream(), null);
+      const ctx = FakeAudioContext.instances.at(-1)!;
+      const disconnect = pipeline.connectVideo({} as HTMLVideoElement, 0.8);
+      const elemSource = ctx.elementSources.at(-1)!;
+      const clipGain = ctx.gains.at(-1)!;
+
+      // The teardown defers source/gain.disconnect() inside setTimeout(..., 100)
+      // so the fade-out can complete — without advancing timers the nodes leak.
+      vi.useFakeTimers();
+      try {
+        disconnect();
+        expect(elemSource.disconnected).toBe(false); // not yet — deferred
+        vi.advanceTimersByTime(100);
+        expect(elemSource.disconnected).toBe(true);
+        expect(clipGain.disconnected).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("defaults clip volume to 1.0 when there is no music present", async () => {
