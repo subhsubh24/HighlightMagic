@@ -124,6 +124,20 @@ normal experiment discipline (falsifiable, min sample, significance) once post-l
   pre-set N. Peeking without sequential correction is not significance — wait for N.
 - Always report the N alongside any rate so a reader can judge it.
 
+### Pulling REAL funnel/analytics data — do this EVERY run (env changes are invisible to git; FACTORY_STANDARD §28)
+The authenticated read path is **`GET /api/growth/stats`** on your deployed production app, returning real
+privacy-safe aggregate metrics. Authenticate with the **`GROWTH_AGENT_SECRET`** provided in your routine
+environment (PROD_URL = your deployed production domain):
+
+    curl -s -H "Authorization: Bearer $GROWTH_AGENT_SECRET" "$PROD_URL/api/growth/stats"
+
+- **Always CALL it — never infer "no owner movement" from `git fetch`.** Owner source-connections
+  are ENV VARS (Vercel + this routine), invisible to `git` and connector-lists — re-probe EVERY run.
+- **Self-diagnose in `GROWTH_STATUS.validation`:** report whether `GROWTH_AGENT_SECRET` was present in your env
+  (presence only, NEVER the value) + the HTTP status. `200` → populate metrics from the REAL payload
+  and flip sources to `connected`. `401` → `GROWTH_AGENT_SECRET` missing/mismatched vs the deployed app
+  (surface the exact owner_action). This makes the break point visible on the dashboard.
+
 ## Strategic outreach (curated, human-reviewed drafts)
 You MAY also run a FEW 1:1, deeply-personalized outreach emails to genuinely strategic targets
 (press / partners / overlapping creators / newsletter curators) — as Gmail **DRAFTS** for the owner
