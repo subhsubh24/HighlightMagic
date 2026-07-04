@@ -150,6 +150,23 @@ describe("E8 experiment engine — lift measurement", () => {
     expect(Number.isNaN(lift.z ?? 0)).toBe(false);
   });
 
+  it("never emits NaN when conversions exceed exposures (lost/duplicated beacon, pooled > 1)", () => {
+    // A lost exposure or a double-fired conversion can make conversions > exposures. The pooled
+    // proportion then exceeds 1 -> sqrt of a negative. The result must stay well-formed.
+    const lift = computeLift(stats("control", 100, 1000), stats("variant", 100, 50));
+    expect(lift.verdict).toBe("no_significant_difference");
+    expect(lift.significant).toBe(false);
+    expect(lift.z).toBeNull();
+    expect(lift.p_value).toBeNull();
+  });
+
+  it("handles fully-saturated arms (every exposure converted, pooled === 1) without NaN", () => {
+    const lift = computeLift(stats("control", 200, 200), stats("variant", 200, 200));
+    expect(lift.verdict).toBe("no_significant_difference");
+    expect(lift.significant).toBe(false);
+    expect(Number.isNaN(lift.z ?? 0)).toBe(false);
+  });
+
   it("MIN_SAMPLE_PER_ARM guards both arms independently", () => {
     expect(computeLift(stats("c", MIN_SAMPLE_PER_ARM - 1, 10), stats("v", 1000, 100)).verdict).toBe(
       "insufficient_data"

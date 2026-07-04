@@ -219,8 +219,14 @@ export function computeLift(control: VariantStats, treatment: VariantStats): Lif
   const nC = control.exposures;
   const nT = treatment.exposures;
   const pooled = (control.conversions + treatment.conversions) / (nC + nT);
+  // Guard the full degenerate range, not just zero variance: exposure and conversion beacons
+  // are reported independently, so a lost exposure or a duplicated conversion can push a
+  // variant's conversions above its exposures -> pooled >= 1 -> sqrt of a negative -> NaN. Both
+  // pooled <= 0 (no conversions) and pooled >= 1 (saturated/over-counted) carry no usable
+  // variance; return a well-formed non-significant result rather than a NaN z/p that would
+  // masquerade as insufficient_data and corrupt the E7 surface.
   const se = Math.sqrt(pooled * (1 - pooled) * (1 / nC + 1 / nT));
-  if (se === 0) {
+  if (pooled <= 0 || pooled >= 1 || !(se > 0)) {
     return { ...base, significant: false, verdict: "no_significant_difference" };
   }
 
