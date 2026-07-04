@@ -4,6 +4,55 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 49 — 2026-07-04 — 2 merged PRs: credit-store atomicity + waitlist KV timeout hardening (correctness/Track H)
+Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (last was 2026-07-04, <24h/<4 runs ago). Consumed
+QUALITY_SCORECARD (as_of 2026-07-03, overall B, ship_gate false — ship-blocker is store_readiness=C, owner-only: archivable
+Xcode target A6/D5 + 6.9" screenshots + real team/app IDs) + GROWTH_STATUS (pre_launch, funnel/pmf 0/null — no binding lever)
++ BUSINESS_CASE (base y1 $7,740) as DATA. Ran a 3-scout Haiku sweep (security/Track-H, test/eval coverage, backend correctness).
+Shipped **2 merged PRs (#350, #351)**, both file-DISJOINT, web-only + fully verified locally (956 tests, 0 lint, build ok),
+each cleared 2 Sonnet reviewers + all 4 required checks. Abandoned 0. Selected the scorecard's named `correctness_reliability`
+to-A+ residual + a real serverless-budget hard-rule gap the correctness scout surfaced; the only ship-critical sub-A dim
+(store_readiness) stays owner-only.
+- **#350 (correctness_reliability to-A+):** `VercelKVCreditStore.grant()` was a two-step SET-NX + INCRBY. `Promise.race`
+  timeouts DON'T cancel the in-flight KV op, so a timed-out INCRBY is an **in-doubt write**. My FIRST attempt (compensating
+  rollback: delete the marker + rethrow) was correctly REJECTED by Reviewer A cycle 1 — on an in-doubt *success* the rollback
+  frees the marker and the App Store retry re-runs INCRBY → **DOUBLE-GRANT** (worse than the silent-loss it fixed). Rewrote to a
+  **single atomic `kv.eval` Lua script** (SET NX + INCRBY commit together or neither) — no split-write window, so a timed-out
+  redeem is idempotent-on-retry. Both cycle-2 reviewers verified the Lua by hand + confirmed `kv.eval` exists in @upstash/redis
+  types + approved. `SET NX` stays the anti-mint boundary. InMemory store unchanged.
+- **#351 (correctness / Track H serverless-budget rule):** `waitlist-store.ts` awaited all 8 `@vercel/kv` ops with NO timeout —
+  the ONLY KV store missing the shared `withTimeout` (kv-quota-store/credit-store/spend-ceiling all have it). A KV hang would
+  idle the live public signup/confirm handlers to Vercel's `maxDuration` hard-kill (budget burn + cheap DoS surface). Wrapped all
+  8 ops (5s). Also wrapped the confirm GET route's `confirmSignup()` in try/catch → branded 503 page (Reviewer A/B cycle 1 both
+  flagged it was falling through to Next's default error handler once the store could throw). No enumeration leak.
+
+Follow-ups / deferred (NOT yet done):
+- **Per-IP rate-limit KV migration** (`rate-limit.ts` `buckets` is an in-memory per-instance Map) — DEFERRED: making
+  `checkRateLimit` async touches EVERY paid route (not file-disjoint, large blast radius), and it's defense-in-depth — the
+  authoritative wallet backstop (monthly quota + daily export/gen ceilings + credit balance) is already KV-atomic + fail-closed,
+  so the scorecard holds `security` at A (this is an A→A+ nicety, NOT a wallet-drain hole). Do it as ONE coordinated async
+  migration, never scattered per-route. The security scout re-flags it every sweep — this is the standing decision.
+- **withTimeout has NO AbortController** across ALL KV stores (Promise.race doesn't cancel the in-flight op). For CREDITS this is
+  now moot (atomic eval → timed-out redeem is idempotent). For the others (quota/ceiling/waitlist) a timed-out op that later
+  lands is a benign defense-in-depth residual (fail-closed already). Not worth a churn PR.
+- **LIVE-KV credit-redeem round-trip** — the atomic Lua can only be validated against real KV (unit tests mock `kv.eval`).
+  Recorded in REMAINING_STEPS: run a sandbox redemption (grant→persist→replay=duplicate, no double-grant) before the credit
+  lever goes purchasable. The lever is DORMANT today (no StoreKit consumable SKU / iOS purchase UI), so the path can't run in prod.
+
+STALE-COVERAGE FINDING (don't re-chase): the QUALITY_SCORECARD 2026-07-03 lists `audio-mux.ts` (8.52%) + `frame-extractor.ts`
+(40.21%) as ship-critical masked-low-coverage in `tests_evals.gap_to_a`. As of Run 49 those numbers are **STALE** — Run 46
+(#322–#325) already covered them: `audio-mux.ts` is now ~99% stmts / 100% lines, `frame-extractor.ts` is above the coverage
+reporting floor (didn't appear in the low-coverage table on a full `--coverage` run this run). Adding more tests there is PADDING;
+Reviewer B would reject it. The next scorecard should reflect the lift. The real remaining `tests_evals` gaps are eval BREADTH
+(ElevenLabs/AtlasCloud round-trips — the prioritized EXPORT rung / G3, needs the FFmpeg-worker build) + no iOS export roundtrip test.
+
+What NOT to re-do:
+- Do NOT re-fix credit-store `grant()` atomicity — done #350 (single atomic `kv.eval` Lua). Do NOT revert to SET-NX+INCRBY, and
+  do NOT add a compensating client-side rollback — the rollback DOUBLE-GRANTS on an in-doubt-write success (Reviewer A caught this).
+- Do NOT re-add `withTimeout` to `waitlist-store.ts` KV ops or the confirm-route try/catch — done #351.
+- Do NOT add per-IP KV rate-limiting as a scattered per-route change — see the deferred note above (one coordinated async migration only).
+- Do NOT add more tests to `audio-mux.ts` / `frame-extractor.ts` for coverage — already ~fully covered (Run 46); the scorecard number is stale.
+
 ## Run 48 — 2026-07-04 — 3 merged PRs: business-case summary parse-parity + web a11y wiring + pollTaskResult coverage
 Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (last was 2026-07-03/07-04, <24h / <4 runs ago — deep
 audits are running ~daily; no fresh one needed). Consumed QUALITY_SCORECARD (as_of 2026-07-03, overall B, ship_gate false —
