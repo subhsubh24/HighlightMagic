@@ -11,6 +11,7 @@
  */
 
 import { getWaitlistCounts, isWaitlistStoreConfigured } from "./waitlist-store";
+import { getExperimentResults, type ExperimentResult } from "./experiments";
 import { emailProvider, isEmailConfigured } from "../email";
 
 export interface GrowthMetrics {
@@ -32,6 +33,12 @@ export interface GrowthMetrics {
     provider: string;
     connected: boolean;
   };
+  /**
+   * E8 — per-experiment aggregate results (exposures/conversions + lift vs control). Honest
+   * by construction: 0 for a variant with no exposures; lift is "insufficient_data" below the
+   * sample gate. The Growth Agent records winners/losers into GROWTH_STATUS.experiments[].
+   */
+  experiments: ExperimentResult[];
 }
 
 function round3(n: number): number {
@@ -43,7 +50,7 @@ function round3(n: number): number {
  */
 export async function getGrowthMetrics(): Promise<GrowthMetrics> {
   const storeLive = isWaitlistStoreConfigured();
-  const counts = await getWaitlistCounts();
+  const [counts, experiments] = await Promise.all([getWaitlistCounts(), getExperimentResults()]);
 
   const channels: string[] = [];
   if (isEmailConfigured()) channels.push("email");
@@ -62,5 +69,6 @@ export async function getGrowthMetrics(): Promise<GrowthMetrics> {
       provider: emailProvider(),
       connected: isEmailConfigured(),
     },
+    experiments,
   };
 }
