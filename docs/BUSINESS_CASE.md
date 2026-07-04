@@ -1,16 +1,19 @@
 ```yaml
 # BUSINESS_CASE_SUMMARY (machine-readable; keep in sync with the analysis below)
-currency: USD
-arr_year1:        # year-1 run-rate ARR (month-12 MRR x 12), per scenario — derived from the model below
-  conservative: 3060
-  base: 7740
-  optimistic: 33460
-planning_case: base
-floor_usd: 100000
-floor_met_year1: false   # year-1 base run-rate ($7,740 at the live $14.99 price) is still below the $100K floor
-time_to_floor: "base: ~year 3.2 (~month 38; ~556 Pro subs at the live $14.99 price); optimistic: ~year 2 (month 22-24); conservative: ~year 5-6"
-annual_tier_lever: "$149.99/yr LIVE (2-months-free equivalent); ~72% GM at typical usage; accelerates $100K ARR ~3-4 months vs monthly-only; see Section 9"
-as_of: 2026-06-27   # recomputed: Pro price is now LIVE at $14.99/mo + $149.99/yr (config aligned across StoreKit/web/ASO)
+# Wrapped under a top-level BUSINESS_CASE_SUMMARY: key so this feed is structurally identical to the
+# other dashboard feeds (QUALITY_SCORECARD:, GROWTH_STATUS:, GTM_SCORECARD:) — one parse convention.
+BUSINESS_CASE_SUMMARY:
+  currency: USD
+  arr_year1:        # year-1 run-rate ARR (month-12 MRR x 12), per scenario — derived from the model below
+    conservative: 3060
+    base: 7740
+    optimistic: 33460
+  planning_case: base
+  floor_usd: 100000
+  floor_met_year1: false   # year-1 base run-rate ($7,740 at the live $14.99 price) is still below the $100K floor
+  time_to_floor: "base: ~year 3.2 (~month 38; ~556 Pro subs at the live $14.99 price); optimistic: ~year 2 (month 22-24); conservative: ~year 5-6"
+  annual_tier_lever: "$149.99/yr LIVE (2-months-free equivalent); ~72% GM at typical usage; accelerates $100K ARR ~3-4 months vs monthly-only; see Section 9"
+  as_of: 2026-06-27   # recomputed: Pro price is now LIVE at $14.99/mo + $149.99/yr (config aligned across StoreKit/web/ASO)
 ```
 
 # HighlightMagic — Business Case
