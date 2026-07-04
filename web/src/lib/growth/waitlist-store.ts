@@ -12,7 +12,26 @@
  *   waitlist:pending:{token}  Str  — token -> email, TTL 7 days (awaiting confirmation)
  */
 
+import { KV_OP_TIMEOUT_MS } from "../kv-quota-store";
+
 const PENDING_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+
+/**
+ * A hung KV op must surface as a fast, catchable rejection — never sit idle and burn the whole
+ * serverless budget until Vercel hard-kills the function (the waitlist route's maxDuration is far
+ * longer than this). Mirrors credit-store.ts / kv-quota-store.ts: the timeout is well under the
+ * route budget; the caller catches the rejection and returns a clean "try again" instead of hanging.
+ */
+function withTimeout<T>(op: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`KV waitlist ${label} timed out after ${KV_OP_TIMEOUT_MS}ms`)),
+      KV_OP_TIMEOUT_MS,
+    );
+  });
+  return Promise.race([op, timeout]).finally(() => clearTimeout(timer));
+}
 
 export interface WaitlistCounts {
   /** Total distinct emails that submitted the form. */
@@ -38,8 +57,11 @@ export async function addPendingSignup(email: string): Promise<string> {
   const token = globalThis.crypto.randomUUID();
   if (isWaitlistStoreConfigured()) {
     const { kv } = await import("@vercel/kv");
-    await kv.sadd("waitlist:emails", email);
-    await kv.set(`waitlist:pending:${token}`, email, { ex: PENDING_TTL_SECONDS });
+    await withTimeout(kv.sadd("waitlist:emails", email), "sadd-pending");
+    await withTimeout(
+      kv.set(`waitlist:pending:${token}`, email, { ex: PENDING_TTL_SECONDS }),
+      "set-pending",
+    );
   } else {
     memEmails.add(email);
     memPending.set(token, email);
@@ -56,8 +78,8 @@ export async function addPendingSignup(email: string): Promise<string> {
 export async function addConfirmedSignup(email: string): Promise<void> {
   if (isWaitlistStoreConfigured()) {
     const { kv } = await import("@vercel/kv");
-    await kv.sadd("waitlist:emails", email);
-    await kv.sadd("waitlist:confirmed", email);
+    await withTimeout(kv.sadd("waitlist:emails", email), "sadd-emails");
+    await withTimeout(kv.sadd("waitlist:confirmed", email), "sadd-confirmed");
   } else {
     memEmails.add(email);
     memConfirmed.add(email);
@@ -72,10 +94,10 @@ export async function confirmSignup(token: string): Promise<string | null> {
   if (!token || typeof token !== "string") return null;
   if (isWaitlistStoreConfigured()) {
     const { kv } = await import("@vercel/kv");
-    const email = await kv.get<string>(`waitlist:pending:${token}`);
+    const email = await withTimeout(kv.get<string>(`waitlist:pending:${token}`), "get-pending");
     if (!email) return null;
-    await kv.sadd("waitlist:confirmed", email);
-    await kv.del(`waitlist:pending:${token}`);
+    await withTimeout(kv.sadd("waitlist:confirmed", email), "sadd-confirmed");
+    await withTimeout(kv.del(`waitlist:pending:${token}`), "del-pending");
     return email;
   }
   const email = memPending.get(token);
@@ -90,8 +112,8 @@ export async function getWaitlistCounts(): Promise<WaitlistCounts> {
   if (isWaitlistStoreConfigured()) {
     const { kv } = await import("@vercel/kv");
     const [signups, confirmed] = await Promise.all([
-      kv.scard("waitlist:emails"),
-      kv.scard("waitlist:confirmed"),
+      withTimeout(kv.scard("waitlist:emails"), "scard-emails"),
+      withTimeout(kv.scard("waitlist:confirmed"), "scard-confirmed"),
     ]);
     return { signups: signups ?? 0, confirmed: confirmed ?? 0 };
   }

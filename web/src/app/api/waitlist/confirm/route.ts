@@ -36,7 +36,18 @@ export async function GET(req: NextRequest) {
   }
 
   const token = req.nextUrl.searchParams.get("token") ?? "";
-  const email = await confirmSignup(token);
+  let email: string | null;
+  try {
+    email = await confirmSignup(token);
+  } catch {
+    // A KV backend error (now bounded by a fast timeout in confirmSignup) must land on a branded,
+    // human page — not Next.js's default error handler. Generic copy, no token/email leak (Track H3).
+    return page(
+      "Something went wrong",
+      "We couldn't confirm your email just now. Please click the link again in a moment.",
+      503
+    );
+  }
   if (!email) {
     // Generic — never reveal whether the token existed (anti-enumeration).
     return page(

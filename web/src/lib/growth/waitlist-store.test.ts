@@ -1,4 +1,16 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock @vercel/kv so the KV-backed path can be exercised without a real connection (mirrors
+// credit-store.test.ts). Harmless to the in-memory suites below — they never reach KV (no env).
+const mockKv = {
+  sadd: vi.fn<(key: string, member: string) => Promise<number>>(),
+  set: vi.fn<(key: string, value: unknown, opts?: unknown) => Promise<string | null>>(),
+  get: vi.fn<(key: string) => Promise<string | null>>(),
+  del: vi.fn<(key: string) => Promise<number>>(),
+  scard: vi.fn<(key: string) => Promise<number>>(),
+};
+vi.mock("@vercel/kv", () => ({ kv: mockKv }));
+
 import {
   addPendingSignup,
   addConfirmedSignup,
@@ -7,6 +19,7 @@ import {
   isWaitlistStoreConfigured,
   _resetWaitlistMemory,
 } from "./waitlist-store";
+import { KV_OP_TIMEOUT_MS } from "../kv-quota-store";
 
 // These run against the in-memory fallback (no KV env in CI/tests).
 describe("waitlist store (E6a) — in-memory fallback", () => {
@@ -102,5 +115,84 @@ describe("waitlist store (E6a) — addConfirmedSignup (no-email-provider path)",
     expect(await confirmSignup(token)).toBe("pending@b.com");
     counts = await getWaitlistCounts();
     expect(counts.confirmed).toBe(2);
+  });
+});
+
+// ── VercelKV path (production — durable, cross-instance) ────────────────────────────────
+// The KV ops must be wrapped in a timeout so a hung KV call fails FAST (catchable) instead of
+// sitting idle until Vercel hard-kills the serverless function (the serverless-budget rule).
+describe("waitlist store (E6a) — Vercel KV path", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("KV_REST_API_URL", "https://example.kv.vercel.app");
+    vi.stubEnv("KV_REST_API_TOKEN", "tok_secret");
+    _resetWaitlistMemory();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    _resetWaitlistMemory();
+  });
+
+  it("uses the KV store when configured", () => {
+    expect(isWaitlistStoreConfigured()).toBe(true);
+  });
+
+  it("addPendingSignup writes the raw-signup member then the pending token with a TTL", async () => {
+    mockKv.sadd.mockResolvedValue(1);
+    mockKv.set.mockResolvedValue("OK");
+
+    const token = await addPendingSignup("kv@b.com");
+
+    expect(mockKv.sadd).toHaveBeenCalledWith("waitlist:emails", "kv@b.com");
+    expect(mockKv.set).toHaveBeenCalledWith(
+      `waitlist:pending:${token}`,
+      "kv@b.com",
+      expect.objectContaining({ ex: 60 * 60 * 24 * 7 }),
+    );
+  });
+
+  it("confirmSignup promotes a pending token to confirmed and deletes the token", async () => {
+    mockKv.get.mockResolvedValue("kv@b.com");
+    mockKv.sadd.mockResolvedValue(1);
+    mockKv.del.mockResolvedValue(1);
+
+    const email = await confirmSignup("tok-123");
+
+    expect(email).toBe("kv@b.com");
+    expect(mockKv.sadd).toHaveBeenCalledWith("waitlist:confirmed", "kv@b.com");
+    expect(mockKv.del).toHaveBeenCalledWith("waitlist:pending:tok-123");
+  });
+
+  it("confirmSignup returns null for an unknown/expired token without mutating state", async () => {
+    mockKv.get.mockResolvedValue(null);
+
+    expect(await confirmSignup("gone")).toBeNull();
+    expect(mockKv.sadd).not.toHaveBeenCalled();
+    expect(mockKv.del).not.toHaveBeenCalled();
+  });
+
+  it("a hung KV op rejects via the timeout so the route fails closed (never burns the budget)", async () => {
+    vi.useFakeTimers();
+    mockKv.sadd.mockReturnValue(new Promise<number>(() => {})); // never resolves
+
+    const pending = addPendingSignup("hang@b.com");
+    const assertion = expect(pending).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 10);
+    await assertion;
+
+    vi.useRealTimers();
+  });
+
+  it("a hung confirmSignup read rejects via the timeout", async () => {
+    vi.useFakeTimers();
+    mockKv.get.mockReturnValue(new Promise<string | null>(() => {})); // never resolves
+
+    const pending = confirmSignup("tok-x");
+    const assertion = expect(pending).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 10);
+    await assertion;
+
+    vi.useRealTimers();
   });
 });
