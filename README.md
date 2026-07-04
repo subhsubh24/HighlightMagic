@@ -7,6 +7,8 @@ import footage, AI finds the best moments, edit, and export a 1080×1920 clip fo
 Shorts. **Status: pre-launch** (join the waitlist on the marketing site; the app ships via the
 App Store / TestFlight).
 
+**Platform posture — native-first (GTM).** The iOS app IS the product; the web is the waitlist / marketing FUNNEL, not a usable web app. Marketing therefore leads with the App Store (ASO-first) — never market a web URL as "the product." (Per GTM_STANDARD §12.)
+
 ## How it works
 
 `import / capture → detect highlights → edit (trim, captions, filters) → 1080×1920 export → share`
