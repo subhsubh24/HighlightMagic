@@ -12,7 +12,7 @@ export default function Header() {
       <button
         onClick={() => dispatch({ type: "RESET" })}
         aria-label="Reset to home"
-        className="flex items-center gap-2 text-white transition-opacity hover:opacity-80"
+        className="flex items-center gap-2 rounded-lg text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-gradient">
           <Sparkles className="h-4 w-4 text-white" />
@@ -26,7 +26,7 @@ export default function Header() {
             href={IOS_APP_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-105"
+            className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0b0f]"
           >
             Get iOS App
           </a>

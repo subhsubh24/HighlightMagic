@@ -313,10 +313,18 @@ export default function UploadStep() {
 
       {/* Error */}
       {error && (
-        <div className="flex w-full max-w-lg items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex w-full max-w-lg items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400"
+        >
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400">
+          <button
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-red-400/60 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -334,7 +342,7 @@ export default function UploadStep() {
             </p>
             <button
               onClick={() => dispatch({ type: "CLEAR_MEDIA" })}
-              className="text-xs text-[var(--text-tertiary)] hover:text-red-400 transition-colors"
+              className="rounded text-xs text-[var(--text-tertiary)] transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               Clear all
             </button>
