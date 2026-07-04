@@ -235,6 +235,12 @@ at your chosen prices (the credit COUNTS are fixed server-side; only PRICE is ow
 value/benchmarks, don't undercut the per-export COGS). **(loop, at submission)** build the iOS
 StoreKit consumable purchase UI (offered at the free-limit paywall moment) and POST the signed
 transaction to `/api/credits/redeem`; keep the product IDs in sync with `CREDIT_PACK_PRODUCTS`.
+Also **(loop/owner, before the packs go purchasable)** run a one-time **live-KV sandbox redemption
+round-trip**: `credit-store.ts` `grant()` now claims the idempotency marker and increments the
+balance in a single atomic `kv.eval` Lua script (#350), and the unit tests mock `kv.eval` — so the
+Lua/RESP behavior can only be proven against a real Vercel KV instance. Redeem a sandbox consumable
+end-to-end (grant → balance persists → replay returns duplicate, no double-grant) once KV is
+provisioned, before enabling the consumable products.
 
 ---
 
