@@ -447,8 +447,10 @@ describe("Atlas Cloud API", () => {
     });
 
     it("rejects when a 'succeeded' task returns no output URL (never returns undefined)", async () => {
-      // checkTaskResult maps succeeded-but-empty-outputs to a failed result rather than a
-      // completed result with an undefined URL, so pollTaskResult must throw, not resolve empty.
+      // Provider-contract guard: a 'succeeded' status with empty outputs must NEVER surface as a
+      // resolved-but-undefined URL to the export caller. checkTaskResult maps this to a failed
+      // result, so pollTaskResult takes its failed branch and throws — this asserts the end-to-end
+      // guarantee (the loop never returns an empty URL), whichever layer catches it.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
