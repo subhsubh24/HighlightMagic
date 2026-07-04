@@ -113,7 +113,24 @@ enums; "premium filters & effects" maps to the real `PremiumEffectRenderer`; the
 literally accurate; iCloud sync is wired). No new inaccuracy introduced.
 
 **What the owner should still do**: at submission, copy this now-honest metadata into App Store Connect
-and re-confirm it against the final shipped build.
+and re-confirm it against the final shipped build. NOTE (Run 47, #342): a subsequent honesty pass also
+removed the unbacked "Priority processing" Pro bullet from this file (and the landing pricing card) — no
+tier/queue prioritization exists, so re-confirm the copied metadata does not reintroduce it.
+
+---
+
+### 0f. E8 experiment-engine live wiring — loop follow-up (no owner action)
+
+**ENGINE BUILT (Run 47, #340)** — `web/src/lib/growth/experiments.ts` (sticky assignment + KV aggregate
+store + two-proportion lift with a min-sample gate), the public beacon `/api/growth/experiment`, and the
+E7 wiring are all merged + tested. What REMAINS is loop work (NOT owner): wire `assignVariant` into an
+actual landing render (e.g. the registered `landing-headline` hero-copy experiment) and fire the
+exposure/conversion beacon, so a designed A/B test actually RUNS. Deferred because pre-launch there is no
+traffic to measure; a future run wires it once the site is live (and, at that point, hardens the beacon
+against client-reported-conversion flooding — see LOOP_MEMORY Run 47).
+
+**What the owner can do to unblock**: nothing — this completes automatically as launch traffic arrives and
+the loop wires the first live experiment.
 
 ---
 
