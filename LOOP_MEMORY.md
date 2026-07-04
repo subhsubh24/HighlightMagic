@@ -4,6 +4,64 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 47 — 2026-07-04 — 4 merged PRs: E8 experiment engine + spend-ceiling security tests + cross-surface honesty fix + landing JSON-LD
+Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 46's was 2026-07-04, same day / <4 runs ago).
+Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
+store_readiness C [owner-Mac: archivable Xcode target A6/D5 + 6.9" screenshots], functional_reality B [iOS export-to-file
+test + iOS export-count server gate — Linux-unverifiable], tests_evals B) + GROWTH_STATUS (pre_launch, funnel/pmf 0/null —
+no lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor ~y3.2) as DATA. NOTE: the 2026-07-03 scorecard's
+tests_evals "audio-mux 8.52% / frame-extractor 40.21%" is STALE — Run 46 (#322-#325) lifted both to ~99/98%; re-ran the web
+gate this run: 918 tests, coverage stmts 90.49% (was 77.64% because the scorecard predates Run 46). Ran a full 5-scout sweep
+(Haiku): security/abuse=CLEAN (no new findings), correctness, monetization, eval/test, growth/artifacts. Shipped **4 merged
+PRs (#340, #341, #342, #343)**, all file-DISJOINT, each cleared 2 Sonnet reviewers + all 4 required checks. Abandoned 0.
+- **#340 (E8 — the run's core, ROADMAP Track E last unbuilt infra):** experiment ENGINE — `web/src/lib/growth/experiments.ts`
+  (deterministic sticky `assignVariant` via sha256(expId:unitId)→weighted bucket, NO unit id stored; `recordEvent` KV HINCRBY
+  aggregate counters + in-memory fallback, only per-variant COUNTS never PII; `computeLift` two-proportion z-test with
+  MIN_SAMPLE_PER_ARM=100 gate → insufficient_data below N, never noise-as-win) + public beacon `/api/growth/experiment`
+  (PUBLIC_RATE_LIMIT H1 + strict registry validation H2 — forged experiment/variant/event → 400, no counter; no paid call) +
+  E7 wiring (getGrowthMetrics now returns experiments[] for GROWTH_STATUS.experiments[]). 34 tests. **Reviewer A (cycle 1)
+  caught a REAL NaN bug:** computeLift's `se === 0` guard missed pooled≥1 (conversions>exposures via a lost/duplicated beacon
+  → sqrt of a negative → NaN z/p that masquerades as insufficient_data + corrupts the E7 surface). Fixed cycle 2: guard the
+  full range `pooled <= 0 || pooled >= 1 || !(se > 0)` + regression tests (pooled>1 and pooled===1). Reviewer A re-confirmed.
+  LESSON: independent exposure/conversion beacons make conversions>exposures reachable — any proportion z-test on them MUST
+  guard the whole degenerate range, not just zero variance.
+- **#341 (spend-ceiling security tests, Track H7):** covered 3 untested branches of the KV daily-ceiling wallet-drain backstop
+  — TTL-set-only-on-INCR→1 (a key without a TTL never resets the day's ceiling), best-effort-EXPIRE-failure (must not fail the
+  caller closed → spurious 429), and withTimeout hung-INCR (fake timers → 429 fail-closed). Test-only; both reviewers APPROVED.
+- **#342 (honesty — "Priority processing"):** the Pro pricing card AND `Sources/Utilities/AppStoreMetadata.swift:46` (the App
+  Store Connect submission description — the real App Review surface) both listed "Priority processing", but NO tier/queue
+  prioritization exists anywhere (verified web/src + Sources; only uniform IP rate-limiting). BOTH reviewers REQUEST_CHANGES on
+  the web-only cut → extended the PR to also remove the Swift bullet (one coherent cross-surface honesty fix). Now 0 hits both.
+- **#343 (landing JSON-LD, Track E/DOD2):** added honest Schema.org SoftwareApplication structured data (real prices $0/$14.99/
+  $149.99 mirrored from StoreKit config; NO fabricated aggregateRating/reviews since unreleased) to `landing/layout.tsx`.
+  Reviewer A investigated the strict nonce CSP concern and confirmed AUTHORITATIVELY: `type="application/ld+json"` scripts are
+  non-executable data blocks → the HTML "prepare the script" algorithm returns before the CSP script-src check → NOT blocked,
+  no nonce needed. Reviewer B confirmed /landing is deliberately site-gate-EXEMPT (middleware.ts) for discovery → genuine
+  marketing-completeness infra, not SEO theater. Both APPROVED.
+
+### What NOT to re-do (Run 47)
+- Do NOT re-build E8 / re-create experiments.ts / the /api/growth/experiment beacon — done #340. The engine (assignment + lift
+  + aggregate store + beacon + E7 wiring) is COMPLETE. What REMAINS (loop follow-up, NOT owner): wire `assignVariant` into an
+  actual landing render (e.g. the `landing-headline` registered experiment's hero copy) + fire the exposure/conversion beacon,
+  so a real A/B test RUNS once the site has launch traffic. Pre-launch there is nothing to measure, so this was deferred.
+- Do NOT revert computeLift's `pooled <= 0 || pooled >= 1 || !(se > 0)` guard to `se === 0` — that reintroduces the pooled>1
+  NaN bug (see LESSON above).
+- Do NOT re-add "Priority processing" anywhere (landing pricing card OR AppStoreMetadata.swift) — it's an unbacked claim; no
+  queue/tier-priority logic exists. If priority processing is ever genuinely built for Pro, re-add it WITH the implementation.
+- Do NOT re-add spend-ceiling TTL/timeout tests — done #341.
+- Do NOT re-add landing JSON-LD — done #343. Do NOT add a nonce to it (JSON-LD is CSP-exempt; a nonce is unnecessary noise).
+- Scout candidates DROPPED this run (correctly, as marginal/premature/against-precedent): server-side frame-scoring cache
+  (memory already warns — unique personal videos → ~0 hit rate; same-user rescoring is an edge case); annual-tier landing badge
+  (cosmetic, ~$5-20/mo, pre-launch no traffic); credit-pack pricing doc (REMAINING_STEPS already covers it; doc-for-doc); OG
+  image (needs a real designed 1200×630 asset — can't produce a tasteful raster headlessly; owner/design); Plausible <script>
+  in layout.tsx (owner action gtm-connect-analytics + Growth-factory lane, needs owner domain); adding the consumable credit
+  SKU to StoreKitConfiguration.storekit (monetization scout judged it premature/misleading without the iOS purchase UI — the
+  .storekit is a local test artifact, real products are owner-set in App Store Connect at submission). Do NOT re-propose these.
+- Reviewer-noted future hardening (NON-blocking, tracked): the /api/growth/experiment beacon trusts a client-reported variant
+  and is only per-IP rate-limited → a distributed flood could inject fake conversions once live with traffic. Not exploitable
+  pre-launch (nothing calls it, no traffic). Harden (signed/server-assigned variant or exposure-gated conversion) WHEN the
+  first live experiment is wired, not before.
+
 ## Run 46 — 2026-07-04 — 4 merged PRs: closed BOTH QUALITY_SCORECARD-named ship-critical low-coverage files (tests_evals)
 Cold start; branched every PR from `origin/main`. Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B,
 ship_gate false) + GROWTH_STATUS (pre_launch, funnel/pmf 0/null — no lever to weight) + BUSINESS_CASE (base y1 $7,740, floor

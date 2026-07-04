@@ -359,12 +359,16 @@ that lets an extracted key or modified client run up cost and bypass the free li
       provider. NEVER exposes raw PII/events. This is what the Growth Agent pulls per
       docs/growth/ANALYSIS_PLAYBOOK.md (E6d's analytics-pull consumes it). Real data or 0/null;
       authed/owner-scoped; rate-limited (Track H1). *(web/ analytics aggregate read-API)*
-- [ ] E8. **Experiment ENGINE** (so designed A/B tests actually RUN and return significant results):
+- [x] E8. **Experiment ENGINE** (so designed A/B tests actually RUN and return significant results):
       deterministic, sticky variant assignment (hashed unit id → variant; no raw PII), exposure +
       conversion logging into the analytics surface (E7), and a LIFT measurement with a significance
       check + minimum-sample-size gate (report "insufficient data" below N — never call noise a win).
       The Growth Agent designs falsifiable hypotheses (ANALYSIS_PLAYBOOK); this engine executes them
-      and records winners/losers in GROWTH_STATUS.experiments[]. *(web/ experiment assignment + lift)*
+      and records winners/losers in GROWTH_STATUS.experiments[]. *(ENGINE BUILT — PR #340, Run 47:
+      web/src/lib/growth/experiments.ts [sticky sha256 assignment + KV aggregate store + two-proportion
+      lift w/ MIN_SAMPLE gate] + public beacon /api/growth/experiment + E7 wiring. Like E6, the engine
+      ships before it's live: wiring assignVariant into an actual landing render + firing the beacon is
+      a loop follow-up once the site has launch traffic — pre-launch there is nothing to measure.)*
 
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
