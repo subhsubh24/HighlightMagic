@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockKv = {
   get: vi.fn<(key: string) => Promise<number | null>>(),
   set: vi.fn<(key: string, value: unknown, opts?: unknown) => Promise<string | null>>(),
-  incrby: vi.fn<(key: string, amount: number) => Promise<number>>(),
   decr: vi.fn<(key: string) => Promise<number>>(),
+  eval: vi.fn<(script: string, keys: string[], args: string[]) => Promise<[number, number]>>(),
 };
 vi.mock("@vercel/kv", () => ({ kv: mockKv }));
 
@@ -89,28 +89,61 @@ describe("credit-store (Vercel KV)", () => {
     __resetCreditStoreForTests();
   });
 
-  it("grant: first redemption sets the NX idempotency marker with TTL, then increments the balance", async () => {
-    mockKv.set.mockResolvedValue("OK");
-    mockKv.incrby.mockResolvedValue(10);
+  it("grant: first redemption runs the atomic redeem-and-grant script with the right keys/args", async () => {
+    // The script claims the NX marker AND increments the balance in ONE server-side op; the mock
+    // returns the script's [granted, balance] tuple for a first redemption.
+    mockKv.eval.mockResolvedValue([10, 10]);
 
     const r = await grantCredits("u1", 10, "txn-1");
 
-    expect(mockKv.set).toHaveBeenCalledWith("credit-redeem:txn-1", "1", {
-      nx: true,
-      ex: REDEEM_TTL_SECONDS,
-    });
-    expect(mockKv.incrby).toHaveBeenCalledWith("credits:u1", 10);
+    expect(mockKv.eval).toHaveBeenCalledWith(
+      expect.stringContaining("SET"), // the Lua script (SET NX ... INCRBY ...)
+      ["credit-redeem:txn-1", "credits:u1"], // KEYS[1]=marker, KEYS[2]=balance
+      ["10", String(REDEEM_TTL_SECONDS)], // ARGV[1]=amount, ARGV[2]=marker TTL
+    );
     expect(r).toEqual({ granted: 10, balance: 10, duplicate: false });
   });
 
-  it("grant: a replayed transactionId (NX fails) grants NOTHING — the anti-mint guard", async () => {
-    mockKv.set.mockResolvedValue(null); // SET NX refused: marker already exists
-    mockKv.get.mockResolvedValue(10);
+  it("grant: a replayed transactionId grants NOTHING — the atomic anti-mint guard (granted=0)", async () => {
+    // On a replay the script's SET NX fails, so INCRBY is skipped and it returns {0, currentBalance}.
+    mockKv.eval.mockResolvedValue([0, 10]);
 
     const r = await grantCredits("u1", 10, "txn-1");
 
-    expect(mockKv.incrby).not.toHaveBeenCalled(); // balance never bumped on a replay
     expect(r).toEqual({ granted: 0, balance: 10, duplicate: true });
+  });
+
+  it("grant: a retry of the same txn observes the applied state and never re-grants (idempotent)", async () => {
+    // This asserts the CLIENT-side contract: the wrapper faithfully maps the script's tuple, so a
+    // retry that lands on the already-applied state (marker present) returns duplicate=true, not a
+    // second grant. It does NOT exercise a real timeout — the split-write safety that makes the
+    // retry safe lives in the atomic Lua (server-side) and can only be proven against real KV (see
+    // the live-KV round-trip queued in REMAINING_STEPS before the lever goes purchasable).
+    mockKv.eval.mockResolvedValueOnce([10, 10]); // first redemption grants
+    const first = await grantCredits("u1", 10, "txn-1");
+    expect(first).toEqual({ granted: 10, balance: 10, duplicate: false });
+
+    mockKv.eval.mockResolvedValueOnce([0, 10]); // retry of same txn: marker present → no re-grant
+    const retry = await grantCredits("u1", 10, "txn-1");
+    expect(retry).toEqual({ granted: 0, balance: 10, duplicate: true });
+  });
+
+  it("grant: floors a negative/garbage balance from the script at 0", async () => {
+    mockKv.eval.mockResolvedValue([10, -3]);
+    const r = await grantCredits("u1", 10, "txn-1");
+    expect(r.balance).toBe(0);
+  });
+
+  it("grant: a hung redeem script rejects via the timeout so the caller fails closed", async () => {
+    vi.useFakeTimers();
+    mockKv.eval.mockReturnValue(new Promise<[number, number]>(() => {})); // never resolves
+
+    const pending = grantCredits("u1", 10, "txn-1");
+    const assertion = expect(pending).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(KV_OP_TIMEOUT_MS + 10);
+    await assertion;
+
+    vi.useRealTimers();
   });
 
   it("getBalance: floors a null read and a negative balance at 0, else returns the stored value", async () => {

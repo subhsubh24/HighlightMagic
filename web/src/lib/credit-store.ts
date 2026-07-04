@@ -7,10 +7,13 @@
  * monthly quota, credits do NOT reset per calendar month — they are durable until spent, so the
  * balance key carries no period.
  *
- * Cross-instance (Track H): Vercel-KV-backed (atomic INCRBY/DECR for the balance; SET NX for the
- * redemption idempotency marker) so a balance and its grants hold across Vercel's serverless
- * fan-out. Falls back to an in-memory store when KV env vars are absent (local dev + tests),
- * exactly like kv-quota-store.ts / spend-ceiling.ts. A KV error surfaces as a fast catchable
+ * Cross-instance (Track H): Vercel-KV-backed so a balance and its grants hold across Vercel's
+ * serverless fan-out. A redemption claims its idempotency marker AND increments the balance in a
+ * SINGLE atomic server-side Lua script (see grant()) — never a two-step SET-NX-then-INCRBY, which
+ * on a client-side timeout of the increment leaves an ambiguous "in-doubt write" that no
+ * compensating rollback can resolve without risking either a silently-lost pack or a double-grant.
+ * Spend is an atomic DECR. Falls back to an in-memory store when KV env vars are absent (local dev +
+ * tests), exactly like kv-quota-store.ts / spend-ceiling.ts. A KV error surfaces as a fast catchable
  * rejection (5s timeout) that callers translate into a fail-closed decision on the paid path.
  */
 import { isKVConfigured, KV_OP_TIMEOUT_MS } from "./kv-quota-store";
@@ -26,9 +29,9 @@ export interface GrantResult {
 }
 
 /**
- * Durable per-user credit store. Implementations must be safe under concurrency (the KV one
- * uses atomic INCRBY/DECR and SET-NX). Methods may reject on a backend error; callers translate
- * that into a fail-closed gate on the paid path.
+ * Durable per-user credit store. Implementations must be safe under concurrency (the KV one is
+ * atomic — a single Lua script for grant, DECR for spend). Methods may reject on a backend error;
+ * callers translate that into a fail-closed gate on the paid path.
  */
 interface CreditStore {
   /** Current spendable balance for `userId` (never negative). */
@@ -97,6 +100,27 @@ function withTimeout<T>(op: Promise<T>, label: string): Promise<T> {
 }
 
 /**
+ * Atomic redeem-and-grant, run entirely server-side so the marker-claim and the balance-increment
+ * can NEVER be split by a client-side timeout (the "in-doubt write" a two-step SET-NX + INCRBY
+ * suffers). KEYS[1]=redeem marker, KEYS[2]=balance; ARGV[1]=amount, ARGV[2]=marker TTL seconds.
+ * Returns {granted, balance}:
+ *   - first redemption of this txn → SET NX succeeds → INCRBY → {amount, newBalance}
+ *   - replay (marker already set)  → INCRBY skipped → {0, currentBalance}   (the anti-mint guard)
+ * Because both effects commit together (or neither), a timed-out redeem is always safe to retry:
+ * if it applied, the retry hits the marker and returns the true balance as a duplicate; if it did
+ * not, the retry grants exactly once. No compensating rollback, no double-grant, no silent loss.
+ */
+const REDEEM_AND_GRANT_LUA = `
+if redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[2]) then
+  local bal = redis.call('INCRBY', KEYS[2], ARGV[1])
+  return {tonumber(ARGV[1]), bal}
+else
+  local bal = redis.call('GET', KEYS[2])
+  if bal == false then bal = 0 end
+  return {0, tonumber(bal)}
+end`;
+
+/**
  * Vercel-KV store. Keys:
  *  - "credits:{userId}"          → integer balance (durable, no period)
  *  - "credit-redeem:{txnId}"     → idempotency marker set once per redeemed transaction (SET NX)
@@ -117,18 +141,25 @@ class VercelKVCreditStore implements CreditStore {
 
   async grant(userId: string, amount: number, transactionId: string): Promise<GrantResult> {
     const { kv } = await import("@vercel/kv");
-    // Atomic idempotency: SET NX succeeds ("OK") only for the FIRST redemption of this txn; a
-    // concurrent/replayed second attempt gets null and is refused a grant. This is the security
+    // ONE atomic script claims the idempotency marker and increments the balance together, so a
+    // KV timeout can never leave them out of sync. The SET NX inside the script is the security
     // boundary — a client cannot re-post one consumable purchase to mint unlimited credits.
-    const marked = await withTimeout(
-      kv.set(this.redeemKey(transactionId), "1", { nx: true, ex: REDEEM_MARKER_TTL_SECONDS }),
-      "set-nx",
-    );
-    if (marked !== "OK") {
-      return { granted: 0, balance: await this.getBalance(userId), duplicate: true };
-    }
-    const balance = await withTimeout(kv.incrby(this.balanceKey(userId), amount), "incrby");
-    return { granted: amount, balance: Math.max(0, balance), duplicate: false };
+    const [grantedRaw, balanceRaw] = (await withTimeout(
+      kv.eval(
+        REDEEM_AND_GRANT_LUA,
+        [this.redeemKey(transactionId), this.balanceKey(userId)],
+        [String(amount), String(REDEEM_MARKER_TTL_SECONDS)],
+      ),
+      "redeem-eval",
+    )) as [number, number];
+    // granted>0 on a first redemption, 0 on a replay. Pack amounts are always positive
+    // (CREDIT_PACK_PRODUCTS is 10/30/100), so granted===0 unambiguously means "already redeemed".
+    const granted = Number(grantedRaw) || 0;
+    return {
+      granted,
+      balance: Math.max(0, Number(balanceRaw) || 0),
+      duplicate: granted === 0,
+    };
   }
 
   async consumeOne(userId: string): Promise<number> {
