@@ -409,4 +409,88 @@ describe("Atlas Cloud API", () => {
       expect(body.strength).toBe(1.0); // clamped from 2.0
     });
   });
+
+  // pollTaskResult is the outer polling loop that every animate/upscale/style-transfer export
+  // depends on: it loops checkTaskResult until the task completes, fails, or the deadline passes.
+  // checkTaskResult itself is covered above; these exercise the loop's terminal outcomes.
+  describe("pollTaskResult", () => {
+    it("resolves with the output URL once the task completes", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_ok", status: "succeeded", outputs: ["https://cdn.example.com/done.mp4"] },
+          }),
+      });
+
+      const { pollTaskResult } = await import("./atlascloud");
+      // Completes on the first poll → no interval sleep is reached, so no fake timers needed.
+      await expect(pollTaskResult("pred_ok")).resolves.toBe("https://cdn.example.com/done.mp4");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects when the task reports failure", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_bad", status: "failed", error: "Content policy violation" },
+          }),
+      });
+
+      const { pollTaskResult } = await import("./atlascloud");
+      await expect(pollTaskResult("pred_bad")).rejects.toThrow("Task failed: Content policy violation");
+    });
+
+    it("rejects when a 'succeeded' task returns no output URL (never returns undefined)", async () => {
+      // checkTaskResult maps succeeded-but-empty-outputs to a failed result rather than a
+      // completed result with an undefined URL, so pollTaskResult must throw, not resolve empty.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_empty", status: "succeeded", outputs: [] },
+          }),
+      });
+
+      const { pollTaskResult } = await import("./atlascloud");
+      await expect(pollTaskResult("pred_empty")).rejects.toThrow("no output URL returned");
+    });
+
+    it("keeps polling through 'processing' and resolves once complete", async () => {
+      vi.useFakeTimers();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              message: "ok",
+              data: { id: "pred_p", status: "processing" },
+            }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              message: "ok",
+              data: { id: "pred_p", status: "succeeded", outputs: ["https://cdn.example.com/p.mp4"] },
+            }),
+        });
+
+      const { pollTaskResult } = await import("./atlascloud");
+      const p = pollTaskResult("pred_p");
+      await vi.runAllTimersAsync(); // let the inter-poll interval sleep elapse and re-poll
+      await expect(p).resolves.toBe("https://cdn.example.com/p.mp4");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+  });
 });
