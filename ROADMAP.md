@@ -7,6 +7,13 @@ VERIFY current state yourself each run — this reflects a snapshot and the repo
 Operating standard (read every run): FACTORY_STANDARD.md is the shared, product-agnostic discipline EVERY factory follows identically — the loop, two-gate readiness, BUILDS≠WORKS, the independent QUALITY_SCORECARD, the business-case strength loop-back, growth-data-as-signal, the model split, the value bar, the disjoint rule, and the brakes. FOLLOW IT. This ROADMAP + VISION.md hold the product-specific details (what to build, the security model, the ship target, the stack) and win on any specific. Identical factories, different products.
 
 ## Vision (the bar — do NOT stop short of it)
+**THE PRODUCT (the WHY — see VISION.md):** anyone becomes a content creator — dump in the raw pics +
+videos from a real-life moment (a July 4th weekend, a trip, a birthday) and HighlightMagic turns them
+into a polished, postable vertical reel with ZERO editing skill. North star: **moment → posted reel** in
+one tap (direct social publishing is Track I / Phase 2, post-launch). The output must look intentionally
+edited + share-worthy (design-taste bar), the input dead-simple, and success = users actually POSTING
+the reels. The business bar below is HOW that becomes a real company.
+
 Make HighlightMagic a **100% complete business**, not just a shippable app. "Done" requires
 BOTH of these at 100%, independently verified:
   1. **PRODUCT** — a freemium iOS app (Swift 6 / iOS 18 + Next.js backend on Vercel) that is
@@ -639,6 +646,34 @@ preflight verifies the critical ones (H1, H2, H7).
       provider-dashboard hard-cap+alert human step is in PENDING_OPS.md `spend-caps`.)*
 SECRETS stay server-side (never in the iOS app); if exposure is ever suspected, record a PENDING_OPS
 handoff to regenerate the key immediately.
+
+## Track I — Direct social publishing (POST-LAUNCH / Phase 2 — NOT a launch gate; EXCLUDED from the DoD)
+North star (VISION.md): the loop from **moment → posted reel** ends in ONE TAP — the app publishes the
+finished reel straight to the user's OWN social account, not just an export they hand-post. Owner-directed
+2026-07-04: **Phase 2 / post-launch.** v1 LAUNCHES with export + the OS **share sheet** (works for
+everyone, no platform approval); direct publishing is built AFTER launch. **These items do NOT block the
+Definition of Done or launch readiness.**
+DISTINCT from Track E / the growth publishing queue (E6c) + `gtm-connect-social` — those post the OWNER's
+MARKETING content; **this posts the END USER's OWN reel to the USER's OWN account** (per-user OAuth).
+- [ ] I1. RESEARCH + design first (the "figure it out" the owner flagged). Per target platform, document —
+      cited source + date — the real posting path, account-type + app-review requirements, content specs,
+      rate limits, and the OAuth/token model: **Instagram Reels** (Meta Graph Content Publishing API — needs
+      a Business/Creator account + Meta app review), **TikTok** (Content Posting API — needs approval;
+      direct-post vs upload-to-drafts tiers), **YouTube Shorts** (Data API upload — generally more permissive
+      to obtain posting access), **Facebook Reels** (same Meta Graph family as IG — low marginal cost once IG
+      is done). NOTE: personal accounts generally CANNOT be API-posted → the **share sheet stays the universal
+      fallback**. Output: a design doc + the ordered build plan.
+- [ ] I2. Per-user social CONNECT (OAuth): let a user securely link their OWN IG/TikTok/YouTube/FB account —
+      per-user tokens stored server-side + encrypted, never in the app, revocable. Depends on the auth/session
+      layer (P0/B3 server-quota-infra).
+- [ ] I3. PUBLISH pipeline: post the rendered reel + caption/hashtags to the connected account via each
+      platform's API — SIDE-EFFECT INTEGRITY (confirm the post ACTUALLY landed, never a fake "posted" toast),
+      retries, and per-platform spec conformance (aspect/length/format).
+- [ ] I4. Platform APP REVIEW + compliance (OWNER-gated, can't be automated): Meta/TikTok/YouTube app
+      submissions, business verification, privacy/permission review — record as REMAINING_STEPS owner steps.
+      Build order: **Instagram Reels + TikTok first, then YouTube Shorts, then Facebook Reels.**
+- [ ] I5. UX: a "Post to…" step after export (multi-select platforms + per-platform caption); the share
+      sheet remains the always-available fallback for un-connected or personal accounts.
 
 ## Definition of Done (STOP gate — BOTH halves at 100%)
 Open `FACTORY: 100% — ready for submission + launch` and stop ONLY when ALL of these checkboxes
