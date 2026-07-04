@@ -4,6 +4,61 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 48 — 2026-07-04 — 3 merged PRs: business-case summary parse-parity + web a11y wiring + pollTaskResult coverage
+Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (last was 2026-07-03/07-04, <24h / <4 runs ago — deep
+audits are running ~daily; no fresh one needed). Consumed QUALITY_SCORECARD (as_of 2026-07-03, overall B, ship_gate false —
+the ONLY ship-blocker is store_readiness=C, owner-only: archivable Xcode target A6/D5 + 6.9" screenshots + real team/app IDs)
++ GROWTH_STATUS (pre_launch, funnel/pmf 0/null — no binding lever to weight; pre-PMF) + BUSINESS_CASE (base y1 $7,740, floor
+~y3.2) as DATA. Ran a full 6-scout Haiku sweep (backend correctness, security/Track-H, test/eval coverage, design/a11y,
+artifact-freshness, monetization/StoreKit). Shipped **3 merged PRs (#345, #346, #347)**, all file-DISJOINT, each cleared 2
+Sonnet reviewers + all 4 required checks. Abandoned 0. Selected against the scorecard's named gap_to_a+ fields (highest-certainty,
+web-verifiable within-grade polish) since the only ship-critical sub-A dim (store_readiness) is owner-only.
+- **#345 (artifact_integrity gap_to_a+):** wrapped BUSINESS_CASE.md's summary under a top-level `BUSINESS_CASE_SUMMARY:` key
+  (the 3 other dashboard feeds all use a namespace key; it was the odd one out with bare fields — the docs assert identical
+  parse convention). Updated BOTH preflight parse paths. No numbers changed; both parsers verified green on the awk-extracted
+  block. Both reviewers APPROVE. Merged fast (docs+script, checks green immediately).
+- **#346 (design_taste gap_to_a+ + real WCAG fixes, A5):** a11y wiring on landing/header/upload/results — Turnstile role=group
+  +aria-label (the named gap_to_a+), focus-visible rings (reused the existing nav-link pattern, no new tokens), role=alert/status
+  live-regions, dismiss-button aria-label+32px hit target. **Reviewer A caught a REAL bug:** role=alert carries an implicit
+  assertive live-region that SRs won't reliably downgrade, so `role=alert aria-live=polite` on the non-blocking failed-animation
+  banner was self-contradicting → fixed to `role=status` (implicit polite). Reviewer B APPROVE. LESSON: never pair role=alert
+  with aria-live=polite; use role=status for polite, role=alert (implicit assertive) only for blocking errors. Keyboard
+  drag-reorder of media cards deferred (needs real key-handling + tests — higher risk, separate change).
+- **#347 (tests_evals gap, G2):** covered pollTaskResult (outer polling loop on every animate/upscale/style-transfer export —
+  0 direct tests, only inner checkTaskResult was covered). 4 outcome-asserting cases. Reviewer B noted the succeeded-empty-outputs
+  case is mapped to `failed` by checkTaskResult (so it hits the failed branch, not pollTaskResult's unreachable internal no-URL
+  guard) → reworded the comment to describe the real end-to-end guarantee (never returns undefined). Both APPROVE.
+
+### DEFERRED this run (recorded so a future run / owner can execute — NOT re-scouted blind):
+- **credit-store.ts grant() atomicity (correctness gap_to_a+, A→A+).** Real narrow bug: the SET-NX idempotency marker is written
+  BEFORE incrby, so if incrby throws (KV timeout) the 400-day marker persists and a client retry returns duplicate=true/granted=0
+  → a PAID credit pack silently lost. Safety-biased today (never double-grants), so it's A not a ship-blocker. The RIGHT fix is
+  atomic mark+increment via a single server-side Lua eval (no partial-failure window; a network throw leaves NOTHING applied →
+  safe retry; preserves the never-double-grant boundary). **VERIFIED the API is available:** @vercel/kv 3.0.0 wraps @upstash/redis,
+  which exposes `kv.eval(script, keys[], args[])` (positional; signature at node_modules/@upstash/redis/error-8y4qG0W2.d.mts:4241).
+  Lua: `if redis.call('SET',KEYS[1],'1','NX','EX',ARGV[1]) then return redis.call('INCRBY',KEYS[2],ARGV[2]) else return -1 end`;
+  -1 sentinel = duplicate (safe: a real grant of amount≥10 to balance≥0 never returns -1). **Why deferred:** the fix's correctness
+  lives in the Lua/eval semantics, which unit tests (mocked kv) can't validate against real Upstash — a "builds≠works" risk on a
+  MONEY path. Land it only with a way to validate against real KV (an integration/live-KV eval), or as an explicitly reviewer-
+  signed reasoned change. Don't naively swap incrby-before-marker (double-grant on replay) or del-marker-on-failure (double-grant
+  on timeout-but-succeeded — regresses the never-double-grant bias the scorecard praises).
+- **a11y keyboard drag-reorder** of UploadStep/ResultsStep media cards (draggable divs, no role/tabIndex/onKeyDown) — WCAG 2.1.1.
+  Needs real key-handling logic + tests; a follow-up, not bundled into the pure-attribute a11y pass.
+
+### Scout findings NOT actioned this run (with why — don't re-propose blind):
+- rate-limit.ts per-IP buckets in-memory→KV (security gap_to_a+): defense-in-depth only (the authoritative wallet backstop —
+  monthly quota + daily export/gen ceilings + credit balance — is already KV-atomic). Adds a KV round-trip to EVERY request
+  (latency + cost) for cross-instance per-IP friction. Reviewer B would question the unjustified per-request cost. Skip unless
+  coordinated multi-IP abuse is actually observed post-launch.
+- /api/stems GLOBAL_STEMS_DAILY_CAP 200→1000 (scout suggested for availability): REJECTED — raising a spend cap to spend MORE is
+  the wrong direction for wallet protection; export succeeds without stems anyway.
+- /api/render rate-limit+entitlement (scout finding): render is STILL a 501 stub in BOTH paths (feature-gate-off AND
+  worker-not-deployed) — zero expensive compute today, so adding rate-limiting is premature. Wire it WITH the real FFmpeg worker
+  when that lands, not before.
+- StoreKit consumable credit-pack SKU + iOS purchase→/api/credits/redeem (business_case gap_to_a+): backend 100% built+tested;
+  the .storekit JSON edit is Linux-doable but the iOS purchase UI is not compile-verifiable here and the SKU must be owner-
+  provisioned in App Store Connect (already in REMAINING_STEPS). iOS-gated — do at submission.
+
 ## Run 47 — 2026-07-04 — 4 merged PRs: E8 experiment engine + spend-ceiling security tests + cross-surface honesty fix + landing JSON-LD
 Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (Run 46's was 2026-07-04, same day / <4 runs ago).
 Consumed QUALITY_SCORECARD (as_of 2026-07-03, commit 709b3b7, overall B, ship_gate false — ship-critical sub-A dims:
