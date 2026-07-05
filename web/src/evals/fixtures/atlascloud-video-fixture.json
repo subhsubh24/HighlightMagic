@@ -1,5 +1,5 @@
 {
-  "_description": "Golden fixture for the AtlasCloud video-generation round-trip eval (ROADMAP G3). One short image-to-video job (Kling) so a run stays ~$0.50–1. Asserts a real, reachable video URL comes back — not a stuck/failed prediction.",
+  "_description": "Golden fixture for the AtlasCloud video-generation round-trip eval (ROADMAP G3). One short image-to-video job (Kling) so a run stays ~$0.50–1. Asserts a completed prediction returns a well-formed video URL — not a stuck/failed one.",
   "_expected": {
     "acceptableSchemes": ["http:", "https:"]
   },
