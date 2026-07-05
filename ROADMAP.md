@@ -482,10 +482,18 @@ this quality track is G.
            infeasible: a Playwright headless-browser export capture — but headless MediaRecorder/WebCodecs is
            limited, so the server worker is the chosen path.)
         4. TTS / voiceover round-trip (ElevenLabs) — real audio; assert valid, non-silent, right duration.
+           SCRIPT BUILT (#353, Run 50): `web/src/evals/elevenlabs.eval.ts` (EVAL_MODE=1) + a pure,
+           unit-tested rubric (`eval-assertions.ts` checkTtsResult: completed status, audio-mime data URI,
+           decoded-byte + duration bounds). NOT yet run green (needs owner-funded key + live-eval wiring,
+           REMAINING_STEPS 2c) — so this rung's DoD (a GREEN real eval) is not yet met.
         5. Music / SFX round-trip.
         6. VIDEO-GENERATION round-trip (AtlasCloud/Kling) + a QUALITY RUBRIC (prompt-adherence, motion/
            temporal coherence, artifact-free, correct aspect/duration) — this rubric also makes the
-           priciest call gate-able for the B5 re-bench (docs/MODEL_BENCH_PLAYBOOK.md).
+           priciest call gate-able for the B5 re-bench (docs/MODEL_BENCH_PLAYBOOK.md). SCRIPT BUILT
+           (#353, Run 50): `web/src/evals/atlascloud.eval.ts` (double-gated EVAL_MODE=1 + RUN_VIDEO_EVAL=1,
+           with the in-code EVAL_MAX_USD ceiling) + a unit-tested structural rubric (checkVideoResult:
+           completed status, well-formed video URL/scheme). The richer QUALITY RUBRIC (motion/temporal/
+           artifact scoring) and a GREEN run remain — DoD not yet met.
         7. BROADEN over time — more fixtures/themes, tighter assertion bounds, and a media-quality judge
            (deterministic file checks as the floor; a vision/audio model scoring vs the rubric as the ceiling).
       COST GOVERNANCE (STANDING — the loop must UNDERSTAND eval cost and run accordingly):
@@ -502,9 +510,12 @@ this quality track is G.
           `spend-caps`). UNTIL BOTH ARE IN PLACE, keep video-gen gated to manual/on-change only — do NOT
           put the priciest call on an unattended weekly timer without a working ceiling + provider cap.
         - PER-RUN CEILING: each eval MUST estimate cost (CostMeter) and ABORT if a run would exceed a cap
-          (`EVAL_MAX_USD`, default ~$1) — a runaway (e.g. a regen loop) can't rack up spend. STATUS: today
-          this is DOCUMENTED policy only (CostMeter logs cost; no abort yet) — implement the abort IN CODE
-          as part of building the video-gen eval, and it is a HARD PREREQUISITE for video-gen going weekly.
+          (`EVAL_MAX_USD`, default ~$1) — a runaway (e.g. a regen loop) can't rack up spend. STATUS:
+          IMPLEMENTED IN CODE (#353, Run 50) — `eval-assertions.ts` `resolveEvalCostCapUSD` +
+          `costCeilingExceeded` (unit-tested, fail-safe on non-finite/negative); the ElevenLabs + AtlasCloud
+          evals estimate projected spend and abort BEFORE any paid call if it exceeds `EVAL_MAX_USD`. The
+          hard prerequisite is now MET; the remaining gate for video-gen going weekly is the owner-side
+          provider spend cap + wiring into `live-eval.yml` (REMAINING_STEPS 2c, PENDING_OPS spend-caps).
         - MINIMIZE: smallest/fewest fixtures that still test the behavior (JPEG, downscaled), cheapest
           capable model per task (scoring = Haiku), cache identical requests, cap regeneration. Verify eval
           code locally/structurally (type-check, lint) BEFORE spending a real run; never iterate via

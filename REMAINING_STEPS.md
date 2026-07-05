@@ -4,7 +4,7 @@ This file lists, in the exact order the owner should execute them, the actions t
 loop physically cannot take. Everything the loop *can* build has been built or is tracked in ROADMAP.md.
 
 Keep this current: as the loop completes prerequisites, steps here become unblocked and should
-be executed. Last updated: 2026-07-01 (Run 34).
+be executed. Last updated: 2026-07-05 (Run 50).
 
 ---
 
@@ -190,6 +190,23 @@ neither key set (current prod state) the form is unchanged. **Owner steps to act
 2. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (public) **and** `TURNSTILE_SECRET_KEY` (server) **together**
    in Vercel env — never the secret alone (the secret alone would 400 every signup since the public
    key gates whether the widget renders the token).
+
+### 2c. Wire the ElevenLabs + AtlasCloud evals into the weekly live-eval workflow
+
+The eval SCRIPTS + unit-tested rubric are **built** (#353): `web/src/evals/elevenlabs.eval.ts`
+(TTS) and `web/src/evals/atlascloud.eval.ts` (Kling video), both `EVAL_MODE=1`-gated exactly like
+the existing Anthropic eval, with the per-run `EVAL_MAX_USD` cost ceiling implemented in code
+(aborts before any paid call). They run manually today; the loop **cannot** edit `.github/`, so
+activating them on the weekly cadence is an owner step:
+
+1. In `.github/workflows/live-eval.yml`, add a step for each new eval, guarded exactly like the
+   existing Anthropic step (`if: ${{ env.ELEVENLABS_API_KEY != '' }}` / `... ATLASCLOUD_API_KEY ...`),
+   invoking `npx tsx web/src/evals/elevenlabs.eval.ts` and (for video) `web/src/evals/atlascloud.eval.ts`.
+2. Set the workflow env for the video eval: `EVAL_MODE=1`, `RUN_VIDEO_EVAL=1`, and optionally
+   `EVAL_MAX_USD` (defaults to $1 in code). Put the video eval on the weekly cadence ONLY once the
+   provider spend cap below is confirmed (per ROADMAP G3 cost governance).
+3. Confirm the owner-funded eval keys (`validation-eval-keys`) AND provider hard spend caps are set
+   before the video eval runs unattended — the priciest call must never sit on a timer without a cap.
 
 ---
 
