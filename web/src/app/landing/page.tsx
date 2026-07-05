@@ -386,7 +386,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col items-center gap-4">
             <WaitlistForm />
-            <p className="text-sm text-[var(--text-tertiary)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               No credit card required &middot; 5 free exports per month
             </p>
             <a
@@ -595,7 +595,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col items-center gap-3">
             <WaitlistForm compact />
-            <p className="text-sm text-[var(--text-tertiary)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               No spam, ever. Unsubscribe anytime.
             </p>
           </div>
@@ -616,7 +616,7 @@ export default function LandingPage() {
             &copy; 2026 Highlight Magic. All rights reserved.
           </p>
 
-          <div className="flex items-center gap-5 text-sm text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-5 text-sm text-[var(--text-secondary)]">
             <a href="/privacy" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Privacy Policy
             </a>
