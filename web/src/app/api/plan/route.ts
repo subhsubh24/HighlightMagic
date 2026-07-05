@@ -4,7 +4,7 @@ import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
-import { MAX_FILES } from "@/lib/constants";
+import { MAX_FILES, MAX_PLANNER_FRAMES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 // The Sonnet planner runs adaptive thinking for 1-3 minutes. Without an explicit
@@ -69,6 +69,13 @@ export async function POST(req: Request) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // H2: cap the frames/scores arrays — each scored frame is serialized into the Sonnet planner
+  // prompt, so an oversized array inflates paid token cost unbounded within a single
+  // ceiling-counted call. A real project never exceeds MAX_PLANNER_FRAMES.
+  if (frames.length > MAX_PLANNER_FRAMES || scores.length > MAX_PLANNER_FRAMES) {
+    return tooLargeResponse();
   }
 
   // H2: bound the free-text steering fields fed to the Claude planner (cost scales per token).

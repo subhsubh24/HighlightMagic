@@ -3,6 +3,7 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { MAX_PLANNER_FRAMES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -63,6 +64,12 @@ export async function POST(req: Request) {
   }
   if (!Array.isArray(scores) || scores.length === 0) {
     return Response.json({ error: "scores must be a non-empty array" }, { status: 400 });
+  }
+  // H2: cap the frames/scores arrays — each scored frame is serialized into the Sonnet planner
+  // prompt, so an oversized array inflates paid token cost unbounded within a single
+  // ceiling-counted call. A real project never exceeds MAX_PLANNER_FRAMES.
+  if (frames.length > MAX_PLANNER_FRAMES || scores.length > MAX_PLANNER_FRAMES) {
+    return tooLargeResponse();
   }
   // H2: bound the free-text steering fields fed to the Claude planner (cost scales per token).
   if (

@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/ios-plan/route";
 import { consumeExport } from "@/lib/entitlement";
-import { FREE_EXPORT_LIMIT } from "@/lib/constants";
+import { FREE_EXPORT_LIMIT, MAX_PLANNER_FRAMES } from "@/lib/constants";
 import { planFromScores } from "@/actions/detect";
 
 vi.mock("@/actions/detect", () => ({
@@ -55,6 +55,20 @@ describe("POST /api/ios-plan", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/scores/);
+  });
+
+  it("413s on an oversized frames array (H2 planner token-cost bound); planFromScores never called", async () => {
+    const huge = Array.from({ length: MAX_PLANNER_FRAMES + 1 }, () => frame);
+    const res = await POST(req({ userId: "u", frames: huge, scores: [score] }));
+    expect(res.status).toBe(413);
+    expect(vi.mocked(planFromScores)).not.toHaveBeenCalled();
+  });
+
+  it("413s on an oversized scores array (H2 planner token-cost bound); planFromScores never called", async () => {
+    const huge = Array.from({ length: MAX_PLANNER_FRAMES + 1 }, () => score);
+    const res = await POST(req({ userId: "u", frames: [frame], scores: huge }));
+    expect(res.status).toBe(413);
+    expect(vi.mocked(planFromScores)).not.toHaveBeenCalled();
   });
 
   it("402s when quota is exceeded; planFromScores never called", async () => {
