@@ -607,6 +607,8 @@ this quality track is G.
       behind a stub. DONE when every ship-critical capability has a green keyless validation OR a green
       live-eval (none stuck mock-only because a key is missing). See docs/ci/VALIDATION.md.
 
+- [ ] **§29 deployed-app validator (computer-use, autonomous, non-blocking) — WEB surface.** Build the Browserbase-driven end-to-end sweep of the DEPLOYED web marketing/waitlist app (FACTORY_STANDARD §29). Keys `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID` are SET + connectivity PROVEN (2026-07-04, HTTP 200). Connect via the SDK's signed `s.connectUrl`; drive every web flow (landing → waitlist → signup CTA), assert real user-visible outcomes; publish `docs/autonomous-loop/VALIDATOR_STATUS.md` (REAL flow counts — NEVER a fabricated green). The NATIVE iOS flows need a separate mobile harness (§29 defers mobile) — do NOT mark native covered. Build epic: #336.
+
 ## Track H — Pre-launch security & abuse hardening (STANDING; re-checked every run)
 RLS/secrets are necessary but NOT sufficient: a LIVE app that calls PAID APIs (Anthropic,
 ElevenLabs, AtlasCloud) and has PUBLIC forms is a wallet-drain + abuse target. STANDING standard —
