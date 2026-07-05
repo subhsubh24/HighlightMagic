@@ -19,12 +19,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ── Mock all external providers so a leaked call is observable (and never real) ──
 vi.mock("@/lib/elevenlabs-sfx", () => ({ generateSoundEffect: vi.fn() }));
 vi.mock("@/lib/elevenlabs-tts", () => ({ generateVoiceover: vi.fn() }));
+vi.mock("@/lib/elevenlabs-music", () => ({ generateMusic: vi.fn() }));
+vi.mock("@/lib/elevenlabs-voice-clone", () => ({ createVoiceClone: vi.fn() }));
+vi.mock("@/lib/kling", () => ({ submitPhotoAnimation: vi.fn() }));
 vi.mock("@/lib/atlascloud", () => ({
   submitTextToVideo: vi.fn(),
   submitPhotoAnimation: vi.fn(),
   submitBackgroundRemoval: vi.fn(),
   submitImageUpscale: vi.fn(),
   submitLipSync: vi.fn(),
+  submitStyleTransfer: vi.fn(),
 }));
 vi.mock("@/lib/sfx-library", () => ({
   // Default to a miss so the sfx route falls through to the quota gate + ceiling
@@ -53,6 +57,17 @@ function jsonRequest(body: unknown): Request {
     body: JSON.stringify(body),
   });
 }
+
+/** voice-clone reads multipart form data (audio file + userId) rather than JSON. */
+function formRequest(fields: Record<string, string | Blob>): Request {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  return new Request("http://localhost/api/voice-clone", { method: "POST", body: fd });
+}
+
+// A tiny base64 data URI reused as the imageData/videoData/audioData payload — small enough to
+// clear the per-field H2 bounds so the route reaches the ceiling gate (the unit under test).
+const TINY = "data:application/octet-stream;base64,aaaa";
 
 /** Force the ceiling to block on the next call, mirroring the real 429 the route sees. */
 async function blockCeilingOnce() {
@@ -110,6 +125,85 @@ describe("generation ceiling blocks the paid provider call (H7 behavioral)", () 
 
     expect(res.status).toBe(429);
     expect(submitBackgroundRemoval).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/music/submit → 429 and never calls generateMusic", async () => {
+    await blockCeilingOnce();
+    const { generateMusic } = await import("@/lib/elevenlabs-music");
+    const { POST } = await import("@/app/api/music/submit/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", prompt: "lofi beat" }));
+
+    expect(res.status).toBe(429);
+    expect(generateMusic).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/voice-clone → 429 and never calls createVoiceClone", async () => {
+    await blockCeilingOnce();
+    const { createVoiceClone } = await import("@/lib/elevenlabs-voice-clone");
+    const { POST } = await import("@/app/api/voice-clone/route");
+
+    const res = await POST(
+      formRequest({ userId: "u1", audio: new Blob(["aaaa"], { type: "audio/mpeg" }) }),
+    );
+
+    expect(res.status).toBe(429);
+    expect(createVoiceClone).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/animate/submit → 429 and never calls submitPhotoAnimation (Kling)", async () => {
+    await blockCeilingOnce();
+    const { submitPhotoAnimation } = await import("@/lib/kling");
+    const { POST } = await import("@/app/api/animate/submit/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", imageData: TINY, prompt: "gentle pan" }));
+
+    expect(res.status).toBe(429);
+    expect(submitPhotoAnimation).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/outro → 429 and never calls submitTextToVideo", async () => {
+    await blockCeilingOnce();
+    const { submitTextToVideo } = await import("@/lib/atlascloud");
+    const { POST } = await import("@/app/api/outro/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", prompt: "closing card" }));
+
+    expect(res.status).toBe(429);
+    expect(submitTextToVideo).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/style-transfer → 429 and never calls submitStyleTransfer", async () => {
+    await blockCeilingOnce();
+    const { submitStyleTransfer } = await import("@/lib/atlascloud");
+    const { POST } = await import("@/app/api/style-transfer/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", videoData: TINY, prompt: "anime look" }));
+
+    expect(res.status).toBe(429);
+    expect(submitStyleTransfer).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/talking-head → 429 and never calls submitLipSync", async () => {
+    await blockCeilingOnce();
+    const { submitLipSync } = await import("@/lib/atlascloud");
+    const { POST } = await import("@/app/api/talking-head/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", imageData: TINY, audioData: TINY }));
+
+    expect(res.status).toBe(429);
+    expect(submitLipSync).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/upscale → 429 and never calls submitImageUpscale", async () => {
+    await blockCeilingOnce();
+    const { submitImageUpscale } = await import("@/lib/atlascloud");
+    const { POST } = await import("@/app/api/upscale/route");
+
+    const res = await POST(jsonRequest({ userId: "u1", imageData: TINY }));
+
+    expect(res.status).toBe(429);
+    expect(submitImageUpscale).not.toHaveBeenCalled();
   });
 
   it("allows the provider call through when the ceiling does NOT block (control)", async () => {
