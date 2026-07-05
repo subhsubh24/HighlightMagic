@@ -386,7 +386,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col items-center gap-4">
             <WaitlistForm />
-            <p className="text-sm text-[var(--text-tertiary)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               No credit card required &middot; 5 free exports per month
             </p>
             <a
@@ -595,7 +595,7 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col items-center gap-3">
             <WaitlistForm compact />
-            <p className="text-sm text-[var(--text-tertiary)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               No spam, ever. Unsubscribe anytime.
             </p>
           </div>

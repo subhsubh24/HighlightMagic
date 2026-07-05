@@ -7,21 +7,21 @@ export default function Footer() {
         <p className="text-xs text-[var(--text-tertiary)]">
           &copy; 2026 Highlight Magic. All rights reserved.
         </p>
-        <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)]">
-          <a href="/privacy" className="hover:text-white transition-colors">
+        <div className="flex items-center gap-4 text-xs text-[var(--text-secondary)]">
+          <a href="/privacy" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
             Privacy Policy
           </a>
           <a
             href={IOS_APP_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white transition-colors"
+            className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
           >
             iOS App
           </a>
           <a
             href="mailto:support@highlightmagic.app"
-            className="hover:text-white transition-colors"
+            className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
           >
             Support
           </a>
