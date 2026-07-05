@@ -10,7 +10,7 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-03
+  as_of: 2026-07-05
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
@@ -43,11 +43,11 @@ OWNER_ACTIONS:
       how: "Per docs/growth/CONNECT.md Step 3: Vercel dashboard -> Storage -> Create Database -> KV, name it, redeploy (Vercel auto-sets the env vars)."
       blocks: growth-execution
     - id: gtm-connect-analytics
-      title: "Add the Plausible script to the landing page + set GROWTH_AGENT_SECRET"
+      title: "Create the plausible.io account for highlightmagic.app + set GROWTH_AGENT_SECRET"
       priority: high
       status: open
-      why: "web/src/lib/analytics.ts implements trackEvent() but no Plausible <script> tag exists in web/src/app/layout.tsx, so zero page/funnel events are ever captured; separately GROWTH_AGENT_SECRET is unset so /api/growth/stats (E6d) returns 503. Reconciles GROWTH_STATUS validation.sources[in_app_analytics, analytics_pull_api] (both unavailable)."
-      how: "(1) Create a free/paid plausible.io account, add <script defer data-domain=\"highlightmagic.app\" src=\"https://plausible.io/js/script.js\" /> to web/src/app/layout.tsx (or tell the product loop to wire it — it's a one-line change). (2) Set GROWTH_AGENT_SECRET in Vercel to any random 32-char string per CONNECT.md Step 3."
+      why: "CODE HALF DONE (#360, 2026-07-05): web/src/app/layout.tsx now renders the nonce'd Plausible <script> on the production host. What remains is purely an owner step — the plausible.io account itself doesn't exist yet, so the script has nowhere to report to; separately GROWTH_AGENT_SECRET is still unset so /api/growth/stats (E6d) returns 503. Reconciles GROWTH_STATUS validation.sources[in_app_analytics, analytics_pull_api] (both unavailable)."
+      how: "(1) Create a free/paid plausible.io account for the highlightmagic.app site — no further code change needed, the script is already wired. (2) Set GROWTH_AGENT_SECRET in Vercel to any random 32-char string per CONNECT.md Step 3. Note: even after both are done, the Growth Agent's stats pull (getGrowthMetrics) reads only the KV waitlist store today, not Plausible — visitor counts will still need a future read-path addition to reach GROWTH_STATUS.funnel.visitors_7d."
       blocks: growth-execution
     - id: gtm-connect-social
       title: "Connect at least one social channel (X / Instagram / TikTok / Reddit) API credentials"
