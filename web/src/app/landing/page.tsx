@@ -616,7 +616,7 @@ export default function LandingPage() {
             &copy; 2026 Highlight Magic. All rights reserved.
           </p>
 
-          <div className="flex items-center gap-5 text-sm text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-5 text-sm text-[var(--text-secondary)]">
             <a href="/privacy" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Privacy Policy
             </a>
