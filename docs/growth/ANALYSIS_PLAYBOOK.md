@@ -31,6 +31,27 @@ sets secrets.
 Phase advances on EVIDENCE only. `site_gate_up` is a HARD precondition, not a judgment call: while
 `phase: pre_launch`, no amount of "the creative is ready" justifies external traffic until it is `true`.
 
+## Launch-timing read — tell the owner WHEN (FACTORY_STANDARD §11b; compute + surface EVERY run)
+The gate above says which phase you're in; this makes the factory TELL THE OWNER where they are, the
+ONE next move, and when to launch — criteria-driven, never a vibe. Compute every run and WRITE it to
+the `launch_readiness` block in GROWTH_STATUS (the dashboard reads it):
+- **LAUNCH = PRODUCT-READY *and* VALIDATED-DEMAND** (both, never one):
+  - `product_ready` = every ship-critical QUALITY_SCORECARD dim A/A+ AND the readiness gate passed
+    (CONSUME the independent grade; never self-grade).
+  - `demand_signal` = a REAL pre-launch pull read: waitlist size **+ GROWTH RATE**, visitor→waitlist
+    rate, engagement, cited public pain. Use `insufficient_data` when the GTM sources are unconnected
+    or there's no traffic — SAY SO plainly; a big waitlist alone is NOT PMF (weight growth rate + intent).
+- **`recommendation`** (write it + the reason + the single next action), exactly one of:
+  - `NOT_YET` — one/both gates unmet; name the lacking axis + the ONE action to fix it.
+  - `START_MARKETING` — product credible but demand data thin → owner should connect the GTM sources +
+    drive traffic; the agent preps turnkey community posts for the owner to post.
+  - `LAUNCH_WINDOW_OPEN` — both gates met → state the reason + the owner launch checklist (open the site
+    gate, submit, announce to the waitlist).
+- **AS AUTONOMOUS AS POSSIBLE:** research / draft / schedule / measure / recommend autonomously; OWNED
+  connected channels auto-post; authentic COMMUNITY posting (Reddit/forums/DMs) stays the OWNER's —
+  never bot-post to communities (platform ToS + it poisons the demand signal): prep the exact posts +
+  plan, the owner posts + reports back as signal.
+
 ## Product-market fit — the leading indicator (assess every run; FACTORY_STANDARD §9)
 Revenue FOLLOWS PMF. Your first job each run (once there's real data) is to read whether the product
 has fit — not just whether the funnel is wide. Compute + write the `pmf` block in GROWTH_STATUS:

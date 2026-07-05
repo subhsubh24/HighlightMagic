@@ -204,6 +204,20 @@ GROWTH_STATUS:
       review-aggregator/blog articles that quote or summarize the underlying reviews (URLs above),
       not raw platform pages fetched directly. Try alternate access paths (e.g. App Store RSS review
       feeds) in a future run to reach primary sources.
+  launch_readiness:              # GTM phasing + launch timing — FACTORY_STANDARD §11b (method: ANALYSIS_PLAYBOOK "Launch-timing read"). The dashboard reads this; recompute every run.
+    phase: build                 # build | assess_demand | launch | post_launch
+    product_ready: false         # every ship-critical QUALITY_SCORECARD dim A/A+ AND readiness passed — currently overall B, ship_gate_met false
+    demand_signal: insufficient_data   # GTM sources unconnected + 0 visitors/waitlist → demand is UNMEASURABLE (not "low")
+    recommendation: NOT_YET      # NOT_YET | START_MARKETING | LAUNCH_WINDOW_OPEN
+    reason: >-
+      Both launch gates unmet. (1) PRODUCT below the ship bar (independent QUALITY_SCORECARD overall B,
+      ship_gate_met=false — the loop keeps building toward A). (2) DEMAND unmeasurable: GTM sources
+      unconnected (gtm-connect-* owner actions open — Plausible/KV/Resend unset) and 0 visitors/waitlist,
+      so no pull signal can be read. A launch window cannot be computed until demand becomes measurable.
+    next_owner_action: >-
+      Connect the free GTM sources (Plausible analytics + Vercel KV + Resend, per docs/growth/CONNECT.md)
+      and drive some real traffic to the waitlist — without this, demand stays 0/null and launch timing
+      cannot be computed. (Product readiness is the loop's job — in progress.)
   outreach:                      # STRATEGIC OUTREACH (docs/growth/OUTREACH.md) — DRAFT-ONLY, owner sends. REAL numbers; replies owner-reported, never fabricated; 0/null pre-launch
     drafted_7d: 1                # curated 1:1 Gmail drafts created for the owner in the last 7d (Run 3: Sam Gutelle, Tubefilter)
     owner_sent_7d: 0             # of those, how many the owner actually sent (owner-reported)
