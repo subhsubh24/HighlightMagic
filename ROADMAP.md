@@ -379,6 +379,8 @@ that lets an extracted key or modified client run up cost and bypass the free li
 
 - [ ] **§11 marketing media-gen adapter (image + video + music + voiceover).** Build the thin media-gen adapter (GTM_STANDARD §11) so the marketing loop produces multi-format creative on the EXISTING Gemini key: IMAGE (Nano Banana), VIDEO (Gemini Omni Flash), MUSIC (Lyria 3), VOICEOVER (Gemini TTS) — a video can carry soundtrack and/or narration from the same key. Route via `getProvider`/`geminiProvider` + the Interactions API. Every asset passes the maker≠checker not-obviously-AI + FTC audit before publish; cost-governed; preview ids pinned. Stages creative pre-launch, publishes only post-§13-approval on a connected channel. Build epic: #368.
 
+- [ ] **§34 pre-launch funnel — public demo of the core aha + gated beta.** Replace the blank waitlist with: a public, no-account, bounded + HARDENED (Track H) demo of the core aha (NATIVE iOS) that goes live only after it clears the quality bar, driving the waitlist; then a gated-beta invite mechanism (waitlist → codes → real app, site gate up for others) yielding the first real PMF cohort. Full product stays gated; demo/beta build is autonomous + quality-gated, traffic/invites post-§13-Gate-1, public launch = Gate 2. Build epic: #373.
+
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
 Not vibes — math, with cited inputs. It must contain:
