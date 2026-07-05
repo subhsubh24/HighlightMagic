@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "@/app/api/plan/route";
 import { consumeExport } from "@/lib/entitlement";
 import { FREE_EXPORT_LIMIT, MAX_PLANNER_FRAMES } from "@/lib/constants";
+import { MAX_FRAME_B64_CHARS } from "@/lib/input-bounds";
 import { planFromScores } from "@/actions/detect";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { _resetBuckets, PAID_RATE_LIMIT } from "@/lib/rate-limit";
@@ -87,6 +88,13 @@ describe("POST /api/plan", () => {
   it("413s on an oversized scores array (H2 planner token-cost bound) before any paid call", async () => {
     const huge = Array.from({ length: MAX_PLANNER_FRAMES + 1 }, () => score);
     const res = await POST(req({ userId: "u", frames: [frame], scores: huge }));
+    expect(res.status).toBe(413);
+    expect(vi.mocked(planFromScores)).not.toHaveBeenCalled();
+  });
+
+  it("413s when a single frame's base64 exceeds the per-frame cap (H2) before any paid call", async () => {
+    const fatFrame = { base64: "x".repeat(MAX_FRAME_B64_CHARS + 1) };
+    const res = await POST(req({ userId: "u", frames: [fatFrame], scores: [score] }));
     expect(res.status).toBe(413);
     expect(vi.mocked(planFromScores)).not.toHaveBeenCalled();
   });
