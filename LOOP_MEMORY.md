@@ -4,6 +4,48 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 52 — 2026-07-05 — 2 merged PRs: a11y contrast/focus pass + kinetic-text exit-branch tests
+Cold start; `git reset --hard origin/main` first. No DEEP AUDIT this run (last was Run 51, 2026-07-05, <24h). Consumed
+QUALITY_SCORECARD (as_of 2026-07-05, overall B, ship_gate false; ship-blocker store_readiness=C owner-only; functional_reality B +
+tests_evals B the other sub-A ship-critical dims) + GROWTH_STATUS (pre_launch, 0/null) + BUSINESS_CASE (base y1 ~$7,740, floor not
+met y1) as DATA. Ran a full 5-Haiku-scout sweep (security/H, tests/evals, backend correctness+cost, design taste/a11y,
+artifact-freshness+monetization). Baseline verified green FIRST: 997 web tests pass, build + lint clean. Shipped **2 merged PRs
+(#375, #376)**, file-DISJOINT, each cleared 2 Sonnet reviewers + all required checks. Abandoned 0.
+- **#375 (design_taste / a11y):** landing microcopy + BOTH footers' link wrappers used `--text-tertiary` (~3.79:1 on `#0F0A1A`,
+  fails WCAG AA) → bumped the informational/interactive text to `--text-secondary` (~9:1); `Footer.tsx` links + the landing inline
+  footer also gained the site's `focus-visible:ring` keyboard-focus pattern. Per-usage fix only — the shared token (mirrors iOS
+  `Theme.swift`) is untouched; decorative copyright left at tertiary. **Reviewer B (cycle 1) REQUEST_CHANGES:** the landing page's
+  OWN inline footer (a near-duplicate of `Footer.tsx`) still had its link wrapper at tertiary — an incomplete fix in the file being
+  edited; fixed in cycle 2 (bumped that wrapper too), both reviewers then APPROVE. **Reviewer A** flagged only that `LOOP_MEMORY.md`
+  still listed this as deferred — correctly deferred to THIS housekeeping PR per the shared-ledger disjoint rule, not the code branch.
+  This **closes the Run 51 deferred "landing microcopy a11y contrast" item** (was parked on Theme.swift-parity risk; the per-usage
+  fix carries zero token-churn risk).
+- **#376 (tests_evals):** `getKineticTransform`'s exit-animation TYPE (10th positional arg, from the AI plan's `captionExitAnimation`,
+  wired into the real export render at ExportStep.tsx:2108 + TapePreviewPlayer) had only its default `fade` branch tested. Added 5
+  tests pinning each branch's distinct formula (pop scale↑ offsetY=0; slide offsetY>0; dissolve α=t² quadratic; fade offsetY<0; the
+  `popExitScale` kineticParams override). BOTH reviewers independently MUTATION-TESTED (swapped/broke a branch formula) and confirmed
+  the new tests fail loud while the old suite passed silently — genuine regression protection, not coverage-padding.
+
+Scout items VERIFIED-DOWN this run (surfaced but NOT shipped, with reasons — so future runs don't re-chase):
+- **sfx-library.ts fuzzy-match test** — the fuzzy scoring path is DEAD until a CDN URL is configured (all `LIBRARY` entries have
+  `url: null`, so `if (!entry.url) continue` skips every one). Testing it = testing dead code / refactor-for-test. Skip until URLs wired.
+- **`/api/render` Track-H hardening** — the route is a DOUBLE 501 no-op (returns 501 when `RENDER_ENABLED!=true`, AND again because the
+  render worker isn't deployed). It makes NO paid/expensive call today, so adding rate-limit/entitlement now protects nothing =
+  premature. The guards MUST be added in the same PR that wires the real worker (flagged for that future work).
+- **validate/route.ts synthetic-green (#289)** — the `{passed:true}` on missing-key/error is INTENTIONAL fail-open (validation never
+  blocks an export; the whole pipeline needs the key anyway). Backend scout + the route's own guard test confirm working-as-designed. Not a defect.
+- **monetization annual-comparison paywall (ExportStep limit-hit)** — the paywall ALREADY carries annual framing ("$149.99/yr, 2
+  months free") and the WEB surface only deep-links to the App Store (StoreKit purchase is iOS-side), so an elaborate web savings
+  table is low-leverage clutter on an intentionally-minimal surface. Skip.
+- **hexToRgba unit test** — `hexToRgba` is a PRIVATE (non-exported) helper; testing it would require widening the API surface = churn.
+
+Known loop-env artifact (NOT owner action): the git proxy refuses branch deletion (`send-pack: unexpected disconnect` on every
+`git push --delete`). During #375's review I mis-committed the landing-footer fix onto the kinetic branch AFTER #376 had already
+merged (clean, at 1dec6c9 — NOT contaminated); the push re-created `claude/kinetic-exit-tests-RUN52` as an orphan branch. I moved the
+fix to #375 via cherry-pick, but the orphan remote branch can't be deleted through the proxy. It's harmless (no PR, its commit is on
+main via #375); a future run on a working proxy can delete it, or it can be ignored. LESSON: always re-`git checkout` the intended
+branch before editing during a mid-review fix — don't assume cwd branch.
+
 ## Run 51 — 2026-07-05 — 3 merged PRs: planner input-bound wallet-drain fix + 2 spend-ceiling test-coverage extensions (Track H)
 Cold start; synced local `main` to `origin/main` first. Ran a full DEEP AUDIT this run (last audit header in memory was Run 22,
 2026-06-28 — >24h/>4 runs, so due). Consumed QUALITY_SCORECARD (as_of 2026-07-05, overall B, ship_gate false; ship-blocker
@@ -40,7 +82,7 @@ Net: 1 CRITICAL + 2 HIGH actioned; no unactioned CRITICAL remains. Deferred item
 
 Follow-ups / deferred (NOT yet done):
 - **Per-IP rate-limit KV migration** — STILL deferred (standing decision since Run 49; async ripple, defense-in-depth only, wallet backstop already KV-atomic). Security scout re-flags every sweep; don't churn.
-- **Landing microcopy a11y contrast** (see deep audit) — deferred on the Theme.swift-parity risk; per-usage fix is a future taste-pass candidate.
+- **Landing microcopy a11y contrast** (see deep audit) — ✅ CLOSED in Run 52 (#375): per-usage bump of the informational microcopy + both footers' link wrappers to `--text-secondary`, zero token churn.
 - **Perf micro-opts** (measureText memo / detect.ts double-iter / poll-manager indexOf) — below the value bar; bundle into a real perf to-A+ push if one is warranted.
 - **Store_readiness=C** (archivable Xcode target A6/D5 + 6.9" screenshots + real team/app IDs + StoreKit consumable SKU) stays the single ship-gate blocker — owner-only / iOS-project work the Linux loop can't produce+verify.
 
