@@ -120,6 +120,49 @@ describe("getKineticTransform", () => {
     });
   });
 
+  // The exit-animation TYPE (10th positional arg) is set per-clip from the AI plan's
+  // captionExitAnimation and drives the real export render (ExportStep drawOverlays →
+  // getKineticTransform). Each type uses a DISTINCT formula; assert the branches stay
+  // distinct so a swapped/broken formula fails CI instead of shipping a wrong exit.
+  describe("exit animation type branches", () => {
+    // clipDuration=5, exitDuration=0.3, localTime=4.85 → timeToEnd=0.15, so t = 0.15/0.3 = 0.5.
+    const atExit = (exitType: string) =>
+      getKineticTransform("Bold", 4.85, 5, 1920, undefined, 0.45, 0.3, 1.0, 1.0, exitType);
+
+    it("pop grows scale and holds vertical position", () => {
+      const t = atExit("pop");
+      expect(t.scale).toBeGreaterThan(1); // 1 + (1-0.5)*0.3 = 1.15
+      expect(t.offsetY).toBe(0);
+      expect(t.alpha).toBeCloseTo(0.5, 5);
+    });
+
+    it("slide pushes DOWN (positive offsetY) — opposite of the default fade", () => {
+      const t = atExit("slide");
+      expect(t.offsetY).toBeGreaterThan(0); // (1-0.5)*20 = 10
+      expect(t.alpha).toBeCloseTo(0.5, 5);
+    });
+
+    it("dissolve fades quadratically (alpha = t², below the linear fade)", () => {
+      const t = atExit("dissolve");
+      expect(t.alpha).toBeCloseTo(0.25, 5); // 0.5² = 0.25 < 0.5
+      expect(t.offsetY).toBe(0);
+    });
+
+    it("fade (default) drifts UP with linear alpha", () => {
+      const t = atExit("fade");
+      expect(t.offsetY).toBeLessThan(0); // (1-0.5)*(-10) = -5
+      expect(t.alpha).toBeCloseTo(0.5, 5);
+    });
+
+    it("honors kineticParams overrides for the exit magnitude", () => {
+      // popExitScale 1.0 instead of the 0.3 default → scale = 1 + (1-0.5)*1.0 = 1.5
+      const t = getKineticTransform(
+        "Bold", 4.85, 5, 1920, undefined, 0.45, 0.3, 1.0, 1.0, "pop", { popExitScale: 1.0 }
+      );
+      expect(t.scale).toBeCloseTo(1.5, 5);
+    });
+  });
+
   describe("custom caption params", () => {
     it("overrides animation type when custom.animation is set", () => {
       // Force "none" animation on Bold style
