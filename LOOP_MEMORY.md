@@ -4,6 +4,46 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 51 — 2026-07-05 — 3 merged PRs: planner input-bound wallet-drain fix + 2 spend-ceiling test-coverage extensions (Track H)
+Cold start; synced local `main` to `origin/main` first. Ran a full DEEP AUDIT this run (last audit header in memory was Run 22,
+2026-06-28 — >24h/>4 runs, so due). Consumed QUALITY_SCORECARD (as_of 2026-07-05, overall B, ship_gate false; ship-blocker
+store_readiness=C owner-only; functional_reality B + tests_evals B the other sub-A ship-critical dims) + GROWTH_STATUS
+(pre_launch, 0/null) + BUSINESS_CASE (base y1 ~$7,740, honest, floor not met y1) as DATA. Shipped **3 merged PRs (#362, #363,
+#365)**, file-DISJOINT, each cleared 2 Sonnet reviewers + all 6 required checks. Abandoned 0. Theme: wallet-drain defense
+(Track H) — the deep audit's one CRITICAL finding + the two highest-value test-coverage gaps on the ship-critical `tests_evals` dim.
+- **#362 (security, CRITICAL — H2):** `/api/plan` + `/api/ios-plan` bounded `photoAnimations.length` but left `frames`/`scores`
+  UNBOUNDED. `planFromScores` serializes `frame.base64` into a vision block (detect.ts `type:"image", source:{type:"base64",
+  data:frame.base64}`) AND the scores summary into the text prompt → an oversized array (or a few frames each with a huge base64)
+  inflates paid Sonnet token cost unbounded within one ceiling-counted call. Added `MAX_PLANNER_FRAMES = MAX_FILES ×
+  MAX_BASE_FRAMES_PER_VIDEO` (12,000 = legit ceiling) count cap + per-frame `anyFrameOverLimit(frames, key, MAX_FRAME_B64_CHARS)`
+  (key `base64` for /api/plan, `jpegBase64` for /api/ios-plan), both returning 413 before the paid call — mirroring the guard
+  /api/score, /api/validate already carry. Reviewer A cycle-1 REQUEST_CHANGES: count cap alone doesn't stop 2 fat-base64 frames
+  (real, confirmed the planner serializes base64) → added the per-frame bound in cycle-2; both approved.
+- **#363 (tests_evals — H7):** `generation-ceiling-block.test.ts` (behavioral proof the daily generation ceiling short-circuits
+  BEFORE the paid provider) covered only 4 of ~13 routes calling `enforceGenerationCeiling`. Extended to 7 more (animate/submit=Kling,
+  outro/style-transfer/talking-head/upscale=AtlasCloud, music/submit + voice-clone=ElevenLabs) spanning every provider family. A
+  Sonnet reviewer reproduced the regression (dropped `if(genBlock) return`) to confirm the tests catch it. Both approved.
+- **#365 (tests_evals — H7):** `/api/score` + `/api/ios-score` tested the 402 monthly-quota path but NOT the 429 daily-export-ceiling
+  path (`checkDailySpendCeiling`, DAILY_EXPORT_CAP=50 — the independent wallet backstop on the highest-frequency paid call). Added a
+  behavioral test each: in-quota user at the cap → 429 + Anthropic fetch never called, driven by the real `recordDailyExport` counter
+  (+ `__resetCeilingStoreForTests`). Both approved.
+
+### DEEP AUDIT — 2026-07-05 (Run 51) — security/abuse + correctness + perf + design + coverage + artifact-freshness (7 Haiku scouts)
+Findings, highest-severity first (CRITICAL actioned this run):
+- **[CRITICAL — FIXED #362] Unbounded `frames`/`scores` on the paid planner routes** — wallet-drain via oversized/fat-base64 arrays. Closed.
+- **[HIGH — FIXED #363/#365] Spend-ceiling behavioral coverage gaps** — generation ceiling proven on only 4/13 routes; daily export ceiling 429 untested on score/ios-score. Both closed (defense-in-depth on the ship-critical `tests_evals` dim).
+- **[MED — DEFERRED, marginal] Perf micro-opts**: detect.ts planner double-Map-iteration (~2-3% COGS), kinetic-text.ts `measureText` unmemoized per-char (scorecard's performance to-A+ nit), poll-manager.ts `results.indexOf` O(n²) on ≤30 tasks. All bounded/below the value bar vs churn; performance already graded A. Left for a future run or the perf to-A+ push.
+- **[MED — DEFERRED, parity risk] a11y contrast on landing microcopy**: `--text-tertiary` = rgba(255,255,255,0.4) ≈ 3.6:1 on the dark bg (fails WCAG AA for normal text) on "No credit card required"/footer copy + email placeholder. NOT fixed: globals.css tokens MIRROR Theme.swift (cross-platform anchor per the scorecard); changing the token risks churning a stable anchor for a dimension already at A. A per-usage fix (bump specific microcopy to `--text-secondary`) is a design call — candidate for a future taste pass, flagged for the Quality Auditor. Step-number `/20` opacity is INTENTIONAL decorative design, not a bug (has an adjacent readable label) — don't "fix".
+- **[MONETIZATION — mostly not web-buildable] Levers**: web credit-pack purchase is NOT web-buildable (StoreKit consumable purchase needs an Apple JWS from iOS; web only has the redeem side); paywall UX redesign + COGS frame-cache are speculative/design-risk/iOS. The real gap = the StoreKit consumable SKU + iOS purchase→/api/credits/redeem flow, which is store_readiness/owner (already tracked).
+- **[CLEAN] Artifact freshness**: no doc/code contradictions; pricing ($14.99/$149.99), FREE_EXPORT_LIMIT=5, COGS ~$0.31, model IDs all consistent across surfaces.
+Net: 1 CRITICAL + 2 HIGH actioned; no unactioned CRITICAL remains. Deferred items are recorded, none ship-blocking.
+
+Follow-ups / deferred (NOT yet done):
+- **Per-IP rate-limit KV migration** — STILL deferred (standing decision since Run 49; async ripple, defense-in-depth only, wallet backstop already KV-atomic). Security scout re-flags every sweep; don't churn.
+- **Landing microcopy a11y contrast** (see deep audit) — deferred on the Theme.swift-parity risk; per-usage fix is a future taste-pass candidate.
+- **Perf micro-opts** (measureText memo / detect.ts double-iter / poll-manager indexOf) — below the value bar; bundle into a real perf to-A+ push if one is warranted.
+- **Store_readiness=C** (archivable Xcode target A6/D5 + 6.9" screenshots + real team/app IDs + StoreKit consumable SKU) stays the single ship-gate blocker — owner-only / iOS-project work the Linux loop can't produce+verify.
+
 ## Run 50 — 2026-07-05 — 2 merged PRs: provider evals + iOS thumbnail LRU (tests/G3 + performance)
 Cold start; synced local `main` to `origin/main` FIRST (the `git checkout main` landed on a stale local branch 13 commits
 behind — a correctness scout even mis-flagged #350/#351 as "not applied"; always `git reset --hard origin/main` on a cold
@@ -2595,6 +2635,12 @@ Full read-only codebase sweep performed. Findings by lens:
 3. **A3 sendability audit** — scan `Sources/` for remaining force-unwraps and Swift 6 concurrency issues; one-PR-per-file pattern.
 4. **G2 coverage expansion** — `frame-extractor.ts` (523 LOC, 0 tests) and `audio-mux.ts` (308 LOC, 0 tests) are the highest-value uncovered files. Both are browser-dependent so need jsdom or mock setup.
 5. **G3 eval expansion** — add eval fixtures for music quality, SFX quality, voiceover quality; wire a scheduled eval run (GitHub Actions cron, gated on `EVAL_MODE=1` + real API keys); add a 2nd golden fixture (e.g. travel-vlog).
+
+### What NOT to re-do (additions for Run 51)
+- Do NOT re-bound frames/scores on /api/plan or /api/ios-plan — done #362 (MAX_PLANNER_FRAMES count cap + per-frame anyFrameOverLimit base64 bound, 413 before the paid call). The plan route reads `frames[].base64` (MultiFrameInput), ios-plan reads `frames[].jpegBase64` (raw IOSFrame) — the bounds use the correct key per route.
+- Do NOT re-add generation-ceiling-block tests for animate/submit, outro, style-transfer, talking-head, upscale, music/submit, voice-clone — done #363. (Covered routes are now sfx/voiceover/intro/thumbnail [orig] + those 7. plan/ios-plan use SSE and are NOT in this file — their guards are tested in plan-route.test.ts/ios-plan-route.test.ts. validate/ios-validate call Anthropic via raw fetch, not a mockable provider fn — left uncovered here by design.)
+- Do NOT re-add the daily-export-ceiling 429 test to score-route.test.ts / ios-score-route.test.ts — done #365 (uses real recordDailyExport × DAILY_EXPORT_CAP + __resetCeilingStoreForTests).
+- COORDINATION HAZARD observed Run 51: reviewer subagents that `git checkout` to inspect a branch MOVE the shared working tree's HEAD (one reviewer left it on branch A mid-work; my uncommitted Change-C edits carried across cleanly only because both branches shared those files at main state). LESSON: give reviewers the diff INLINE and tell them explicitly NOT to `git checkout`/switch branches; if a reviewer must build, tell it to use an isolated worktree. Re-check `git branch --show-current` after any reviewer that touched the repo.
 
 ### Runner constraints
 - This factory runs on Linux — cannot run `xcodebuild`, `simctl`, or iOS simulator
