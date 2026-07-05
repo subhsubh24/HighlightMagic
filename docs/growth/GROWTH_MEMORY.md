@@ -284,3 +284,104 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    it can change again.
 5. If a future run can reach primary review platforms (Reddit/Trustpilot/App Store), deepen the
    `demand_signal` citations with direct quotes instead of aggregator-article summaries.
+
+---
+
+## 2026-07-05 — Run 6
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged)
+- Channels connected: none — **6th consecutive run** with connect-channels open. `spend-caps` stays
+  closed (owner-attested). No new owner env-var connection since Run 5.
+- `site_gate_up`: false (unchanged — HARD BLOCK on execute mode).
+- Confirmed no `GROWTH_AGENT_SECRET`/`PROD_URL` in this run's environment (checked `env`) — the
+  `/api/growth/stats` pull genuinely cannot be called this run; correctly stayed on code-state reads.
+- Real change since Run 5: the product loop shipped **#360** (`feat(analytics): wire the Plausible
+  script`) to `web/src/app/layout.tsx` — the code half of `gtm-connect-analytics` is now DONE
+  (host+nonce-gated `<script>` tag). This made the `GROWTH_STATUS.validation.sources[in_app_analytics].why`
+  text and the matching `PENDING_OPS` item factually STALE (both said "no Plausible script tag exists,"
+  which is no longer true).
+- Also since Run 5: `docs(quality): independent grade 2026-07-05 (#356)` re-graded the product
+  QUALITY_SCORECARD (still overall B, `ship_gate_met: false` — `store_readiness` C, `functional_reality`/
+  `tests_evals` B); a `launch_readiness` block (FACTORY_STANDARD §11b, #359) was added to GROWTH_STATUS by
+  the product loop and already correctly reflects this — required no correction.
+- `GTM_SCORECARD.md` still shows the pre-fix `self_validation_honesty: B` (as_of 2026-06-30) — not
+  re-graded since Run 1; still the Auditor's turn, not mine.
+- Sam Gutelle (Tubefilter) draft from Run 3: confirmed still unsent (Gmail draft still present, unedited)
+  and zero replies (`search_threads` for tubefilter/sam@tubefilter.com returns one unrelated 2023 email).
+
+### What I did this run
+- **Corrected the now-stale analytics validation text** in `docs/growth/GROWTH_STATUS.md`
+  (`validation.sources[in_app_analytics].why`) and `PENDING_OPS.md` (`gtm-connect-analytics` why/how/title):
+  confirmed via reading the #360 diff that the Plausible `<script>` is genuinely wired (host+nonce-gated),
+  then re-verified (grep, case-insensitive, across `web/src/lib/growth/` and `web/src/app/api/growth/`) that
+  `getGrowthMetrics()` still reads ONLY the KV waitlist store — Plausible is not read anywhere server-side.
+  Narrowed the remaining owner ask to exactly two things: create the plausible.io account, and set
+  `GROWTH_AGENT_SECRET`. Flagged the still-open engineering gap (no Plausible read-path back into
+  `getGrowthMetrics()`, so `visitors_7d`/`visitor_to_waitlist_rate` will stay null even once the account
+  exists) as a `next_actions` RECOMMEND — explicitly NOT a roadmap steer (no revenue data attached, it's a
+  plumbing gap, and GTM_STANDARD §3's steer bar requires real, significant, revenue-linked data).
+- **Followed up on the Run 5 open question** (the Titas Khan / gaming-journalist outreach lead): WebSearch
+  (unlike WebFetch, not blocked this run) confirmed Titas Khan's actual beat is esports/game-news reporting
+  (Valorant, Dota 2, Roblox, mobile games) — NOT creator-tool/streaming-tool coverage. Does not clear
+  OUTREACH.md's beat-match bar; correctly did NOT draft. A second search for named journalists who cover
+  AI clip-editing tools specifically surfaced only unattributed review-aggregator/SEO sites (agent-finder.co,
+  twoaveragegamers.com) — no identifiable individual with a public professional contact, so no target to name.
+  **Zero new outreach drafts this run** — the correct outcome per OUTREACH.md, not a miss.
+  Ran one bounded WebSearch check for new HighlightMagic-specific public reviews/complaints (none exist —
+  expected pre-launch, zero public footprint); the Run 5 `demand_signal` synthesis needed no update, so left
+  it untouched rather than re-running the same citation search for no new evidence (anti-churn).
+  Also bumped `as_of` (GROWTH_STATUS + PENDING_OPS) to today and validated both YAML blocks
+  (`node scripts/validate-gtm.mjs` + a `yaml.safe_load` check) before committing.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff: it
+  independently re-read `layout.tsx` and `metrics.ts`, grepped for "plausible" itself, confirmed PR #360 is
+  real and correctly cited, confirmed no funnel/pmf/channel number was touched (only prose + `as_of`), and
+  re-ran the YAML validator. Verdict: **APPROVE**, zero issues found.
+
+### Learnings
+- **A code ship can silently stale a GTM dashboard fact between runs** — #360 landed between Run 5 and
+  Run 6 and made a validation `why` field factually wrong (it asserted code that no longer matched reality).
+  This is a real category of drift distinct from "owner hasn't acted yet": always re-diff the product loop's
+  recent commits touching files a validation `why` cites, not just check env-var names.
+  "Code done" and "owner action done" are different facts — narrowing an owner ask to what's ACTUALLY still
+  theirs to do (here: just the plausible.io account + a secret, not a script) is itself a real, non-churn
+  improvement to `PENDING_OPS.md`'s honesty.
+- **WebSearch can clear a lead WebFetch can't** — the Titas Khan beat-mismatch was resolved this run purely
+  via WebSearch result snippets, without needing the blocked muckrack/bio-page fetch. Worth trying WebSearch
+  first on a blocked-WebFetch outreach lead before giving up on it entirely.
+- **Not every "each run" standard clause demands a full redo** — GTM_STANDARD §10 says demand-signal mining
+  happens "each run," but re-running the exact same citations search 2 days later without new evidence would
+  be padding, not diligence. Did a bounded, cheap check (one search for new product-specific complaints) to
+  confirm nothing changed, then explicitly said why no full refresh was warranted — that's the honest middle
+  ground between silent staleness and manufactured churn.
+- Circuit-breaker discipline held again: 6th consecutive run with connect-channels open; no new escalation
+  prose, just the incremented count and this run's two genuinely new, real deliverables (analytics-staleness
+  fix + the outreach-lead follow-up) instead of padding.
+
+### Dead ends / what NOT to repeat
+- Do NOT draft outreach to Titas Khan (or any similarly-sourced gaming/esports beat journalist without
+  independently confirmed tool/software coverage) — confirmed this run via WebSearch: his beat is
+  match/game-news reporting, not creator/streaming tools. This lead is now closed, not just unconfirmed.
+- Do NOT treat unattributed review-aggregator sites (agent-finder.co, twoaveragegamers.com, similar SEO/
+  affiliate content) as outreach targets — there is no named individual with editorial standing to pitch.
+- Do NOT re-run the full demand_signal citation search on a 2-day cadence with no new-evidence hypothesis;
+  a bounded "anything material changed?" check is enough between full refreshes.
+
+### Circuit-breaker status
+- **Still open at Run 6 (6 consecutive runs).** `spend-caps` stays closed; the four `gtm-connect-*` items
+  (email/datastore/analytics/social) plus `site-gate` remain open. Analytics narrowed to its true remaining
+  scope this run (account + secret only, code is done) but is NOT resolved — still an owner step. The ask
+  is otherwise unchanged: Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single
+  highest-leverage unlock.
+
+### Next run priorities (Run 7)
+1. Check for channel connections (re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL` — never infer from
+   git); if any connected, pull real data and move toward execute mode (still gated by `site_gate_up`).
+2. Check whether `docs/growth/GTM_SCORECARD.md` was finally re-graded (still shows the pre-fix B as of
+   2026-06-30, 3 cycles after the Run 4 fix) — if still B with no new evidence cited, that itself may be
+   worth noting as a stale-audit signal.
+3. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`.
+4. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both changed recently
+   (§11b landed between Run 5 and Run 6).
+5. If a genuinely new, verifiable outreach target surfaces (not Titas Khan, not an aggregator site), draft it;
+   otherwise zero new outreach remains correct.
