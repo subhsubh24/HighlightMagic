@@ -5,9 +5,45 @@
  * These functions take a REAL provider response plus the fixture's expected bounds and return a
  * list of human-readable problems (empty === passed). They contain the scoring rubric, so they are
  * unit-tested directly in eval-assertions.test.ts with synthetic pass/fail inputs — the live evals
- * that actually spend provider tokens are gated behind EVAL_MODE=1 and only run in the weekly
- * live-eval workflow, but the RUBRIC they enforce is verified in normal CI here.
+ * that actually spend provider tokens are gated behind EVAL_MODE=1 (run manually today; wiring them
+ * into the weekly .github/workflows/live-eval.yml is an owner step — see REMAINING_STEPS), but the
+ * RUBRIC they enforce is verified in normal CI here.
+ *
+ * This module also holds the per-run COST CEILING (ROADMAP G3 "PER-RUN CEILING"): resolve a cap
+ * from EVAL_MAX_USD and abort a run IN CODE before any paid call if the projected spend exceeds it,
+ * so a runaway (e.g. a regen loop or a fat fixture) can never rack up provider spend unattended.
  */
+
+/** Default per-run eval cost ceiling in USD (ROADMAP G3: `EVAL_MAX_USD`, default ~$1). */
+export const DEFAULT_EVAL_MAX_USD = 1.0;
+
+/**
+ * Resolve the per-run eval cost cap (USD) from a raw EVAL_MAX_USD value. Falls back to
+ * DEFAULT_EVAL_MAX_USD when unset, non-numeric, or negative — the cap can only ever be a
+ * sane non-negative number, never accidentally disabled by a malformed env var.
+ */
+export function resolveEvalCostCapUSD(
+  raw: string | undefined,
+  fallback: number = DEFAULT_EVAL_MAX_USD,
+): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return n;
+}
+
+/**
+ * Return an abort message if the projected run cost exceeds the cap, otherwise null.
+ * Callers run this BEFORE making any paid provider call and exit non-zero on a message.
+ * A non-finite projection is treated as over-cap (fail-safe).
+ */
+export function costCeilingExceeded(projectedUSD: number, capUSD: number): string | null {
+  if (!Number.isFinite(projectedUSD) || projectedUSD > capUSD) {
+    const shown = Number.isFinite(projectedUSD) ? `$${projectedUSD.toFixed(2)}` : `${projectedUSD}`;
+    return `projected run cost ${shown} exceeds the EVAL_MAX_USD cap $${capUSD.toFixed(2)} — aborting before any paid call`;
+  }
+  return null;
+}
 
 /** Shape of an ElevenLabs TTS result (mirrors TtsGenerateResult in lib/elevenlabs-tts.ts). */
 export interface TtsResultLike {

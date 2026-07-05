@@ -3,6 +3,9 @@ import {
   decodeDataUriByteLength,
   checkTtsResult,
   checkVideoResult,
+  resolveEvalCostCapUSD,
+  costCeilingExceeded,
+  DEFAULT_EVAL_MAX_USD,
   type TtsExpected,
   type VideoExpected,
 } from "./eval-assertions";
@@ -139,5 +142,49 @@ describe("checkVideoResult", () => {
       expected, // only https accepted
     );
     expect(problems.some((p) => p.includes("is not one of"))).toBe(true);
+  });
+});
+
+describe("resolveEvalCostCapUSD", () => {
+  it("parses a valid numeric env value", () => {
+    expect(resolveEvalCostCapUSD("2.5")).toBe(2.5);
+    expect(resolveEvalCostCapUSD("0")).toBe(0);
+  });
+
+  it("falls back to the default when unset or blank", () => {
+    expect(resolveEvalCostCapUSD(undefined)).toBe(DEFAULT_EVAL_MAX_USD);
+    expect(resolveEvalCostCapUSD("")).toBe(DEFAULT_EVAL_MAX_USD);
+    expect(resolveEvalCostCapUSD("   ")).toBe(DEFAULT_EVAL_MAX_USD);
+  });
+
+  it("falls back on non-numeric or negative values (never silently disables the cap)", () => {
+    expect(resolveEvalCostCapUSD("abc")).toBe(DEFAULT_EVAL_MAX_USD);
+    expect(resolveEvalCostCapUSD("-5")).toBe(DEFAULT_EVAL_MAX_USD);
+    expect(resolveEvalCostCapUSD("NaN")).toBe(DEFAULT_EVAL_MAX_USD);
+  });
+
+  it("honours a custom fallback", () => {
+    expect(resolveEvalCostCapUSD(undefined, 3)).toBe(3);
+  });
+});
+
+describe("costCeilingExceeded", () => {
+  it("returns null when projected cost is within the cap", () => {
+    expect(costCeilingExceeded(0.5, 1)).toBeNull();
+    expect(costCeilingExceeded(1, 1)).toBeNull(); // exactly at cap is allowed
+    expect(costCeilingExceeded(0, 1)).toBeNull();
+  });
+
+  it("returns an abort message when projected cost exceeds the cap", () => {
+    const msg = costCeilingExceeded(1.5, 1);
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("$1.50");
+    expect(msg).toContain("$1.00");
+    expect(msg).toContain("aborting before any paid call");
+  });
+
+  it("treats a non-finite projection as over-cap (fail-safe)", () => {
+    expect(costCeilingExceeded(Infinity, 1)).not.toBeNull();
+    expect(costCeilingExceeded(NaN, 1)).not.toBeNull();
   });
 });

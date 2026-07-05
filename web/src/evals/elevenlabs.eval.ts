@@ -2,8 +2,12 @@
  * ElevenLabs TTS quality eval — ROADMAP G3 rung: eval breadth beyond Anthropic.
  *
  * GATED — only runs when EVAL_MODE=1. Normal CI never calls this; it spends real ElevenLabs
- * credits (a few short strings, well under a cent per run).
+ * credits (a few short strings, well under a cent per run). Run manually:
  *   EVAL_MODE=1 ELEVENLABS_API_KEY=... npx tsx web/src/evals/elevenlabs.eval.ts
+ *
+ * Before any paid call it estimates cost and ABORTS if it would exceed EVAL_MAX_USD (ROADMAP G3
+ * "PER-RUN CEILING"). Designed to run in the weekly .github/workflows/live-eval.yml once wired
+ * there (owner step — the loop cannot edit .github/; see REMAINING_STEPS); manual today.
  *
  * What it tests: the REAL text-to-speech round-trip (generateVoiceover → ElevenLabs → MP3 data URI)
  * for each golden test case must (1) resolve the requested voice character to the expected voice id
@@ -24,13 +28,22 @@ import path from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { generateVoiceover, resolveVoiceId } from "../lib/elevenlabs-tts";
-import { checkTtsResult, decodeDataUriByteLength, type TtsExpected } from "./eval-assertions";
+import {
+  checkTtsResult,
+  costCeilingExceeded,
+  decodeDataUriByteLength,
+  resolveEvalCostCapUSD,
+  type TtsExpected,
+} from "./eval-assertions";
 
 interface TtsFixture {
   _description: string;
   _expected: TtsExpected;
   testCases: Array<{ text: string; voiceCharacter: string; expectedVoiceId: string }>;
 }
+
+/** Conservative upper-bound cost of one short TTS call (ElevenLabs bills per input character). */
+const EST_COST_PER_CALL_USD = 0.01;
 
 const FIXTURE_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,6 +57,17 @@ async function main() {
   console.log(`   ELEVENLABS_API_KEY: ${process.env.ELEVENLABS_API_KEY ? "set ✓" : "MISSING ✗"}\n`);
 
   const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf-8")) as TtsFixture;
+
+  // PER-RUN COST CEILING (ROADMAP G3) — estimate spend and abort BEFORE any paid call.
+  const capUSD = resolveEvalCostCapUSD(process.env.EVAL_MAX_USD);
+  const projectedUSD = fixture.testCases.length * EST_COST_PER_CALL_USD;
+  const overCap = costCeilingExceeded(projectedUSD, capUSD);
+  console.log(`   Projected cost: ~$${projectedUSD.toFixed(2)} (${fixture.testCases.length} call(s)); cap $${capUSD.toFixed(2)}`);
+  if (overCap) {
+    console.error(`\n[eval] ABORT — ${overCap}\n       Raise EVAL_MAX_USD or shrink the fixture to proceed.`);
+    process.exit(1);
+  }
+
   let failures = 0;
 
   for (const tc of fixture.testCases) {
