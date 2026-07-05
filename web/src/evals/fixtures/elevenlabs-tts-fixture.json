@@ -1,0 +1,20 @@
+{
+  "_description": "Golden fixture for the ElevenLabs TTS round-trip eval (ROADMAP G3). Short, cheap strings so a full run costs well under a cent. Asserts real audio bytes come back, not just a 200.",
+  "_expected": {
+    "minAudioBytes": 2000,
+    "maxAudioBytes": 2000000,
+    "minDurationSec": 0.4
+  },
+  "testCases": [
+    {
+      "text": "This highlight is unreal.",
+      "voiceCharacter": "male-broadcaster-hype",
+      "expectedVoiceId": "pNInz6obpgDQGcFmaJgB"
+    },
+    {
+      "text": "Watch this moment again.",
+      "voiceCharacter": "female-narrator-warm",
+      "expectedVoiceId": "EXAVITQu4vr4xnSDxMaL"
+    }
+  ]
+}

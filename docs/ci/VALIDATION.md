@@ -52,7 +52,12 @@ validation path before the PR can merge:
 `.github/workflows/live-eval.yml` runs **weekly + on demand** (never on PRs, never a required check —
 it spends real tokens). It exercises the real services against the gold fixtures:
 - **Anthropic** detection eval (`web/src/evals/detect.eval.ts`) — live today.
-- **ElevenLabs** (TTS) and **AtlasCloud/Kling** (video) — activate as their evals land (ROADMAP G3).
+- **ElevenLabs** (TTS, `web/src/evals/elevenlabs.eval.ts`) and **AtlasCloud/Kling** (video,
+  `web/src/evals/atlascloud.eval.ts`) — eval scripts + unit-tested rubric are **built** (ROADMAP G3);
+  they run manually via `EVAL_MODE=1` today. Wiring them into this weekly workflow is a tracked owner
+  step (the loop cannot edit `.github/`; see REMAINING_STEPS). The video eval is additionally gated by
+  `RUN_VIDEO_EVAL=1` + an in-code `EVAL_MAX_USD` ceiling and stays manual-only until the provider spend
+  cap is set (ROADMAP G3 cost governance).
 
 Keys are **owner-funded GitHub Actions secrets** (`OWNER_ACTIONS: validation-eval-keys`): separate,
 low-budget, hard-capped keys — distinct from the Vercel runtime keys. When a key is absent the matching

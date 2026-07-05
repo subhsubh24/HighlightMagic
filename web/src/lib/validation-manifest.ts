@@ -62,14 +62,14 @@ export const VALIDATION_MANIFEST: ServiceEntry[] = [
     service: "ElevenLabs",
     purpose: "Voiceover / text-to-speech generation.",
     validation: "live-eval",
-    evalNote: "TTS quality eval — to be built (ROADMAP G3). Until the eval exists the flow is mock-validated; key: owner-funded GH Actions secret.",
+    evalNote: "web/src/evals/elevenlabs.eval.ts (EVAL_MODE=1) — real ElevenLabs TTS round-trip; rubric unit-tested in eval-assertions.test.ts. Run manually today; wiring into the weekly live-eval workflow is a tracked owner step (REMAINING_STEPS). Key: owner-funded GH Actions secret.",
   },
   {
     env: "ATLASCLOUD_API_KEY",
     service: "AtlasCloud / Kling",
     purpose: "AI video generation (most expensive per call).",
     validation: "live-eval",
-    evalNote: "Video-gen quality eval — to be built (ROADMAP G3). Until the eval exists the flow is mock-validated; key: owner-funded GH Actions secret.",
+    evalNote: "web/src/evals/atlascloud.eval.ts (EVAL_MODE=1 + RUN_VIDEO_EVAL=1) — real Kling image-to-video round-trip; rubric unit-tested in eval-assertions.test.ts. In-code EVAL_MAX_USD ceiling aborts before spend. Manual/on-change only until wired into the weekly live-eval workflow (owner step + provider spend cap, per ROADMAP G3). Key: owner-funded GH Actions secret.",
   },
 
   // ── Other external services — flow validated keyless (fail-open / in-memory fallback in CI) ──
