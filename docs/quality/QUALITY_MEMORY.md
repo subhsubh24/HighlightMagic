@@ -167,3 +167,64 @@ code), each backing its letter with a mechanical signal it ran + file/line evide
 
 **Issues:** #174 (store_readiness), #176 (functional_reality), #177 (tests_evals) all still open — updated with
 current evidence (esp. #177: coverage enforcement now CLOSED; remaining gaps are eval breadth + skip-green + iOS roundtrip).
+
+---
+
+## 2026-07-05 — fourth grade, commit 468dd02
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → **956 tests passed (71 files)** (up from 859/68),
+coverage ENFORCED and passing (v8: stmts 91.65 / branch 82.51 / funcs 92.12 / lines 92.79, all above the 60/60/50/60
+floor — a big lift from 77.57/73.26/81.87/78.49), **0 lint warnings**, build ok. Required CI (web, web-lint, web-e2e,
+validate-capabilities, validate-gtm, ios) green on 468dd02 (latest main run: success). Graded with 9 fresh, adversarial
+per-dimension subagents (none wrote the code), each backing its letter with a mechanical signal it ran + file/line evidence.
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-03 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (both iOS gaps unchanged three cycles) |
+| correctness_reliability | ✅ | A | = (credit-grant now atomic Lua #350; new residual: atomicity only mock-proven) |
+| security | ✅ | A | = (per-IP throttle still in-memory; wallet backstop KV-atomic) |
+| design_taste | ✅ | A | = (CAPTCHA aria-label CLOSED #346; mobile screenshots still open) |
+| store_readiness | ✅ | C | = (both blockers open three cycles; placeholder IDs + no consumable SKU) |
+| artifact_integrity | ✅ | **A+** | **A → A+ ↑** (BUSINESS_CASE_SUMMARY key #345 closed; all 4 feeds parse; zero findings) |
+| business_case_strength | ✅ | A | = (numbers reconcile; credit lever still half-shipped, no consumable SKU) |
+| tests_evals | ✅ | B | = (coverage + low-file CLOSED; eval breadth/skip-green/iOS roundtrip remain) |
+| performance | ⬜ | **A** | **B → A ↑** (thumbnail per-entry LRU #354; base64 finding non-binding) |
+
+**What changed (real, verified):**
+- **artifact_integrity A → A+:** the sole prior residual closed — #345 wrapped BUSINESS_CASE.md's summary under a real
+  top-level `BUSINESS_CASE_SUMMARY:` key (col 0, not a comment); all four dashboard feeds now parse under one convention
+  (python3+pyyaml verified). 8 sampled ticked boxes all back real wired artifacts; env manifest complete; docs honestly
+  disclose what's not done. Zero findings ⇒ A+.
+- **performance B → A:** #354 replaced ThumbnailService's cache.removeAll()-at-50 with proper per-entry LRU
+  (ThumbnailService.swift:8-12 accessOrder array; :48-51 evict coldest) — residual (1) closed with code. Residual (2)
+  (base64 frame transfer) reconciled as non-binding: the Anthropic Vision API requires base64 image blocks, and
+  extraction+scoring share one JS context, so a Blob would just be re-encoded — the "33% overhead" framing doesn't bind.
+- **correctness (held A):** #350 made the credit redeem+grant a single atomic KV Lua script (REDEEM_AND_GRANT_LUA),
+  closing the prior SET-NX-before-INCRBY split-write race. New successor residual: the atomicity is proven only against a
+  mock (credit-store.test.ts:116-129 says so explicitly); the deferred live-KV test holds it at A.
+- **design_taste (held A):** #346 labeled the Turnstile CAPTCHA (role="group" aria-label), closing one to-A+ item; the
+  mobile-viewport screenshots item (playwright single desktop chromium project) remains open.
+- **tests_evals (held B):** coverage floor was already enforced; this cycle the two ship-critical low-coverage files were
+  covered (frame-extractor 40.21→97.82%, audio-mux 8.52→99.22%, #322-#325) — a real lift. Held at B because eval breadth
+  (ElevenLabs/AtlasCloud) is still absent ON MAIN (the G3 branch is queued in CI but not merged — not credited),
+  live-eval.yml still skips-green keyless (#289), and no iOS export roundtrip test exists.
+
+**Auditor reconciliations (recorded for transparency):**
+- artifact_integrity: subagent returned A+; ACCEPTED. Verified independently the four-feed parse + no overclaim; honest
+  disclosure of incomplete work is the opposite of an integrity failure.
+- performance: subagent returned A (B→A); ACCEPTED. The residual (1) closure is code-verified; the residual (2) dismissal
+  rests on a sound technical argument (Vision API base64 requirement), not hand-waving. Non-ship-critical, so no gate impact.
+- correctness: subagent returned A with a named residual; kept A (no A+): the mock-only atomicity proof is a real gap.
+
+**Ship gate NOT met:** needs A/A+ on every ship-critical dim; `store_readiness` (C), `functional_reality` (B),
+`tests_evals` (B) are below the A bar — all unchanged for three cycles on the same root blockers.
+
+**Top gaps (ordered; issues updated):**
+1. `store_readiness` C — no archivable Xcode app target (Package.swift .library-only ⇒ no submittable IPA); missing 6.9" screenshots + preview; placeholder team/app IDs; consumable SKU absent from .storekit.
+2. `functional_reality` B — no executing iOS export-to-file test; export-COUNT quota still client-side (reset by reinstall). Unchanged three cycles.
+3. `tests_evals` B — coverage + low-file coverage CLOSED; eval breadth (ElevenLabs/AtlasCloud absent on main), skip-green keyless (#289), and no iOS export roundtrip remain.
+
+**Diff vs last grade:** two dims rose (artifact_integrity A→A+, performance B→A); the three sub-A ship-critical dims
+unchanged, so overall holds at B and the ship gate stays false. No letter regressed.
