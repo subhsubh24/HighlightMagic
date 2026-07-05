@@ -3,8 +3,8 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
-import { MAX_DIRECTION_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
-import { MAX_FILES } from "@/lib/constants";
+import { MAX_DIRECTION_CHARS, MAX_FRAME_B64_CHARS, anyFrameOverLimit, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { MAX_FILES, MAX_PLANNER_FRAMES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 // The Sonnet planner runs adaptive thinking for 1-3 minutes. Without an explicit
@@ -69,6 +69,20 @@ export async function POST(req: Request) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // H2: cap the frames/scores arrays — each scored frame is serialized into the Sonnet planner
+  // prompt, so an oversized array inflates paid token cost unbounded within a single
+  // ceiling-counted call. A real project never exceeds MAX_PLANNER_FRAMES.
+  if (frames.length > MAX_PLANNER_FRAMES || scores.length > MAX_PLANNER_FRAMES) {
+    return tooLargeResponse();
+  }
+
+  // H2: bound per-frame base64 size — planFromScores serializes frame.base64 into the vision
+  // prompt, so a handful of frames each carrying a huge base64 string is a wallet-drain that sails
+  // past the count cap. Mirrors the same guard on /api/score, /api/validate, etc.
+  if (anyFrameOverLimit(frames, "base64", MAX_FRAME_B64_CHARS)) {
+    return tooLargeResponse();
   }
 
   // H2: bound the free-text steering fields fed to the Claude planner (cost scales per token).
