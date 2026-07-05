@@ -39,13 +39,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Track H6: reading the request headers opts rendering into per-request (dynamic) mode so
   // Next.js stamps the middleware-issued nonce onto its bootstrap scripts. Without this, the
   // statically-prerendered HTML ships un-nonce'd scripts that the strict-dynamic CSP blocks,
-  // breaking hydration. We don't need the value here — the read itself is what matters.
-  await headers();
+  // breaking hydration.
+  const h = await headers();
+
+  // Track E5 — Plausible analytics (privacy-friendly, no cookies). Only load on the PRODUCTION
+  // host, so it never fires in local dev, CI/e2e, or Vercel preview (no data pollution, and no
+  // external fetch that could flake the journey suite). The nonce is required by the Track H6
+  // strict-dynamic CSP (extracted from the middleware-set CSP header). Starts reporting the moment
+  // the owner creates the plausible.io account for highlightmagic.app — no further code change.
+  const nonce = (h.get("content-security-policy") ?? "").match(/'nonce-([^']+)'/)?.[1];
+  const host = h.get("host") ?? "";
+  const analyticsEnabled =
+    (host === "highlightmagic.app" || host === "www.highlightmagic.app") && Boolean(nonce);
 
   return (
     <html lang="en" className="dark">
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        {analyticsEnabled && (
+          <script
+            defer
+            data-domain="highlightmagic.app"
+            src="https://plausible.io/js/script.js"
+            nonce={nonce}
+          />
+        )}
       </head>
       <body className="bg-app-gradient min-h-screen antialiased">
         {children}
