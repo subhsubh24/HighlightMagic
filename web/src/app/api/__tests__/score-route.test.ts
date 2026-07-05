@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { POST } from "@/app/api/score/route";
 import { consumeExport } from "@/lib/entitlement";
 import { FREE_EXPORT_LIMIT } from "@/lib/constants";
+import { DAILY_EXPORT_CAP, recordDailyExport, __resetCeilingStoreForTests } from "@/lib/spend-ceiling";
 
 function req(body: unknown): Request {
   return new Request("http://localhost/api/score", {
@@ -47,6 +48,20 @@ describe("/api/score", () => {
     const json = await res.json();
     expect(json.remaining).toBe(0);
     expect(fetchSpy).not.toHaveBeenCalled(); // never hit the paid API when over quota
+  });
+
+  it("429s once the daily export ceiling is hit — before the Anthropic call (H7 wallet-drain backstop)", async () => {
+    // An in-quota user (fresh monthly limit) who has already hit the per-user DAILY_EXPORT_CAP must
+    // be blocked at the ceiling BEFORE the paid Anthropic scoring call — the monthly quota (402) and
+    // the daily ceiling (429) are independent wallet backstops. recordDailyExport does not touch the
+    // monthly counter, so checkExportAllowed still passes and the ceiling is the thing that blocks.
+    __resetCeilingStoreForTests();
+    const userId = "score-daily-ceiling-user";
+    for (let i = 0; i < DAILY_EXPORT_CAP; i++) await recordDailyExport(userId);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const res = await POST(req({ userId, frames: [frame] }));
+    expect(res.status).toBe(429);
+    expect(fetchSpy).not.toHaveBeenCalled(); // never hit the paid API once the ceiling trips
   });
 
   it("503s when the server key is not configured (for an in-quota user)", async () => {
