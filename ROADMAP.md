@@ -377,6 +377,8 @@ that lets an extracted key or modified client run up cost and bypass the free li
       ships before it's live: wiring assignVariant into an actual landing render + firing the beacon is
       a loop follow-up once the site has launch traffic — pre-launch there is nothing to measure.)*
 
+- [ ] **§11 marketing media-gen adapter (image + video + music + voiceover).** Build the thin media-gen adapter (GTM_STANDARD §11) so the marketing loop produces multi-format creative on the EXISTING Gemini key: IMAGE (Nano Banana), VIDEO (Gemini Omni Flash), MUSIC (Lyria 3), VOICEOVER (Gemini TTS) — a video can carry soundtrack and/or narration from the same key. Route via `getProvider`/`geminiProvider` + the Interactions API. Every asset passes the maker≠checker not-obviously-AI + FTC audit before publish; cost-governed; preview ids pinned. Stages creative pre-launch, publishes only post-§13-approval on a connected channel. Build epic: #368.
+
 ## Track F — Business case (the finish-line gate; LIVING doc: docs/BUSINESS_CASE.md)
 `docs/BUSINESS_CASE.md` is a LIVING document the loop builds and keeps current every run.
 Not vibes — math, with cited inputs. It must contain:
