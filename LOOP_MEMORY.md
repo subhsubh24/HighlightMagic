@@ -4,6 +4,38 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 50 — 2026-07-05 — 2 merged PRs: provider evals + iOS thumbnail LRU (tests/G3 + performance)
+Cold start; synced local `main` to `origin/main` FIRST (the `git checkout main` landed on a stale local branch 13 commits
+behind — a correctness scout even mis-flagged #350/#351 as "not applied"; always `git reset --hard origin/main` on a cold
+start). DEEP AUDIT skipped (last was Run 46, 2026-07-04, ~24h/<4 runs ago — ran a 6-Haiku-scout targeted sweep instead).
+Consumed QUALITY_SCORECARD (as_of 2026-07-03, overall B, ship_gate false; ship-blocker store_readiness=C owner-only) +
+GROWTH_STATUS (pre_launch, 0/null) + BUSINESS_CASE (base y1 ~$7,740, honest, floor not met y1) as DATA. **KEY: the 07-03
+scorecard is STALE vs recent runs** — its two named low-coverage files (`audio-mux.ts` 8.52%, `frame-extractor.ts` 40.21%)
+are ALREADY CLOSED on current main (99.22% / 97.82%), so that top_gap is done; verify gaps against real `npm test` before
+selecting. Shipped **2 merged PRs (#353, #354)**, file-DISJOINT, each cleared 2 Sonnet reviewers + all 4 required checks.
+Abandoned 0.
+- **#353 (tests_evals G3 breadth):** the eval suite was Anthropic-only (detect/score). Added real provider round-trip evals
+  `elevenlabs.eval.ts` (TTS) + `atlascloud.eval.ts` (Kling video), matching the existing EVAL_MODE=1-gated pattern. To beat
+  BUILDS≠WORKS, the scoring rubric lives in a PURE module (`eval-assertions.ts`) unit-tested by 26 CI tests (verifiable even
+  though the paid round-trips can't run in CI). BOTH reviewers cycle-1 REQUEST_CHANGES (converged): (a) scripts orphaned +
+  stale docs (`validation-manifest.ts` evalNotes / `docs/ci/VALIDATION.md` said "to be built"), (b) MISSING the ROADMAP-
+  mandated per-run cost ceiling (HARD prereq for video-gen), (c) overclaims ("reachable"/"runs weekly"). Fixed all I could:
+  implemented `EVAL_MAX_USD` ceiling IN CODE (resolveEvalCostCapUSD/costCeilingExceeded, fail-safe, aborts before any paid
+  call) + double-gated the video eval (RUN_VIDEO_EVAL=1) + corrected the living-artifact docs + dropped the overclaims. The
+  ONE thing I CANNOT do — wire into `.github/workflows/live-eval.yml` — is FORBIDDEN blast radius (`.github/`), so it's an
+  owner step (REMAINING_STEPS 2c). Cycle-2 both reviewers APPROVE. G3 rungs 4/6 DoD (a GREEN real eval) NOT yet met — needs
+  owner-funded keys + the live-eval wiring; recorded honestly in ROADMAP, not ticked.
+- **#354 (performance residual):** `ThumbnailService` full-cleared its 50-entry cache at capacity → cold-start re-decode
+  storm on timeline scrub. Replaced with a real bounded LRU (parallel `accessOrder`, evict coldest only), actor-isolated.
+  Conservative iOS (can't xcodebuild on Linux); both reviewers approved, `ios` check green, merged.
+
+Follow-ups / deferred (NOT yet done):
+- **Wire the two new evals into `.github/workflows/live-eval.yml`** — owner-only (loop can't edit `.github/`). REMAINING_STEPS 2c.
+- **Per-IP rate-limit KV migration** — STILL deferred (see Run 49 note): async ripple across every paid route, defense-in-depth
+  only (wallet backstop already KV-atomic). The security scout re-flags it every sweep; this is the standing decision, don't churn.
+- **Store_readiness=C** (archivable Xcode target A6/D5 + 6.9" screenshots + real team/app IDs + StoreKit consumable SKU) stays
+  the single ship-gate blocker — owner-only / iOS-project work the Linux loop can't produce+verify.
+
 ## Run 49 — 2026-07-04 — 2 merged PRs: credit-store atomicity + waitlist KV timeout hardening (correctness/Track H)
 Cold start; branched every PR from `origin/main`. DEEP AUDIT skipped (last was 2026-07-04, <24h/<4 runs ago). Consumed
 QUALITY_SCORECARD (as_of 2026-07-03, overall B, ship_gate false — ship-blocker is store_readiness=C, owner-only: archivable
