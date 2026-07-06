@@ -78,6 +78,41 @@ describe("GET /api/proxy-video", () => {
     expect(res.status).toBe(502);
   });
 
+  it("proxies a chunked response with NO Content-Length header through correctly", async () => {
+    // A chunked upstream omits Content-Length; the proxy must still stream + rebuild the bytes.
+    const parts = [new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])];
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const p of parts) controller.enqueue(p);
+        controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "video/mp4" } }),
+    );
+    const res = await GET(get("https://replicate.delivery/chunked.mp4"));
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+  });
+
+  it("502s on a chunked over-cap response with NO Content-Length (streaming OOM guard)", async () => {
+    // The declared-size guard can't catch this — parseInt("") is NaN — so the running byte cap
+    // must. A single 100 MB+1 chunk with no Content-Length header must be rejected, proving the
+    // proxy never buffers an unbounded chunked body into memory.
+    const oversized = new Uint8Array(100 * 1024 * 1024 + 1);
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(oversized);
+        controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "video/mp4" } }),
+    );
+    const res = await GET(get("https://replicate.delivery/huge-chunked.mp4"));
+    expect(res.status).toBe(502);
+  });
+
   it("502s when the upstream fetch throws", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
     const res = await GET(get("https://replicate.delivery/x.mp4"));

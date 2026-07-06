@@ -66,25 +66,50 @@ export async function GET(req: Request) {
       return new Response(`Upstream returned ${upstream.status}`, { status: 502 });
     }
 
-    // Check Content-Length before buffering to avoid OOM
-    const contentLength = parseInt(upstream.headers.get("content-length") ?? "", 10);
-    if (contentLength > MAX_RESPONSE_BYTES) {
+    // Fast-path reject when the upstream DECLARES a size over the cap.
+    const declaredLength = parseInt(upstream.headers.get("content-length") ?? "", 10);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
       return new Response("Upstream response too large", { status: 502 });
     }
 
     const contentType = upstream.headers.get("content-type") || "video/mp4";
-    // Buffer the full response to avoid streaming issues through Next.js
-    const buffer = await upstream.arrayBuffer();
 
-    if (buffer.byteLength > MAX_RESPONSE_BYTES) {
-      return new Response("Upstream response too large", { status: 502 });
+    // Enforce the cap on the ACTUAL bytes, not just the declared Content-Length. A chunked
+    // response omits Content-Length, so `parseInt("")` is NaN and the declared-size guard above
+    // silently passes it — reading such a body via arrayBuffer() would buffer unbounded and OOM
+    // the function. Stream with a running total so memory is bounded to ~MAX_RESPONSE_BYTES even
+    // when the upstream lies about (or omits) its size. Still fully buffered before responding to
+    // avoid streaming issues through Next.js.
+    if (!upstream.body) {
+      return new Response("Upstream response had no body", { status: 502 });
+    }
+    const reader = upstream.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        return new Response("Upstream response too large", { status: 502 });
+      }
+      chunks.push(value);
+    }
+
+    const buffer = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      buffer.set(chunk, offset);
+      offset += chunk.byteLength;
     }
 
     return new Response(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Length": String(buffer.byteLength),
+        "Content-Length": String(total),
         "Cache-Control": "private, max-age=3600",
       },
     });
