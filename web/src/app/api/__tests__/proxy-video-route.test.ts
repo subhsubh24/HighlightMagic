@@ -95,15 +95,29 @@ describe("GET /api/proxy-video", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3, 4, 5]));
   });
 
-  it("502s on a chunked over-cap response with NO Content-Length (streaming OOM guard)", async () => {
-    // The declared-size guard can't catch this — parseInt("") is NaN — so the running byte cap
-    // must. A single 100 MB+1 chunk with no Content-Length header must be rejected, proving the
-    // proxy never buffers an unbounded chunked body into memory.
-    const oversized = new Uint8Array(100 * 1024 * 1024 + 1);
+  it("cancels the stream mid-read once the running byte cap is exceeded (chunked OOM guard)", async () => {
+    // This must distinguish the new streaming cap from the OLD buffer-then-check: the old code
+    // called arrayBuffer(), which DRAINS the entire body (never cancelling) and only then checked
+    // byteLength — so it could not bound memory on an effectively-unbounded chunked stream. The new
+    // code must ABORT (reader.cancel) as soon as the running total exceeds MAX_RESPONSE_BYTES
+    // (100 MB), never draining the whole stream. We emit 10 MB chunks past the cap and assert the
+    // stream was cancelled and NOT fully drained — assertions the old buffer-then-check fails.
+    const TEN_MB = new Uint8Array(10 * 1024 * 1024); // shared ref — memory stays ~10 MB in-process
+    let pulls = 0;
+    let cancelled = false;
     const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(oversized);
-        controller.close();
+      pull(controller) {
+        pulls++;
+        if (pulls > 25) {
+          // Safety bound: if a (buggy) consumer never cancels, terminate the stream so the test
+          // can't hang — the old buffer-then-check drains all the way to here instead of aborting.
+          controller.close();
+          return;
+        }
+        controller.enqueue(TEN_MB);
+      },
+      cancel() {
+        cancelled = true;
       },
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -111,6 +125,11 @@ describe("GET /api/proxy-video", () => {
     );
     const res = await GET(get("https://replicate.delivery/huge-chunked.mp4"));
     expect(res.status).toBe(502);
+    // The reader was cancelled mid-stream — the streaming abort path. (Old buffer-then-check: false.)
+    expect(cancelled).toBe(true);
+    // Aborted right after crossing 100 MB (~11-12 × 10 MB), far below the 25-chunk safety bound —
+    // the old buffer-then-check would instead drain the whole stream to that bound.
+    expect(pulls).toBeLessThan(15);
   });
 
   it("502s when the upstream fetch throws", async () => {
