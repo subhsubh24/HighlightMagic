@@ -48,7 +48,7 @@ interface VideoFixture {
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_PATH = path.resolve(HERE, "fixtures", "atlascloud-video-fixture.json");
+const FIXTURE_PATH = path.resolve(HERE, "fixtures", "video", "atlascloud-video-fixture.json");
 const MEDIA_DIR = path.resolve(HERE, "fixtures", "media");
 
 async function main() {

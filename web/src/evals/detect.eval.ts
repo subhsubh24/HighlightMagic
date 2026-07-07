@@ -171,23 +171,15 @@ async function main() {
   console.log("NOTE: This makes REAL API calls. Each run costs ~$0.05–$0.20.");
   console.log(`      ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "set ✓" : "MISSING ✗"}\n`);
 
-  const fixturesDir = path.join(__dirname, "fixtures");
-  // This dir is SHARED across evals — sibling round-trip evals (TTS, video-gen) keep their fixtures
-  // here too. Load ONLY DETECTION fixtures (the {frames, _expected} shape); a differently-shaped
-  // sibling fixture must never crash this eval. (Before this guard, atlascloud-video-fixture.json —
-  // which has no `frames` — took the whole run down.)
+  // Each eval OWNS a fixtures/<eval>/ subdir; detection fixtures live in fixtures/detection/. This is
+  // structural, not a runtime guard: globbing here can only ever see this eval's own fixtures, so a
+  // sibling eval's differently-shaped fixture can't be picked up (the actual root cause of the earlier
+  // crash — a video-gen fixture sitting in a shared flat dir). Add a *-highlight.json here to include it.
+  const fixturesDir = path.join(__dirname, "fixtures", "detection");
   const fixtures = readdirSync(fixturesDir)
     .filter((f) => f.endsWith(".json"))
     .sort()
-    .map((f) => path.join(fixturesDir, f))
-    .filter((p) => {
-      try {
-        const d = JSON.parse(readFileSync(p, "utf8"));
-        return Array.isArray(d?.frames) && d?._expected != null;
-      } catch {
-        return false;
-      }
-    });
+    .map((f) => path.join(fixturesDir, f));
 
   const results: EvalResult[] = [];
   for (const fixture of fixtures) {

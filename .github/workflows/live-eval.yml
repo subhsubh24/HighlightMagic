@@ -54,6 +54,17 @@ jobs:
           echo "::warning::ANTHROPIC_API_KEY not set — the real detection + frame-scoring round-trips were NOT validated."
           echo "Set it as a GitHub Actions secret (low-budget + capped) to enable. See OWNER_ACTIONS: validation-capability-anthropic."
 
-      # ElevenLabs (TTS) + AtlasCloud (video) evals are tracked in ROADMAP G3. Once those eval scripts
-      # exist, add steps here guarded the same way (`if: env.<KEY> != ''`) so they validate the real
+      - name: TTS eval (ElevenLabs — real voiceover round-trip vs fixture bounds) [G3 rung 4]
+        if: ${{ env.ELEVENLABS_API_KEY != '' }}
+        run: npx tsx src/evals/elevenlabs.eval.ts
+
+      - name: Video-gen eval (AtlasCloud/Kling — real image-to-video round-trip) [G3 rung 6]
+        # The expensive rung — owner-approved for the weekly cadence (2026-07-02) now that BOTH prereqs
+        # are met: the in-code per-run cost ceiling (eval-assertions.ts EVAL_MAX_USD, aborts before any
+        # paid call) AND the provider spend cap (OWNER_ACTIONS spend-caps, done). Double-gated: needs
+        # RUN_VIDEO_EVAL=1 + the key. Bounded to one Kling job (~$0.50–1); EVAL_MAX_USD caps a runaway.
+        if: ${{ env.ATLASCLOUD_API_KEY != '' }}
+        env:
+          RUN_VIDEO_EVAL: "1"
+        run: npx tsx src/evals/atlascloud.eval.ts
       # round-trip when the owner-funded key is present and skip+warn when it isn't.
