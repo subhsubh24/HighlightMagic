@@ -362,6 +362,30 @@ export async function pollTaskResult(
  * Photo animation (Kling v2.5 Turbo Pro image-to-video).
  * Backward-compatible replacement for the old kling.ts functions.
  */
+
+/**
+ * Discrete durations (seconds) each video model actually accepts. Passing anything else makes the
+ * provider REJECT the whole job — Kling returns `duration value 'N' is invalid` for e.g. 2s. The old
+ * `Math.max(2, Math.min(10, d))` clamp wrongly assumed any value in [2,10] was accepted, so a short
+ * photoDisplayDuration (e.g. 3.5s) reached Kling verbatim and killed the animation for a real user.
+ * Snap to the NEAREST allowed value so a submit can never be rejected on duration.
+ * Kling {5,10} is API-confirmed (live-eval); the Wan models use the same conservative set pending
+ * their own eval rung.
+ */
+const MODEL_DURATIONS: Record<string, readonly number[]> = {
+  [MODELS.KLING_I2V]: [5, 10],
+  [MODELS.WAN_T2V]: [5, 10],
+  [MODELS.WAN_LIPSYNC]: [5, 10],
+};
+
+function snapDuration(model: string, duration: number): number {
+  const allowed = MODEL_DURATIONS[model] ?? [5, 10];
+  return allowed.reduce(
+    (best, v) => (Math.abs(v - duration) < Math.abs(best - duration) ? v : best),
+    allowed[0],
+  );
+}
+
 export async function submitPhotoAnimation(
   imageUrl: string,
   prompt: string,
@@ -373,7 +397,7 @@ export async function submitPhotoAnimation(
   return submitTask(MODELS.KLING_I2V, {
     image,
     prompt,
-    duration: Math.max(2, Math.min(10, duration)),
+    duration: snapDuration(MODELS.KLING_I2V, duration),
     cfg_scale: 0.5,
     sound: false,
   });
@@ -406,7 +430,7 @@ export async function submitTextToVideo(
 ): Promise<string> {
   return submitTask(MODELS.WAN_T2V, {
     prompt,
-    duration: Math.max(2, Math.min(10, duration)),
+    duration: snapDuration(MODELS.WAN_T2V, duration),
     aspect_ratio: aspectRatio,
   });
 }
@@ -476,7 +500,7 @@ export async function submitLipSync(
   return submitTask(MODELS.WAN_LIPSYNC, {
     image,
     audio,
-    duration: Math.max(2, Math.min(10, duration)),
+    duration: snapDuration(MODELS.WAN_LIPSYNC, duration),
   });
 }
 
