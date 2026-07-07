@@ -172,10 +172,22 @@ async function main() {
   console.log(`      ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "set ✓" : "MISSING ✗"}\n`);
 
   const fixturesDir = path.join(__dirname, "fixtures");
+  // This dir is SHARED across evals — sibling round-trip evals (TTS, video-gen) keep their fixtures
+  // here too. Load ONLY DETECTION fixtures (the {frames, _expected} shape); a differently-shaped
+  // sibling fixture must never crash this eval. (Before this guard, atlascloud-video-fixture.json —
+  // which has no `frames` — took the whole run down.)
   const fixtures = readdirSync(fixturesDir)
     .filter((f) => f.endsWith(".json"))
     .sort()
-    .map((f) => path.join(fixturesDir, f));
+    .map((f) => path.join(fixturesDir, f))
+    .filter((p) => {
+      try {
+        const d = JSON.parse(readFileSync(p, "utf8"));
+        return Array.isArray(d?.frames) && d?._expected != null;
+      } catch {
+        return false;
+      }
+    });
 
   const results: EvalResult[] = [];
   for (const fixture of fixtures) {
