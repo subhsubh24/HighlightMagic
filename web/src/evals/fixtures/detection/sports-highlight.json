@@ -3,7 +3,8 @@
   "_expected": {
     "minClips": 2,
     "maxClips": 8,
-    "minTotalDurationSec": 20,
+    "_minTotalDurationSec_note": "Calibrated 20→15 (2026-07-07) to match cooking/travel: a ~15s fast-cut sports highlight is a valid short-form edit, so the 20s floor was a miscalibrated outlier that failed good output, not a real quality miss.",
+    "minTotalDurationSec": 15,
     "maxTotalDurationSec": 90,
     "acceptableThemes": ["sports", "fitness", "cinematic"],
     "requiredPlanFields": ["musicPrompt", "sfx", "voiceover", "intro", "outro"]

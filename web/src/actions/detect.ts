@@ -2738,62 +2738,79 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
   debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${CLAUDE_PLANNER}, effort=medium`);
   const plannerStartMs = Date.now();
 
-  const response = await fetchWithRetry(
-    "https://api.anthropic.com/v1/messages",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_PLANNER,
-        // max_tokens caps thinking + response text COMBINED. Medium-effort adaptive thinking can
-        // consume tens of thousands of tokens on its own, so at 32000 the plan JSON was getting
-        // truncated (stop_reason=max_tokens → empty/invalid JSON, failing the whole plan). 64000
-        // gives thinking + a full plan comfortable room; it's well under the model's 128k output
-        // ceiling and you only pay for tokens actually generated, so a higher ceiling adds no cost
-        // unless used. (Surfaced by the detection eval running for real; see docs/MODEL_COSTS.md.)
-        max_tokens: 64000,
-        stream: true,
-        thinking: {
-          type: "adaptive",
+  // Retry an EMPTY/INCOMPLETE stream (200 OK but no text — e.g. stop_reason=null, the stream cut off
+  // mid-flight). That's a transient, and `fetchWithRetry` can't catch it: it only retries transport
+  // errors (429/529) on the HTTP response, and can't see that a 200's SSE stream came back empty. This
+  // gives the planner the same batch-level resilience the scoring path already has. NOT a retry for a
+  // real API error (still throws) or max_tokens truncation (handled by the 64000 ceiling below).
+  const PLANNER_EMPTY_RETRIES = 2;
+  let text = "";
+  let stopReason: string | null = null;
+  let plannerIn = 0;
+  let plannerOut = 0;
+  for (let attempt = 0; attempt <= PLANNER_EMPTY_RETRIES; attempt++) {
+    const response = await fetchWithRetry(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
-        output_config: {
-          effort: "medium",
-        },
-        system: [
-          {
-            type: "text",
-            text: finalSystemPrompt,
-            cache_control: { type: "ephemeral" },
+        body: JSON.stringify({
+          model: CLAUDE_PLANNER,
+          // max_tokens caps thinking + response text COMBINED — raised 32000→64000 so adaptive
+          // thinking + a full plan fit without truncation. Well under the 128k ceiling; you only pay
+          // for tokens actually generated. See docs/MODEL_COSTS.md.
+          max_tokens: 64000,
+          stream: true,
+          thinking: {
+            type: "adaptive",
           },
-        ],
-        messages: [{ role: "user", content: userContent }],
-      }),
-    },
-    "Planner"
-  );
+          output_config: {
+            effort: "medium",
+          },
+          system: [
+            {
+              type: "text",
+              text: finalSystemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          messages: [{ role: "user", content: userContent }],
+        }),
+      },
+      "Planner"
+    );
 
-  debugLog(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
+    debugLog(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
-  }
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(`Planner API error (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
+    }
 
-  // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests
-  // Pass onPartial to extract production plan fields early for pre-emptive generator start
-  const { text, stopReason, inputTokens: plannerIn, outputTokens: plannerOut } = await consumeSSEStream(response, onPhase, onPartial);
-  console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
+    // Consume SSE stream — streaming prevents HTTP timeout on long thinking requests.
+    // Pass onPartial to extract production plan fields early for pre-emptive generator start.
+    ({ text, stopReason, inputTokens: plannerIn, outputTokens: plannerOut } = await consumeSSEStream(
+      response,
+      onPhase,
+      onPartial,
+    ));
+    console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
 
-  if (stopReason === "max_tokens") {
-    console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
-  }
+    if (stopReason === "max_tokens") {
+      console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
+    }
 
-  if (!text) {
-    console.error(`Planner: no text content from stream. stop_reason=${stopReason}`);
+    if (text) break; // usable content — done
+
+    if (attempt < PLANNER_EMPTY_RETRIES) {
+      console.warn(`Planner: no text content (stop_reason=${stopReason}) on attempt ${attempt + 1}/${PLANNER_EMPTY_RETRIES + 1} — retrying (transient incomplete stream)`);
+      continue;
+    }
+    console.error(`Planner: no text content from stream after ${attempt + 1} attempts. stop_reason=${stopReason}`);
     throw new Error(`Planner: no text content (stop_reason=${stopReason})`);
   }
 
