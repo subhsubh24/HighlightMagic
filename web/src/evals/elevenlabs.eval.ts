@@ -48,6 +48,7 @@ const EST_COST_PER_CALL_USD = 0.01;
 const FIXTURE_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "fixtures",
+  "tts",
   "elevenlabs-tts-fixture.json",
 );
 
