@@ -1060,6 +1060,18 @@ actor ExportService {
             parentLayer.addSublayer(watermarkLayer)
         }
 
+        // Only attach the Core Animation post-processing tool when there is actually something to
+        // draw over the video. An empty overlay pass is pure cost on every export — and, crucially,
+        // that pass HANGS on the iOS Simulator (no hardware Core Animation video compositing), which
+        // is why an executing export test could never complete on CI. Skipping it when unused is both
+        // a real production speedup and what makes the plain (no-overlay) export path CI-testable.
+        let hasOverlay =
+            !transitionEffects.isEmpty || aiEffectConfig?.customTransition != nil
+            || !particleEffects.isEmpty || aiEffectConfig?.customParticle != nil
+            || !captionText.isEmpty
+            || addWatermark
+        guard hasOverlay else { return }
+
         videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
             postProcessingAsVideoLayer: videoLayer,
             in: parentLayer
