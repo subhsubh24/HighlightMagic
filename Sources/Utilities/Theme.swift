@@ -34,7 +34,8 @@ enum Theme {
     static let surfaceLight = Color(hex: "2A2A4A")
     static let textPrimary = Color.white
     static let textSecondary = Color.white.opacity(0.7)
-    static let textTertiary = Color.white.opacity(0.4)
+    // 0.5 (not 0.4) keeps tertiary/helper text at WCAG-AA contrast on the dark background; mirrored in web --text-tertiary.
+    static let textTertiary = Color.white.opacity(0.5)
     static let success = Color.green
     static let warning = Color.orange
     static let error = Color.red
