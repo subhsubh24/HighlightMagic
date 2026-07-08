@@ -34,6 +34,19 @@ export default defineConfig({
         launchOptions: chromiumPath ? { executablePath: chromiumPath } : {},
       },
     },
+    {
+      // Phone form factor — HighlightMagic is a vertical-video app whose users live on
+      // their phones, so the journey suite must prove the flows work (and look right) at
+      // a real mobile viewport, not just Desktop Chrome. Pixel 5 is Chromium-based
+      // (393×727, touch, mobile UA), so it reuses the SAME managed/system Chromium as the
+      // desktop project — no extra browser download needed. Screenshots land in a
+      // per-project subdir (see journeys.spec.ts) so the two form factors never collide.
+      name: "mobile-chrome",
+      use: {
+        ...devices["Pixel 5"],
+        launchOptions: chromiumPath ? { executablePath: chromiumPath } : {},
+      },
+    },
   ],
   // Only boot a local server when we are NOT pointed at an external/deployed target.
   webServer: usingExternalTarget

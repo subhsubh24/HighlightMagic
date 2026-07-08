@@ -8,6 +8,17 @@ import path from "node:path";
 // captures go stale undetected.)
 const SHOT_DIR = path.join(__dirname, "__screenshots__");
 
+// Per-project screenshot directory. The default desktop project ("chromium") keeps writing
+// to the __screenshots__ root (stable filenames, existing committed baselines unchanged); any
+// additional viewport project (e.g. "mobile-chrome") writes under its own subdir so the two
+// form factors' captures never overwrite each other. Playwright's page.screenshot creates the
+// parent dir automatically.
+function shotPath(projectName: string, file: string): string {
+  return projectName === "chromium"
+    ? path.join(SHOT_DIR, file)
+    : path.join(SHOT_DIR, projectName, file);
+}
+
 // BUILDS != WORKS: every test RUNS the real flow as a user and asserts the INTENDED
 // OUTCOME (a working, populated screen) — never just status<400 or "a handler exists".
 // The app's error boundary (src/app/error.tsx) renders this exact copy on a crash;
@@ -27,7 +38,7 @@ const NAV_SCREENSHOTS: Record<string, string> = {
 };
 
 test.describe("HighlightMagic web — critical journeys (outcome-asserting)", () => {
-  test("app main screen (/) renders the real editor, not an error", async ({ page }) => {
+  test("app main screen (/) renders the real editor, not an error", async ({ page }, testInfo) => {
     const res = await page.goto("/");
     expect(res?.status(), "/ must not be a 4xx/5xx").toBeLessThan(400);
     // Intended outcome: the real editor's initial (Upload) screen — the "Drop your
@@ -36,20 +47,20 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     await expectNoErrorBoundary(page);
     // FACTORY_STANDARD §6 — capture the asserted state so a vision-capable gate can
     // visually review the real rendered UI (a green DOM assertion alone hides a blank surface).
-    await page.screenshot({ path: path.join(SHOT_DIR, "01-app-main-drop-footage.png"), fullPage: true });
+    await page.screenshot({ path: shotPath(testInfo.project.name, "01-app-main-drop-footage.png"), fullPage: true });
   });
 
-  test("landing (/landing) renders the real marketing page with a working waitlist form", async ({ page }) => {
+  test("landing (/landing) renders the real marketing page with a working waitlist form", async ({ page }, testInfo) => {
     const res = await page.goto("/landing");
     expect(res?.status()).toBeLessThan(400);
     await expect(page.locator("h1").first()).toBeVisible(); // real hero, not a blank/boundary
     await expect(page.locator('input[type="email"]').first()).toBeVisible();
     await expectNoErrorBoundary(page);
     // FACTORY_STANDARD §6 — screenshot after assertions pass.
-    await page.screenshot({ path: path.join(SHOT_DIR, "02-landing-hero.png"), fullPage: true });
+    await page.screenshot({ path: shotPath(testInfo.project.name, "02-landing-hero.png"), fullPage: true });
   });
 
-  test('waitlist signup (the real "signup" flow) reaches the success outcome', async ({ page }) => {
+  test('waitlist signup (the real "signup" flow) reaches the success outcome', async ({ page }, testInfo) => {
     await page.goto("/landing");
     // Self-seed via the REAL flow: submit a unique email through the actual form.
     const email = `e2e+${Date.now()}@example.com`;
@@ -63,18 +74,18 @@ test.describe("HighlightMagic web — critical journeys (outcome-asserting)", ()
     await expect(page.getByText(/check your email/i)).toHaveCount(0);
     await expectNoErrorBoundary(page);
     // FACTORY_STANDARD §6 — screenshot after assertions pass.
-    await page.screenshot({ path: path.join(SHOT_DIR, "03-landing-waitlist-success.png"), fullPage: true });
+    await page.screenshot({ path: shotPath(testInfo.project.name, "03-landing-waitlist-success.png"), fullPage: true });
   });
 
   // Every primary nav target resolves to its REAL screen (heading present, no boundary, not 404).
   for (const route of ["/privacy", "/terms", "/support", "/offline"]) {
-    test(`nav target ${route} resolves to a real screen`, async ({ page }) => {
+    test(`nav target ${route} resolves to a real screen`, async ({ page }, testInfo) => {
       const res = await page.goto(route);
       expect(res?.status(), `${route} must not be 4xx/5xx`).toBeLessThan(400);
       await expect(page.locator("h1, h2").first()).toBeVisible();
       await expectNoErrorBoundary(page);
       // FACTORY_STANDARD §6 — screenshot after assertions pass, keyed by route.
-      await page.screenshot({ path: path.join(SHOT_DIR, NAV_SCREENSHOTS[route]), fullPage: true });
+      await page.screenshot({ path: shotPath(testInfo.project.name, NAV_SCREENSHOTS[route]), fullPage: true });
     });
   }
 });
