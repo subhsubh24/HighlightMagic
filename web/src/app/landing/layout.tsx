@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FAQ } from "./faq-data";
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://highlightmagic.app";
 
@@ -52,6 +53,20 @@ const softwareAppJsonLd = {
   },
 };
 
+// FAQPage structured data (JSON-LD) — makes the six on-page Q&As eligible for Google's FAQ
+// rich result (an expandable answer accordion in the SERP), lifting organic CTR on informational
+// queries ("is HighlightMagic free", "what platforms"). Built from the SAME ./faq-data array the
+// visible accordion renders, so the schema always matches the on-page copy (a Google requirement).
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ.map(({ q, a }) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+};
+
 export default function LandingLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -60,6 +75,11 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
         // Static object serialized to JSON — no user input is interpolated, so this inline
         // JSON-LD script is safe.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // Built from the static FAQ array (no user input) — safe inline JSON-LD.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
       {children}
     </>
