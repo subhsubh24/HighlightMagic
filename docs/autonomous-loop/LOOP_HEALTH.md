@@ -24,13 +24,14 @@ LOOP_HEALTH:
     enforced_in_ci: true         # `validate-capabilities` is a REQUIRED check; a new unregistered external service CANNOT merge
     capabilities_total: 12       # distinct external services in web/src/lib/validation-manifest.ts
     ci_validated_keyless: 3      # mock, green every PR: Resend (flow), Turnstile, Vercel KV
-    live_eval: 3                 # Anthropic = VALIDATED 2026-07-01 (real detect eval 4/4 GREEN, ~$0.07/fixture). ElevenLabs + AtlasCloud = keys SET; awaiting their G3 evals being built.
+    live_eval: 3                 # ALL 3 VALIDATED via real paid round-trips. Anthropic (detect 4/4 + frame-scoring), ElevenLabs (TTS), AtlasCloud/Kling (image→video) all GREEN in live-eval run 28912951013 (2026-07-08).
     owner_only: 6                # Apple StoreKit receipt, site-gate, Instagram/Reddit/TikTok/X — validated at launch (existing OWNER_ACTIONs)
     owner_blocked: 0             # capabilities the OWNER must still act on (key/secret) — NONE: all three AI keys were set 2026-07-01 (validation-capability-* OWNER_ACTIONS are done)
     unmet: []                    # = owner_blocked ids the dashboard renders as "needs your key". EMPTY — every AI key is provided; do NOT put a key-provided capability here.
-    awaiting_loop_eval:          # key PROVIDED; the LOOP must BUILD the eval before these validate (ROADMAP G3) — NOT owner-blocked, NOT "needs your key"
-      - validation-capability-elevenlabs   # key set; TTS round-trip eval not built yet (G3 rung 4)
-      - validation-capability-atlascloud   # key set; video-gen round-trip eval not built yet (G3 rung 6)
+    awaiting_loop_eval: []       # EMPTY — both evals are now built AND GREEN in live-eval run 28912951013 (2026-07-08):
+                                 #   elevenlabs (G3 rung 4): src/evals/elevenlabs.eval.ts — real TTS round-trip, in-bounds audio, VALIDATED.
+                                 #   atlascloud (G3 rung 6): src/evals/atlascloud.eval.ts — real Kling image→video, status=completed + valid MP4 URL, VALIDATED
+                                 #     (fixed en route: submitPhotoAnimation snapped an invalid duration 2 → 5; PR #386. The fixture keeps durationSec=2 as the regression test.)
   this_run:
     changes_shipped: 6          # #243 proxy-video H1, #244 landing honesty+a11y, #245 atlascloud submit-retry, #246 ios-score COGS, #247 plan tests, #248 content honesty
     changes_abandoned: 0
