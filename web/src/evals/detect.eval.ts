@@ -171,7 +171,11 @@ async function main() {
   console.log("NOTE: This makes REAL API calls. Each run costs ~$0.05–$0.20.");
   console.log(`      ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? "set ✓" : "MISSING ✗"}\n`);
 
-  const fixturesDir = path.join(__dirname, "fixtures");
+  // Each eval OWNS a fixtures/<eval>/ subdir; detection fixtures live in fixtures/detection/. This is
+  // structural, not a runtime guard: globbing here can only ever see this eval's own fixtures, so a
+  // sibling eval's differently-shaped fixture can't be picked up (the actual root cause of the earlier
+  // crash — a video-gen fixture sitting in a shared flat dir). Add a *-highlight.json here to include it.
+  const fixturesDir = path.join(__dirname, "fixtures", "detection");
   const fixtures = readdirSync(fixturesDir)
     .filter((f) => f.endsWith(".json"))
     .sort()

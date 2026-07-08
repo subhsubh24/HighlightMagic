@@ -194,6 +194,17 @@ every UI surface in every factory; product-specific brand/voice/tokens live in V
   Skill is available in the run environment, use it — but this in-repo standard + the gates are the
   guarantee, independent of any skill being installed.)
 
+## 6c. Fix the ROOT CAUSE — never bypass, never band-aid
+When something breaks, fix the underlying CAUSE, not the symptom. NOT fixes (forbidden as the
+resolution): skipping/disabling the failing check or test, catching-and-swallowing the error, loosening
+a threshold/guard to go green, a narrow special-case that leaves the same CLASS of bug live elsewhere,
+or any workaround that hides the problem. REQUIRED instead: diagnose WHY it failed from EVIDENCE
+(observe the real system — §6/§10), fix the actual cause so the whole class CANNOT recur, add a
+regression test that fails LOUD on that cause, and record it. A genuine minimal mitigation to stop the
+bleeding is allowed ONLY if it is EXPLICITLY labeled temporary AND paired with a tracked root-cause
+fix — never left as the answer. A green check bought by weakening the check is a FAILURE, not a fix.
+Reviewers (§4) REJECT band-aids; the readiness auditors (§7) treat a symptom-patch as not-done.
+
 ## 7. Readiness = TWO gates (you may NOT self-certify "ready")
 Declare "ready" / open the single readiness issue ONLY when BOTH pass IN THE SAME RUN:
 - **Gate 1 — mechanical preflight (`scripts/preflight.sh`, exit 0):** re-runs the full
@@ -741,3 +752,77 @@ consumer waitlist only; a personal tool is a no-op here.) The funnel:
 - **Native-app products (e.g. an iOS app) where a live web demo of the core is infeasible:** substitute
   a REAL screen-recording demo video + a bounded web taste where possible, and use a gated TestFlight/
   closed beta as the "gated beta." Never mark a demo/beta "live" when it isn't (BUILDS ≠ WORKS, §6).
+
+## 35. Structured, itemized memory (no context collapse — ACE discipline)
+The memory files (§10b loop-memory + dead-end ledger, §20 SUCCESS_PATTERNS, GROWTH_MEMORY) are your
+only cross-run brain — a free-form blob rewritten each run loses hard-won detail to brevity bias and
+collapses. Keep them as an ITEMIZED log of stable, addressable entries, not prose:
+- **One entry = one bullet with a stable id + a typed line:** `[id] KIND: insight — CONTEXT — EVIDENCE`.
+  KIND ∈ {pattern, dead-end, incident, decision}. The id is permanent so later runs can reference it.
+- **Update INCREMENTALLY.** Append a new bullet or edit the ONE relevant bullet; NEVER rewrite the whole
+  file into a fresh summary — that is exactly where detail dies. Same discipline the ACE playbook uses:
+  a deterministic itemized merge, not a re-summarized blob.
+- **CURATOR pass (with the deep audit, §10).** Periodically dedup near-identical entries, MERGE them into
+  one higher-level entry (keep the survivor's id so references stay valid), drop the obsolete, and CAP
+  each file. Fewer, sharper entries beat many specific ones — a bloated memory is an unusable memory.
+- **Honest only (anti-gaming):** a `pattern` cites a real merged PR / measured result; a `dead-end` cites
+  the real verifier cause. This is observability + reuse, NOT a ship gate.
+
+## 36. Harness self-improvement — propose → held-out-validate → human-accept (extends §10b)
+The META rule (§10b) is the ONLY channel by which the loop's own operating rules improve, and the accept
+step is HUMAN-GATED BY DESIGN: the loop MUST NOT edit its own routine / `.claude` / CI — the evaluator
+and the permission controls live OUTSIDE the loop that would change them. This boundary is what makes an
+unattended self-improving loop safe (reward-hacking + broken-abstraction risk); never route around it. To
+make each proposal rigorous instead of a vague wish, the `loop: harness improvement proposal` issue
+(opened only on a churning/stuck signal, ≤1/run) MUST contain all five:
+1. **WEAKNESS (verifier-grounded):** the recurring failure pattern mined from LOOP_HEALTH traces — the
+   terminal cause AND the causal mechanism, not the surface symptom (two runs sharing `gate_test` can
+   have different roots).
+2. **BOUNDED EDIT:** the SMALLEST change to an editable surface (a doctrine line, a prompt clause, a
+   checklist item) that resolves it — narrow and addressable, never a rewrite, never task-specific
+   difficulty dressed up as a rule.
+3. **HELD-IN evidence:** the specific past run(s) the edit would have fixed (the reproduction).
+4. **HELD-OUT check:** the passing behaviors it must NOT break — name currently-succeeding runs/changes
+   and argue the edit does not regress them. A proposal with no held-out argument is INCOMPLETE.
+5. **PRESERVE:** what stays unchanged.
+A human (owner / a human-run doctrine sync) accepts or rejects. REJECTED proposals are LOGGED as a
+`decision` entry (§35), never silently dropped — so the same wall re-surfaces with accumulated evidence
+rather than being re-litigated cold each run.
+
+## 37. Diversity — don't collapse onto the same lever every run
+A loop that keeps shipping the SAME category of change run after run is exploiting a local groove, not
+covering the roadmap (the diversity-collapse failure mode).
+- **Track the category** of each shipped change in LOOP_HEALTH (§10b) as `rolling_7d.category_mix`
+  (a `{category: count}` map — e.g. reliability/perf, security, mobile, monetization, design-taste,
+  tests/evals, marketing, business-case), plus a one-line `diversity` read (`varied` /
+  `concentrated: <category>`) so the mix surfaces on the dashboard.
+- **Novelty check at SELECT time (§1 step B):** if the last ~K runs cluster on one or two categories, the
+  scout sweep must SURFACE and the selection must INCLUDE ≥1 genuinely different, still-value-bar-clearing
+  lens. The lowest-incomplete phase still wins priority — this breaks monoculture, it does NOT license
+  off-roadmap work.
+- **Bounded by the value bar (§5):** novelty NEVER justifies a sub-bar change — a diverse-but-worthless
+  change is still churn. Coverage of REAL work, not variety for its own sake.
+- **Honest signal:** if genuinely only one category has value-bar-clearing work this run (common
+  pre-launch), concentrate there and SAY so in LOOP_HEALTH — forced diversity against an empty field is
+  the same failure inverted.
+
+## 38. Owner-action lifecycle — resolve, re-confirm, prune (keep OWNER_ACTIONS bounded)
+PENDING_OPS / OWNER_ACTIONS is a LIVING ledger (§14): an item left `open` after it is actually done
+nags the owner, and a pile of never-pruned `done` items bloats the file (§35). Close the loop honestly
+AND keep it small:
+- **Resolve only with dated proof.** Flip an item to `status: done` ONLY with a `resolved:`/`done_on:`
+  date AND a `verification:` note stating HOW it was confirmed — a real §28 re-probe round-trip (what the
+  probe returned), a merged artifact, or `owner-attested` when the repo genuinely cannot see it (a
+  provider-dashboard setting). Never mark done on assumption; an unverifiable "done" is the same failure
+  as a fabricated metric.
+- **Re-confirm, don't trust the flag.** Each run, an env/source-probeable `done` item is RE-CHECKED by
+  the §28 probe (not assumed from its stored status). If the probe now fails, flip it BACK to `open` — a
+  regression (a rotated-away key, a disconnected source) — and say so; a stale `done` hiding a broken
+  dependency is a lie. An `owner-attested` item the loop cannot probe stays done unless the owner says
+  otherwise.
+- **Prune to stay bounded (§35 curator pass).** Once a `done` item is re-confirmed AND stale (resolved
+  more than ~2 runs ago), ARCHIVE it: move it out of the live `items:` list into a collapsed `RESOLVED`
+  tail (or drop it, keeping the dated one-line record as a `decision` entry in loop-memory). The live list
+  then carries only `open` + freshly-resolved work — fewer, current items beat a 600-line audit scroll.
+- **Honest only (anti-gaming):** never mass-flip to `done` to look clear, and never delete an `open` item
+  to shrink the list. Bounded means CURATED, not hidden.

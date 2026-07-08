@@ -3,6 +3,7 @@
   "_expected": {
     "acceptableSchemes": ["http:", "https:"]
   },
+  "_durationSec_note": "Intentionally 2 — an INVALID raw Kling duration (the API rejects 'duration value 2 is invalid'). This is the regression test for atlascloud.ts snapDuration(): the product must snap 2 → nearest valid Kling duration (5) so the submit succeeds. Do NOT 'fix' this to 5 — that would delete the test that proves the snap works.",
   "testCases": [
     {
       "kind": "image-to-video",

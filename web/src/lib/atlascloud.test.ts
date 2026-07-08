@@ -325,17 +325,28 @@ describe("Atlas Cloud API", () => {
       expect(body.duration).toBe(5);
     });
 
-    it("submitPhotoAnimation clamps duration to 2-10", async () => {
+    // Kling accepts ONLY discrete durations (5 or 10). The provider rejects anything else with
+    // "duration value 'N' is invalid" — so the submit layer must SNAP to the nearest valid value,
+    // never pass an in-range-but-invalid duration (e.g. 2, 3) through. Regression for that bug.
+    it.each([
+      [2, 5], // the actual live-eval failure: 2 is invalid → must snap to 5, not pass through
+      [3, 5],
+      [4, 5],
+      [7, 5],
+      [8, 10],
+      [99, 10], // above the max → nearest valid is 10
+    ])("submitPhotoAnimation snaps duration %d → valid Kling %d", async (input, expected) => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ data: { id: "pred_clamp" } }),
+        json: () => Promise.resolve({ data: { id: "pred_snap" } }),
       });
 
       const { submitPhotoAnimation } = await import("./atlascloud");
-      await submitPhotoAnimation("base64img", "test", 99);
+      await submitPhotoAnimation("base64img", "test", input);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.duration).toBe(10);
+      expect(body.duration).toBe(expected);
+      expect([5, 10]).toContain(body.duration); // never an invalid value reaches Kling
     });
 
     it("submitTextToVideo sends correct model", async () => {
