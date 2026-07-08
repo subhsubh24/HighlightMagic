@@ -81,6 +81,16 @@ describe("checkDailySpendCeiling", () => {
     expect((await checkDailySpendCeiling(userA)).allowed).toBe(false);
     expect((await checkDailySpendCeiling(userB)).allowed).toBe(true);
   });
+
+  it("fails closed on an over-long userId and records nothing (H2)", async () => {
+    const bad = "u".repeat(500);
+    // record should be a no-op...
+    await recordDailyExport(bad);
+    // ...and the check fails closed rather than deriving a KV key from the pathological id.
+    const result = await checkDailySpendCeiling(bad);
+    expect(result.allowed).toBe(false);
+    expect(result.cap).toBe(DAILY_EXPORT_CAP);
+  });
 });
 
 describe("recordDailyExport", () => {
