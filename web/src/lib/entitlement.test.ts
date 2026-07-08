@@ -54,6 +54,14 @@ describe("checkExportAllowed (free tier gate)", () => {
     expect(d.reason).toMatch(/userId/);
   });
 
+  it("denies an over-long userId before it becomes a KV key (H2)", async () => {
+    const d = await checkExportAllowed({ userId: "u".repeat(500), store, now });
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toMatch(/userId/);
+    // fail closed: nothing was written for the pathological id
+    expect(await store.get("u".repeat(500), currentPeriodKey(now))).toBe(0);
+  });
+
   it("allows a fresh free user and reports remaining", async () => {
     const d = await checkExportAllowed({ userId: "u1", store, now });
     expect(d.allowed).toBe(true);
@@ -96,6 +104,12 @@ describe("consumeExport", () => {
   it("increments for free users", async () => {
     const store = new InMemoryQuotaStore();
     expect(await consumeExport({ userId: "free", store })).toBe(1);
+  });
+  it("is a no-op for an over-long userId — never writes a pathological KV key (H2)", async () => {
+    const store = new InMemoryQuotaStore();
+    const bad = "u".repeat(500);
+    expect(await consumeExport({ userId: bad, store })).toBe(0);
+    expect(await store.get(bad, currentPeriodKey())).toBe(0);
   });
 });
 

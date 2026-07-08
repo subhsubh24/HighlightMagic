@@ -15,6 +15,15 @@ import { CREDIT_PACK_PRODUCTS, FREE_EXPORT_LIMIT, PRO_PRODUCT_IDS } from "./cons
 import { isKVConfigured, VercelKVQuotaStore } from "./kv-quota-store";
 import { loadTrustedRootsFromEnv, verifyAppStoreJWS } from "./app-store-jws";
 import { consumeCredit, getCreditBalance, grantCredits, type GrantResult } from "./credit-store";
+import { isValidUserId } from "./user-id";
+
+/**
+ * A StoreKit 2 signed transaction is a compact 3-part JWS — comfortably under this bound in
+ * practice. Reject anything larger BEFORE the ES256 verify (Track H2 input bounds): a hostile
+ * client cannot make us burn crypto work on a multi-megabyte payload, and the CPU cost of the
+ * verify stays bounded regardless of what the wire sends.
+ */
+export const MAX_SIGNED_TRANSACTION_CHARS = 20_000;
 
 /** Current monthly period key in UTC, e.g. "2026-06". Quotas reset per calendar month. */
 export function currentPeriodKey(date: Date = new Date()): string {
@@ -82,6 +91,7 @@ export function getQuotaStore(): QuotaStore {
  */
 export async function verifyProEntitlement(signedTransaction?: string | null): Promise<boolean> {
   if (!signedTransaction || typeof signedTransaction !== "string") return false;
+  if (signedTransaction.length > MAX_SIGNED_TRANSACTION_CHARS) return false; // H2: bound before verify
 
   const trustedRootDer = loadTrustedRootsFromEnv();
   if (trustedRootDer.length === 0) return false; // no trusted Apple root configured → deny
@@ -132,7 +142,8 @@ export async function checkExportAllowed(opts: {
   now?: Date;
 }): Promise<ExportDecision> {
   const { userId, signedTransaction, store = getQuotaStore(), now = new Date() } = opts;
-  if (!userId || typeof userId !== "string") {
+  if (!isValidUserId(userId)) {
+    // H2: reject a missing OR over-long userId before it becomes a KV key suffix (fail closed).
     return { allowed: false, isPro: false, remaining: 0, limit: FREE_EXPORT_LIMIT, used: 0, reason: "missing userId" };
   }
   if (await verifyProEntitlement(signedTransaction)) {
@@ -209,6 +220,9 @@ export async function consumeExport(opts: {
 }): Promise<number> {
   const { userId, isPro = false, store = getQuotaStore(), now = new Date() } = opts;
   if (isPro) return 0;
+  // H2: never derive a KV key from an invalid/over-long userId (defence-in-depth — the paid path
+  // always validates via checkExportAllowed first, but consumeExport must not trust that).
+  if (!isValidUserId(userId)) return 0;
   const period = currentPeriodKey(now);
 
   // Decide free-quota vs purchased-credit the same way checkExportAllowed did: while under the
@@ -273,11 +287,16 @@ export async function redeemCreditPack(opts: {
   signedTransaction?: string | null;
 }): Promise<RedeemResult> {
   const { userId, signedTransaction } = opts;
-  if (!userId || typeof userId !== "string") {
+  if (!isValidUserId(userId)) {
+    // H2: reject a missing OR over-long userId before it becomes a credit-balance KV key.
     return { ok: false, granted: 0, balance: 0, reason: "missing userId" };
   }
   if (!signedTransaction || typeof signedTransaction !== "string") {
     return { ok: false, granted: 0, balance: 0, reason: "missing signedTransaction" };
+  }
+  if (signedTransaction.length > MAX_SIGNED_TRANSACTION_CHARS) {
+    // H2: bound the JWS before the ES256 verify — same wallet-of-CPU guard as verifyProEntitlement.
+    return { ok: false, granted: 0, balance: 0, reason: "invalid transaction" };
   }
 
   const trustedRootDer = loadTrustedRootsFromEnv();

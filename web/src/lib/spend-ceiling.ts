@@ -34,6 +34,7 @@
  * Preflight asserts: `grep -rqiE 'spend.?ceiling|daily.?cap|usage.?cap' web/src/lib`
  */
 import { isKVConfigured, KV_OP_TIMEOUT_MS } from "./kv-quota-store";
+import { isValidUserId } from "./user-id";
 
 /** Maximum paid exports per user per day. Applies to ALL tiers including Pro. */
 export const DAILY_EXPORT_CAP = 50;
@@ -176,6 +177,8 @@ interface CeilingResult {
 
 /** Check whether `userId` has hit the daily EXPORT ceiling. Call BEFORE the paid API call. */
 export async function checkDailySpendCeiling(userId: string): Promise<CeilingResult> {
+  // H2: an over-long/empty userId never becomes a KV key — fail closed like the catch below.
+  if (!isValidUserId(userId)) return { allowed: false, usage: DAILY_EXPORT_CAP, cap: DAILY_EXPORT_CAP };
   try {
     const usage = await getStore().get("export", userId, dailyPeriodKey());
     return { allowed: usage < DAILY_EXPORT_CAP, usage, cap: DAILY_EXPORT_CAP };
@@ -187,6 +190,7 @@ export async function checkDailySpendCeiling(userId: string): Promise<CeilingRes
 
 /** Record one successful export against the daily ceiling. Call AFTER consumeExport. */
 export async function recordDailyExport(userId: string): Promise<void> {
+  if (!isValidUserId(userId)) return; // H2: never write a KV key for an invalid userId
   try {
     await getStore().increment("export", userId, dailyPeriodKey());
   } catch {
@@ -199,6 +203,7 @@ export async function recordDailyExport(userId: string): Promise<void> {
  * Check whether `userId` has hit the daily paid-GENERATION ceiling. Call BEFORE the paid call.
  */
 export async function checkDailyGenerationCeiling(userId: string): Promise<CeilingResult> {
+  if (!isValidUserId(userId)) return { allowed: false, usage: DAILY_GENERATION_CAP, cap: DAILY_GENERATION_CAP };
   try {
     const usage = await getStore().get("gen", userId, dailyPeriodKey());
     return { allowed: usage < DAILY_GENERATION_CAP, usage, cap: DAILY_GENERATION_CAP };
@@ -209,6 +214,7 @@ export async function checkDailyGenerationCeiling(userId: string): Promise<Ceili
 
 /** Record one paid generation sub-call against the daily generation ceiling. */
 export async function recordDailyGeneration(userId: string): Promise<number> {
+  if (!isValidUserId(userId)) return 0; // H2: never write a KV key for an invalid userId
   return getStore().increment("gen", userId, dailyPeriodKey());
 }
 
@@ -222,6 +228,8 @@ export async function recordDailyGeneration(userId: string): Promise<number> {
  * unverifiable — fail closed), or `null` to proceed. Mirrors `rateLimitResponse(...)`.
  */
 export async function enforceGenerationCeiling(userId: string): Promise<Response | null> {
+  // H2: reject an over-long/empty userId before it becomes a KV key — fail closed (429).
+  if (!isValidUserId(userId)) return ceilingResponse();
   let count: number;
   try {
     count = await getStore().increment("gen", userId, dailyPeriodKey());
