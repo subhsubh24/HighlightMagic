@@ -17,8 +17,9 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-// sharp is a web/ dependency (not installed at repo root); resolve it from there like the sibling
-// validate-*.mjs scripts resolve js-yaml.
+// sharp is a build-time-only tool declared in web/package.json devDependencies; resolve it from
+// web/ (it isn't installed at repo root) the same way the sibling validate-*.mjs scripts resolve
+// js-yaml via createRequire.
 const require = createRequire(join(ROOT, "web", "package.json"));
 const sharp = require("sharp");
 const ACCENT = "#7C3AED";
