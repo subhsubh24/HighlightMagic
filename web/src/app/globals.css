@@ -11,7 +11,8 @@
   --accent-pink: #EC4899;
   --text-primary: #FFFFFF;
   --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-tertiary: rgba(255, 255, 255, 0.4);
+  /* 0.5 (not 0.4) keeps tertiary/helper text at WCAG-AA 5.29:1 on --bg-primary; kept in sync with Theme.textTertiary. */
+  --text-tertiary: rgba(255, 255, 255, 0.5);
   --success: #22C55E;
   --warning: #F59E0B;
   --error: #EF4444;

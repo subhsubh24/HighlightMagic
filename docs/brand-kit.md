@@ -32,7 +32,7 @@ Ported from iOS `Theme.swift` and web `globals.css`. All tokens are production-d
 | `--accent-pink` | `#EC4899` | Gradient terminus; energy/excitement |
 | `--text-primary` | `#FFFFFF` | Headings, primary body |
 | `--text-secondary` | `rgba(255,255,255,0.70)` | Body, descriptions |
-| `--text-tertiary` | `rgba(255,255,255,0.40)` | Placeholders, helper text |
+| `--text-tertiary` | `rgba(255,255,255,0.50)` | Placeholders, helper text (WCAG-AA 5.29:1 on `--bg-primary`) |
 | `--success` | `#22C55E` | Confirmations, checkmarks |
 | `--warning` | `#F59E0B` | Warnings |
 | `--error` | `#EF4444` | Error states |
