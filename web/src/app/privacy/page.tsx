@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy — Highlight Magic",
+  description:
+    "How Highlight Magic (web and iOS) handles your data: what we collect, how uploaded video is processed and retained, and the choices you have.",
+};
+
 export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">

@@ -1,3 +1,11 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Terms of Use — Highlight Magic",
+  description:
+    "The terms that govern your use of Highlight Magic (web and iOS): your account, acceptable use, subscriptions and billing, and liability.",
+};
+
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
