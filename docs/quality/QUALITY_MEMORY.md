@@ -228,3 +228,61 @@ per-dimension subagents (none wrote the code), each backing its letter with a me
 
 **Diff vs last grade:** two dims rose (artifact_integrity A→A+, performance B→A); the three sub-A ship-critical dims
 unchanged, so overall holds at B and the ship gate stays false. No letter regressed.
+
+---
+
+## 2026-07-09 — grade, commit efe1add
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → build compiled successfully, **1029 tests passed
+(75 files)** (up from 956/71), coverage stmts **91.65%** / branch 82.83% / funcs 92.19% / lines 92.94% (all above the
+60/60/50/60 floor), **0 lint warnings**. Latest 5 main CI runs all green on `efe1add`. Independently inspected the
+**live-eval** history via the GitHub Actions API and pulled the **job logs** for the cited run. Graded with 9 fresh,
+adversarial per-dimension subagents (none wrote the code), each backing its letter with a mechanical signal it ran +
+file/line evidence.
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-05 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (within-grade ↑: #378 executing plain-path export test) |
+| correctness_reliability | ✅ | A | = |
+| security | ✅ | A | = |
+| design_taste | ✅ | **A+** | **A → A+ ↑** |
+| store_readiness | ✅ | C | = (unchanged 4 cycles) |
+| artifact_integrity | ✅ | A+ | = |
+| business_case_strength | ✅ | A | = |
+| tests_evals | ✅ | B | = (within-grade ↑↑: 2/3 sub-gaps closed) |
+| performance | ⬜ | A | = |
+
+**What changed (real, verified):**
+- **design_taste A → A+:** the sole prior residual (desktop-only journey screenshots) closed via **#397** — a real Pixel 5
+  Playwright project (`playwright.config.ts:44-49`) with 7 committed mobile-viewport baselines — plus **#390** raised
+  `--text-tertiary` to 0.5 (5.29:1, clears WCAG-AA). Emoji-as-UI grep = 0; iconography real; a11y strong. Zero new findings.
+- **functional_reality (within B):** **#378** `ExportRoundtripTests.swift` is a genuine executing outcome-asserting test —
+  synthesizes a real source video, invokes production `exportClip`, asserts a playable 1080×1920 mp4 on disk. Closes prior
+  gap 1. BUT a NEW named gap surfaced under adversarial read: `ExportView.swift:275` forces `shouldWatermark=true` for every
+  free user, so the *actual* shipped free-tier export always takes the watermark→`AVVideoCompositionCoreAnimationTool`
+  overlay path — which the test deliberately skips (simulator hangs) and which has only config assertions. Plus gap 2
+  (client-side export-count quota) persists. → stays B.
+- **tests_evals (within B):** 2 of 3 sub-gaps closed — real ElevenLabs + AtlasCloud round-trip evals now exist
+  (`web/src/evals/elevenlabs.eval.ts`, `atlascloud.eval.ts`), unit-tested rubric, wired into `live-eval.yml`, and proven
+  GREEN with genuine paid execution in **live-eval run 28912951013** (2026-07-08); the iOS export roundtrip landed (#378).
+  Remaining A-blocker: the paid-eval suite is ADVISORY — `live-eval` is not a required check and stays green when keyless
+  (#289), and the `ios` check running the roundtrip is explicitly non-required (`ci.yml:125`). → stays B.
+- **security (held A):** #392 (userId ≤128 + JWS/transaction length bounds before verify) and #379 (proxy-video actual-byte
+  cap) confirmed. New adversarial finding recorded as a to-A+ residual: `getClientIP` takes the leftmost, spoofable XFF hop
+  (`rate-limit.ts:93`), compounding the in-memory per-instance bucket — defense-in-depth only (wallet guard is KV-atomic).
+- **artifact_integrity (held A+):** the one claim most exposed to inflation — #389 "ElevenLabs + AtlasCloud VALIDATED" — was
+  held honest by pulling **job 85773961893** logs, which show the paid steps genuinely executed (real MP3 bytes, real Kling
+  MP4 URL), not skip-guarded. All four dashboard feeds still parse under real top-level keys. #395/#393/#394 artifacts real.
+
+**Ship gate NOT met:** needs A/A+ on every ship-critical dim; `store_readiness` C (no archivable app target + no 6.9-inch
+screenshots — 4 cycles), `functional_reality` B, `tests_evals` B remain below the A bar.
+
+**Diff vs last grade (2026-07-05, 468dd02):** design_taste **A→A+**; no regressions; three ship-critical dims below A are the
+same three, but functional_reality and tests_evals each closed prior named sub-gaps (moved up within B). Overall holds **B**.
+
+**Top gaps (ordered; filed/updated as issues #174, #176, #177):**
+1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker).
+2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota.
+3. `tests_evals` B — make the paid-eval suite enforceable (required / hard-fail when keyless, #289) and promote `ios` to a required check.
