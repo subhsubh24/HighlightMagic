@@ -71,6 +71,29 @@ describe("getThemeTransitions", () => {
   it("returns empty array for count 0", () => {
     expect(getThemeTransitions("cinematic", 0)).toHaveLength(0);
   });
+
+  it("enforces the pattern-interrupt for every theme even when the pool wraps around", () => {
+    // Several theme pools start and end with the SAME transition (e.g. the vlog
+    // pool is [hard_cut, dip_to_black, hard_cut, crossfade, hard_cut]). Requesting
+    // more transitions than the pool length forces a wrap where pool[i % len]
+    // collides with the previous pick — the branch the sports/10 case never hits.
+    // The no-consecutive-duplicate guarantee must still hold for all of them.
+    for (const theme of ALL_THEMES) {
+      const result = getThemeTransitions(theme, 12);
+      expect(result).toHaveLength(12);
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i]).not.toBe(result[i - 1]);
+      }
+    }
+  });
+
+  it("substitutes a different transition when the wrap-around candidate repeats", () => {
+    // The vlog pool ends and begins with "hard_cut", so index 5 (pool[0]) would
+    // repeat result[4] (pool[4]) — exercising the alternate-selection fallback.
+    const result = getThemeTransitions("vlog", 6);
+    expect(result[5]).not.toBe(result[4]);
+    expect(result[5]).not.toBe("hard_cut");
+  });
 });
 
 describe("getEditingStyle", () => {
