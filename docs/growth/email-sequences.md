@@ -5,7 +5,7 @@ Build + stage only — owner wires to the email provider (Resend / SendGrid / Ma
 See `docs/growth/CONNECT.md` for the provider connection steps.
 
 **Voice**: confident, direct, peer-to-creator. Lead with the outcome. Short sentences. No hype.  
-**Product facts** (never contradict): 5 free exports/month with watermark; Pro at $14.99/month or $149.99/year — unlimited exports, no watermark.  
+**Product facts** (never contradict): 5 free exports/month with watermark; Pro at $14.99/month or $149.99/year — no monthly export cap (a 50/day fair-use ceiling applies to all tiers), no watermark. Never use the bare word "unlimited" — always "no monthly export cap".  
 **Social proof**: never invented. Leave blank until real examples exist.
 
 ---
@@ -71,7 +71,7 @@ You don't touch the timeline.
 - 5 exports per month
 
 **Upgrade to Pro ($14.99/month) and also get:**
-- Unlimited exports
+- No monthly export cap
 - No watermark on your highlights
 
 [See it in action → https://highlightmagic.app/landing]
@@ -101,7 +101,7 @@ As a waitlist member, you're first. When the App Store listing is live, you'll g
 - Music, captions, and sound effects — automatically
 - Export ready to post to TikTok, Reels, or Shorts
 
-Pro is $14.99/month (unlimited exports, no watermark). Start free — no commitment.
+Pro is $14.99/month (no monthly export cap, no watermark). Start free — no commitment.
 
 Watch for the launch email in 2 days.
 
@@ -137,7 +137,7 @@ Highlight Magic is in the App Store. You're first on the list, so you get first 
 
 Your first 5 exports are free every month. No card, no commitment.
 
-If you want unlimited exports and no watermark, Pro is $14.99/month or $149.99/year.
+If you want no monthly export cap and no watermark, Pro is $14.99/month or $149.99/year.
 
 Go make something worth sharing.
 
@@ -203,10 +203,10 @@ Hey —
 
 You've made 4 highlights with Highlight Magic. One free export left this month.
 
-If you want to keep going without limits:
+If you want to keep going past the free cap:
 
 **Highlight Magic Pro — $14.99/month**
-- Unlimited exports
+- No monthly export cap
 - No watermark on your highlights
 
 Or go annual: **$149.99/year** — that's $12.50/month, 2 months free.
@@ -231,7 +231,7 @@ Hey —
 
 You've used your 5 free exports for the month.
 
-If you want to keep going now, Pro unlocks unlimited exports:
+If you want to keep going now, Pro removes the monthly export cap:
 
 **$14.99/month** — cancel any time  
 **$149.99/year** — 2 months free ($12.50/month effective)
@@ -241,7 +241,7 @@ If you want to keep going now, Pro unlocks unlimited exports:
 
 Your free exports reset at the start of next month. If you can wait, they'll be back then.
 
-But if you've got footage to turn into highlights now, Pro removes the limit entirely.
+But if you've got footage to turn into highlights now, Pro removes the monthly export cap.
 
 — The Highlight Magic team
 
@@ -271,7 +271,7 @@ That's what Highlight Magic is for. One minute. AI does the edit.
 [Make a highlight now →]  
 [APP DEEP LINK — owner inserts]
 
-If you want unlimited exports going forward, Pro is $14.99/month or $149.99/year.
+If you want to lift the monthly export cap going forward, Pro is $14.99/month or $149.99/year.
 
 — The Highlight Magic team
 
