@@ -370,6 +370,7 @@ export default function LandingPage() {
               href={IOS_APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackEvent("cta_click", { source: "hero" })}
               className="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
             >
               <Download className="h-4 w-4" />
@@ -607,6 +608,7 @@ export default function LandingPage() {
               href={IOS_APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackEvent("cta_click", { source: "footer" })}
               className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               iOS App
