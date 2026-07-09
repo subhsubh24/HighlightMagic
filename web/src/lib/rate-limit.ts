@@ -85,14 +85,27 @@ export function checkRateLimit(key: string, config: RateLimitConfig): RateLimitR
 }
 
 /**
- * Extract the real client IP from a Request object.
- * Checks x-forwarded-for (set by Vercel's edge), x-real-ip, then falls back to "unknown".
+ * Extract a SPOOF-RESISTANT client IP from a Request object, for keying the per-IP rate limiter.
+ *
+ * Security: `x-forwarded-for` is a client-writable header. If we trusted its LEFTMOST entry, an
+ * attacker could send `X-Forwarded-For: <random>` on every request and rotate the key freely,
+ * bypassing the per-IP throttle entirely (OWASP: parse XFF from the RIGHT, never the left).
+ *
+ * On Vercel, `x-real-ip` is set by the platform to the actual connecting IP and CANNOT be spoofed by
+ * the client (Vercel overwrites it), so we prefer it. Only if it is absent do we fall back to the
+ * RIGHTMOST `x-forwarded-for` hop — the entry appended by the trusted terminating edge, not the
+ * left-hand values the client controls. Both spoof-resistant; last resort is "unknown".
+ *
+ * Refs: Vercel request-headers docs; adam-p.ca "The perils of the real client IP" (parse XFF right).
  */
 export function getClientIP(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
   const xri = req.headers.get("x-real-ip");
-  if (xri) return xri.trim();
+  if (xri && xri.trim()) return xri.trim();
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
   return "unknown";
 }
 
