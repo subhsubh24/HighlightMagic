@@ -107,16 +107,44 @@ describe("sliding-window decay", () => {
 });
 
 describe("getClientIP", () => {
-  it("extracts first IP from x-forwarded-for", () => {
+  it("prefers x-real-ip (Vercel-set, client-unspoofable) over x-forwarded-for", () => {
+    // If both are present, the platform-trusted x-real-ip wins — a client cannot override it.
     const req = new Request("http://localhost", {
-      headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
+      headers: { "x-real-ip": "9.10.11.12", "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
     });
-    expect(getClientIP(req)).toBe("1.2.3.4");
+    expect(getClientIP(req)).toBe("9.10.11.12");
   });
 
-  it("falls back to x-real-ip", () => {
+  it("uses x-real-ip when it is the only header", () => {
     const req = new Request("http://localhost", { headers: { "x-real-ip": "9.10.11.12" } });
     expect(getClientIP(req)).toBe("9.10.11.12");
+  });
+
+  it("falls back to the RIGHTMOST x-forwarded-for hop (trusted edge), not the leftmost", () => {
+    // Chain "client, proxy, edge" — the rightmost is the hop the trusted terminating edge appended.
+    const req = new Request("http://localhost", {
+      headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8, 9.9.9.9" },
+    });
+    expect(getClientIP(req)).toBe("9.9.9.9");
+  });
+
+  it("is NOT spoofable by a client-supplied leftmost x-forwarded-for entry", () => {
+    // An attacker sends a forged left-hand value to rotate the rate-limit key; when x-real-ip is
+    // present it is ignored entirely, so the throttle key stays pinned to the real connecting IP.
+    const spoofed = new Request("http://localhost", {
+      headers: { "x-forwarded-for": "6.6.6.6", "x-real-ip": "203.0.113.7" },
+    });
+    expect(getClientIP(spoofed)).toBe("203.0.113.7");
+    // And even with NO x-real-ip, two different forged leftmost values behind the same trusted edge
+    // resolve to the SAME rightmost hop — so the attacker cannot mint fresh buckets by rotating XFF.
+    const a = new Request("http://localhost", { headers: { "x-forwarded-for": "1.1.1.1, 8.8.8.8" } });
+    const b = new Request("http://localhost", { headers: { "x-forwarded-for": "2.2.2.2, 8.8.8.8" } });
+    expect(getClientIP(a)).toBe(getClientIP(b));
+  });
+
+  it("trims whitespace and ignores empty XFF segments", () => {
+    const req = new Request("http://localhost", { headers: { "x-forwarded-for": " 1.2.3.4 ,  " } });
+    expect(getClientIP(req)).toBe("1.2.3.4");
   });
 
   it("returns unknown when no IP header present", () => {
