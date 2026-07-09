@@ -260,7 +260,7 @@ describe("loadTrackAudio", () => {
     vi.stubGlobal("fetch", fetchMock);
     const ctx = new FakeAudioContext();
     const buf = await loadTrackAudio(musicTrack({ fileName: "sunset-drive" }), ctx as unknown as AudioContext);
-    expect(fetchMock).toHaveBeenCalledWith("/audio/sunset-drive.mp3");
+    expect(fetchMock).toHaveBeenCalledWith("/audio/sunset-drive.mp3", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(buf).toEqual({ duration: 2.0 });
   });
 
@@ -273,7 +273,7 @@ describe("loadTrackAudio", () => {
       ctx as unknown as AudioContext,
       "https://cdn.example.com/ai-music.mp3",
     );
-    expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/ai-music.mp3");
+    expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/ai-music.mp3", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it("falls back to the local path when __ai_generated__ has no URL", async () => {
@@ -281,7 +281,7 @@ describe("loadTrackAudio", () => {
     vi.stubGlobal("fetch", fetchMock);
     const ctx = new FakeAudioContext();
     await loadTrackAudio(musicTrack({ id: "__ai_generated__", fileName: "fallback" }), ctx as unknown as AudioContext, null);
-    expect(fetchMock).toHaveBeenCalledWith("/audio/fallback.mp3");
+    expect(fetchMock).toHaveBeenCalledWith("/audio/fallback.mp3", expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it("returns null on a non-ok response", async () => {
@@ -386,7 +386,7 @@ describe("createAudioPipeline", () => {
     const fetchMock = okFetch();
     vi.stubGlobal("fetch", fetchMock);
     await createAudioPipeline(canvasStream(), null, "https://cdn.example.com/ai.mp3");
-    expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/ai.mp3");
+    expect(fetchMock).toHaveBeenCalledWith("https://cdn.example.com/ai.mp3", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     const ctx = FakeAudioContext.instances.at(-1)!;
     expect(ctx.bufferSources).toHaveLength(1);
   });

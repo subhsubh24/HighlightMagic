@@ -10,6 +10,16 @@
 import type { MusicTrack } from "./types";
 
 /**
+ * Bound every asset fetch on the render path so a slow/unreachable CDN (AI-generated music,
+ * SFX, voiceover — external URLs) can NEVER hang the export indefinitely. Without a signal a
+ * browser fetch can stall for minutes on a dead connection, freezing the whole render with no
+ * user-visible progress. On timeout the fetch rejects and the existing catch degrades
+ * gracefully (the export continues without that audio layer). 30s is comfortably above a
+ * healthy CDN response yet well under a "stuck forever" hang.
+ */
+const AUDIO_FETCH_TIMEOUT_MS = 30_000;
+
+/**
  * Try to load an audio file for the given music track.
  * Supports both local curated tracks (/audio/*.mp3) and AI-generated tracks (external URL).
  * Returns the AudioBuffer if found, null otherwise.
@@ -25,12 +35,12 @@ export async function loadTrackAudio(
     : `/audio/${track.fileName}.mp3`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS) });
     if (!response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     return await audioCtx.decodeAudioData(arrayBuffer);
   } catch {
-    // Audio file not available yet
+    // Audio file not available yet (or the fetch timed out) — degrade silently.
     return null;
   }
 }
@@ -134,7 +144,7 @@ export async function createAudioPipeline(
 
   if (musicUrl) {
     try {
-      const response = await fetch(musicUrl);
+      const response = await fetch(musicUrl, { signal: AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS) });
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer();
         const buffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -178,7 +188,7 @@ export async function createAudioPipeline(
     const renderStartTime = audioCtx.currentTime;
     for (const layer of scheduledLayers) {
       try {
-        const response = await fetch(layer.url);
+        const response = await fetch(layer.url, { signal: AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS) });
         if (!response.ok) continue;
         const arrayBuffer = await response.arrayBuffer();
         const buffer = await audioCtx.decodeAudioData(arrayBuffer);
