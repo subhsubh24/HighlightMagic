@@ -92,7 +92,7 @@ describe("credit-store outage resilience (consumeExport)", () => {
   });
 
   it("spends exactly one credit (not the monthly counter) once the free quota is exhausted", async () => {
-    mockedConsumeCredit.mockResolvedValueOnce(undefined);
+    mockedConsumeCredit.mockResolvedValueOnce(4); // consumeCredit resolves the remaining balance (a number)
     const incSpy = vi.spyOn(atLimitStore, "increment");
     await consumeExport({ userId: "u1", store: atLimitStore });
     expect(mockedConsumeCredit).toHaveBeenCalledTimes(1);
