@@ -81,9 +81,9 @@ enum AppStoreMetadata {
             screenContent: "Prompt screen → 'epic scenery' typed → suggestion chips shown → 'Find Highlights' button"
         ),
         (
-            headline: "7-Pass AI Analyzes Every Frame",
+            headline: "6-Pass AI Analyzes Every Frame",
             subtitle: "Motion, faces, scenes — nothing missed",
-            screenContent: "Processing screen → animated progress ring at 65% → 'Pass 4: AI video-text matching...' label"
+            screenContent: "Processing screen → animated progress ring at 50% → 'Pass 4: ML model scoring...' label"
         ),
         (
             headline: "3 Highlights Found In 10 Seconds",
