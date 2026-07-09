@@ -42,7 +42,8 @@ re-benchmarked (cheapest model that still clears each task's quality bar).
 ## Pricing
 
 - **Free** — 5 exports / month, with a watermark.
-- **Pro** — **$14.99/mo** or **$149.99/yr** — removes the watermark and the export limit.
+- **Pro** — **$14.99/mo** or **$149.99/yr** — removes the watermark and the monthly export
+  cap (a 50-per-day fair-use ceiling applies to all tiers).
 
 ## Requirements
 
