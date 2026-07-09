@@ -26,15 +26,15 @@ exactly like it reads BUSINESS_CASE_SUMMARY in docs/BUSINESS_CASE.md.
 ```yaml
 GROWTH_STATUS:
   project: HighlightMagic
-  as_of: 2026-07-05
+  as_of: 2026-07-09
   phase: pre_launch              # pre_launch | launching | post_launch
   engine_built: true             # COMPUTED: == (engine_pct == 100); E6 plumbing shipped in code (#123)
   engine_pct: 100                # COMPUTED from E6 anchor files on disk (5/5: waitlist/confirm, email, social queue, metrics, CONNECT.md). DO NOT hand-edit
   channels_connected: []         # none connected yet (engine built in code, not yet live externally)
   awaiting_connect: true         # owner must connect channels before agent executes externally
-  site_gate_up: false            # HARD precondition (ROADMAP D6): pre-launch SITE GATE confirmed UP. While phase=pre_launch, EXECUTE-mode public outreach is FORBIDDEN unless this is true. Flips true only once the owner applies the gate (sets SITE_GATE_PASSWORD)
-  validation:                    # SELF-VALIDATION (GTM_STANDARD S4) — every external source this agent depends on, checked against the REAL code/config this run (2026-07-05: re-verified validation-manifest.ts env-var names unchanged since Run 4 — grep confirms same line numbers), never asserted from memory
-    as_of: 2026-07-05
+  site_gate_up: false            # HARD precondition (ROADMAP D6): pre-launch SITE GATE confirmed UP. While phase=pre_launch, EXECUTE-mode public outreach is FORBIDDEN unless this is true. Flips true only once the owner applies the gate (sets SITE_GATE_PASSWORD). Run 7 (2026-07-09): could not confirm via a live probe — highlightmagic.app returned a proxy-level 502 to this routine's outbound curl (network/DNS, not evidence either way) and neither PROD_URL nor GROWTH_AGENT_SECRET is present in this run's env, so the authenticated /api/growth/stats path could not be tried either. Stays false (fail-closed) until independently confirmed.
+  validation:                    # SELF-VALIDATION (GTM_STANDARD S4) — every external source this agent depends on, re-probed against the REAL env/code this run (2026-07-09: `env` re-checked for GROWTH_AGENT_SECRET/PROD_URL/RESEND_API_KEY/KV_REST_API_URL/social tokens — all absent, same as Run 6; validation-manifest.ts line numbers re-grepped, unchanged)
+    as_of: 2026-07-09
     sources:
       - name: in_app_analytics
         provider: Plausible
@@ -107,21 +107,43 @@ GROWTH_STATUS:
     organic_share_rate: null     # % of new users arriving via share/referral (is it spreading on its own?)
     signal: null                 # honest read: none | weak | emerging | strong — NEVER flattered
   demand_signal:                 # PRE-LAUNCH DEMAND VALIDATION (GTM_STANDARD S10) — a LEADING indicator, NEVER PMF. Real cited public evidence only.
-    as_of: 2026-07-03
+    as_of: 2026-07-09
+    overall_strength: emerging   # real, recurring, multi-source cited pain on the core JTBD (theme 1) is genuine, but 3 of 4 themes carry material counter-signal (established incumbents already serve the "underserved" wedges) — not "strong" until HighlightMagic earns its own differentiated proof; not "weak" or "none" given the durable, cross-source core-JTBD evidence.
     method: >-
-      WebSearch this run (2026-07-03) for real public complaints/reviews about video-highlight
-      editing pain and existing AI clip tools. Primary platform pages (Reddit threads, Trustpilot
-      review pages, App Store review pages, a journalist bio page) returned HTTP 403 to WebFetch
-      this run, so citations below are 2026-dated review-aggregator/blog articles that quote or
-      summarize the underlying reviews — each cited by URL, none fabricated.
+      Schema updated this run to match GTM_STANDARD S10's demand_signal field list (as_of,
+      overall_strength, sources_covered[]/sources_unconnected[], themes[] with
+      label/strength/cited_count/quote/url/product_solves/recency, disconfirming[],
+      steers_opened[]) — added to the standard (#367/#370/#371) after Run 6 last touched this
+      block. All citations below are UNCHANGED, carried over from the Run 5 (2026-07-03) research
+      (primary platform pages — Reddit threads, Trustpilot review pages, App Store review pages, a
+      journalist bio page — returned HTTP 403 to WebFetch across Runs 5/6; citations are 2026-dated
+      review-aggregator/blog articles that quote or summarize the underlying reviews). This run did
+      a BOUNDED refresh check (not a full re-derivation, per Run 6's anti-churn call): WebSearch for
+      HighlightMagic-specific public reviews/complaints (none exist — expected pre-launch, zero
+      public footprint) and for new AI-video-tool press coverage. That surfaced X's new iOS video
+      editor (captions/green-screen, announced 2026-07-07) and Apple Creator Studio's Final Cut Pro
+      "Edit Detection"/"Auto Mask" AI features (announced 2026-06-30) — both real and dated, but
+      neither is a direct competitor to HighlightMagic's one-tap mobile auto-highlight-and-export
+      niche (X's tool is manual in-app editing; Apple's is a Mac-only professional NLE feature) —
+      correctly NOT added as a new theme (would overstate tangential platform news as core-JTBD
+      signal). No new citable theme found; the 4 themes below stand unchanged.
+    sources_covered:
+      - "competitor/review-aggregator blog articles (blog.eklipse.gg, twoaveragegamers.com, fullcourt.ai, snowball-for-streamers.com, ngram.com, ssemble.com, 1trustreview.com) — reachable via WebSearch"
+      - "an App Store listing page (apps.apple.com) for a named competitor app"
+      - "a Trustpilot review quoted via an aggregator (trustpilot.com/review/descript.com, reached via WebSearch synthesis, not direct WebFetch)"
+    sources_unconnected:
+      - "reddit_api — Reddit's Responsible Builder Policy requires explicit commercial-mining approval (GTM_STANDARD S10); REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET unset in this run's env — not circumvented"
+      - "x_api — paid/gated API; no key set in this run's env"
+      - "direct primary-platform fetches (Reddit threads, Trustpilot review pages, Apple App Store review pages, Muckrack journalist bios) — WebFetch returned HTTP 403 on every attempt across Runs 5/6; not re-attempted this run (no reason to expect a different result)"
     themes:
-      - theme: "Manual highlight editing is a large, structural time cost"
+      - label: "Manual highlight editing is a large, structural time cost"
+        strength: strong
+        cited_count: 3
+        quote: "'Manually scrubbing through hours of VODs takes forever' / manual editing 'take[s] 4 to 6 hours per video'"
+        url: "https://blog.eklipse.gg/streaming-tips/video-editing/how-to-create-highlight-reel-save-time.html"
+        product_solves: yes
         recency: durable
-        confidence: high
         examples:
-          - quote: "'Manually scrubbing through hours of VODs takes forever' / manual editing 'take[s] 4 to 6 hours per video'"
-            source: "https://blog.eklipse.gg/streaming-tips/video-editing/how-to-create-highlight-reel-save-time.html"
-            date: "2026"
           - quote: "the difference between a 4-hour edit and a 40-minute one"
             source: "https://www.twoaveragegamers.com/the-complete-ai-tool-stack-for-twitch-streamers-2026/"
             date: "2026"
@@ -129,13 +151,14 @@ GROWTH_STATUS:
             source: "https://www.fullcourt.ai/"
             date: "2026"
         solved_by_product: "YES — HighlightMagic's core loop (auto-detect + auto-export) is a direct answer to this, vs manual scrubbing."
-      - theme: "Established AI clip tools are audio/transcript-first and mis-select on visually-driven, low-dialogue footage (gaming, sports)"
+      - label: "Established AI clip tools are audio/transcript-first and mis-select on visually-driven, low-dialogue footage (gaming, sports)"
+        strength: moderate
+        cited_count: 2
+        quote: "the AI consistently selects commentary moments over gameplay highlights"
+        url: "https://snowball-for-streamers.com/en/blog/opus-clip-doesnt-work-for-gaming"
+        product_solves: partial
         recency: "durable — recurring across multiple independent 2026 comparison pieces"
-        confidence: moderate
         examples:
-          - quote: "the AI consistently selects commentary moments over gameplay highlights"
-            source: "https://snowball-for-streamers.com/en/blog/opus-clip-doesnt-work-for-gaming"
-            date: "2026"
           - quote: "visual-heavy content without clear dialogue still underperforms, and dedicated gaming clip tools work better"
             source: "https://www.ngram.com/blog/opus-clip-vs-vizard"
             date: "2026"
@@ -146,13 +169,14 @@ GROWTH_STATUS:
           iOS-native scope (gaming AND sports AND events AND family in one mobile app), not a
           "no one does gaming well" claim — do not market it that way.
         solved_by_product: "PARTIAL — frame-based visual scoring (not transcript-based) fits this gap architecturally, but the gaming-specific niche has a dedicated, trusted incumbent; differentiate on breadth + mobile-native workflow."
-      - theme: "Existing tools carry real, current reliability + pricing-trust friction (processing failures, opaque credits, hard-to-cancel billing)"
+      - label: "Existing tools carry real, current reliability + pricing-trust friction (processing failures, opaque credits, hard-to-cancel billing)"
+        strength: strong
+        cited_count: 3
+        quote: "Videos hang for hours, and often never finish processing"
+        url: "https://www.ssemble.com/blog/opus-clip-review-2026"
+        product_solves: partial
         recency: "current — 2026 reviews of ongoing, unresolved issues"
-        confidence: high
         examples:
-          - quote: "Videos hang for hours, and often never finish processing"
-            source: "https://www.ssemble.com/blog/opus-clip-review-2026"
-            date: "2026"
           - quote: "'a shocking 1.2 out of 5-star rating' on Trustpilot; users report still being charged after attempting to cancel"
             source: "https://1trustreview.com/review/capcut"
             date: "2026"
@@ -164,18 +188,31 @@ GROWTH_STATUS:
           $149.99/yr Pro, no credit-expiry traps) structurally avoids the cited credit/cancellation
           complaint pattern, but this is an unproven claim pre-launch (zero real users yet) — not a
           guarantee until actual reliability + cancel-flow UX earns it.
-      - theme: "The youth-sports highlight moment is a contested sub-niche with dedicated competitors"
+      - label: "The youth-sports highlight moment is a contested sub-niche with dedicated competitors"
+        strength: moderate
+        cited_count: 2
+        quote: "press a button and get highlight clips right as they happen ... saves about 2 hours per game"
+        url: "https://www.fullcourt.ai/"
+        product_solves: partial
         recency: current
-        confidence: moderate
         examples:
-          - quote: "press a button and get highlight clips right as they happen ... saves about 2 hours per game"
-            source: "https://www.fullcourt.ai/"
-            date: "2026"
           - detail: "XbotGo Chameleon (hardware camera + auto-highlights), Athlete AI Sports Reel Editor, and MOJO Sports all target the youth-sports highlight moment specifically"
             source: "https://apps.apple.com/us/app/athlete-ai-sports-reel-editor/id6469645741"
             date: "2026"
         counter_signal: "Several dedicated apps/hardware already target this exact sub-niche. HighlightMagic's differentiator there is 'bring any footage you already have' (no special camera/hardware), not novelty of the JTBD."
         solved_by_product: "PARTIAL — general-purpose (any raw footage), not sports-specific features (e.g. player/jersey tracking) these dedicated tools may offer."
+    steers_opened: []
+    steers_opened_note: >-
+      Themes 1 and 3 numerically clear the S10 corroboration bar (>=3 independent cited posts across
+      >=2 independent sources, recent + recurring). No steer was opened for either: theme 1's fit is
+      already the product's existing core-loop thesis (auto-detect + auto-export), not a new
+      direction; theme 3's fit is already the existing flat-pricing decision (5 free/mo, no
+      credit-expiry traps), not an unbuilt gap. Opening a ROADMAP/BUSINESS_CASE steer to "build" what
+      is already built would be circular, not a genuine direction-setting action — so zero steers is
+      the correct, non-gamed outcome, not a miss.
+    disconfirming:
+      - "The 'gaming/visual content underserved' claim is only partially true — Eklipse already serves it directly and claims 1M+ streamers; do not market HighlightMagic as 'the only tool that works for gaming highlights.'"
+      - "The youth-sports highlight moment is a contested sub-niche with dedicated competitors; HighlightMagic's differentiator there is breadth (any footage, no special hardware), not novelty of the underlying need."
     synthesis: >-
       The core job-to-be-done HighlightMagic addresses — turning raw footage into a shareable
       highlight without hours of manual scrubbing — is REAL, RECURRING, and durable across years of
@@ -195,15 +232,13 @@ GROWTH_STATUS:
       competitive-landscape awareness (Eklipse + youth-sports-specific tools were absent from the
       Section 2 comp table) — logged as a Section 2 addendum in docs/BUSINESS_CASE.md, not a
       re-priced table.
-    disconfirming_notes:
-      - "The 'gaming/visual content underserved' claim is only partially true — Eklipse already serves it directly and claims 1M+ streamers; do not market HighlightMagic as 'the only tool that works for gaming highlights.'"
-      - "The youth-sports highlight moment is a contested sub-niche with dedicated competitors; HighlightMagic's differentiator there is breadth (any footage, no special hardware), not novelty of the underlying need."
     limitation: >-
       Primary sources (Reddit threads, Trustpilot review pages, App Store review pages, a
-      journalist bio page) returned HTTP 403 to WebFetch this run; citations are 2026-dated
+      journalist bio page) returned HTTP 403 to WebFetch across Runs 5/6; citations are 2026-dated
       review-aggregator/blog articles that quote or summarize the underlying reviews (URLs above),
-      not raw platform pages fetched directly. Try alternate access paths (e.g. App Store RSS review
-      feeds) in a future run to reach primary sources.
+      not raw platform pages fetched directly. Not re-attempted this run (no reason to expect a
+      different result than the last two runs). Try alternate access paths (e.g. App Store RSS
+      review feeds) in a future run to reach primary sources.
   launch_readiness:              # GTM phasing + launch timing — FACTORY_STANDARD §11b (method: ANALYSIS_PLAYBOOK "Launch-timing read"). The dashboard reads this; recompute every run.
     phase: build                 # build | assess_demand | launch | post_launch
     product_ready: false         # every ship-critical QUALITY_SCORECARD dim A/A+ AND readiness passed — currently overall B, ship_gate_met false
@@ -219,9 +254,9 @@ GROWTH_STATUS:
       and drive some real traffic to the waitlist — without this, demand stays 0/null and launch timing
       cannot be computed. (Product readiness is the loop's job — in progress.)
   outreach:                      # STRATEGIC OUTREACH (docs/growth/OUTREACH.md) — DRAFT-ONLY, owner sends. REAL numbers; replies owner-reported, never fabricated; 0/null pre-launch
-    drafted_7d: 1                # curated 1:1 Gmail drafts created for the owner in the last 7d (Run 3: Sam Gutelle, Tubefilter)
-    owner_sent_7d: 0             # of those, how many the owner actually sent (owner-reported)
-    replies_7d: 0                # replies received (owner-reported, never fabricated)
+    drafted_7d: 0                # curated 1:1 Gmail drafts created for the owner in the last 7d — the one drafted Gmail draft (Sam Gutelle, Tubefilter, created 2026-06-29) is now 10 days old, outside the trailing 7d window; zero NEW drafts created this run (no verified new target — see next_actions)
+    owner_sent_7d: 0             # of those, how many the owner actually sent (owner-reported) — confirmed via Gmail: draft still sits unsent, unedited
+    replies_7d: 0                # replies received (owner-reported, never fabricated) — confirmed via search_threads(tubefilter): zero replies (one unrelated 2023 email is the only hit)
     signal: none                 # honest read: none | weak | emerging | strong
   channels: []                   # [{name, status, reach_7d, clicks_7d, signups_7d, ctr, notes}]
   experiments:                    # [{id, hypothesis, status, result, lift_pct, started, decided}] — DESIGNED, not run: no experiment engine (ROADMAP E8 unbuilt) and zero traffic (pre-launch, no channel connected)
@@ -261,16 +296,17 @@ GROWTH_STATUS:
     - "connect-channels has now been open 4 consecutive runs (Run 1-4). No new owner action taken between Run 3 and Run 4 (PENDING_OPS + CONNECT.md unchanged). Per Run 3's own guidance: not re-escalating with new prose — the ask is unchanged (connect Resend, ~5 min, see CONNECT.md Step 1) and repeating it does not help; kept this run's PREPARE work to the two items above instead of padding."
     - "Run 5 (2026-07-03): connect-channels is now open 5 consecutive runs — still no email/datastore/analytics/social connection (spend-caps DID close, owner-attested 2026-07-02, so that's off the blocker list now). Per the Run 3/4 discipline: not re-escalating with new prose, the ask is unchanged. GTM_SCORECARD (as_of 2026-06-30) has NOT been re-graded since Run 4 closed the self_validation_honesty gap (#208) — still shows the pre-fix B; nothing further for this agent to do there until the independent Auditor re-runs. Built the demand_signal block GTM_STANDARD S10 requires (new this run, added 2026-07-01 to the standard — genuinely missing before now): WebSearch found real, cited 2026 evidence that the core JTBD (manual highlight editing is a multi-hour time cost) is real and durable, but also real counter-signal — Eklipse is an established dedicated gaming-clip AI competitor and the youth-sports-highlight niche has several dedicated apps/hardware (FullCourt.ai, XbotGo, Athlete AI, MOJO), so 'gaming/sports is underserved' is only partially true; logged honestly including the disconfirming notes. No BUSINESS_CASE number changed (qualitative signal only) — added a competitive-landscape addendum to Section 2. Primary sources (Reddit, Trustpilot, App Store reviews, a journalist bio page) all returned HTTP 403 to WebFetch this run; citations are dated 2026 aggregator articles that quote the underlying reviews, not raw platform pages — a tooling limitation to note, not a fabrication. Checked for a new strategic-outreach target (a gaming/esports journalist, given the Eklipse finding) but could not verify their specific beat (tool coverage vs match reporting) after the bio-page fetch was blocked — correctly drafted ZERO new outreach rather than guess; the Sam Gutelle draft from Run 3 is still unsent."
     - "Run 6 (2026-07-05): connect-channels open 6 consecutive runs — no email/datastore/social connection; the product loop DID ship the code half of gtm-connect-analytics (#360, Plausible <script> now wired to layout.tsx, prod-host-gated) since Run 5, so this run corrected the validation.sources[in_app_analytics].why text (was stale — cited the script as absent, which is no longer true) and narrowed the remaining owner ask to just the plausible.io account + GROWTH_AGENT_SECRET. Also confirmed (grep, this run) that getGrowthMetrics() still reads only the KV waitlist store, not Plausible — so visitors_7d/visitor_to_waitlist_rate will stay null even after the account exists, a real remaining gap now flagged. Followed up on the Run 5 gaming/esports-journalist lead: WebSearch (not blocked, unlike WebFetch) confirmed Titas Khan's actual beat is game-news/esports reporting (Valorant, Dota 2, Roblox, mobile games), NOT creator/streaming-tool coverage — does not clear the OUTREACH.md beat-match bar; a second search for named journalists covering AI clip-editing tools surfaced only unattributed review-aggregator sites (agent-finder.co, twoaveragegamers.com), no named individual with a public professional contact. Correctly drafted ZERO new outreach. Ran one light WebSearch check for new HighlightMagic-specific public complaints/reviews (none exist — pre-launch, no public footprint) — the Run 5 demand_signal synthesis needed no update; not re-running the full citation search to avoid duplicative churn on unchanged evidence. GTM_SCORECARD still shows the pre-fix B (as_of 2026-06-30, unchanged) — still the Auditor's turn, not this agent's. Sam Gutelle draft (Run 3) confirmed still unsent, zero replies (Gmail search)."
+    - "Run 7 (2026-07-09): connect-channels open 7 consecutive runs — re-probed env for GROWTH_AGENT_SECRET/PROD_URL/RESEND_API_KEY/KV_REST_API_URL/social tokens (all absent, unchanged) and additionally attempted a direct curl to https://highlightmagic.app as extra diligence — the outbound proxy returned a 502 (DNS/network, not evidence the site is up or down); stayed fail-closed (site_gate_up: false unchanged). GTM_STANDARD.md changed materially since Run 6 (#367/#370/#371, landed after Run 6's commit): the demand_signal block gained a mandated schema (overall_strength, sources_covered[]/sources_unconnected[], per-theme label/strength/cited_count/quote/url/product_solves, steers_opened[]) — restructured this run to match it, preserving every existing citation unchanged (no new fabricated data; a living-artifact consistency fix, not new research). Evaluated the new S10 'demand-driven auto-steer' mechanism against the restructured themes: 2 of 4 numerically clear the corroboration bar (>=3 cited posts, >=2 sources) but both map to fit the product/pricing ALREADY has (auto-detect+export core loop; flat non-credit pricing) — correctly opened zero steers rather than steer toward already-built decisions. Corrected outreach.drafted_7d from 1 to 0: the Sam Gutelle draft (created 2026-06-29) is now 10 days old, outside the trailing 7-day window — a real metric-accuracy fix (the draft itself is still open/unsent, tracked in next_actions, not forgotten). Bounded WebSearch found no new HighlightMagic-specific footprint (expected, pre-launch) and no verified new outreach target; surfaced two real but tangential trend items (X's new iOS in-app video editor, 2026-07-07; Apple Creator Studio's Final Cut Pro 'Edit Detection'/'Auto Mask', 2026-06-30) — correctly judged NEITHER as a direct competitor to HighlightMagic's mobile one-tap auto-highlight niche (manual in-app editor vs. Mac-only pro NLE, respectively) and did not force a competitive-landscape addendum for weak-relevance news. GTM_SCORECARD.md is STILL as_of 2026-06-30 (bootstrap grade) — 3+ runs and ~9 days since Run 4's #208 fix, never re-graded; flagging this plainly as a stale-audit signal worth the owner's attention (not this agent's file to write, per maker!=checker, but a scorecard that never re-runs stops being a useful ship gate). Sam Gutelle draft reconfirmed still unsent, zero replies."
   next_actions:
-    - "CIRCUIT BREAKER — 6 runs open: owner must connect Resend (docs/growth/CONNECT.md Step 1, ~5 min, free) + set SITE_GATE_PASSWORD to unlock execute mode. No new action needed from this agent until one of those changes — see PENDING_OPS.md gtm-connect-email / site-gate."
-    - "Owner: review + send the Sam Gutelle / Tubefilter Gmail draft (search inbox drafts for 'Highlight Magic (iOS, pre-launch)'). Add full name, business address, one specific article reference first — still unsent as of 2026-07-05."
+    - "CIRCUIT BREAKER — 7 runs open: owner must connect Resend (docs/growth/CONNECT.md Step 1, ~5 min, free) + set SITE_GATE_PASSWORD to unlock execute mode. No new action needed from this agent until one of those changes — see PENDING_OPS.md gtm-connect-email / site-gate."
+    - "Owner: review + send the Sam Gutelle / Tubefilter Gmail draft (search inbox drafts for 'Highlight Magic (iOS, pre-launch)'). Add full name, business address, one specific article reference first — still unsent as of 2026-07-09 (10 days old)."
     - "Owner: create a plausible.io account for highlightmagic.app (the code side, #360, already shipped) — this is now the ONLY remaining step for in_app_analytics besides GROWTH_AGENT_SECRET."
     - "If owner connects Resend: queue welcome email to existing waitlist; pull real list_size from Resend Audience."
     - "If owner provisions Vercel KV + sets GROWTH_AGENT_SECRET: pull real waitlist_signups_total from /api/growth/stats instead of reading code state."
     - "Product-factory build gap (not an owner action): even after the Plausible account exists, getGrowthMetrics() has no read path back to Plausible's Stats API, so visitors_7d/visitor_to_waitlist_rate stay null. Worth a future E6d extension once analytics is otherwise connected — flagging as a RECOMMEND, not a roadmap steer (no revenue data attached, just a wiring gap)."
     - "Once the experiment engine (ROADMAP E8) ships AND a channel connects: run exp-landing-h1-benefit-vs-outcome (already designed, see experiments[]) rather than designing a new one."
-    - "Watch for the independent GTM Auditor to re-grade self_validation_honesty (still shows the pre-fix B as of 2026-06-30, unchanged since Run 4's fix); if still B after re-grading, re-examine why the Run 4 fix didn't close it."
-    - "If a future run can reach primary review sources (Reddit/Trustpilot/App Store pages were all 403 to WebFetch again this run): deepen the demand_signal citations with direct platform quotes instead of aggregator-article summaries."
+    - "GTM_SCORECARD.md is unchanged (as_of 2026-06-30) across Runs 4-7 despite the #208 fix landing at Run 4 — this is now a 'stuck' signal for the independent GTM Auditor routine specifically, distinct from this agent's own circuit breaker. Worth the owner's attention if the Auditor routine itself may be stalled."
+    - "If a future run can reach primary review sources (Reddit/Trustpilot/App Store pages were all 403 to WebFetch again the last two runs): deepen the demand_signal citations with direct platform quotes instead of aggregator-article summaries."
   owner_blockers:
     - "gtm-connect-email: connect Resend (docs/growth/CONNECT.md Step 1) to unlock transactional + lifecycle email"
     - "gtm-connect-datastore: provision Vercel KV (CONNECT.md Step 3) so waitlist signups persist + /api/growth/stats has real data"
