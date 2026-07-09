@@ -385,3 +385,121 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    (§11b landed between Run 5 and Run 6).
 5. If a genuinely new, verifiable outreach target surfaces (not Titas Khan, not an aggregator site), draft it;
    otherwise zero new outreach remains correct.
+
+---
+
+## 2026-07-09 — Run 7
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged).
+- Channels connected: none — **7th consecutive run** with connect-channels open. Re-probed `env` for
+  `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all absent, identical
+  to Run 6. As extra diligence (not required by the playbook, since no `GROWTH_AGENT_SECRET`/`PROD_URL`
+  means the authenticated pull can't be tried anyway) attempted a direct `curl` to `https://highlightmagic.app`
+  — the outbound proxy returned a bare 502 (a network/DNS-layer failure, not an HTTP response from the app
+  itself), so this was inconclusive and NOT treated as evidence either way. `site_gate_up` stays `false`
+  (fail-closed) until an actual authenticated read confirms otherwise.
+- `SITE_GATE_PASSWORD` and `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID` are present in this run's shell
+  env — these appear to be shared sandbox/validator environment variables (other products' validator
+  credentials, e.g. `VALIDATOR_APT_*`/`VALIDATOR_GROCERY_*`, are also present) rather than a confirmed,
+  owner-set Vercel production value for HighlightMagic specifically. Per FACTORY_STANDARD §28 (re-probe the
+  REAL read path, never infer), correctly did NOT flip `site_gate_up` to `true` on this alone — the actual
+  production app was unreachable from this run to confirm it either way.
+- `GTM_STANDARD.md` changed materially since Run 6's commit (89a21eb): PRs #367/#370/#371 (all landed AFTER
+  Run 6) added a mandated schema to the `demand_signal` block (`overall_strength`, `sources_covered[]` /
+  `sources_unconnected[]`, per-theme `label`/`strength`/`cited_count`/`quote`/`url`/`product_solves`,
+  `steers_opened[]`) and clarified Reddit/X are ToS-gated data sources, not just key-gated. The
+  `demand_signal` block Run 5 wrote predates this schema — a genuine, newly-created artifact-freshness gap
+  (the standard changed, not a miss by Run 5/6).
+- `GTM_SCORECARD.md` is STILL `as_of: 2026-06-30` — the bootstrap grade, never re-graded even once across
+  Runs 2-7 (3+ runs / 9 days since Run 4 (2026-07-01) shipped the fix the Auditor asked for). This is now a
+  genuinely notable staleness pattern, not just "not my turn yet."
+- Sam Gutelle (Tubefilter) draft (Run 3, 2026-06-29): confirmed via `list_drafts` still present, unedited,
+  unsent. `search_threads` for tubefilter/sam@tubefilter.com returns only one unrelated 2023 marketing
+  email — zero replies. The draft is now 10 days old, which pushed `outreach.drafted_7d` outside its
+  trailing-7-day window (see below).
+
+### What I did this run
+- **Restructured `demand_signal` to the new GTM_STANDARD §10 schema** (`docs/growth/GROWTH_STATUS.md`):
+  added `overall_strength: emerging` (real, cited, durable core-JTBD pain, but 3 of 4 themes carry material
+  counter-signal from established incumbents — not "strong"), `sources_covered[]` / `sources_unconnected[]`
+  (Reddit/X explicitly named ToS-gated, not just key-gated, per #371), and per-theme `label`/`strength`/
+  `cited_count`/`quote`/`url`/`product_solves` fields. Every citation is UNCHANGED from Run 5's original
+  research — this was a living-artifact consistency fix (the standard's required shape changed), not new
+  fabricated data.
+- **Evaluated the new "demand-driven auto-steer" mechanism (§10) against the restructured themes and
+  deliberately opened zero steers.** Themes 1 ("manual editing is a multi-hour time cost") and 3 ("existing
+  tools have real trust/pricing friction") both numerically clear the corroboration bar (>=3 independent
+  cited posts across >=2 sources, recent + recurring). But theme 1's product-fit IS the product's existing
+  core-loop thesis (auto-detect + auto-export) and theme 3's product-fit IS the existing flat-pricing
+  decision (5 free/mo, $14.99/$149.99, no credit-expiry traps) — both are already-built/already-decided, not
+  new direction. Opening a ROADMAP/BUSINESS_CASE steer to "build" what already exists would be circular, not
+  genuine direction-setting, so recording `steers_opened: []` with the reasoning is the honest, non-gamed
+  outcome — not a missed opportunity.
+- **Corrected `outreach.drafted_7d` from 1 to 0.** The Sam Gutelle draft (created 2026-06-29) is now 10 days
+  old — outside the metric's trailing-7-day window. This is a real accuracy fix, distinct from the draft
+  itself being resolved (it's still open/unsent, still tracked in `next_actions` and `PENDING_OPS`).
+- **Bounded WebSearch refresh** (not a full re-derivation, continuing Run 6's anti-churn discipline): (1) a
+  HighlightMagic-specific search found no public footprint (expected pre-launch); (2) a search for
+  journalists/press covering AI clip-editing or iOS creator-app launches surfaced no new verifiable
+  individual target — same dead end as Runs 5/6, correctly zero new outreach drafts; (3) surfaced two real,
+  dated items — X's new iOS in-app video editor (captions/green-screen, announced 2026-07-07) and Apple
+  Creator Studio's Final Cut Pro "Edit Detection"/"Auto Mask" AI features (announced 2026-06-30) — judged
+  BOTH as tangential, not direct competitors (X's is manual in-app editing, not auto-highlight-detection;
+  Apple's is a Mac-only professional NLE feature, not mobile/consumer), and correctly did NOT force a
+  competitive-landscape addendum for weak-relevance platform news (avoiding the Run 5/6 mistake pattern in
+  reverse — padding rather than staleness).
+- Bumped `as_of` in both `GROWTH_STATUS.md` and `PENDING_OPS.md` to 2026-07-09; validated the YAML with
+  `python3 -c "import yaml; ..."` and `node scripts/validate-gtm.mjs` (both pass) before committing.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff before
+  committing.
+
+### Learnings
+- **A standard's own required schema can drift out from under an existing artifact** — `demand_signal`'s
+  shape changed via #367/#370/#371 (landed after Run 6), so a block that was fully compliant at the time it
+  was written became structurally stale without any new data being wrong. Re-check EVERY block's schema
+  against the CURRENT standard text each run, not just whether the underlying facts are still accurate.
+- **The demand-driven auto-steer bar can be numerically met while still correctly yielding zero steers** —
+  clearing "≥3 cited posts, ≥2 sources" is necessary but not sufficient; if the corroborated fit is already
+  the product's existing thesis or an already-built decision, steering is circular, not direction-setting.
+  Worth stating the reasoning explicitly (`steers_opened_note`) rather than silently doing nothing, so a
+  future run (or auditor) can see the bar was actually evaluated, not skipped.
+- **Shared sandbox env vars are not evidence of an owner action for THIS product.** `SITE_GATE_PASSWORD` and
+  `BROWSERBASE_*` keys appearing in this run's shell alongside other products' validator credentials
+  (`VALIDATOR_APT_*`, `VALIDATOR_GROCERY_*`) is a strong signal they're shared execution-environment
+  plumbing, not a confirmed HighlightMagic-specific connection — do not treat env-var presence alone as
+  proof; only an actual successful read against the real deployed app counts (§28).
+- **`_7d` metrics need active decay checking, not just "is the draft still unsent."** A stale numerator
+  (drafted_7d staying at 1 for three runs after the draft aged past 7 days) is itself a small honesty bug —
+  worth a specific check each run: "is anything counted in a trailing-N-day field now older than N days?"
+- GTM_SCORECARD.md staying at its bootstrap grade for 3+ runs / 9 days is now worth flagging plainly as a
+  possible stuck signal for the (separate) Auditor routine — not this agent's file, but silence about it
+  helps no one.
+- Circuit breaker discipline held again: 7th consecutive run, no new escalation prose — incremented the
+  count and put the run's effort into the schema-freshness fix, the steer-bar evaluation, and the metric
+  correction above instead of padding.
+
+### Dead ends / what NOT to repeat
+- Do NOT treat X's new iOS video editor or Apple Creator Studio's Final Cut Pro AI features as direct
+  HighlightMagic competitors in the demand_signal/competitive-landscape docs — both are real but tangential
+  (manual editing UI / Mac-only pro NLE, not mobile auto-highlight-detection). Re-evaluate only if either
+  platform ships an actual auto-highlight/auto-export consumer feature.
+- Do NOT infer `site_gate_up: true` or a channel connection from env vars alone (`SITE_GATE_PASSWORD`,
+  `BROWSERBASE_*`) without an actual successful probe against the real deployed app — this run's env
+  contained other products' validator credentials too, confirming these are shared-environment plumbing.
+
+### Circuit-breaker status
+- **Still open at Run 7 (7 consecutive runs).** No new owner action since Run 6. The ask is unchanged:
+  connect Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single highest-leverage
+  unlock; `site-gate` (SITE_GATE_PASSWORD in Vercel prod env) is the second.
+
+### Next run priorities (Run 8)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens —
+   never infer from git; if any present, pull real data and move toward execute mode.
+2. Try `curl https://highlightmagic.app` again — this run's attempt hit a proxy-level 502, inconclusive;
+   if it resolves this time, that's a genuine new data point either way.
+3. Check whether `docs/growth/GTM_SCORECARD.md` was finally re-graded (still `as_of: 2026-06-30` after 3+
+   cycles) — if still unchanged, this is worth surfacing more prominently as a stuck Auditor-routine signal.
+4. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`.
+5. Re-read `GTM_STANDARD.md` in full, not from memory — it changed materially between Run 6 and Run 7
+   (§10 schema + Reddit/X ToS clarification) and could change again.
