@@ -35,7 +35,7 @@ Drive organic App Store installs via short-form demo content. Target: 10%/month 
 | 3 | Before/After: birthday party footage | Demo: smooth transitions + fast export | Niche: workout highlight | Re-share any organic reposts |
 | 4 | Tips: "Why your highlights don't go viral" | Before/After: travel vlog | Demo: caption styles A/B comparison | Check analytics: which niche performs best → double down |
 | 5 | Niche: (top performer from Week 1–4) | Demo: editor features — trim + filter | Before/After: sports (different sport) | Introduce the Pro vs Free framing |
-| 6 | Tips: "How to make TikTok's algorithm love your posts" | Niche: pet / family content | Demo: 30-second export challenge | Paywall CTA: "Go unlimited with Pro" |
+| 6 | Tips: "How to make TikTok's algorithm love your posts" | Niche: pet / family content | Demo: 30-second export challenge | Paywall CTA: "No monthly cap with Pro" |
 | 7 | Before/After: wedding footage → highlights | Demo: color filter looks (before/after) | Tips: "Best 3 camera settings for highlight-worthy footage" | Repurpose best-performing post as a Reel |
 | 8 | Niche: (highest-performing niche) | Demo: side-by-side iPhone vs Highlight Magic | Tips + CTA: "Link in bio to download free" | 8-week review: pivot calendar based on data |
 
