@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { getKineticTransform, drawKineticCaption, type KineticTransform } from "./kinetic-text";
+import { describe, it, expect, beforeEach } from "vitest";
+import { getKineticTransform, drawKineticCaption, measureTextCached, _resetMeasureCache, type KineticTransform } from "./kinetic-text";
 import type { CaptionStyle } from "./types";
+
+// measureTextCached uses a module-level memo keyed by (font, text). Reset it before each test so
+// a width cached under one test's mock charWidth can never leak into another's assertions.
+beforeEach(() => _resetMeasureCache());
 
 const STYLES: CaptionStyle[] = ["Bold", "Minimal", "Neon", "Classic"];
 
@@ -267,5 +271,56 @@ describe("drawKineticCaption", () => {
     // "Hey" → 3 chars drawn separately, not one "Hey" fillText.
     expect(m.texts).toHaveLength(3);
     expect(m.texts.map((t) => t.text)).toEqual(["H", "e", "y"]);
+  });
+});
+
+describe("measureTextCached", () => {
+  // A ctx whose measureText counts invocations, so we can prove the memo actually elides calls.
+  function makeCountingCtx(charWidth = 7) {
+    let calls = 0;
+    const ctx = {
+      font: "40px sans-serif",
+      measureText(s: string) {
+        calls++;
+        return { width: s.length * charWidth } as TextMetrics;
+      },
+    };
+    return { ctx: ctx as unknown as CanvasRenderingContext2D & { font: string }, get calls() { return calls; } };
+  }
+
+  it("returns the exact underlying measureText width", () => {
+    _resetMeasureCache();
+    const m = makeCountingCtx(7);
+    expect(measureTextCached(m.ctx, "abcd")).toBe(28); // 4 * 7
+  });
+
+  it("measures once then serves repeats from cache (same font + text)", () => {
+    _resetMeasureCache();
+    const m = makeCountingCtx();
+    measureTextCached(m.ctx, "whoosh");
+    measureTextCached(m.ctx, "whoosh");
+    measureTextCached(m.ctx, "whoosh");
+    expect(m.calls).toBe(1);
+  });
+
+  it("re-measures when the font changes (font is part of the key)", () => {
+    _resetMeasureCache();
+    const m = makeCountingCtx();
+    const ctx = m.ctx as CanvasRenderingContext2D & { font: string };
+    ctx.font = "40px sans-serif";
+    const wSmall = measureTextCached(ctx, "Hi");
+    ctx.font = "80px sans-serif";
+    measureTextCached(ctx, "Hi"); // different font → cache miss, re-measures
+    expect(m.calls).toBe(2);
+    expect(wSmall).toBe(2 * 7);
+  });
+
+  it("stays correct after the cache is cleared at its cap", () => {
+    _resetMeasureCache();
+    const m = makeCountingCtx(7);
+    // Force > MEASURE_CACHE_MAX distinct keys to trigger a wholesale clear, then re-hit a key.
+    for (let i = 0; i < 2100; i++) measureTextCached(m.ctx, `k${i}`);
+    // A previously-seen key may have been evicted by the clear; re-measuring must still be exact.
+    expect(measureTextCached(m.ctx, "abcd")).toBe(28);
   });
 });
