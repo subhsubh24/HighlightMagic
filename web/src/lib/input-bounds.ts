@@ -19,6 +19,12 @@ export const MAX_DIRECTION_CHARS = 5_000;
 /** A source-footage audio transcript serialized into the validation prompt. Generous — a real
  *  multi-clip reel's transcript is a few KB — but finite so it can't inflate the paid Haiku bill. */
 export const MAX_TRANSCRIPT_CHARS = 40_000;
+/** Backstop cap on the FULLY-ASSEMBLED validation prompt text (buildTapeDescription output). Per-
+ *  field bounds catch the named inputs; this bounds every remaining serialized path at once — the
+ *  arbitrary `plan` object, JSON.stringify(assetStatuses), sourceFiles[].name, per-clip strings.
+ *  A legit 100-clip reel (transcript + summary + clips + plan) stays well under this; only a
+ *  crafted request approaches it. ~200k chars ≈ ~50k text tokens — far above any real payload. */
+export const MAX_TAPE_DESCRIPTION_CHARS = 200_000;
 /** A single base64 image payload (~9MB of bytes). */
 export const MAX_IMAGE_B64_CHARS = 12_000_000;
 /** A single base64 audio payload (~45MB of bytes). */

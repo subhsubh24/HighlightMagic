@@ -128,6 +128,20 @@ describe("H2 — validate free-text prompt bounds (413)", () => {
     expect(res.status).not.toBe(413);
     expect(res.status).not.toBe(400);
   });
+
+  it("rejects an oversized plan.musicPrompt with 413 (assembled-prompt backstop)", async () => {
+    // plan.musicPrompt is serialized into the SAME paid prompt but has no dedicated per-field
+    // bound — the total-description backstop must still catch it.
+    const res = await post({ plan: { musicPrompt: "x".repeat(250_000) } }, "203.0.113.85");
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects an oversized assetStatuses object with 413 (assembled-prompt backstop)", async () => {
+    // assetStatuses is JSON.stringify'd verbatim into the prompt — an arbitrary huge object must
+    // be caught by the assembled-description cap even without a dedicated per-field bound.
+    const res = await post({ assetStatuses: { blob: "x".repeat(250_000) } }, "203.0.113.86");
+    expect(res.status).toBe(413);
+  });
 });
 
 describe("H2 — ios-validate free-text prompt bounds (413)", () => {
@@ -163,6 +177,20 @@ describe("H2 — ios-validate free-text prompt bounds (413)", () => {
     const res = await post(
       { voiceover: { enabled: true, segments: [{ clipIndex: 0, text: "x".repeat(MAX_PROMPT_CHARS + 1) }] } },
       "203.0.113.92",
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("rejects an oversized per-clip captionText with 413 (assembled-prompt backstop)", async () => {
+    // captionText is serialized per clip into the prompt but has no dedicated per-field bound —
+    // the total-description backstop must catch it.
+    const bigClip = { ...clip, captionText: "x".repeat(250_000) };
+    const res = await iosValidatePOST(
+      new Request("http://localhost/api/ios-validate", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.93" },
+        body: JSON.stringify({ userId: "u", clips: [bigClip] }),
+      }),
     );
     expect(res.status).toBe(413);
   });

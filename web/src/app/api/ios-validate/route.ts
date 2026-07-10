@@ -9,6 +9,7 @@ import {
   MAX_FRAME_B64_CHARS,
   MAX_DIRECTION_CHARS,
   MAX_PROMPT_CHARS,
+  MAX_TAPE_DESCRIPTION_CHARS,
   tooLargeResponse,
 } from "@/lib/input-bounds";
 
@@ -220,6 +221,11 @@ export async function POST(req: Request) {
     intro,
     outro
   );
+
+  // H2 backstop: bound the fully-assembled prompt text before the paid call. The per-field bounds
+  // above catch the named inputs; this also caps every per-clip string (captionText, etc.)
+  // serialized by buildTapeDescription, so no un-enumerated field can inflate paid token cost.
+  if (description.length > MAX_TAPE_DESCRIPTION_CHARS) return tooLargeResponse();
 
   const userContent: object[] = [{ type: "text", text: description }];
   if (hasFrames) {

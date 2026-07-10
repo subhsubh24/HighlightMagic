@@ -10,6 +10,7 @@ import {
   MAX_DIRECTION_CHARS,
   MAX_PROMPT_CHARS,
   MAX_TRANSCRIPT_CHARS,
+  MAX_TAPE_DESCRIPTION_CHARS,
   tooLargeResponse,
 } from "@/lib/input-bounds";
 
@@ -235,6 +236,15 @@ If passed is true, fixes should be empty or omitted.`;
       sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
       viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
     });
+
+    // H2 backstop: bound the FULLY-ASSEMBLED prompt text before the paid call. The per-field
+    // bounds above catch the named free-text inputs, but buildTapeDescription also serializes
+    // the arbitrary `plan` object (plan.musicPrompt / intro / outro / sfx[] / voiceover /
+    // editingPhilosophy), JSON.stringify(assetStatuses), sourceFiles[].name and per-clip strings
+    // — all client-controlled. This single cap on the assembled text closes every remaining
+    // path so no un-enumerated field can inflate paid token cost (building the string is free;
+    // the paid Haiku call is not).
+    if (tapeDescription.length > MAX_TAPE_DESCRIPTION_CHARS) return tooLargeResponse();
 
     // Build message content — multimodal if frames are available, text-only otherwise.
     const userContent = hasFrames
