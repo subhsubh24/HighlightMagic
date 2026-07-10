@@ -3,8 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 // COGS metering is a side effect we assert fires; mock it so we can spy without a real meter.
 vi.mock("@/lib/usage-meter", () => ({ logProviderUsage: vi.fn() }));
 
-import { generateVoiceover, generateVoiceovers, resolveVoiceId } from "./elevenlabs-tts";
+import {
+  generateVoiceover,
+  generateVoiceovers,
+  resolveVoiceId,
+  TTS_GENERATION_TIMEOUT_MS,
+} from "./elevenlabs-tts";
 import { logProviderUsage } from "@/lib/usage-meter";
+
+// The `/api/voiceover` route runs with `maxDuration = 30` (30_000ms). B6/H10 requires the
+// in-code abort to fire strictly BEFORE Vercel's platform kill, else the clean error path
+// is dead code and the user sees an opaque "function timed out". Guard the budget.
+const VOICEOVER_ROUTE_MAX_DURATION_MS = 30_000;
+
+describe("TTS_GENERATION_TIMEOUT_MS (B6/H10 timeout headroom)", () => {
+  it("fires strictly before the serverless budget", () => {
+    expect(TTS_GENERATION_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(TTS_GENERATION_TIMEOUT_MS).toBeLessThan(VOICEOVER_ROUTE_MAX_DURATION_MS);
+  });
+});
 
 /** Build a minimal fetch Response stand-in for the TTS endpoint (returns audio bytes). */
 function audioResponse(bytes: number, ok = true, status = 200): Response {
