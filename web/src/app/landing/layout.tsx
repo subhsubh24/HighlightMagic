@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   description:
     "AI-powered iOS app that automatically finds your best moments and exports them as polished 1080×1920 clips for TikTok, Reels, and Shorts. Free to start.",
   metadataBase: new URL(SITE_URL),
+  // Self-referential canonical so search engines consolidate ranking signals onto one URL
+  // for the marketing page — utm/www/trailing-slash variants all fold into /landing rather
+  // than splitting PageRank. Resolved against metadataBase to an absolute URL by Next.
+  alternates: { canonical: "/landing" },
   openGraph: {
     title: "Highlight Magic — Turn Raw Video Into Viral Highlights",
     description:
