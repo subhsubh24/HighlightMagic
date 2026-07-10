@@ -15,6 +15,15 @@ const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 /** Max SFX duration (ms). Most transition SFX are 1-3 seconds. */
 const MAX_SFX_DURATION_MS = 10_000;
 
+/**
+ * Per-request fetch timeout (ms). B6/H10 timeout-inversion rule: the internal
+ * abort MUST fire BEFORE Vercel's platform kill — the `/api/sfx` route runs with
+ * `maxDuration = 30`, so this budget sits strictly UNDER 30_000ms. Otherwise the
+ * user gets an opaque "function timed out" instead of the clean error below, and
+ * the in-code error handling becomes dead code.
+ */
+export const SFX_GENERATION_TIMEOUT_MS = 26_000;
+
 function getApiKey(): string {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
@@ -62,7 +71,7 @@ export async function generateSoundEffect(
         text: prompt,
         duration_seconds: clampedDuration / 1000,
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(SFX_GENERATION_TIMEOUT_MS),
     }
   );
 

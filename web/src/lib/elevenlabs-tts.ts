@@ -14,6 +14,15 @@ import { logProviderUsage } from "@/lib/usage-meter";
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
 /**
+ * Per-request fetch timeout (ms). B6/H10 timeout-inversion rule: the internal
+ * abort MUST fire BEFORE Vercel's platform kill — the `/api/voiceover` route runs
+ * with `maxDuration = 30`, so this budget sits strictly UNDER 30_000ms. Otherwise
+ * the user gets an opaque "function timed out" instead of the clean error handling,
+ * and the in-code error path becomes dead code.
+ */
+export const TTS_GENERATION_TIMEOUT_MS = 26_000;
+
+/**
  * Pre-mapped voice characters → ElevenLabs voice IDs.
  * Claude outputs a character string; we resolve it to an actual voice.
  * These are ElevenLabs' built-in high-quality voices (no cloning needed).
@@ -96,7 +105,7 @@ export async function generateVoiceover(
           use_speaker_boost: true,
         },
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(TTS_GENERATION_TIMEOUT_MS),
     }
   );
 
