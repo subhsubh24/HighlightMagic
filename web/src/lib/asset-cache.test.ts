@@ -130,3 +130,28 @@ describe("clearAssetCache", () => {
     expect(storage.get("unrelated_key")).toBe("keep");
   });
 });
+
+describe("corrupted-entry resilience (eviction sweep)", () => {
+  it("treats an unparseable cache entry as expired and sweeps it without breaking a fresh write", () => {
+    // A truncated/garbage value under the cache prefix (e.g. a partial write or a schema
+    // change) must not throw out of evictIfNeeded and abort the whole sweep — it should be
+    // dropped like an expired entry so the cache self-heals on the next write.
+    const corrupt = cacheKey("music", { id: "corrupt" });
+    storage.set(corrupt, "{not-valid-json");
+
+    const fresh = cacheKey("music", { id: "fresh" });
+    expect(() => setCachedAsset(fresh, "new-data")).not.toThrow();
+
+    // Corrupt entry swept; fresh entry stored and readable.
+    expect(storage.has(corrupt)).toBe(false);
+    expect(getCachedAsset(corrupt)).toBeNull();
+    expect(getCachedAsset(fresh)?.data).toBe("new-data");
+  });
+
+  it("getCachedAsset returns null (not a throw) for a corrupted entry", () => {
+    const corrupt = cacheKey("sfx", { id: "bad" });
+    storage.set(corrupt, "definitely-not-json");
+    expect(() => getCachedAsset(corrupt)).not.toThrow();
+    expect(getCachedAsset(corrupt)).toBeNull();
+  });
+});
