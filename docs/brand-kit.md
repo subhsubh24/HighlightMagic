@@ -138,15 +138,15 @@ Maintain a minimum clear space of 10% of the icon size on all sides. Never place
 
 | Asset | Size | Status | Owner action |
 |---|---|---|---|
-| App Store icon | 1024×1024 PNG, no alpha | ⬜ Needed | Rasterize from brand spec |
+| App Store icon | 1024×1024 PNG, no alpha | ✅ Done | `Sources/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` |
 | App preview video thumbnail | 1080×1920 (portrait) | ⬜ Needed | Screenshot from device |
 | App Store screenshots (6.9-inch) | 1320×2868 | ⬜ Needed | Capture from simulator |
-| OG image | 1200×630 | ⬜ Spec in this doc | Rasterize + upload to `/public` |
+| OG image | 1200×630 | ✅ Done | Rendered routes: `/landing/opengraph-image` (#394) + root `/opengraph-image` (#422) |
 | Social avatar | 400×400 PNG | ⬜ Needed | Rasterize icon |
 | Twitter/X banner | 1500×500 PNG | ⬜ Needed | Rasterize banner spec |
-| Favicon | 32×32 + 16×16 PNG | ⬜ Needed | Rasterize icon |
-| Apple Touch Icon | 180×180 PNG | ⬜ Needed | Rasterize icon |
+| Favicon | 32×32 + 16×16 PNG | ✅ Done | `web/src/app/icon.png` (Next favicon convention, #395) |
+| Apple Touch Icon | 180×180 PNG | ✅ Done | `web/public/icons/icon-192.png`, wired `<link rel="apple-touch-icon">` in `layout.tsx` (#395) |
 
 ---
 
-*Last updated: 2026-06-25 (Run 10, E2). Design tokens verified against `web/src/app/globals.css` and iOS `Sources/Utilities/Theme.swift`.*
+*Last updated: 2026-07-10 (Run 60). Asset checklist reconciled to code: App Store icon (AppIcon-1024.png), OG image (#394 landing + #422 root), favicon + apple-touch icon (#395) marked shipped; screenshots/preview/avatar/banner remain owner-only. Design tokens verified against `web/src/app/globals.css` and iOS `Sources/Utilities/Theme.swift`.*
