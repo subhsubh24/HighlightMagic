@@ -159,10 +159,17 @@ describe("redeemCreditPack", () => {
   });
 
   it("rejects an over-length signedTransaction before the ES256 verify (H2 CPU-DoS guard)", async () => {
-    const oversized = "a".repeat(MAX_SIGNED_TRANSACTION_CHARS + 1);
-    const r = await redeemCreditPack({ userId: "u1", signedTransaction: oversized });
+    // A VALID, correctly-signed credit-pack JWS, bloated past the cap by an extra payload field.
+    // This is what makes the test DISCRIMINATING: were the length guard removed, this JWS would
+    // verify successfully and GRANT 30 credits — so asserting ok:false + zero grant proves the
+    // guard short-circuited BEFORE the ES256 verify (a dot-less blob would fail structurally with
+    // the same reason whether or not the guard exists, and would prove nothing).
+    const bloated = makeJWS(creditPackTxn({ pad: "x".repeat(MAX_SIGNED_TRANSACTION_CHARS) }));
+    expect(bloated.length).toBeGreaterThan(MAX_SIGNED_TRANSACTION_CHARS);
+    const r = await redeemCreditPack({ userId: "u1", signedTransaction: bloated });
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("invalid transaction");
+    expect(r.granted).toBe(0);
     expect(await getCreditBalance("u1")).toBe(0);
   });
 });
