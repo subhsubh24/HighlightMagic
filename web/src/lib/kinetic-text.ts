@@ -11,6 +11,41 @@
 
 import type { CaptionStyle } from "./types";
 
+/**
+ * Memoized `ctx.measureText().width`.
+ *
+ * Caption wrapping (wrapText) and letter-spacing (drawSpacedText) call measureText on the SAME
+ * strings/glyphs in the SAME font on every rendered frame (30-60x/sec, for the full duration a
+ * caption is on screen). measureText is a real per-call cost; caching by (font, text) collapses
+ * the repeated per-frame measurements to one. Correctness: the width of a string depends only on
+ * the text and the active font (which is baked into the key), so a cache hit is exact.
+ *
+ * The cache is bounded — a long session with many distinct captions could otherwise grow it
+ * without limit. At the cap we clear it wholesale (cheap; the hot per-frame strings simply
+ * repopulate on the next frame), which keeps memory flat without per-entry LRU bookkeeping.
+ */
+const MEASURE_CACHE_MAX = 2048;
+const measureCache = new Map<string, number>();
+
+export function measureTextCached(ctx: CanvasRenderingContext2D, text: string): number {
+  // Length-prefix the font so the (font, text) boundary is unambiguous: ctx.font is a CSS font
+  // shorthand and text is arbitrary caption copy — both can contain spaces, so a plain
+  // separator could collide (font "40px A" + "B" vs font "40px" + "A B"). Prefixing font.length can't.
+  const font = ctx.font;
+  const key = `${font.length}:${font}${text}`;
+  const cached = measureCache.get(key);
+  if (cached !== undefined) return cached;
+  const width = ctx.measureText(text).width;
+  if (measureCache.size >= MEASURE_CACHE_MAX) measureCache.clear();
+  measureCache.set(key, width);
+  return width;
+}
+
+/** Clear the measureText memo. For tests only. */
+export function _resetMeasureCache(): void {
+  measureCache.clear();
+}
+
 /** AI-authored caption customizations. When present, override the named CaptionStyle defaults. */
 export interface CustomCaptionParams {
   fontWeight?: number;       // 100-900
@@ -295,7 +330,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
   for (let i = 1; i < words.length; i++) {
     const testLine = currentLine + " " + words[i];
-    if (ctx.measureText(testLine).width <= maxWidth) {
+    if (measureTextCached(ctx, testLine) <= maxWidth) {
       currentLine = testLine;
     } else {
       lines.push(currentLine);
@@ -464,7 +499,7 @@ function drawSpacedText(
   sBlur: number = 8
 ) {
   const chars = text.split("");
-  const baseWidths = chars.map((c) => ctx.measureText(c).width);
+  const baseWidths = chars.map((c) => measureTextCached(ctx, c));
   const totalWidth = baseWidths.reduce((sum, w) => sum + w * spacing, 0);
   let currentX = x - totalWidth / 2;
 
