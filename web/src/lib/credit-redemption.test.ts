@@ -5,6 +5,7 @@ import {
   checkExportAllowed,
   consumeExport,
   InMemoryQuotaStore,
+  MAX_SIGNED_TRANSACTION_CHARS,
   redeemCreditPack,
 } from "./entitlement";
 import { __resetCreditStoreForTests, getCreditBalance } from "./credit-store";
@@ -136,6 +137,40 @@ describe("redeemCreditPack", () => {
     const r = await redeemCreditPack({ userId: "u1", signedTransaction: null });
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("missing signedTransaction");
+  });
+
+  // ── H2 input-bound guards (Track H): these return BEFORE any KV-key derivation or ES256 verify,
+  // so a hostile client cannot mint a pathological credit-balance key or burn CPU on an oversized
+  // JWS. Regressing either check would reopen a wallet-of-CPU / KV-key-injection surface. ──
+
+  it("rejects an empty / over-long userId before it becomes a credit-balance KV key (H2)", async () => {
+    // Empty is invalid; so is anything over MAX_USER_ID_CHARS (128). Uses a plainly-invalid
+    // signedTransaction to prove the userId guard fires FIRST (no JWS work happens).
+    const empty = await redeemCreditPack({ userId: "", signedTransaction: "irrelevant" });
+    expect(empty.ok).toBe(false);
+    expect(empty.reason).toBe("missing userId");
+    expect(empty.granted).toBe(0);
+
+    const overLong = await redeemCreditPack({ userId: "u".repeat(129), signedTransaction: "irrelevant" });
+    expect(overLong.ok).toBe(false);
+    expect(overLong.reason).toBe("missing userId");
+    // Nothing was granted to the pathological key.
+    expect(await getCreditBalance("u".repeat(129))).toBe(0);
+  });
+
+  it("rejects an over-length signedTransaction before the ES256 verify (H2 CPU-DoS guard)", async () => {
+    // A VALID, correctly-signed credit-pack JWS, bloated past the cap by an extra payload field.
+    // This is what makes the test DISCRIMINATING: were the length guard removed, this JWS would
+    // verify successfully and GRANT 30 credits — so asserting ok:false + zero grant proves the
+    // guard short-circuited BEFORE the ES256 verify (a dot-less blob would fail structurally with
+    // the same reason whether or not the guard exists, and would prove nothing).
+    const bloated = makeJWS(creditPackTxn({ pad: "x".repeat(MAX_SIGNED_TRANSACTION_CHARS) }));
+    expect(bloated.length).toBeGreaterThan(MAX_SIGNED_TRANSACTION_CHARS);
+    const r = await redeemCreditPack({ userId: "u1", signedTransaction: bloated });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("invalid transaction");
+    expect(r.granted).toBe(0);
+    expect(await getCreditBalance("u1")).toBe(0);
   });
 });
 
