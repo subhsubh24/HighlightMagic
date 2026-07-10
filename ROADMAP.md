@@ -4,6 +4,24 @@ Convergence anchor for the autonomous loop. Read every run with README.md + plan
 Build toward the Definition of Done, phase by phase, then STOP and hand off.
 VERIFY current state yourself each run — this reflects a snapshot and the repo evolves.
 
+> ## ⚑ OWNER PRIORITY STEER (2026-07-10) — read FIRST, honor until items 1–4 are done
+> Recent runs over-indexed on web SEO / marketing-copy / honesty-wording micro-polish (8 of the last 12
+> merges were small `web/` changes; ~1 touched `Sources/`). Diminishing returns. KEEP shipping the
+> honesty/security fixes the auditors flag, but weight NET-NEW work toward the high-value UNBLOCKED items
+> below, in order — and apply the §37 diversity rule to break the web-polish monoculture:
+> 1. **Computer-use E2E validator (#336 / #292)** — Browserbase IS connected (owner-set keys). Build + run
+>    it, write `VALIDATOR_STATUS.md`. Unblocked, high value.
+> 2. **Quality raises to A** — functional_reality (#176) + tests_evals (#177): drive the named top_gaps.
+> 3. **Media-gen adapter (#368 / #287)** — build the ADAPTER CODE (image/video/music) and STAGE it, gated
+>    on the owner media key (surface the key as an OWNER_ACTION); do NOT skip it just because the key isn't set.
+> 4. **Synthetic-green elimination (#289)** — real-service checks FAIL-not-skip (§28).
+>
+> **DO NOT spin on the iOS app binary (A6/D5):** it is genuinely blocked on a Mac/Xcode (no app target /
+> `.xcodeproj`; the loop on Linux cannot author or verify it). That is owner/human-core — leave it parked
+> in REMAINING_STEPS; do NOT let it consume runs. This steer is the owner's; supersede it only when 1–4
+> are genuinely complete.
+
+
 Operating standard (read every run): FACTORY_STANDARD.md is the shared, product-agnostic discipline EVERY factory follows identically — the loop, two-gate readiness, BUILDS≠WORKS, the independent QUALITY_SCORECARD, the business-case strength loop-back, growth-data-as-signal, the model split, the value bar, the disjoint rule, and the brakes. FOLLOW IT. This ROADMAP + VISION.md hold the product-specific details (what to build, the security model, the ship target, the stack) and win on any specific. Identical factories, different products.
 
 ## Vision (the bar — do NOT stop short of it)
@@ -917,3 +935,4 @@ clear it (maximize scope), ZERO that don't. Never pad to hit a count; never arti
 Apple Developer account + signing + App Store Connect; StoreKit live products; TestFlight;
 submission + review; live backend API keys + Vercel env; Anthropic spend cap; domain/DNS;
 connect waitlist/analytics destinations; fund + launch marketing/ad accounts.
+
