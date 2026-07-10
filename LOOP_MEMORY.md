@@ -4,6 +4,64 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 59 — 2026-07-10 — 3 merged PRs (#415 honesty · #416 credit-guard tests · #417 landing canonical) — no deep audit (Run 57 ran one <24h)
+Cold start; `git reset --hard origin/main` (tip d44dd98, #414). Consumed QUALITY_SCORECARD (as_of 2026-07-09, commit efe1add,
+overall B, ship_gate FALSE — ship-critical below A: **store_readiness C** [THE blocker, iOS/owner/CI-gated], **functional_reality B**,
+**tests_evals B**), GROWTH_STATUS (pre_launch, funnel/pmf 0/null — no lever to weight → bias PRODUCT per PMF-first), BUSINESS_CASE
+(base y1 $7,740, floor ~y3.2, floor_met_year1 false) as DATA. Web baseline green FIRST (build + 1029 tests + 0 lint). Ran a 5-scout
+Haiku sweep (backend robustness, test/coverage, artifact freshness, design/a11y, revenue/growth) → SELECTed the maximal file-DISJOINT
+VERIFIABLE set. The gate-moving store_readiness gaps stay unmovable from Linux, so value came from web/backend/docs. Shipped **3
+file-DISJOINT PRs**, each cleared 2 Sonnet reviewers + all 4 required checks. Abandoned 0.
+
+**What shipped:**
+- **#415 (honesty, Track E):** qualified the last four bare "unlimited" claims — in-app paywall subcopy (ExportStep "Go Pro on iOS"),
+  support FAQ, content-calendar wk6 CTA, and the App Store screenshot-5 headline (aso-package.md). Pro's 50/day ceiling makes bare
+  "unlimited" an overstatement; the rule (email-sequences.md, post-batch-2.md) is to qualify to "monthly". Copy-only.
+- **#416 (tests_evals G2 / Track H):** covered redeemCreditPack's two H2 input-bound guards (empty/over-long userId → no KV key;
+  oversized JWS → rejected before the ES256 verify). Test-only.
+- **#417 (Track E / SEO):** self-referential canonical on /landing (`alternates.canonical`), verified at runtime via curl (not just build).
+
+**REVIEWER LESSON (#416 — maker≠checker earned its keep AGAIN):** my first oversized-JWS test used a dot-less blob (`"a".repeat(N)`),
+but `verifyAppStoreJWS` rejects a non-3-part string with the SAME "invalid transaction" reason whether or not the length guard exists,
+so the test was TAUTOLOGICAL — BOTH reviewers independently disabled the guard and saw all tests still green. Fix: a VALID signed JWS
+bloated past the cap (`makeJWS(creditPackTxn({ pad: "x".repeat(...) }))`) — removing the guard now lets it verify + grant 30 credits, so
+the assertions genuinely discriminate (I falsified it: guard-disabled → FAIL, restored → 16/16). **LESSON: a "rejects oversized/invalid X"
+guard-test only proves the guard fired if the input would OTHERWISE SUCCEED — an input that fails for an unrelated structural reason
+proves nothing. ALWAYS falsify a guard-test by disabling the guard and confirming it flips to FAIL.**
+
+**SCOUT FINDINGS DELIBERATELY NOT SHIPPED (with reasons — don't re-propose without new info):**
+- **poll-manager fetch timeout (backend scout) + "add" error-branch test (coverage scout):** DROPPED. The consecutive-error branch is
+  ALREADY tested (poll-manager.test.ts:91-102 "rejects after too many consecutive errors" — mockRejectedValue + toThrow("consecutive
+  poll errors")); an earlier grep missed it. A client-side `AbortSignal.timeout` on the /api/animate/check fetch is marginal (the task is
+  already bounded by its deadline; setInterval keeps ticking past a hung fetch) AND risks destabilizing the fake-timer suite. Not worth it.
+- **frame-extractor decodeVideoAudio timeout (backend scout):** DEFERRED per existing note — best-effort browser fetch of a local blob URL;
+  the serverless-timeout rule doesn't apply. Marginal.
+- **validate/route.ts reader.cancel cleanup (backend scout):** SKIPPED — serverless functions are short-lived; a dangling reader is GC'd.
+- **AtlasCloud generateLipSync/generateStyleTransfer propagation tests (coverage scout):** SKIPPED — near-tautological; they are thin
+  `return pollTaskResult(id)` wrappers and pollTaskResult's throw paths are already covered (atlascloud.test.ts:427+).
+- **design token hex-swaps on landing gradients + Header focus-ring offset (design scout):** SKIPPED — replacing a hardcoded hex that
+  EQUALS the token value is a no-visual-change rename (churn; Reviewer-B-reject risk); design_taste is already A+. The Header ring-offset
+  `#0b0b0f` vs `--bg-primary #0F0A1A` mismatch is a real but negligible-visual nit — not worth a PR this run.
+- **waitlist_confirmed analytics event (revenue scout):** DEFERRED — the confirm route returns raw server-rendered HTML (no client React),
+  so firing `window.plausible` would mean injecting a CSP-nonce'd script into a raw HTML string I can't verify fires (fake-success risk),
+  and Plausible isn't connected pre-launch. Revisit if the confirm page becomes a client component post-launch.
+- **Plausible read integration in getGrowthMetrics (revenue scout):** DEFERRED — owner-blocked (needs a plausible.io account +
+  PLAUSIBLE_API_KEY); can't verify the real pull → building ahead of the dependency.
+
+**Store_readiness (still C — THE ship blocker; unchanged, iOS/owner/CI-gated, CANNOT move from Linux):** no archivable Xcode app target
+(Package.swift .library-only); no 6.9" (1320×2868) screenshots/preview; placeholder team/app IDs; consumable credit-pack SKU absent from
+.storekit. All captured in REMAINING_STEPS. No deep audit this run (Run 57's is <24h). No recurring harness-failure pattern.
+
+### What NOT to re-do (additions for Run 59)
+- Do NOT re-qualify the four bare "unlimited" instances — done #415 (ExportStep "Go Pro on iOS" subcopy, support FAQ, content-calendar
+  wk6 CTA, aso-package screenshot-5 headline). The in-app **"Go unlimited." headline (ExportStep.tsx:1076) is DELIBERATELY LEFT** — its
+  qualifier "Unlimited exports — no monthly cap" sits in the SAME card (1090) and the scorecard blessed qualified-unlimited; a reviewer
+  confirmed leaving it is defensible. Don't "fix" it.
+- Do NOT re-add redeemCreditPack H2 guard tests — done #416 (empty/over-long userId; oversized JWS). Test 2 MUST use a VALID bloated JWS
+  (`makeJWS(creditPackTxn({ pad }))`), NEVER a dot-less blob (that is tautological — see the REVIEWER LESSON above).
+- Do NOT re-add a landing canonical — done #417 (`alternates.canonical: "/landing"` in landing/layout.tsx).
+- poll-manager's consecutive-error branch is ALREADY tested (poll-manager.test.ts:91-102) — do not "add coverage" for it.
+
 ## Run 58 — 2026-07-09 — 3 merged PRs (#409 error-page design tokens · #410 App Store pass-count honesty · #411 coverage) — no deep audit (Run 57 ran one today)
 Cold start; branched every PR from `origin/main`. Consumed QUALITY_SCORECARD (as_of 2026-07-09, commit efe1add, overall B,
 ship_gate false — ship-critical dims below A: **functional_reality B, store_readiness C, tests_evals B**) + GROWTH_STATUS
