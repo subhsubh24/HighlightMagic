@@ -6,6 +6,7 @@ import {
   VELOCITY_PRESETS,
   getSuggestedVelocity,
   type VelocityPreset,
+  type VelocityKeyframe,
 } from "./velocity";
 
 // ── getSpeedAtPosition ──
@@ -148,6 +149,20 @@ describe("getEffectiveDuration", () => {
       const effective = getEffectiveDuration(10, preset);
       expect(effective).toBeGreaterThan(0);
     }
+  });
+
+  it("guards a near-zero average speed by returning the source duration (never Infinity/NaN)", () => {
+    // A degenerate custom curve of all speed-0 keyframes averages to ~0. Dividing the
+    // source duration by that would yield Infinity and cascade into broken timeline math;
+    // getEffectiveDuration must detect this and fall back to the source duration.
+    const allZero: VelocityKeyframe[] = [
+      { position: 0, speed: 0 },
+      { position: 0.5, speed: 0 },
+      { position: 1, speed: 0 },
+    ];
+    const effective = getEffectiveDuration(10, "normal", allZero);
+    expect(Number.isFinite(effective)).toBe(true);
+    expect(effective).toBe(10);
   });
 });
 
