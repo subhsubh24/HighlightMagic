@@ -3,7 +3,14 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
-import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
+import {
+  anyFrameOverLimit,
+  overStringLimit,
+  MAX_FRAME_B64_CHARS,
+  MAX_DIRECTION_CHARS,
+  MAX_PROMPT_CHARS,
+  tooLargeResponse,
+} from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 // B6 resilience: the Haiku vision validation call below is bounded at 45s (parity with
@@ -170,6 +177,28 @@ export async function POST(req: Request) {
   }
   // H2: bound each frame's base64 image so a single oversized frame can't inflate the bill.
   if (anyFrameOverLimit(clipFrames, "jpegBase64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
+  // H2: the free-text fields below are serialized verbatim into the Haiku prompt
+  // (buildTapeDescription) — bound each server-side BEFORE the paid call so a crafted request
+  // can't inflate paid token cost. sfx/voiceover cardinality is bounded too (each entry's
+  // prompt/text is serialized per-entry).
+  if (Array.isArray(sfx) && sfx.length > MAX_FILES) {
+    return Response.json({ error: "too many sfx tracks" }, { status: 400 });
+  }
+  if (Array.isArray(voiceover?.segments) && voiceover.segments.length > MAX_FILES) {
+    return Response.json({ error: "too many voiceover segments" }, { status: 400 });
+  }
+  if (
+    overStringLimit(contentSummary, MAX_DIRECTION_CHARS) ||
+    overStringLimit(musicPrompt, MAX_PROMPT_CHARS) ||
+    overStringLimit(intro?.text, MAX_PROMPT_CHARS) ||
+    overStringLimit(intro?.stylePrompt, MAX_PROMPT_CHARS) ||
+    overStringLimit(outro?.text, MAX_PROMPT_CHARS) ||
+    overStringLimit(outro?.stylePrompt, MAX_PROMPT_CHARS) ||
+    anyFrameOverLimit(sfx, "prompt", MAX_PROMPT_CHARS) ||
+    anyFrameOverLimit(voiceover?.segments, "text", MAX_PROMPT_CHARS)
+  ) {
+    return tooLargeResponse();
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {

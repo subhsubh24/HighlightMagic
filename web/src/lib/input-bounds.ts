@@ -16,6 +16,9 @@
 export const MAX_PROMPT_CHARS = 2_000;
 /** Planner steering text (creativeDirection / userFeedback → Claude planner tokens). */
 export const MAX_DIRECTION_CHARS = 5_000;
+/** A source-footage audio transcript serialized into the validation prompt. Generous — a real
+ *  multi-clip reel's transcript is a few KB — but finite so it can't inflate the paid Haiku bill. */
+export const MAX_TRANSCRIPT_CHARS = 40_000;
 /** A single base64 image payload (~9MB of bytes). */
 export const MAX_IMAGE_B64_CHARS = 12_000_000;
 /** A single base64 audio payload (~45MB of bytes). */
