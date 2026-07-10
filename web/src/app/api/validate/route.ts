@@ -3,7 +3,16 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
-import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
+import {
+  anyFrameOverLimit,
+  overStringLimit,
+  MAX_FRAME_B64_CHARS,
+  MAX_DIRECTION_CHARS,
+  MAX_PROMPT_CHARS,
+  MAX_TRANSCRIPT_CHARS,
+  MAX_TAPE_DESCRIPTION_CHARS,
+  tooLargeResponse,
+} from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,6 +62,28 @@ export async function POST(req: Request) {
     }
     if (Array.isArray(voiceoverSegments) && voiceoverSegments.length > MAX_FILES) {
       return Response.json({ error: "too many voiceover segments" }, { status: 400 });
+    }
+    // H2: the free-text fields below are each serialized verbatim into the Haiku prompt
+    // (buildTapeDescription). Client-side length limits are UX, not security — bound them
+    // server-side BEFORE the paid call so a crafted request can't inflate paid token cost.
+    if (
+      overStringLimit(contentSummary, MAX_DIRECTION_CHARS) ||
+      overStringLimit(audioTranscript, MAX_TRANSCRIPT_CHARS) ||
+      overStringLimit(creativeDirection, MAX_DIRECTION_CHARS) ||
+      overStringLimit(regenerateFeedback, MAX_DIRECTION_CHARS) ||
+      overStringLimit(introCard?.text, MAX_PROMPT_CHARS) ||
+      overStringLimit(introCard?.stylePrompt, MAX_PROMPT_CHARS) ||
+      overStringLimit(outroCard?.text, MAX_PROMPT_CHARS) ||
+      overStringLimit(outroCard?.stylePrompt, MAX_PROMPT_CHARS) ||
+      // Each sfx cue's prompt + each voiceover segment's text is also serialized per-entry.
+      anyFrameOverLimit(sfxTracks, "prompt", MAX_PROMPT_CHARS) ||
+      anyFrameOverLimit(voiceoverSegments, "text", MAX_PROMPT_CHARS)
+    ) {
+      return tooLargeResponse();
+    }
+    // H2: sourceFiles is serialized one line per entry into the prompt — bound its cardinality.
+    if (Array.isArray(sourceFiles) && sourceFiles.length > MAX_FILES) {
+      return Response.json({ error: "too many source files" }, { status: 400 });
     }
 
     // Gate on userId when supplied — anonymous callers proceed without checking (fail-open).
@@ -205,6 +236,15 @@ If passed is true, fixes should be empty or omitted.`;
       sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
       viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
     });
+
+    // H2 backstop: bound the FULLY-ASSEMBLED prompt text before the paid call. The per-field
+    // bounds above catch the named free-text inputs, but buildTapeDescription also serializes
+    // the arbitrary `plan` object (plan.musicPrompt / intro / outro / sfx[] / voiceover /
+    // editingPhilosophy), JSON.stringify(assetStatuses), sourceFiles[].name and per-clip strings
+    // — all client-controlled. This single cap on the assembled text closes every remaining
+    // path so no un-enumerated field can inflate paid token cost (building the string is free;
+    // the paid Haiku call is not).
+    if (tapeDescription.length > MAX_TAPE_DESCRIPTION_CHARS) return tooLargeResponse();
 
     // Build message content — multimodal if frames are available, text-only otherwise.
     const userContent = hasFrames
