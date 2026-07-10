@@ -4,6 +4,60 @@ State the autonomous factory carries across runs. Updated each housekeeping PR.
 
 Read every run BEFORE selecting work.
 
+## Run 61 — 2026-07-10 — 3 merged PRs (#435 Track-H10 timeout · #436 velocity guard test · #437 asset-cache resilience test) + DEEP AUDIT
+Cold start; **hit the known stale-main gotcha** — local main was behind a FORCED origin/main update (sibling FACTORY_STANDARD/GTM/quality
+routines pushed #424–#434 on 2026-07-10); `git fetch` + `git reset --hard origin/main` (tip 246797b) FIRST before anything. Consumed
+QUALITY_SCORECARD (as_of 2026-07-09, commit efe1add, overall B, ship_gate_met=false — ship-critical sub-A dims all owner/iOS/CI-blocked:
+store_readiness C, functional_reality B, tests_evals B) + GROWTH_STATUS (pre_launch, funnel/pmf 0/null → bias PRODUCT) + BUSINESS_CASE
+(base y1 $7,740, floor ~y3.2) as DATA. Web baseline green FIRST (build + **1065 tests** + 0 lint, coverage well above floors). Ran the
+periodic DEEP AUDIT (last was Run 57, 2026-07-09; 4 runs/~24h prior → due) — 7 read-only Haiku lenses. SELECTed the maximal file-DISJOINT
+VERIFIABLE set (3), each cleared 2 Sonnet reviewers + all 6 checks (web/ios/web-e2e/web-lint/validate-capabilities/validate-gtm). Abandoned 1.
+
+**What shipped:**
+- **#435 (Track H10/B6 — a REAL zero-headroom defect):** `/api/sfx` + `/api/voiceover` both fetched with `AbortSignal.timeout(30_000)`
+  while their route `maxDuration = 30` (30_000ms) — timeout EQUAL to the platform budget, so a slow call is killed by Vercel with an opaque
+  "function timed out" instead of the in-code clean-error path (which was thereby dead code). Extracted named exported
+  `SFX_/TTS_GENERATION_TIMEOUT_MS = 26_000` (~87% of budget, matching the documented B6 convention: atlascloud 50_000<60, music 55_000<60,
+  score 45_000<60) + a falsifiable regression test (`const < 30_000`). Reviewer A confirmed wiring + non-tautology; Reviewer B confirmed it's
+  the last two outliers of the already-shipped #211/#203/#195/#196 B6 family, not speculative.
+- **#436 + #437 (Track G / G2 — genuine guard-coverage, NOT padding):** #436 covers getEffectiveDuration's near-zero avgSpeed Infinity guard
+  (all-zero custom curve → guard returns sourceDuration, not Infinity); #437 covers the asset-cache corrupted-entry recovery (unparseable
+  localStorage value under the cache prefix is swept like expired without aborting the sweep; corrupt read returns null). BOTH reviewers on
+  BOTH PRs MUTATION-TESTED the guards (removed the guard in a worktree → the new test flips to FAIL) — proving they're falsifiable, not tautological.
+
+### DEEP AUDIT — 2026-07-10 (Run 61) — 7 read-only Haiku lenses (security/Track-H, correctness/dead-code, COGS/model/perf, test-coverage, artifact-freshness, design/a11y/web-functional, revenue/business-case)
+Codebase remains **exceptionally clean**; NO CRITICAL findings, nothing jumped the queue. Dispositions (verify-before-acting caught several false alarms):
+- **Security/Track-H — CLEAN except the 2 timeout outliers (shipped #435).** All paid routes carry rate-limit + server-side validation/bounds +
+  error-hygiene + CORS/headers + KV-atomic fail-closed spend ceiling + entitlement gate. The scout's 3rd finding (ios-score 90k/120k = 75% headroom)
+  is TECHNICALLY COMPLIANT (90<120) — declined as subjective tuning, not a defect.
+- **Correctness/dead-code — CLEAN.** Scout's one finding (elevenlabs-stems.ts arrayBuffer read) was largely STALE: the empty-buffer guard ALREADY
+  EXISTS (stems.ts:88-90) and the outer route try/catch already handles a read throw gracefully → wrapping it is a no-op defense-in-depth. Declined.
+- **COGS/model/perf — CLEAN.** (The COGS Haiku scout drifted off-task and returned a DoD status dump instead of findings — no COGS findings; consistent
+  with prior clean COGS audits. No model re-bench triggered this run — no new/cheaper capable model or price change surfaced.)
+- **Test-coverage — the run's #436/#437 work.** The 3rd candidate (beat-sync.ts) was CORRECTLY ABANDONED: its uncovered line 272
+  (`totalTransitions===0 → quality=1`) is UNREACHABLE — validateBeatSync early-returns when `clipStarts.length < 2`, so the main body always has
+  ≥1 entry → line 272 is dead defensive code (impossible-case, must NOT test); the only other gap (nextBeatAfter's past-grid fallback) is a trivial
+  1-liner → padding. Abandoned the branch (clean tree) rather than pad a 4th PR.
+- **Artifact-freshness — CLEAN.** Pricing $14.99/$149.99, FREE_EXPORT_LIMIT=5, "unlimited MONTHLY exports + 50/day fair-use", no embedded keys,
+  1080×1920, frame-SAMPLING — all consistent across README/BUSINESS_CASE/aso/brand/support/terms vs code.
+- **Design/a11y/web-functional — key surfaces well-crafted.** Two findings DECLINED: (a) landing mobile-nav "dead-end" — the "Get the App" CTA is
+  OUTSIDE the hidden nav (always visible on mobile) and the 3 anchor links are scroll-reachable, so it's NOT a dead-end; a hamburger for 3 scroll-anchors
+  is borderline churn Reviewer B would question. (b) constants.ts App-Store-URL placeholder fallback — INTENTIONAL (env set in Vercel prod); hard-failing
+  the build would break the `web` CI check which has no such env. Both left as-is.
+- **Revenue/business-case — HONEST, no gamed numbers; no new buildable web-lane lever.** BUSINESS_CASE_SUMMARY matches the body + billing config.
+  Scout's top idea (server-side export-event cohort telemetry for churn/TTE measurement) is real but PRE-LAUNCH there are no users, and E7 analytics is
+  partly the Growth Agent's domain — not built this run. Creator-tier needs the iOS purchase UI (unverifiable on Linux) + risks a gamed attach-%. Deferred.
+
+### What NOT to re-do (Run 61)
+- Do NOT re-touch the sfx/voiceover fetch timeouts — done #435 (26_000 named consts, B6-compliant, regression-tested).
+- Do NOT re-test getEffectiveDuration's Infinity guard (#436) or asset-cache corrupted-entry recovery (#437) — both covered + mutation-verified.
+- Do NOT propose beat-sync.ts line-272 coverage — it's UNREACHABLE dead defensive code (early-return on clipStarts.length<2); testing it is an
+  impossible-case test. The only reachable gap (nextBeatAfter past-grid fallback) is a trivial 1-liner = padding.
+- Do NOT re-raise the elevenlabs-stems arrayBuffer wrap — empty-buffer guard already exists + outer route try/catch already graceful (no-op change).
+- **DEFERRED (low-value, non-blocking, real):** Reviewer A (#435) noted `generateVoiceovers` runs segments SEQUENTIALLY (not `Promise.all` like SFX batch),
+  so many segments could exceed the 30s `maxDuration` in AGGREGATE even with the tightened per-call timeout — PRE-EXISTING, unchanged by #435, out of scope.
+  If ever touched, either parallelize the batch or bound segment count per request. Not worth a standalone PR now.
+
 ## Run 60 — 2026-07-10 — 4 merged PRs (#419 perf · #420 security H2 · #421 honesty · #422 root OG) — no deep audit (Run 57 ran one 2026-07-09, <24h)
 Cold start; baseline web gate green (build+test+lint). Consumed QUALITY_SCORECARD (as_of 2026-07-09, commit efe1add,
 overall B, ship_gate_met=false) + GROWTH_STATUS (pre_launch, all funnel metrics 0/null) as DATA. Ran the full ~6-scout
