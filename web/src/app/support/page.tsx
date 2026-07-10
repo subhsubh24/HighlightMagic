@@ -80,7 +80,8 @@ export default function SupportPage() {
               </h3>
               <p className="mt-1">
                 Each completed export counts toward your 5 free exports per month. The count resets
-                at the start of each calendar month. Upgrade to Pro for unlimited monthly exports.
+                at the start of each calendar month. Upgrade to Pro for unlimited monthly exports (a
+                50-per-day fair-use ceiling applies to all plans).
               </p>
             </div>
 
