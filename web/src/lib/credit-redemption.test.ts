@@ -5,6 +5,7 @@ import {
   checkExportAllowed,
   consumeExport,
   InMemoryQuotaStore,
+  MAX_SIGNED_TRANSACTION_CHARS,
   redeemCreditPack,
 } from "./entitlement";
 import { __resetCreditStoreForTests, getCreditBalance } from "./credit-store";
@@ -136,6 +137,33 @@ describe("redeemCreditPack", () => {
     const r = await redeemCreditPack({ userId: "u1", signedTransaction: null });
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("missing signedTransaction");
+  });
+
+  // ── H2 input-bound guards (Track H): these return BEFORE any KV-key derivation or ES256 verify,
+  // so a hostile client cannot mint a pathological credit-balance key or burn CPU on an oversized
+  // JWS. Regressing either check would reopen a wallet-of-CPU / KV-key-injection surface. ──
+
+  it("rejects an empty / over-long userId before it becomes a credit-balance KV key (H2)", async () => {
+    // Empty is invalid; so is anything over MAX_USER_ID_CHARS (128). Uses a plainly-invalid
+    // signedTransaction to prove the userId guard fires FIRST (no JWS work happens).
+    const empty = await redeemCreditPack({ userId: "", signedTransaction: "irrelevant" });
+    expect(empty.ok).toBe(false);
+    expect(empty.reason).toBe("missing userId");
+    expect(empty.granted).toBe(0);
+
+    const overLong = await redeemCreditPack({ userId: "u".repeat(129), signedTransaction: "irrelevant" });
+    expect(overLong.ok).toBe(false);
+    expect(overLong.reason).toBe("missing userId");
+    // Nothing was granted to the pathological key.
+    expect(await getCreditBalance("u".repeat(129))).toBe(0);
+  });
+
+  it("rejects an over-length signedTransaction before the ES256 verify (H2 CPU-DoS guard)", async () => {
+    const oversized = "a".repeat(MAX_SIGNED_TRANSACTION_CHARS + 1);
+    const r = await redeemCreditPack({ userId: "u1", signedTransaction: oversized });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe("invalid transaction");
+    expect(await getCreditBalance("u1")).toBe(0);
   });
 });
 
