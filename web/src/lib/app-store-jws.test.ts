@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import crypto from "node:crypto";
 import { loadTrustedRootsFromEnv, verifyAppStoreJWS } from "./app-store-jws";
-import { verifyProEntitlement } from "./entitlement";
+import { checkExportAllowed, verifyProEntitlement, type QuotaStore } from "./entitlement";
 
 // ── Deterministic test PKI (generated with openssl, EC P-256 / ES256 — mirrors Apple's chain) ──
 // Chain: leaf <- intermediate <- root. `otherRoot` is an independent, UNTRUSTED root.
@@ -181,5 +181,51 @@ describe("verifyProEntitlement (end-to-end, env-configured trusted root)", () =>
   it("never trusts a client-supplied non-JWS string", async () => {
     process.env.APP_STORE_ROOT_CA_PEM = rootPem(rootDer);
     expect(await verifyProEntitlement("client-claims-pro")).toBe(false);
+  });
+});
+
+describe("checkExportAllowed (a verified Pro subscription bypasses the free quota)", () => {
+  afterEach(() => {
+    delete process.env.APP_STORE_ROOT_CA_PEM;
+    delete process.env.APP_STORE_BUNDLE_ID;
+  });
+
+  // A quota store that throws on every access. If checkExportAllowed reaches it, the Pro
+  // short-circuit (entitlement.ts) did NOT fire — so these assertions prove the Pro branch
+  // returns BEFORE any monthly-count read, i.e. a verified Pro user is never bounded by the
+  // free FREE_EXPORT_LIMIT.
+  const neverStore: QuotaStore = {
+    get: async () => {
+      throw new Error("quota store must not be read for a verified Pro user");
+    },
+    increment: async () => {
+      throw new Error("quota store must not be incremented for a verified Pro user");
+    },
+  };
+
+  it("allows unconditionally with isPro + unlimited remaining (-1)", async () => {
+    process.env.APP_STORE_ROOT_CA_PEM = rootPem(rootDer);
+    const d = await checkExportAllowed({
+      userId: "pro-user",
+      signedTransaction: makeJWS(proPayload),
+      store: neverStore,
+    });
+    expect(d.allowed).toBe(true);
+    expect(d.isPro).toBe(true);
+    expect(d.remaining).toBe(-1); // -1 sentinel = unlimited (not capped at FREE_EXPORT_LIMIT)
+  });
+
+  // Falsification companion: with NO trusted root configured the same JWS is NOT Pro-verifiable,
+  // so the Pro branch is skipped and the quota store IS consulted (neverStore throws → fail
+  // closed). This proves the allow above genuinely comes from the Pro short-circuit, not an
+  // unconditional allow — remove the Pro early-return and the test above flips to allowed:false.
+  it("does NOT bypass the quota when the same transaction is not Pro-verifiable", async () => {
+    const d = await checkExportAllowed({
+      userId: "pro-user",
+      signedTransaction: makeJWS(proPayload),
+      store: neverStore,
+    });
+    expect(d.isPro).toBe(false);
+    expect(d.allowed).toBe(false);
   });
 });
