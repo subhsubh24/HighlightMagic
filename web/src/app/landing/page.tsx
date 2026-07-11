@@ -83,7 +83,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         className={`flex items-center gap-3 rounded-2xl border border-[var(--success)]/30 bg-[var(--success)]/10 px-5 py-4 ${compact ? "max-w-sm" : "max-w-md"}`}
       >
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--success)]/20">
-          <Check className="h-4 w-4 text-[var(--success)]" />
+          <Check aria-hidden="true" className="h-4 w-4 text-[var(--success)]" />
         </div>
         <div>
           <p className="font-semibold text-[var(--success)]">
@@ -276,7 +276,7 @@ function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-gradient">
-            <Sparkles className="h-4 w-4 text-white" />
+            <Sparkles aria-hidden="true" className="h-4 w-4 text-white" />
           </div>
           <span className="font-bold text-white">Highlight Magic</span>
         </div>
@@ -346,7 +346,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-4xl">
           {/* Badge */}
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-1.5 text-sm text-[var(--accent)]">
-            <Star className="h-3.5 w-3.5 fill-current" />
+            <Star aria-hidden="true" className="h-3.5 w-3.5 fill-current" />
             <span>Coming soon to the App Store</span>
           </div>
 
@@ -373,7 +373,7 @@ export default function LandingPage() {
               onClick={() => trackEvent("cta_click", { source: "hero" })}
               className="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
             >
-              <Download className="h-4 w-4" />
+              <Download aria-hidden="true" className="h-4 w-4" />
               Already have the app? Download on the App Store
             </a>
           </div>
@@ -399,7 +399,7 @@ export default function LandingPage() {
                     {step}
                   </span>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)]/15">
-                    <Icon className="h-5 w-5 text-[var(--accent)]" />
+                    <Icon aria-hidden="true" className="h-5 w-5 text-[var(--accent)]" />
                   </div>
                 </div>
                 <h3 className="mb-2 text-lg font-semibold">{title}</h3>
@@ -430,7 +430,7 @@ export default function LandingPage() {
                 className="glass-card p-6 transition-all duration-200 hover:border-[var(--accent)]/20 hover:bg-[var(--accent)]/5"
               >
                 <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)]/15">
-                  <Icon className="h-5 w-5 text-[var(--accent)]" />
+                  <Icon aria-hidden="true" className="h-5 w-5 text-[var(--accent)]" />
                 </div>
                 <h3 className="mb-2 font-semibold">{title}</h3>
                 <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
@@ -479,7 +479,7 @@ export default function LandingPage() {
               >
                 {plan.highlight && (
                   <div className="mb-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-accent-gradient px-3 py-1 text-xs font-semibold text-white">
-                    <Star className="h-3 w-3 fill-current" />
+                    <Star aria-hidden="true" className="h-3 w-3 fill-current" />
                     Most Popular
                   </div>
                 )}
@@ -496,7 +496,7 @@ export default function LandingPage() {
                 <ul className="mb-8 flex-1 space-y-3">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-center gap-3 text-sm">
-                      <Check className="h-4 w-4 flex-shrink-0 text-[var(--success)]" />
+                      <Check aria-hidden="true" className="h-4 w-4 flex-shrink-0 text-[var(--success)]" />
                       <span className="text-[var(--text-secondary)]">{f}</span>
                     </li>
                   ))}
@@ -585,7 +585,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 md:flex-row md:justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-gradient">
-              <Sparkles className="h-3.5 w-3.5 text-white" />
+              <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-white" />
             </div>
             <span className="font-bold text-white">Highlight Magic</span>
           </div>
