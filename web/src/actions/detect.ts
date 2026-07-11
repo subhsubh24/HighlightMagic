@@ -22,6 +22,15 @@ const INITIAL_BACKOFF_MS = 2000;
 const MAX_RETRY_WAIT_MS = 15_000;
 
 /**
+ * Fetch-level timeout (B6) for the streaming planner call. Must stay UNDER the plan route
+ * maxDuration (300s — plan/route.ts:14, ios-plan/route.ts:9) so a hung upstream connection surfaces
+ * as a clean AbortError instead of an opaque platform kill. 280s leaves ~20s headroom and sits well
+ * above a legitimate plan stream (single-attempt streaming + thinking, up to ~3 min) so it never
+ * aborts real work.
+ */
+const PLANNER_FETCH_TIMEOUT_MS = 280_000;
+
+/**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
  */
 async function fetchWithRetry(
@@ -2781,7 +2790,15 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
           messages: [{ role: "user", content: userContent }],
         }),
       },
-      "Planner"
+      "Planner",
+      // Bound the planner call (B6) so a stalled upstream connection can't hang detection until the
+      // serverless function is opaquely killed at the route maxDuration (300s — plan/route.ts:14,
+      // ios-plan/route.ts:9). consumeSSEStream's per-chunk stall timeout only applies AFTER headers
+      // return, so a hung initial connect was previously unbounded. 280s leaves ~20s headroom for the
+      // clean error path and sits comfortably above a legitimate plan stream (streaming + thinking,
+      // up to ~3 min per the single-attempt note above) so it never aborts real work — the same
+      // convention as the sibling scoring (45s<60) and tape-validation (30s<60) fetches.
+      PLANNER_FETCH_TIMEOUT_MS
     );
 
     debugLog(`[Planner] Got HTTP ${response.status} in ${((Date.now() - plannerStartMs) / 1000).toFixed(1)}s`);
