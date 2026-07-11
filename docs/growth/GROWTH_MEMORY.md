@@ -503,3 +503,126 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
 4. Check whether the Sam Gutelle draft was sent (owner-reported) and update `outreach.owner_sent_7d`.
 5. Re-read `GTM_STANDARD.md` in full, not from memory — it changed materially between Run 6 and Run 7
    (§10 schema + Reddit/X ToS clarification) and could change again.
+
+---
+
+## 2026-07-11 — Run 8
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged). Channels connected: none —
+  **8th consecutive run** with connect-channels open. Re-probed `env` for `GROWTH_AGENT_SECRET`/
+  `PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent, identical to Runs 6-7.
+  `site_gate_up`: false (unchanged — HARD BLOCK on execute mode); did not re-attempt the prod curl probe
+  this run (Run 7's attempt hit an inconclusive proxy-layer 502 and nothing in-repo changed to warrant
+  retrying immediately).
+- **`GTM_SCORECARD.md` was finally re-graded** (Audit Run 2, 2026-07-10, commit 8b0b04b): overall **A**,
+  `ship_gate_met: TRUE` — the bootstrap's sole blocker (`self_validation_honesty` B) closed via #208 and
+  independently re-verified A+. This resolves the 3+-run staleness this agent had been flagging as a
+  possible stuck-Auditor signal — no further owner attention needed there. Confirmed this does **NOT**
+  unlock GTM_STANDARD §13 Gate 1 (waitlist outreach) by itself: that gate keys off the **product**
+  `QUALITY_SCORECARD` (still overall B, `ship_gate_met: false` — `store_readiness` C, an owner-only
+  Xcode-app-target + 6.9" screenshot gap, unchanged for 5 grading cycles), a separate scorecard entirely.
+- Security hardening landed since Run 7: #441 (2026-07-10) made `/api/growth/stats`'s bearer-token
+  compare constant-time (CWE-208 fix) — a security improvement, not a connectivity change;
+  `GROWTH_AGENT_SECRET` is still unset so the endpoint still 503s for this agent.
+- Sam Gutelle (Tubefilter) draft (Run 3, 2026-06-29): confirmed via `list_drafts` still present, unedited,
+  unsent, now 12 days old. `search_threads` for tubefilter/sam@tubefilter.com: zero replies (one unrelated
+  2023 marketing email is the only hit). Also noticed (via `list_drafts`) a **second, unrelated Gmail
+  draft** — a full "HighlightMagic Growth Report — 2026-06-29 (Run 3)" status email addressed to the
+  owner, created the same day as the Sam Gutelle draft. This predates the current GTM_STANDARD §5 rule
+  ("you do NOT email status reports or digests... No status-report drafts") — clearly a Run 3-era artifact
+  from before that rule was enforced this strictly. It is unsent and harmless (the Gmail tool available to
+  this agent is `create_draft`-only, never send), but there is no `delete_draft` tool available to this
+  agent to clean it up — flagged as an owner cleanup item in `PENDING_OPS.md` instead.
+
+### What I did this run
+- **Found and fixed a real, pre-existing honesty/compliance defect in the queued content library**
+  (not a new regression — present since Runs 2-3 when `docs/content/post-batch-1.md` and
+  `post-batch-2.md` were written, just never caught before): **every one of the 24 ready-to-record
+  short-form video scripts had a call-to-action that asserted the app was ALREADY live and downloadable**
+  — "Free on the App Store", "Download free → link in bio", "Free app → link in bio", plus a `#AppStore`
+  hashtag — when the product is `pre_launch` with only the public waitlist open. GTM_STANDARD §13 is
+  explicit: "Pre-launch every link → the PUBLIC waitlist, never the gated app." These scripts are staged
+  as "ready to record" — the moment any social channel connects, the owner (or this agent, once execute
+  mode is reachable) could post one of these verbatim and publish a false live-availability claim. Also
+  found a **fabricated engagement metric** in Batch 1 Post 01 ("Posted it. Got 80K views.") — invented
+  fake social proof with zero basis, a direct GTM_STANDARD §7 anti-gaming violation.
+  - Rewrote every CTA in the pre-launch-appropriate posts (Batch 1: all 12; Batch 2: posts 1-7, 10-12) to
+    "join the waitlist" framing pointing at `highlightmagic.app/landing`, matching the phrasing already
+    used consistently in `press-kit.md` and `email-sequences.md`. Removed the fabricated view-count line.
+    Removed the `#AppStore` hashtag. Added a "PRE-LAUNCH NOTE" banner to the top of both files so a future
+    run (or the owner) sees the constraint before recording, with an explicit instruction to swap in a
+    real App Store link once the app actually ships.
+  - **Deliberately left Batch 2 Posts 08-09 unchanged.** These are explicit free→Pro conversion posts
+    that assume a LIVE free tier exists — the file's own pre-existing "Usage Notes" section already gates
+    them to "Week 5-6+ ... after the audience has seen value from the free tier," i.e. post-launch. Their
+    live-app framing is correct for their intended use, not a bug; touching them would have been wrong.
+  - Priority call: this fix took precedence over drafting the still-unbuilt Content-First Demand
+    Validation kit (docs/growth/DEMAND_VALIDATION_PLAYBOOK.md, added before Run 7 but never executed) —
+    a real defect sitting in a queued, ready-to-fire asset outranks building a new asset from scratch.
+    Left as an open opportunity for a future run once this run's fix and the circuit breaker leave room.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff before
+  committing. **First pass: REQUEST_CHANGES** — it caught one real miss: Batch 1 Post 12's caption still
+  carried a `#AppStore` hashtag (a live-availability signal of the same class the CTA rewrite was meant to
+  eliminate) that survived the first pass. Fixed (swapped for `#ComingSoon`). It also flagged one
+  redundant, non-blocking line (tightened) and one pre-existing, out-of-scope issue for future attention:
+  Batch 2 Post 09's "I made that back from one sponsored post... one brand deal" line reads as an
+  unverified personal-anecdote claim that should only be recorded if actually true — logged in
+  `next_actions` since that post isn't due until Week 5-6+, not this run's fix to make. Re-verified with
+  `grep` for every remaining "Free on the App Store"/"Download free"/"80K views"/`#AppStore` occurrence
+  across both files (zero) and confirmed pricing/tier facts ($14.99/mo, $149.99/yr, 5 free exports/month,
+  watermark-on-free) were byte-identical before/after (untouched, as intended).
+- Bumped `as_of` in `GROWTH_STATUS.md` and `PENDING_OPS.md` to 2026-07-11; validated both YAML blocks with
+  a `yaml.safe_load` check before committing (the repo's `validate-gtm.mjs` needs a `web/` `npm ci` this
+  agent didn't have reason to run, so used the same parser directly instead).
+
+### Learnings
+- **A "ready to record" content asset is a landmine, not just a draft** — content staged months before any
+  channel connects can silently drift out of compliance with a policy (here, the pre-launch waitlist-only
+  CTA rule) that either postdates the content or was simply missed the first time. A queued asset is not
+  "safe" just because it hasn't been posted yet; it should be re-audited against the CURRENT standard
+  periodically, the same way a living dashboard block is, not just written once and forgotten.
+- **Fabricated social proof can hide inside a "script," not just a stats block.** GTM_STANDARD §7's
+  anti-gaming rule ("never invent numbers or social proof") is usually checked against dashboard metrics;
+  it applies equally to a line of dialogue in a marketing script ("Got 80K views") that nobody would think
+  to grep for unless specifically looking. Worth a standing check: does any content asset assert a
+  specific outcome/number that hasn't actually happened?
+- **The maker≠checker reviewer earned its keep again on a narrow diff** — even a mechanical-seeming
+  find-and-replace across two files missed one instance (a hashtag, not a sentence) that carried the same
+  false-availability meaning as the CTAs being fixed. A "did I get all of them" self-check is exactly the
+  blind spot the independent pass exists to catch.
+- **Two scorecards, two different gates — do not conflate them.** `GTM_SCORECARD.md` flipping to
+  `ship_gate_met: true` is real progress and resolves this agent's own staleness flag, but it says nothing
+  about whether outbound marketing can start — that reads the PRODUCT `QUALITY_SCORECARD` instead
+  (GTM_STANDARD §13 Gate 1), which is still B/false on an owner-only Mac-signing gap. Conflating "the GTM
+  factory's own grade is good" with "we can launch outreach" would have been a real mistake this run.
+- Circuit breaker discipline held again: 8th consecutive run, no new escalation prose on connect-channels
+  — the run's effort went into the content-honesty fix instead, a higher-leverage, genuinely new,
+  non-duplicative deliverable.
+
+### Dead ends / what NOT to repeat
+- Do NOT touch Batch 2 Posts 08-09's live-app framing — they are correctly gated to post-launch (Week
+  5-6+) by the file's own usage notes; rewriting their CTAs to waitlist language would be WRONG for their
+  intended post-launch use.
+- Do NOT assume a queued/staged content asset is compliance-safe just because it hasn't been posted —
+  re-check it against the CURRENT GTM_STANDARD each time it's touched, the same discipline already applied
+  to the `demand_signal` schema.
+
+### Circuit-breaker status
+- **Still open at Run 8 (8 consecutive runs).** No new owner action since Run 7. The ask is unchanged:
+  connect Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single highest-leverage
+  unlock; `site-gate` (SITE_GATE_PASSWORD in Vercel prod env) is the second.
+
+### Next run priorities (Run 9)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens —
+   never infer from git; if any present, pull real data and move toward execute mode.
+2. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the stale Run-3 "Growth
+   Report" Gmail draft was deleted (owner cleanup item in PENDING_OPS.md).
+3. Check whether the product `QUALITY_SCORECARD` finally cleared `store_readiness` to A (the Xcode
+   app-target + 6.9" screenshot gap) — that is the actual remaining Gate 1 blocker per GTM_STANDARD §13,
+   distinct from the now-resolved GTM_SCORECARD.
+4. If there's genuinely new capacity (no higher-priority defect found first): build the still-unexecuted
+   Content-First Demand Validation kit (docs/growth/DEMAND_VALIDATION_PLAYBOOK.md — hero-feature pick,
+   throwaway demo prototype spec, hook variations, shot list) — a real gap, deferred this run in favor of
+   the content-honesty fix.
+5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change between runs.
