@@ -229,7 +229,7 @@ const PRICING: PricingPlan[] = [
     description: "For creators who publish consistently.",
     highlight: true,
     features: [
-      "Unlimited monthly exports",
+      "Unlimited monthly exports (50/day fair-use)",
       "No watermark",
       "AI highlight detection",
       "Auto captions & transitions",
