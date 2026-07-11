@@ -291,6 +291,60 @@ describe("Atlas Cloud API", () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
       vi.useRealTimers();
     });
+
+    it("retries a transient 5xx poll response (502/503/504), then returns the parsed result", async () => {
+      vi.useFakeTimers();
+      // A 502/503/504 from the poll endpoint is a transient upstream/gateway blip — exactly like a
+      // thrown fetch — so it must retry rather than abort the whole export. Before the retry branch
+      // (atlascloud.ts:273-280) a single gateway hiccup killed every in-flight animation/upscale export.
+      mockFetch
+        .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve("upstream unavailable") })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              code: 200,
+              message: "ok",
+              data: { id: "pred_5xx", status: "succeeded", outputs: ["https://cdn.example.com/5xx.mp4"] },
+            }),
+        });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const p = checkTaskResult("pred_5xx");
+      await vi.runAllTimersAsync();
+      const result = await p;
+
+      expect(result.status).toBe("completed");
+      expect(result.outputUrl).toBe("https://cdn.example.com/5xx.mp4");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it("gives up (rejects) only after exhausting retries when the poll keeps returning 5xx", async () => {
+      vi.useFakeTimers();
+      mockFetch.mockResolvedValue({ ok: false, status: 504, text: () => Promise.resolve("gateway timeout") });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const p = checkTaskResult("pred_5xx_dead");
+      const rejection = expect(p).rejects.toThrow("Atlas Cloud poll error (504)");
+      await vi.runAllTimersAsync();
+      await rejection;
+
+      // Initial attempt + MAX_RETRIES(3) = 4 total before giving up.
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      vi.useRealTimers();
+    });
+
+    it("does NOT retry a non-transient 4xx poll response — throws immediately", async () => {
+      // A 400/401/etc is a permanent error (bad request/auth), NOT a transient blip: retrying would
+      // burn the poll budget re-hitting a call that fails identically. It must throw on the first hit.
+      mockFetch.mockResolvedValue({ ok: false, status: 400, text: () => Promise.resolve("bad prediction id") });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      await expect(checkTaskResult("pred_bad")).rejects.toThrow("Atlas Cloud poll error (400)");
+      // No retry — exactly one fetch (contrast the 5xx exhaustion case above, which fetches 4×).
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("MODELS", () => {
