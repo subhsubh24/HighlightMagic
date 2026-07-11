@@ -10,15 +10,22 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-09
+  as_of: 2026-07-11
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
       priority: normal
       status: open
       why: "Growth Agent created a pre-launch pitch email for Sam Gutelle (Senior Editor, Tubefilter, creator economy press) as a Gmail DRAFT for owner to review + send. The agent never sends; the owner sends after reviewing."
-      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions."
+      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-11 (12 days old)."
       blocks: press-outreach
+    - id: cleanup-stale-gmail-draft
+      title: "Delete a leftover Gmail draft ('HighlightMagic Growth — 2026-06-29') — a status-report email that predates the current no-digest-email policy"
+      priority: normal
+      status: open
+      why: "The Growth Agent's Run 3 (2026-06-29) created a full status-report email as a Gmail draft, addressed to the owner. GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these, but this one pre-existing draft was never cleaned up. It is unsent and harmless (no auto-send exists), but it clutters Gmail drafts alongside the real to-send outreach draft."
+      how: "Open Gmail drafts, find the one titled 'HighlightMagic Growth — 2026-06-29', delete it. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
+      blocks: none
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
       priority: urgent

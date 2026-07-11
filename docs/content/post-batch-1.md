@@ -5,6 +5,8 @@ All posts are for TikTok/Reels/Shorts unless noted. Cross-post to all platforms.
 
 **Instructions**: Record with iPhone camera or screen record. Keep to 30–60 seconds. The hook IS the first 2 seconds — say it directly to camera or as text overlay. No formal intro ("Hey guys!") — start immediately with the hook.
 
+**PRE-LAUNCH NOTE (do not skip before recording):** HighlightMagic is not yet live on the App Store — only the public waitlist (`highlightmagic.app/landing`) is open. Every CTA below has been written to point to the waitlist, never "download"/"free on the App Store" (GTM_STANDARD §13 — pre-launch, every link goes to the waitlist). Once the app actually ships and this note is removed, swap the waitlist CTAs for a real App Store link.
+
 ---
 
 ## POST 01 — App Walkthrough Demo (Week 1, Monday)
@@ -28,7 +30,7 @@ All posts are for TikTok/Reels/Shorts unless noted. Cross-post to all platforms.
 [Voiceover] "— and gave me this. I didn't touch the edit. This is straight from the AI."
 
 [Show: share sheet → "Share to TikTok"]
-[Voiceover] "Posted it. Got 80K views. App is called Highlight Magic. Link in bio — first 5 exports are free."
+[Voiceover] "App's called Highlight Magic, launching soon. Join the waitlist — link in bio."
 ```
 
 **Caption**:
@@ -37,7 +39,7 @@ I imported 3 hrs of basketball footage. AI made this highlight in 28 seconds �
 
 No editing. No scrubbing. Just imported and got this.
 
-Try it free → link in bio
+Join the waitlist → link in bio
 
 #HighlightMagic #AIVideo #BasketballHighlights #VideoEditing #ContentCreator #TikTokTips
 ```
@@ -59,8 +61,8 @@ Try it free → link in bio
 [Right side / cut to: polished 60-second highlight with captions and transitions]
 
 [End card — text overlay]
-"Highlight Magic — Free on the App Store"
-"5 free exports/month"
+"Highlight Magic — join the waitlist"
+"5 free exports/month at launch"
 ```
 
 **Caption**:
@@ -71,7 +73,7 @@ vs. what AI turned it into in under a minute 😭
 
 Same footage. No editing. AI found the best moments automatically.
 
-Free app — link in bio 🔗
+Join the waitlist — link in bio 🔗
 
 #BeforeAndAfter #AIVideo #TravelContent #VideoEditing #HighlightMagic #ContentHack
 ```
@@ -109,7 +111,7 @@ Stop paying video editors to make your highlight reels — AI does it in 30 seco
 ✅ Auto captions + clean cuts, no timeline scrubbing
 ✅ 1080×1920 vertical — perfect for Instagram/TikTok
 
-Free → link in bio
+Join the waitlist → link in bio
 
 #AthleteContent #WorkoutHighlight #SportsEdit #AIVideo #HighlightMagic #FitnessContent
 ```
@@ -134,7 +136,7 @@ Free → link in bio
 [Voiceover] "— then builds your highlight from only the highest-scoring moments. No scrubbing a 3-hour timeline yourself."
 
 [End card]
-"AI highlight detection. Highlight Magic — Free on the App Store."
+"AI highlight detection. Highlight Magic — join the waitlist."
 ```
 
 **Caption**:
@@ -147,7 +149,7 @@ The AI scans your footage so you don't have to 🎯
 
 No scrubbing. No guessing. Import and go.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #AIVideo #VideoEditing #ContentCreator #HighlightMagic #CreatorTools #TikTokTips
 ```
@@ -169,7 +171,7 @@ Free app → link in bio
 [Cut to: polished 45-second highlight with caption overlays and clean transitions]
 
 [Direct to camera — end]
-"AI scanned the whole 6 hours so I didn't have to. Posted it the same day I landed. Highlight Magic — Free."
+"AI scanned the whole 6 hours so I didn't have to. Highlight Magic — join the waitlist, launching soon."
 ```
 
 **Caption**:
@@ -180,7 +182,7 @@ I haven't had time to edit travel videos in years. This app changed that.
 
 Imports video → AI finds the best moments → adds captions + transitions → done
 
-Link in bio (free to try) 🔗
+Join the waitlist (link in bio) 🔗
 
 #TravelContent #TravelVlog #TravelTikTok #AIVideo #HighlightMagic #ContentHack #Reels
 ```
@@ -211,7 +213,7 @@ Link in bio (free to try) 🔗
 [Voiceover] "Highlight reels that go viral are 30–90 seconds. AI knows this and keeps your clip in range."
 
 [End]
-"App I use: Highlight Magic. Free. Link in bio."
+"App I use: Highlight Magic. Join the waitlist — link in bio."
 ```
 
 **Caption**:
@@ -222,7 +224,7 @@ Why your highlight reels don't go viral (and how to fix it) 👇
 2/ No captions — most people watch on mute; AI auto-adds kinetic captions
 3/ Too long — AI keeps it under 90 seconds
 
-The app I use is called Highlight Magic. Free to try → link in bio
+The app I use is called Highlight Magic. Join the waitlist → link in bio
 
 #VideoTips #ContentStrategy #TikTokTips #ReelsTips #HighlightReel #AIVideo #ContentCreator
 ```
@@ -258,7 +260,7 @@ No typing. No timing. It watches your video and generates text that matches what
 
 7 kinetic caption styles included (auto-applied based on the vibe of your clip).
 
-Try free → link in bio
+Join the waitlist → link in bio
 
 #Captions #VideoEditing #AIVideo #ContentHack #HighlightMagic #CreatorTools #TikTokTips
 ```
@@ -294,7 +296,7 @@ Filmed an entire concert. AI turned it into 60 seconds of magic 🎵🎤
 
 For every concert-goer who films everything and shares nothing
 
-Free → link in bio
+Join the waitlist → link in bio
 
 #ConcertTikTok #ConcertContent #MusicFestival #AIVideo #HighlightMagic #ContentCreator
 ```
@@ -316,7 +318,7 @@ Free → link in bio
 [Cut to: polished 45-second birthday highlight with captions like "5 YEARS OLD!" and transitions]
 
 [End]
-"Best moments. Auto-found. All I had to do was import. Highlight Magic — link in bio."
+"Best moments. Auto-found. All I had to do was import. Highlight Magic — join the waitlist, link in bio."
 ```
 
 **Caption**:
@@ -327,7 +329,7 @@ I'm not a video editor. I just want to save the best moments without spending my
 
 This took me less than 1 minute total.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #FamilyContent #BirthdayMemories #ParentingHack #AIVideo #HighlightMagic #MemoryKeeping
 ```
@@ -369,7 +371,7 @@ Free app → link in bio
 
 More quality footage = better highlights. Film smart, let AI edit.
 
-App: Highlight Magic → link in bio (free)
+App: Highlight Magic → join the waitlist (link in bio)
 
 #iPhoneTips #ContentCreatorTips #VideoTips #FilmingTips #AIVideo #HighlightMagic #CreatorHacks
 ```
@@ -392,7 +394,7 @@ App: Highlight Magic → link in bio (free)
 
 [End — text overlay]
 "Done in [X] seconds."
-"Highlight Magic. Free."
+"Highlight Magic. Join the waitlist."
 ```
 
 **Caption**:
@@ -403,7 +405,7 @@ It finished in [X] seconds.
 
 I am not a video editor. I am a guy who pressed Import.
 
-Try the challenge yourself → free app, link in bio
+Try the challenge yourself once we launch → join the waitlist, link in bio
 
 #30SecondChallenge #AIVideo #HighlightMagic #SpeedEdit #ContentCreator #VideoEditing
 ```
@@ -423,22 +425,22 @@ Try the challenge yourself → free app, link in bio
 
 If you're a creator, an athlete, a traveler, a parent — anyone who records stuff and never edits it — this app is for you.
 
-5 free exports every month. AI does the work. 30 seconds.
+5 free exports every month once we launch. AI does the work. 30 seconds.
 
-If you try it, let me know what you made. I want to see it."
+Join the waitlist — I'll let you know the second it's live, and I want to see what you make with it."
 ```
 
 **Caption**:
 ```
 I built Highlight Magic because I had too much footage and not enough time to edit.
 
-If that's you — try it. 5 free exports, no card required.
+If that's you — join the waitlist. 5 free exports/month at launch, no card required.
 
-Reply with what you made — I watch every comment 👀
+Reply and I'll let you know the moment it's live 👀
 
-Download free → link in bio
+Join the waitlist → link in bio
 
-#HighlightMagic #BuildInPublic #IndieApp #ContentCreator #AIVideo #AppStore
+#HighlightMagic #BuildInPublic #IndieApp #ContentCreator #AIVideo #ComingSoon
 ```
 
 ---

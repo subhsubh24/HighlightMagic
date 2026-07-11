@@ -9,6 +9,8 @@ fitness transformation, pet compilations, family events, free-vs-Pro conversion,
 car meets, dance/performance, soccer/football, cooking/food content, extreme/adventure sports.
 Conversion posts (08, 09) suit Week 5–6+ of the content calendar.
 
+**PRE-LAUNCH NOTE (do not skip before recording):** HighlightMagic is not yet live on the App Store — only the public waitlist (`highlightmagic.app/landing`) is open. Posts 01–07 and 10–12 below have their CTAs written to point to the waitlist, never "download"/"free on the App Store" (GTM_STANDARD §13). Posts 08–09 are conversion content that assumes a LIVE free tier and are explicitly scheduled for Week 5–6+ — do not use any of these before the app has actually launched.
+
 ---
 
 ## POST 01 — Niche: Gaming Highlights (Week 9, Monday)
@@ -29,7 +31,7 @@ Conversion posts (08, 09) suit Week 5–6+ of the content calendar.
 [Voiceover] "— and built this. Every clutch play, every comeback. I didn't touch the timeline."
 
 [End card]
-"Highlight Magic — Free on the App Store. 5 exports/month."
+"Highlight Magic — join the waitlist. 5 free exports/month at launch."
 ```
 
 **Caption**:
@@ -40,7 +42,7 @@ No clip software. No timeline scrubbing. Just imported and got this.
 
 Works on any game footage — console, mobile, screen recording.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #GamingClips #GameHighlights #AIVideo #HighlightMagic #ContentCreator #GamingTikTok #ClipEdit
 ```
@@ -65,7 +67,7 @@ Free app → link in bio
 [Voiceover] "— and cut this teaser. In under a minute. No videographer fee."
 
 [Direct to camera]
-"It's not a replacement for your wedding video. It's a teaser you can share that day. Highlight Magic. Link in bio."
+"It's not a replacement for your wedding video. It's a teaser you can share that day. Highlight Magic — join the waitlist, link in bio."
 ```
 
 **Caption**:
@@ -74,7 +76,7 @@ Your wedding highlight teaser — done the same day 💍
 
 4 hrs of footage → 90-sec shareable clip. AI found the best moments automatically.
 
-Free on the App Store (5 exports/month) → link in bio
+Join the waitlist (5 free exports/month at launch) → link in bio
 
 #WeddingContent #WeddingHighlight #WeddingTikTok #AIVideo #HighlightMagic #WeddingDay #BridesOfTikTok
 ```
@@ -108,7 +110,7 @@ Free on the App Store (5 exports/month) → link in bio
 
 Every PR moment found automatically. Cut chronologically with clean transitions and captions.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #FitnessContent #GymTikTok #TransformationReel #AIVideo #HighlightMagic #WorkoutMotivation #FitnessCreator
 ```
@@ -133,7 +135,7 @@ Free app → link in bio
 [Voiceover] "— built this in under a minute. I have a dog content account now."
 
 [End card — light tone]
-"Highlight Magic — Free. 5 exports/month."
+"Highlight Magic — join the waitlist. 5 free exports/month at launch."
 ```
 
 **Caption**:
@@ -142,7 +144,7 @@ My dog is now a TikTok star. AI edited all his clips into this 🐕
 
 I filmed everything. AI found the funny moments and built the compilation.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #DogTikTok #PetContent #CuteDogs #AIVideo #HighlightMagic #PetTok #ContentCreator
 ```
@@ -176,7 +178,7 @@ Every family should have this app for birthdays, reunions, holidays 🎂
 
 Stop having 2-hour videos no one rewatches. AI turns it into the 60-second highlight you'll actually share.
 
-Free → link in bio
+Join the waitlist → link in bio
 
 #FamilyContent #BirthdayTikTok #FamilyMemories #AIVideo #HighlightMagic #FamilyTok #ContentCreator
 ```
@@ -201,7 +203,7 @@ Free → link in bio
 [Voiceover] "— and builds something that actually does the event justice."
 
 [End card]
-"Highlight Magic — Free on the App Store."
+"Highlight Magic — join the waitlist."
 ```
 
 **Caption**:
@@ -212,7 +214,7 @@ Import your footage → AI finds the best angles, revs, crowd moments → custom
 
 Works for car shows, track days, cruises.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #CarMeet #CarTikTok #AutomotiveContent #AIVideo #HighlightMagic #CarContent #CarCommunity
 ```
@@ -237,7 +239,7 @@ Free app → link in bio
 [Voiceover] "— and builds the reel. The teacher. The parents. Everyone gets a shareable version."
 
 [Direct to camera]
-"Dance teachers: share this at the end of every recital season. Link in bio — Highlight Magic."
+"Dance teachers: share this at the end of every recital season. Highlight Magic — join the waitlist, link in bio."
 ```
 
 **Caption**:
@@ -246,7 +248,7 @@ Every dance teacher / performing arts parent needs this 💃
 
 Full recital recordings → polished performance highlights → shareable with families that same night
 
-Free on the App Store → link in bio
+Join the waitlist → link in bio
 
 #DanceContent #RecitalHighlight #DanceTikTok #PerformingArts #AIVideo #HighlightMagic #DanceMom
 ```
@@ -346,7 +348,7 @@ Try free first → link in bio
 [Voiceover] "— and made the edit. Tight cuts on the best moments. Clean captions. Done."
 
 [End card]
-"Highlight Magic — Free on the App Store."
+"Highlight Magic — join the waitlist."
 ```
 
 **Caption**:
@@ -355,7 +357,7 @@ Filmed a full cooking session. AI edited the highlight reel in 35 seconds 🍳
 
 Every good flip, every plating moment, every satisfied taste-test — found automatically
 
-Food creators: your time is worth more than editing. Free app → link in bio
+Food creators: your time is worth more than editing. Join the waitlist → link in bio
 
 #FoodTikTok #CookingContent #FoodContent #AIVideo #HighlightMagic #FoodCreator #CookingTikTok
 ```
@@ -389,7 +391,7 @@ Food creators: your time is worth more than editing. Free app → link in bio
 
 AI found every clean touch and big moment automatically
 
-Free on the App Store — scouts don't wait for a polished tape; give them one → link in bio
+Join the waitlist — scouts don't wait for a polished tape; give them one → link in bio
 
 #SoccerTikTok #FootballSkills #SoccerHighlights #AIVideo #HighlightMagic #SoccerContent #RecruitmentReel
 ```
@@ -425,7 +427,7 @@ No editing, no scrubbing hours of GoPro footage. AI scored every clip and made t
 
 Works for skiing, surfing, snowboarding, mountain biking — any action footage.
 
-Free app → link in bio
+Join the waitlist → link in bio
 
 #SkiContent #ActionSports #SnowboardTikTok #GoPro #AIVideo #HighlightMagic #AdventureContent #SkiTok
 ```
