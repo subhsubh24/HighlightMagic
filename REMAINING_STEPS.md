@@ -109,8 +109,9 @@ the description, `whatsNew`, free/Pro plan bullets, and the screenshot set (musi
 templates screen); "Unlimited exports" → "Unlimited monthly exports (50/day fair-use ceiling)"; and the
 false CONTENT-section licensed-music line was removed. An independent reviewer verified every retained
 claim against source (8 templates match `TemplateLibrary`; kinetic captions/color filters map to real
-enums; "premium filters & effects" maps to the real `PremiumEffectRenderer`; the "7-pass" language is
-literally accurate; iCloud sync is wired). No new inaccuracy introduced.
+enums; "premium filters & effects" maps to the real `PremiumEffectRenderer`; the pass-count language is
+accurate (the store copy was later refined "7-Pass"→"6-Pass" in #410 to match the six user-visible
+`ProcessingView` passes — the backend runs seven stages); iCloud sync is wired). No new inaccuracy introduced.
 
 **What the owner should still do**: at submission, copy this now-honest metadata into App Store Connect
 and re-confirm it against the final shipped build. NOTE (Run 47, #342): a subsequent honesty pass also
