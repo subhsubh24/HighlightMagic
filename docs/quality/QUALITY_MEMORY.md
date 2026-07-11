@@ -286,3 +286,64 @@ same three, but functional_reality and tests_evals each closed prior named sub-g
 1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker).
 2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota.
 3. `tests_evals` B — make the paid-eval suite enforceable (required / hard-fail when keyless, #289) and promote `ios` to a required check.
+
+---
+
+## 2026-07-11 — grade, commit 8b0b04b
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → build compiled successfully, **1070 tests passed
+(76 files)** (up from 1029/75), coverage stmts **92.41%** / branch 83.73% / funcs 92.55% / lines 93.77% (all above the
+60/60/50/60 floor), **0 lint warnings**. Latest 8 main CI runs all green on `8b0b04b`. Graded with 4 fresh, adversarial
+per-dimension grader subagents (none wrote the code) on the inflation-exposed dimensions
+(correctness/security/artifact_integrity/business_case), each backing its letter with a mechanical signal it ran +
+file/line evidence; the other five settled by direct mechanical checks the auditor ran (emoji-as-UI grep, YAML feed
+parse, app-target find, ios/live-eval required-check inspection, watermark/quota grep, perf-residual grep).
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-09 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (both iOS gaps unchanged) |
+| correctness_reliability | ✅ | A | = (credit atomicity still mock-only; 133/133 pass) |
+| security | ✅ | A | = (#403 closed the XFF-spoof half; in-memory buckets residual remains) |
+| design_taste | ✅ | A+ | = (emoji grep 0; iconography real; tokens mirrored) |
+| store_readiness | ✅ | C | = (unchanged 5 cycles; only a doc #426 moved) |
+| artifact_integrity | ✅ | **A** | **A+ → A ↓** (one fresh trivial doc-vs-doc nit from #410) |
+| business_case_strength | ✅ | A | = (numbers reconcile; credit lever half-shipped) |
+| tests_evals | ✅ | B | = (ios + live-eval still non-required; #289 open) |
+| performance | ⬜ | A | = (#419 closed residual b; no-LRU-test residual a remains) |
+
+**What changed (real, verified):**
+- **artifact_integrity A+ → A:** the sole grade change. **#410** (landed after the last grade) corrected the App Store
+  screenshot headline **"7-Pass" → "6-Pass"** to match the 6-pass ProcessingView UI users see, but the historical
+  narrative line `REMAINING_STEPS.md:112` still calls "the '7-pass' language is literally accurate." A genuine, if trivial
+  and defensible (7 = backend stage count vs 6 = UI-displayed passes), doc-vs-doc numeric inconsistency on the exact number
+  #410 corrected — a fresh finding where last cycle had none. A+ requires zero findings ⇒ A. Everything else (four feeds
+  parse, uniform pricing, honest "unlimited" qualifications, no overclaim) is exemplary.
+- **security (held A):** #403 CONFIRMED — rate-limit.ts:101-110 getClientIP now prefers Vercel's unspoofable x-real-ip,
+  else the RIGHTMOST XFF hop; the leftmost-spoof residual is closed. ONE compounding residual remains (down from two):
+  rate-limit.ts:28 in-memory per-instance buckets — defense-in-depth only (wallet guards are KV-atomic + fail-closed).
+- **correctness (held A):** #435 (SFX/TTS timeout inversion fix), #436 (velocity Infinity guard), #406 (audio-mux fetch
+  timeouts) all real at cause; 133/133 tests pass. Credit-grant atomicity still proven ONLY against a mock (unchanged residual).
+- **performance (held A):** #419 memoized ctx.measureText in the per-frame caption loop (kinetic-text.ts:30-44) — closed
+  residual (b). Residual (a) — no Swift ThumbnailService LRU-eviction ordering test (grep Tests/ = 0) — remains.
+- **store_readiness (held C, 5th cycle):** only a doc moved (#426 APP_TARGET_SETUP.md). No archivable app target
+  (Package.swift .library-only), no 6.9-inch screenshots, placeholder team/app IDs + empty products:[]. THE ship blocker.
+
+**Auditor reconciliation (recorded for transparency):**
+- artifact_integrity: subagent returned A (A+→A) on the REMAINING_STEPS.md:112 "7-pass" nit; I VERIFIED it independently
+  (git show d3069c0 confirms the 7→6 store change; the stale line is a historical narrative, but it does touch the exact
+  number #410 corrected) and ACCEPTED the downgrade rather than overriding up — holding A+ over a fresh, verified finding
+  would be the inflation the rubric warns against. A still clears the A-bar, so no ship-gate impact.
+
+**Ship gate NOT met:** needs A/A+ on every ship_critical dim; `store_readiness` C (5 cycles), `functional_reality` B,
+`tests_evals` B remain below the A bar.
+
+**Diff vs last grade (2026-07-09, efe1add):** `artifact_integrity` **A+→A** (one fresh trivial doc nit; NOT a product
+regression); no other letter moved; no product regressed. The three sub-A ship-critical dims are the same three on the
+same root blockers. Overall holds **B**, gate stays false.
+
+**Top gaps (ordered; updated on issues #174, #176, #177):**
+1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker; owner-only Mac work).
+2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota.
+3. `tests_evals` B — make the paid-eval suite enforceable (required / hard-fail when keyless, #289) and promote `ios` to a required check.
