@@ -1,6 +1,20 @@
+import { createHash, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { getGrowthMetrics } from "@/lib/growth/metrics";
+
+/**
+ * Constant-time bearer-token check (CWE-208). Comparing the raw secrets with `!==` (and a
+ * length pre-check) leaks the secret's length and short-circuits on the first differing byte,
+ * so the compare time correlates with how much of the token an attacker guessed. Hashing both
+ * sides to fixed-width SHA-256 digests removes the length leak AND satisfies timingSafeEqual's
+ * equal-length requirement, so the comparison is genuinely constant-time regardless of input.
+ */
+function bearerTokenMatches(provided: string, secret: string): boolean {
+  const a = createHash("sha256").update(provided).digest();
+  const b = createHash("sha256").update(secret).digest();
+  return timingSafeEqual(a, b);
+}
 
 // E6d — Analytics pull / internal growth read-API.
 // The daily Growth Agent calls this each run (Authorization: Bearer GROWTH_AGENT_SECRET) to
@@ -28,8 +42,7 @@ export async function GET(req: NextRequest) {
 
   const auth = req.headers.get("authorization") ?? "";
   const provided = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  // Constant-ish comparison (length check first avoids early-exit on length mismatch).
-  if (provided.length !== secret.length || provided !== secret) {
+  if (!bearerTokenMatches(provided, secret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

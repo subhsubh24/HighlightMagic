@@ -89,6 +89,14 @@ describe("E6d — /api/growth/stats read-API", () => {
     expect(res.status).toBe(401);
   });
 
+  it("returns 401 for a same-length wrong token (constant-time compare, no length short-circuit)", async () => {
+    vi.stubEnv("GROWTH_AGENT_SECRET", "s".repeat(32));
+    // Same length as the secret but different content — exercises the content-mismatch branch
+    // of the SHA-256 + timingSafeEqual comparison, not just the length-mismatch path above.
+    const res = await statsGET(statsReq(`Bearer ${"x".repeat(32)}`, "203.0.113.53"));
+    expect(res.status).toBe(401);
+  });
+
   it("returns aggregate metrics with a correct secret (no PII)", async () => {
     const secret = "s".repeat(32);
     vi.stubEnv("GROWTH_AGENT_SECRET", secret);
