@@ -132,6 +132,34 @@ describe("GET /api/proxy-video", () => {
     expect(pulls).toBeLessThan(15);
   });
 
+  it("502s and cancels the reader when the upstream stalls mid-stream (per-chunk stall guard)", async () => {
+    // The upstream sends headers + one chunk, then goes silent forever (never enqueues again,
+    // never closes). Without the per-chunk stall guard `reader.read()` on the 2nd iteration would
+    // block until the maxDuration kill; with it, the read is bounded and the route 502s + cancels
+    // the reader. Fake timers advance past STREAM_STALL_TIMEOUT_MS (20 s) without real waiting.
+    vi.useFakeTimers();
+    let cancelled = false;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3])); // one chunk, then hang (no close)
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200, headers: { "content-type": "video/mp4" } }),
+    );
+    const resPromise = GET(get("https://replicate.delivery/stall.mp4"));
+    // Let the first (successful) chunk read settle, then trip the stall timer on the 2nd read.
+    // 21 s > the route's 20 s STREAM_STALL_TIMEOUT_MS, so the guard fires.
+    await vi.advanceTimersByTimeAsync(21_000);
+    const res = await resPromise;
+    expect(res.status).toBe(502);
+    expect(cancelled).toBe(true); // the socket was released, not left hanging to maxDuration
+    vi.useRealTimers();
+  });
+
   it("502s when the upstream fetch throws", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
     const res = await GET(get("https://replicate.delivery/x.mp4"));
