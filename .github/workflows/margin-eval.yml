@@ -59,6 +59,15 @@ jobs:
       - name: Margin cost-per-outcome eval (real metered path -> emit to Margin, cost-capped)
         # Needs BOTH the Anthropic key (to make the calls) and the Margin ingest key (to emit).
         if: ${{ env.ANTHROPIC_API_KEY != '' && env.MARGIN_INGEST_KEY != '' }}
+        env:
+          # GitHub Actions sets CI=true for every step. Neutralize it for THIS step ONLY (and only
+          # behind the secrets guard above) so nothing can mistake this real, secrets-backed run for
+          # the hermetic keyless gate and quietly turn the meter into a no-op — which would leave the
+          # workflow GREEN but emitting nothing. Belt-and-suspenders: verified the client + runner do
+          # NOT gate on CI today (no `process.env.CI` read anywhere; a live local-ingest test emits
+          # under CI=true), so this guards only against a FUTURE CI-based no-op. CI stays true for
+          # every other step and job, so the keyless `web` gate remains hermetic.
+          CI: ""
         run: |
           echo "Refreshing highlightmagic-tape cost-per-outcome on Margin after an AI/eval change..."
           npx tsx src/evals/margin/margin-eval.eval.ts --max-usd 1.00 --run-id "ci-${GITHUB_SHA::7}"
