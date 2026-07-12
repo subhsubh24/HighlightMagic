@@ -9,11 +9,21 @@ struct PaywallView: View {
     @State private var isPurchasing = false
     @State private var purchaseError: String?
 
+    // Pro perks shown on the paywall. Every line must map to a capability that is GENUINELY gated on
+    // isProUser in code — the paywall is the pre-purchase surface, so an unbacked claim here is a
+    // false-advertising / App Store review risk. Verified gates:
+    //  • Unlimited monthly exports — free tier is 5/mo (Constants.freeExportLimit); 50/day fair-use
+    //    ceiling applies to all tiers.
+    //  • No watermark — ExportView forces the watermark on for non-Pro.
+    //  • iCloud sync across devices — UserAccountService.syncTo/FromiCloud() `guard isProUser`.
+    //  • Exclusive filters & effects — EditorView premiumEffectsButton routes non-Pro to the paywall.
+    // Deliberately NOT listed: "Premium music library" (music isn't enabled in v1 — no audio assets
+    // ship), and "AI detection" (the detection engine is identical for free and Pro; only the export
+    // quota differs — it is not a Pro differentiator).
     private let features = [
-        ("infinity", "Unlimited exports"),
+        ("infinity", "Unlimited monthly exports"),
         ("sparkles", "No watermark"),
-        ("music.note.list", "Premium music library"),
-        ("wand.and.stars", "Advanced AI detection"),
+        ("icloud", "iCloud sync across devices"),
         ("camera.filters", "Exclusive filters & effects")
     ]
 
