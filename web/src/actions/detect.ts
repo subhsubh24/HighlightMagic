@@ -1064,8 +1064,12 @@ async function analyzeMultiBatch(
     const scoreIn = data.usage?.input_tokens ?? 0;
     const scoreOut = data.usage?.output_tokens ?? 0;
     console.log(`[CostMeter] score: model=${CLAUDE_FRAME_SCORER}, in=${scoreIn}, out=${scoreOut}, est=$${estimateCostUSD(CLAUDE_FRAME_SCORER, scoreIn, scoreOut).toFixed(4)}`);
-    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
-    void getMeter()?.recordCall({
+    // Emit this call's economics to Margin (cost-per-outcome). Awaited so the
+    // emit reliably completes before a Vercel serverless instance freezes (a
+    // bare floating promise would be dropped mid-flight). Fail-safe + a no-op
+    // with no ingest key (the SDK makes no network call), so this is instant
+    // in every keyless environment.
+    await getMeter()?.recordCall({
       workflowId: "highlightmagic-tape",
       provider: "anthropic",
       model: CLAUDE_FRAME_SCORER,
@@ -2811,8 +2815,12 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       onPartial,
     ));
     console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
-    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
-    void getMeter()?.recordCall({
+    // Emit this call's economics to Margin (cost-per-outcome). Awaited so the
+    // emit reliably completes before a Vercel serverless instance freezes (a
+    // bare floating promise would be dropped mid-flight). Fail-safe + a no-op
+    // with no ingest key (the SDK makes no network call), so this is instant
+    // in every keyless environment.
+    await getMeter()?.recordCall({
       workflowId: "highlightmagic-tape",
       provider: "anthropic",
       model: CLAUDE_PLANNER,

@@ -288,8 +288,12 @@ If passed is true, fixes should be empty or omitted.`;
       `[CostMeter] api/validate: model=${CLAUDE_VALIDATOR}, in=${inputTokens}, out=${outputTokens}, ` +
         `est=$${estimateCostUSD(CLAUDE_VALIDATOR, inputTokens, outputTokens).toFixed(4)}`
     );
-    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
-    void getMeter()?.recordCall({
+    // Emit this call's economics to Margin (cost-per-outcome). Awaited so the
+    // emit reliably completes before this serverless function freezes (a bare
+    // floating promise would be dropped mid-flight). Fail-safe + a no-op with
+    // no ingest key (the SDK makes no network call), so it is instant in every
+    // keyless environment.
+    await getMeter()?.recordCall({
       workflowId: "highlightmagic-tape",
       provider: "anthropic",
       model: CLAUDE_VALIDATOR,
@@ -341,8 +345,11 @@ If passed is true, fixes should be empty or omitted.`;
     }
 
     // Emit the OUTCOME (a unit of productivity) to Margin — the pass/fail + a
-    // quality score derived from the issue count. Non-blocking, fail-safe.
-    void getMeter()?.recordOutcome({
+    // quality score derived from the issue count. Awaited (before the response
+    // is returned) so it reliably completes before this serverless function
+    // freezes; a bare floating promise would be dropped. Fail-safe + a no-op
+    // with no ingest key, so it is instant in every keyless environment.
+    await getMeter()?.recordOutcome({
       workflowId: "highlightmagic-tape",
       passed: !!result.passed,
       qualityScore: 1 - Math.min(result.issues?.length ?? 0, 5) / 5,

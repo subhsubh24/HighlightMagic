@@ -18,8 +18,13 @@ import { MarginMeter } from "margin-meter";
  *    (local, CI, PR previews).
  *  - Construction is wrapped in try/catch and the instance is cached; any error
  *    (or a missing SDK) yields `null` and callers simply skip metering.
- *  - Callers MUST fire-and-forget: `getMeter()?.recordCall({...})?.catch(() => {})`.
- *    Metering must never block, slow, or throw into a user-facing path.
+ *  - Callers MUST `await` the emit with a swallowing catch:
+ *    `await getMeter()?.recordCall({...})?.catch(() => {})`. Awaiting is required
+ *    on Vercel serverless — the function instance freezes the moment a response
+ *    is sent, so a bare floating promise is dropped before its fetch completes.
+ *    The `.catch(() => {})` keeps it fail-safe (metering must never throw into a
+ *    user-facing path), and with no ingest key the SDK makes no network call, so
+ *    the await is instant in every keyless environment.
  */
 let meter: MarginMeter | null | undefined;
 
