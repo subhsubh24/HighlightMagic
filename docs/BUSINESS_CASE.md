@@ -148,7 +148,7 @@ audio generation, and photo animation are all COGS lines the business pays.
 
 | Cost item | Model / service | Rough estimate | Notes |
 |---|---|---|---|
-| **iOS frame scoring** | `claude-haiku-4-5` (up to 120 frames, 480p JPEG) | **~$0.10–0.20** | Business-borne under business-paid. ~120 frames × ~1800 tokens/frame at $0.80/M input = ~$0.17. Verify with Vercel logs. |
+| **iOS frame scoring** | `claude-haiku-4-5` (up to 120 frames, 512px JPEG) | **~$0.10–0.20** | Business-borne under business-paid. ~120 frames × ~1800 tokens/frame at $0.80/M input = ~$0.17. Verify with Vercel logs. iOS bounds frames to 512×512 before upload (CloudScoringService.swift:63); the web frame path uses 480px (frame-extractor.ts) — matches the privacy policy's per-platform disclosure. |
 | **Tape planning** | `claude-sonnet-4-6` (B4, merged PR #45) | **~$0.07** | Switched from Opus (~$0.35) in PR #45 — 80% COGS cut. Dominant text-inference line. |
 | **Tape validation** | `claude-haiku-4-5` (2 passes max) | ~$0.01 | Not a concern |
 | **Music gen** | ElevenLabs music endpoint | ~$0.05–0.20 | Per clip; depends on duration + ElevenLabs plan |
