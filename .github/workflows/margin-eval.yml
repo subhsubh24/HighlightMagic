@@ -1,0 +1,72 @@
+name: margin-eval
+
+# CHANGE-TRIGGERED cost-per-outcome refresh for the `highlightmagic-tape` workflow.
+#
+# When a real change ships to the AI/eval code on `main`, this drives the representative input
+# matrix through the REAL metered path (scorer -> planner -> validator) and emits fresh
+# call + graded-outcome economics to Margin, so Margin's cost-per-outcome reflects the change.
+# See web/src/evals/margin/README.md.
+#
+# NOT a required check and NOT run on PRs: it spends real Anthropic tokens (bounded by
+# --max-usd). It runs only on push to `main` when the AI/eval code actually changed (paths
+# filter below — never on docs/bookkeeping), plus on-demand via workflow_dispatch.
+#
+# GUARD: inert until the owner sets the secrets. If ANTHROPIC_API_KEY or MARGIN_INGEST_KEY is
+# absent the eval step SKIPS cleanly and prints how to enable it — this workflow never reddens
+# the branch. (It also can't block anything: it runs post-merge on `main`, not as a PR check.)
+
+on:
+  workflow_dispatch: # manual / on-demand refresh
+  push:
+    branches: [main]
+    # Only when the AI/eval code that moves cost-per-outcome actually changed — NOT docs/bookkeeping.
+    paths:
+      - "web/src/actions/detect.ts"          # scorer + planner (metered Claude calls)
+      - "web/src/app/api/validate/**"         # validator (metered call + graded outcome)
+      - "web/src/lib/ai-models.ts"            # model ids + cost table
+      - "web/src/evals/margin/**"             # the input matrix, grader, and runner
+      - ".github/workflows/margin-eval.yml"   # this workflow itself
+
+permissions:
+  contents: read
+
+# Serialize runs so a burst of pushes can't double-spend; let an in-flight paid run finish.
+concurrency:
+  group: margin-eval
+  cancel-in-progress: false
+
+jobs:
+  margin-eval:
+    name: margin-eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      EVAL_MODE: "1"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MARGIN_INGEST_URL: ${{ secrets.MARGIN_INGEST_URL }}
+      MARGIN_INGEST_KEY: ${{ secrets.MARGIN_INGEST_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+
+      - name: Margin cost-per-outcome eval (real metered path -> emit to Margin, cost-capped)
+        # Needs BOTH the Anthropic key (to make the calls) and the Margin ingest key (to emit).
+        if: ${{ env.ANTHROPIC_API_KEY != '' && env.MARGIN_INGEST_KEY != '' }}
+        run: |
+          echo "Refreshing highlightmagic-tape cost-per-outcome on Margin after an AI/eval change..."
+          npx tsx src/evals/margin/margin-eval.eval.ts --max-usd 1.00 --run-id "ci-${GITHUB_SHA::7}"
+          echo "::notice::Margin cost-per-outcome refreshed for ${GITHUB_SHA::7} (sessionId=eval:ci-${GITHUB_SHA::7})."
+
+      - name: SKIPPED (secrets not set)
+        if: ${{ env.ANTHROPIC_API_KEY == '' || env.MARGIN_INGEST_KEY == '' }}
+        run: |
+          echo "::warning::margin-eval skipped — set the GitHub Actions secrets to enable the cost-per-outcome refresh."
+          echo "Required secrets: ANTHROPIC_API_KEY (funded, capped), MARGIN_INGEST_KEY, and MARGIN_INGEST_URL (the hosted Margin ingest base URL)."
+          echo "Until then this workflow is inert and always green."
