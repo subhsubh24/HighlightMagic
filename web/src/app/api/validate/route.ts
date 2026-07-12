@@ -1,4 +1,5 @@
 import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
+import { getMeter } from "@/lib/margin-meter-client";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
@@ -253,6 +254,7 @@ If passed is true, fixes should be empty or omitted.`;
 
     // Use streaming API so the connection stays alive during processing.
     // Non-streaming requests can time out when Haiku is slow (especially with vision).
+    const validateStartMs = Date.now();
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -286,6 +288,16 @@ If passed is true, fixes should be empty or omitted.`;
       `[CostMeter] api/validate: model=${CLAUDE_VALIDATOR}, in=${inputTokens}, out=${outputTokens}, ` +
         `est=$${estimateCostUSD(CLAUDE_VALIDATOR, inputTokens, outputTokens).toFixed(4)}`
     );
+    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
+    void getMeter()?.recordCall({
+      workflowId: "highlightmagic-tape",
+      provider: "anthropic",
+      model: CLAUDE_VALIDATOR,
+      inputTokens,
+      outputTokens,
+      latencyMs: Date.now() - validateStartMs,
+      status: "ok",
+    })?.catch(() => {});
 
     // Extract JSON from response
     const jsonStr = extractJSON(text);
@@ -327,6 +339,15 @@ If passed is true, fixes should be empty or omitted.`;
     if (regenCount > 3) {
       if (fixes.regenerateIntro) { delete fixes.regenerateIntro; regenCount--; }
     }
+
+    // Emit the OUTCOME (a unit of productivity) to Margin — the pass/fail + a
+    // quality score derived from the issue count. Non-blocking, fail-safe.
+    void getMeter()?.recordOutcome({
+      workflowId: "highlightmagic-tape",
+      passed: !!result.passed,
+      qualityScore: 1 - Math.min(result.issues?.length ?? 0, 5) / 5,
+      qualityMethod: "llm_judge",
+    })?.catch(() => {});
 
     return Response.json({
       passed: !!result.passed,
