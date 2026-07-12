@@ -45,6 +45,7 @@ export interface Meter {
 
 let meter: Meter | null | undefined;
 let sessionId: string | undefined;
+let workflowOverride: string | undefined;
 
 /**
  * Set (or clear) the session id stamped on every subsequent `recordCall`. Called
@@ -55,15 +56,32 @@ export function setMeterSessionId(id: string | undefined): void {
   sessionId = id;
 }
 
+/**
+ * Override the `workflowId` on every subsequent `recordCall` / `recordOutcome`. Called ONLY by the
+ * offline eval harness so a PER-OPERATION suite can re-tag the app's (hard-coded "highlightmagic-tape")
+ * emits under the supply-chain NODE it is isolating — e.g. "highlightmagic-scorer" — giving Margin
+ * genuine per-node economics. Production never calls it, so `workflowOverride` stays `undefined` and
+ * the app path emits byte-for-byte what it always did. Pass `undefined` to clear.
+ */
+export function setMeterWorkflow(id: string | undefined): void {
+  workflowOverride = id;
+}
+
 export function getMeter(): Meter | null {
   if (meter !== undefined) return meter;
   try {
     const base = new MarginMeter();
     meter = {
-      // Session id is read here, per-call, so it reflects the current value even if
-      // the singleton was constructed earlier. Production leaves it undefined.
-      recordCall: (input) => base.recordCall(sessionId ? { ...input, sessionId } : input),
-      recordOutcome: (input) => base.recordOutcome(input),
+      // sessionId + workflowOverride are read here, per-call, so they reflect the current values
+      // even if the singleton was constructed earlier. Production leaves both undefined.
+      recordCall: (input) =>
+        base.recordCall({
+          ...input,
+          ...(workflowOverride ? { workflowId: workflowOverride } : {}),
+          ...(sessionId ? { sessionId } : {}),
+        }),
+      recordOutcome: (input) =>
+        base.recordOutcome(workflowOverride ? { ...input, workflowId: workflowOverride } : input),
     };
   } catch {
     meter = null;
