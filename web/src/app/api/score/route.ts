@@ -47,7 +47,17 @@ export async function POST(req: Request) {
   if (!userId || typeof userId !== "string") {
     return Response.json({ error: "userId is required" }, { status: 400 });
   }
-  if (frames.length === 0 || !frames.every((f) => typeof f?.jpegBase64 === "string" && typeof f?.timeSec === "number")) {
+  if (frames.length === 0) {
+    return Response.json({ error: "frames must be a non-empty array of { timeSec, jpegBase64 }" }, { status: 400 });
+  }
+  // H2: bound the frame COUNT before the O(n) shape/size scans below, so a tampered client can't
+  // force a large validation sweep with 10k+ frames only to have them silently sliced to MAX_FRAMES.
+  // Mirrors the sibling /api/ios-score `> 1000` guard; legitimate batches (≤120 after the slice) are
+  // unaffected — anything between 121 and 1000 still validates and is capped at MAX_FRAMES as before.
+  if (frames.length > 1000) {
+    return Response.json({ error: "frames must be 1000 or fewer" }, { status: 400 });
+  }
+  if (!frames.every((f) => typeof f?.jpegBase64 === "string" && typeof f?.timeSec === "number")) {
     return Response.json({ error: "frames must be a non-empty array of { timeSec, jpegBase64 }" }, { status: 400 });
   }
   // H2: bound per-frame payload + the optional free-text prompt — both feed the vision model
