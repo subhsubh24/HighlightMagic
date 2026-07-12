@@ -4,6 +4,7 @@ import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
 import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER, estimateCostUSD } from "@/lib/ai-models";
+import { getMeter } from "@/lib/margin-meter-client";
 
 // ── Debug logging ──
 
@@ -1063,6 +1064,17 @@ async function analyzeMultiBatch(
     const scoreIn = data.usage?.input_tokens ?? 0;
     const scoreOut = data.usage?.output_tokens ?? 0;
     console.log(`[CostMeter] score: model=${CLAUDE_FRAME_SCORER}, in=${scoreIn}, out=${scoreOut}, est=$${estimateCostUSD(CLAUDE_FRAME_SCORER, scoreIn, scoreOut).toFixed(4)}`);
+    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
+    void getMeter()?.recordCall({
+      workflowId: "highlightmagic-tape",
+      provider: "anthropic",
+      model: CLAUDE_FRAME_SCORER,
+      inputTokens: scoreIn,
+      outputTokens: scoreOut,
+      cacheReadTokens: data.usage?.cache_read_input_tokens ?? 0,
+      latencyMs: Date.now() - batchStart,
+      status: "ok",
+    })?.catch(() => {});
 
     // Warn on truncated response — still attempt to parse what we got
     if (data.stop_reason === "max_tokens") {
@@ -2799,6 +2811,16 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       onPartial,
     ));
     console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
+    // Emit this call's economics to Margin (cost-per-outcome). Non-blocking, fail-safe.
+    void getMeter()?.recordCall({
+      workflowId: "highlightmagic-tape",
+      provider: "anthropic",
+      model: CLAUDE_PLANNER,
+      inputTokens: plannerIn,
+      outputTokens: plannerOut,
+      latencyMs: Date.now() - plannerStartMs,
+      status: "ok",
+    })?.catch(() => {});
 
     if (stopReason === "max_tokens") {
       console.warn("Planner: response was truncated (max_tokens reached) — JSON may be incomplete");
