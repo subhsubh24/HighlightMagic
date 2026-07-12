@@ -39,6 +39,18 @@ describe("/api/score", () => {
     expect((await POST(req({ userId: "u", frames: [{ timeSec: 1 }] }))).status).toBe(400);
   });
 
+  it("400s (before any paid call) on an oversized frame COUNT — H2 CPU-DoS backstop", async () => {
+    // A tampered client could send 10k+ well-shaped frames; without a count bound the route would
+    // run the O(n) shape + per-frame size scans over all of them before silently slicing to
+    // MAX_FRAMES=120. The count guard rejects early — mirrors /api/ios-score's `> 1000` bound.
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const tooMany = Array.from({ length: 1001 }, (_, i) => ({ timeSec: i, jpegBase64: "AAAA" }));
+    const res = await POST(req({ userId: "u", frames: tooMany }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/1000 or fewer/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("402s once the free monthly limit is reached (gate runs before any paid call)", async () => {
     const userId = "over-quota-user";
     for (let i = 0; i < FREE_EXPORT_LIMIT; i++) await consumeExport({ userId }); // default singleton store
