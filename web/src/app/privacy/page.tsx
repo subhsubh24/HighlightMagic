@@ -31,9 +31,10 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-2 pl-5 mt-2">
             <li>
               <strong className="text-white">Video frames (JPEG images)</strong> — sampled from
-              your video at approximately 1 frame per second, downscaled to 480 px. These are sent
-              to our server and then to <strong>Anthropic Claude</strong> for AI highlight
-              detection. Full video files are not uploaded.
+              your video at approximately 1 frame per second, downscaled to roughly 480&nbsp;px on
+              the web or 512&nbsp;px in the iOS app. These are sent to our server and then to{" "}
+              <strong>Anthropic Claude</strong> for AI highlight detection. Full video files are not
+              uploaded.
             </li>
           </ul>
           <p className="mt-2">
