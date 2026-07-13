@@ -347,3 +347,68 @@ same root blockers. Overall holds **B**, gate stays false.
 1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker; owner-only Mac work).
 2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota.
 3. `tests_evals` B — make the paid-eval suite enforceable (required / hard-fail when keyless, #289) and promote `ios` to a required check.
+
+---
+
+## 2026-07-13 — grade, commit a4863f5
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → build ok, **1110 tests passed (79 files)** (up from
+1070/76), **0 lint warnings**, coverage enforced & passing (stmts 92.71 / branch 84.04 / funcs 92.09 / lines 94.08;
+60/60/50/60 hard-fail floor via vitest.config.ts + the required `web` job). Latest `ci.yml` run on HEAD `a4863f5` = success
+(required checks web / web-lint / web-e2e / validate-capabilities / validate-gtm). Graded with **9 fresh, adversarial
+per-dimension subagents** (none wrote the code), each backing its letter with a mechanical signal it ACTUALLY RAN + file/line
+evidence (subagent test runs cited: security 90 passed / 6 files, correctness 215 passed / 14 files). 26 commits since the
+last grade (`8b0b04b`) — mostly within-grade hardening (#459/#441 security, #460/#458 correctness, #445 a11y, #453/#444/#450
+honesty) plus NEW Margin cost-per-outcome telemetry (#457-#467).
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-11 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (both iOS gaps unchanged) |
+| correctness_reliability | ✅ | A | = (credit atomicity still mock-only; 215/215 pass) |
+| security | ✅ | A | = (#459/#441 confirmed at cause; in-memory buckets residual remains) |
+| design_taste | ✅ | A+ | = (emoji-as-UI grep 0; iconography real; tokens mirrored) |
+| store_readiness | ✅ | C | = (7th cycle; only a doc #426 ever moved) |
+| artifact_integrity | ✅ | **A+** | **A → A+ ↑** (#442 reconciled the 7/6-pass nit; no fresh finding) |
+| business_case_strength | ✅ | A | = (numbers reconcile; credit lever half-shipped) |
+| tests_evals | ✅ | B | = (ios + live-eval still non-required; margin-eval advisory; #289 open) |
+| performance | ⬜ | A | = (#419 intact; new Margin telemetry no hot-path hazard; no-LRU-test residual remains) |
+
+**What changed (real, verified):**
+- **artifact_integrity A → A+:** the sole grade change and the ONLY movement this cycle. The single prior finding — the
+  `REMAINING_STEPS.md` 7-pass/6-pass doc-vs-doc nit that slipped it A+→A last cycle — is **reconciled by #442**
+  (REMAINING_STEPS.md:112-114 now reads "the store copy was later refined '7-Pass'→'6-Pass' in #410 to match the six
+  user-visible ProcessingView passes — the backend runs seven stages"). The fresh grader found **no replacement finding**:
+  5/5 dashboard YAML feeds parse (QUALITY_SCORECARD / GTM_SCORECARD / BUSINESS_CASE_SUMMARY / GROWTH_STATUS / LOOP_HEALTH),
+  pricing uniform $14.99/$149.99 zero drift, honesty claims match code (480px web / 512px iOS frame downscale;
+  DAILY_EXPORT_CAP=50 = "50/day fair-use"), no Margin-eval overclaim (margin-eval.yml self-labels "NOT a required check").
+- **security (held A):** #459 CONFIRMED (score/route.ts:57-59 bounds frames.length>1000 BEFORE the O(n) sweep, then MAX_FRAMES=120);
+  #441 CONFIRMED (growth/stats bearer compare now SHA-256 + crypto.timingSafeEqual, CWE-208 closed). In-memory per-instance
+  rate-limit buckets residual remains (defense-in-depth only; wallet guards KV-atomic + fail-closed).
+- **correctness (held A):** #460 redeemCreditPack fails CLOSED on a thrown ledger (real catch branch exercised, not tautology);
+  #458 all four Margin emit sites awaited so they survive the Vercel serverless freeze. 215/215 tests pass. Credit-grant
+  atomicity still proven ONLY against a mock (unchanged to-A+ residual).
+- **tests_evals (held B):** the NEW margin-eval.yml is advisory POST-MERGE cost telemetry — self-labeled not a PR gate, skips
+  green keyless, and never exits non-zero on low quality — so it does NOT close the "no real AI round-trip gates a merge"
+  blocker. live-eval still non-required + keyless-green (#289); `ios` still non-required (ci.yml:125).
+- **store_readiness (held C, 7th cycle):** no archivable app target (Package.swift .library-only), no 6.9-inch screenshots,
+  placeholder team/app IDs + empty products:[]. THE ship blocker. Only a doc (#426) has ever moved.
+
+**Auditor reconciliation (recorded for transparency):**
+- artifact_integrity: subagent returned A+ (A→A+) on the verified #442 reconcile + a zero-findings sweep. I VERIFIED the
+  reconcile independently (REMAINING_STEPS.md:112-114) and confirmed the grader's YAML/pricing/honesty checks, then ACCEPTED
+  the restore. Restoring A+ on a genuinely zero-findings state is the rubric working, not inflation — last cycle's downgrade
+  was on a fresh finding, and that finding is now closed with no replacement. No ship-gate impact (already ship-critical A+).
+
+**Ship gate NOT met:** needs A/A+ on every ship_critical dim; `store_readiness` C (7 cycles), `functional_reality` B,
+`tests_evals` B remain below the A bar.
+
+**Diff vs last grade (2026-07-11, 8b0b04b):** `artifact_integrity` **A→A+** (verified nit reconcile, no replacement finding);
+no other letter moved; no product regressed. The three sub-A ship-critical dims are the SAME three on the SAME root blockers.
+Overall holds **B**, gate stays false.
+
+**Top gaps (ordered; tracked on open issues #174, #176, #177):**
+1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker; owner-only Mac work). #174 / #427.
+2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota. #176.
+3. `tests_evals` B — make a real AI round-trip eval required / hard-fail when keyless (#289) and promote `ios` to a required check. #177.
