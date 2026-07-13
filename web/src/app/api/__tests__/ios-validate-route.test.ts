@@ -6,6 +6,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { POST } from "@/app/api/ios-validate/route";
 import { _resetBuckets, PAID_RATE_LIMIT } from "@/lib/rate-limit";
+import { consumeExport } from "@/lib/entitlement";
+import { FREE_EXPORT_LIMIT } from "@/lib/constants";
 
 function req(body: unknown, ip = "1.2.3.4"): Request {
   return new Request("http://localhost/api/ios-validate", {
@@ -92,6 +94,24 @@ describe("POST /api/ios-validate", () => {
       new Response(JSON.stringify({ error: "overloaded" }), { status: 529 })
     );
     const res = await POST(req({ userId: "u", clips: [clip] }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.passed).toBe(true);
+  });
+
+  it("does NOT re-gate the monthly export quota — a free user at their limit still validates (no 402)", async () => {
+    // Regression guard for the sub-step contract (route docstring + this file's header): the monthly
+    // quota is consumed once at /api/ios-score. This route must NOT re-check it — doing so 402'd the
+    // LAST allowed free export of the month (score consumes export N, bringing usage to the limit, then
+    // the QA sub-step of that same already-paid export saw used==limit and rejected it). Exhaust the
+    // quota, then assert the validation pass still succeeds. If a checkExportAllowed()/402 gate is ever
+    // re-introduced, this flips to a 402 and fails loud.
+    const userId = "ios-validate-overquota";
+    for (let i = 0; i < FREE_EXPORT_LIMIT; i++) await consumeExport({ userId });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(haikuOk), { status: 200 })
+    );
+    const res = await POST(req({ userId, clips: [clip], contentSummary: "sports" }, "198.51.100.7"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.passed).toBe(true);
