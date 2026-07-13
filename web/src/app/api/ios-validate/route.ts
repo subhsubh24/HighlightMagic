@@ -1,5 +1,4 @@
 import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
-import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
@@ -136,10 +135,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { userId, signedTransaction, clips, contentSummary, musicPrompt, sfx, voiceover, intro, outro, clipFrames } =
+  const { userId, clips, contentSummary, musicPrompt, sfx, voiceover, intro, outro, clipFrames } =
     body as {
       userId: unknown;
-      signedTransaction?: unknown;
       clips: unknown;
       contentSummary: unknown;
       musicPrompt?: string;
@@ -154,16 +152,13 @@ export async function POST(req: Request) {
     return Response.json({ error: "userId is required" }, { status: 400 });
   }
 
-  const decision = await checkExportAllowed({
-    userId,
-    signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
-  });
-  if (!decision.allowed) {
-    return Response.json(
-      { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
-      { status: 402 },
-    );
-  }
+  // NO monthly-quota gate here (by design — see the route docstring): validation is a sub-step of
+  // an export whose monthly quota was already consumed at /api/ios-score. Re-checking checkExportAllowed()
+  // here 402'd the LAST allowed free export of the month — score consumes the 5th, bringing usage to the
+  // limit, then this sub-step saw used==limit and rejected the QA pass of an already-paid export. The
+  // wallet backstop for this paid Haiku call is the per-user daily generation ceiling (enforced below),
+  // exactly as on the sibling sub-step routes (sfx/voiceover/intro/outro/…), which likewise do not
+  // re-gate the monthly quota.
 
   if (!Array.isArray(clips) || clips.length === 0) {
     return Response.json({ error: "clips must be a non-empty array" }, { status: 400 });
