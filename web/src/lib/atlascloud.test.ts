@@ -125,6 +125,43 @@ describe("Atlas Cloud API", () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
       vi.useRealTimers();
     });
+
+    it("retries a transient 5xx submit response (502/503/504) instead of aborting the export", async () => {
+      vi.useFakeTimers();
+      // A gateway 5xx on submit is transient like a thrown fetch — submit gates EVERY paid export,
+      // so a 502/503/504 blip must retry, not abort. Distinct branch from the thrown/parse retries
+      // above (this one hits the `!response.ok` path and reads response.text()). Guards atlascloud.ts's
+      // `[502,503,504].includes(response.status) && attempt < MAX_RETRIES → continue`.
+      mockFetch
+        .mockResolvedValueOnce({ ok: false, status: 503, text: () => Promise.resolve("upstream gateway error") })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: { id: "pred_5xx" } }) });
+
+      const { submitTask, MODELS } = await import("./atlascloud");
+      const p = submitTask(MODELS.KLING_I2V, { image: "test" });
+      await vi.runAllTimersAsync();
+      const result = await p;
+
+      expect(result).toBe("pred_5xx");
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it("does NOT retry a non-transient 4xx submit response — fails fast without burning retries", async () => {
+      vi.useFakeTimers();
+      // The retry is gateway-transient-ONLY: a 400/401/403/429 is a real rejection (bad payload,
+      // auth, quota) — retrying wastes the serverless budget and spams the provider. Asserts the
+      // 5xx allow-list excludes 4xx (the false side of the `[502,503,504].includes` gate).
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 400, text: () => Promise.resolve("invalid request") });
+
+      const { submitTask, MODELS } = await import("./atlascloud");
+      const p = submitTask(MODELS.KLING_I2V, { image: "test" });
+      const rejection = expect(p).rejects.toThrow("Atlas Cloud API error (400)");
+      await vi.runAllTimersAsync();
+      await rejection;
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      vi.useRealTimers();
+    });
   });
 
   describe("submitAttemptTimeoutMs (B6 budget invariant)", () => {
