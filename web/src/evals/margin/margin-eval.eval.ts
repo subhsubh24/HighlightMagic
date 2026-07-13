@@ -29,7 +29,8 @@
  * FLAGS
  *   --suite <s>          scorer|planner|validator|tape|all  (default tape)
  *   --dry-run            no API calls; print the selected cases + a grader demonstration
- *   --max-usd <n>        stop before ESTIMATED cumulative cost exceeds this (default 1.00; shared)
+ *   --max-usd <n>        PER-SUITE cap: stop each suite before its ESTIMATED cost exceeds this
+ *                        (default 1.00). --suite all bounds total spend at suites × --max-usd.
  *   --limit <n>          cap the number of cases per suite
  *   --content <type>     tape/planner only: sports|cooking|gaming|travel|music
  *   --difficulty <d>     tape/planner only: easy|medium|hard
@@ -405,7 +406,7 @@ async function main(): Promise<void> {
   console.log("HighlightMagic — Margin cost-per-outcome eval (per-operation supply chain)");
   console.log("=========================================================================");
   console.log(`   run-id:   ${args.runId}    suite(s): ${suites.join(", ")}    provider: anthropic`);
-  console.log(`   max-usd:  $${args.maxUsd.toFixed(2)} (ESTIMATED shared cap; real cost is metered)`);
+  console.log(`   max-usd:  $${args.maxUsd.toFixed(2)} PER-SUITE (ESTIMATED cap; real cost is metered)`);
   console.log(`   mode:     ${args.dryRun ? "DRY RUN — no API calls" : "REAL — metered emit to Margin"}`);
 
   if (args.dryRun) return dryRun(args, suites);
@@ -420,8 +421,12 @@ async function main(): Promise<void> {
     console.warn("\n[eval] WARNING: MARGIN_INGEST_KEY is unset — real calls run but telemetry will NOT reach Margin (no-op).");
   }
 
-  const budget = new Budget(args.maxUsd);
+  // Each suite gets its OWN --max-usd budget (a PER-SUITE cap), so running --suite all still
+  // exercises + EMITS every supply-chain node (scorer/planner/validator/tape) instead of a shared
+  // budget starving the later suites. Total spend is bounded by suites.length × --max-usd.
+  let totalSpent = 0;
   for (const suite of suites) {
+    const budget = new Budget(args.maxUsd);
     try {
       if (suite === "scorer") await runScorerSuite(args, budget);
       else if (suite === "planner") await runPlannerSuite(args, budget);
@@ -430,10 +435,11 @@ async function main(): Promise<void> {
     } catch (err) {
       console.error(`[eval] suite ${suite} errored (continuing):`, err instanceof Error ? err.message : String(err));
     }
+    totalSpent += budget.spent;
   }
 
   console.log("\n══════════════════════════════════════════════");
-  console.log(`RUN COMPLETE — est. spend ~$${budget.spent.toFixed(3)} of $${args.maxUsd.toFixed(2)} cap.`);
+  console.log(`RUN COMPLETE — est. spend ~$${totalSpent.toFixed(3)} (per-suite cap $${args.maxUsd.toFixed(2)} × ${suites.length} suite(s)).`);
   console.log("Per-operation economics are on Margin under the node workflow ids + sessionId=eval:<op>:" + args.runId + ".");
   console.log("Note: non-trivial FAIL/low-quality counts are expected — the suites include edge/fuzz + weak cases.");
   console.log("══════════════════════════════════════════════");
