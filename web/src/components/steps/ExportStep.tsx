@@ -1073,7 +1073,7 @@ export default function ExportStep() {
               {FREE_EXPORT_LIMIT}/{FREE_EXPORT_LIMIT} exports used
             </p>
             <h3 className="text-2xl font-bold leading-tight">
-              <span className="gradient-text">No monthly cap.</span>
+              <span className="gradient-text">Keep the reels coming.</span>
             </h3>
             <p className="mt-2 text-[var(--text-secondary)] text-[15px] leading-relaxed">
               You&apos;ve hit the free tier limit. Upgrade to Pro and keep creating.
