@@ -12,8 +12,9 @@ struct PaywallView: View {
     // Pro perks shown on the paywall. Every line must map to a capability that is GENUINELY gated on
     // isProUser in code — the paywall is the pre-purchase surface, so an unbacked claim here is a
     // false-advertising / App Store review risk. Verified gates:
-    //  • Unlimited monthly exports — free tier is 5/mo (Constants.freeExportLimit); 50/day fair-use
-    //    ceiling applies to all tiers.
+    //  • No monthly export cap — free tier is 5/mo (Constants.freeExportLimit); 50/day fair-use
+    //    ceiling applies to all tiers. (Never the bare word "unlimited": a hard 50/day cap makes it
+    //    an FTC / Guideline 2.3.1 overclaim — see the project honesty standard.)
     //  • No watermark — ExportView forces the watermark on for non-Pro.
     //  • iCloud sync across devices — UserAccountService.syncTo/FromiCloud() `guard isProUser`.
     //  • Exclusive filters & effects — EditorView premiumEffectsButton routes non-Pro to the paywall.
@@ -21,7 +22,7 @@ struct PaywallView: View {
     // ship), and "AI detection" (the detection engine is identical for free and Pro; only the export
     // quota differs — it is not a Pro differentiator).
     private let features = [
-        ("infinity", "Unlimited monthly exports"),
+        ("infinity", "No monthly export cap"),
         ("sparkles", "No watermark"),
         ("icloud", "iCloud sync across devices"),
         ("camera.filters", "Exclusive filters & effects")
@@ -60,7 +61,7 @@ struct PaywallView: View {
                             .font(Theme.largeTitle)
                             .foregroundStyle(.white)
 
-                        Text("Create unlimited highlights\nwith premium features")
+                        Text("Create share-ready highlights\nwith premium features")
                             .font(Theme.body)
                             .foregroundStyle(Theme.textSecondary)
                             .multilineTextAlignment(.center)
