@@ -17,6 +17,12 @@ name: margin-eval
 
 on:
   workflow_dispatch: # manual / on-demand refresh
+    inputs:
+      suite:
+        description: "Which supply-chain node(s) to refresh"
+        type: choice
+        default: all
+        options: [all, tape, scorer, planner, validator]
   push:
     branches: [main]
     # Only when the AI/eval code that moves cost-per-outcome actually changed — NOT docs/bookkeeping.
@@ -68,10 +74,16 @@ jobs:
           # under CI=true), so this guards only against a FUTURE CI-based no-op. CI stays true for
           # every other step and job, so the keyless `web` gate remains hermetic.
           CI: ""
+          # Which node(s): the dispatch input when run manually, else ALL nodes on push. Running ALL
+          # emits every supply-chain node — highlightmagic-tape AND highlightmagic-scorer/planner/
+          # validator — each under its own workflow id (+ sessionId=eval:<op>:<runid>).
+          SUITE: ${{ inputs.suite || 'all' }}
         run: |
-          echo "Refreshing highlightmagic-tape cost-per-outcome on Margin after an AI/eval change..."
-          npx tsx src/evals/margin/margin-eval.eval.ts --max-usd 1.00 --run-id "ci-${GITHUB_SHA::7}"
-          echo "::notice::Margin cost-per-outcome refreshed for ${GITHUB_SHA::7} (sessionId=eval:ci-${GITHUB_SHA::7})."
+          echo "Refreshing HighlightMagic cost-per-outcome on Margin (suite=$SUITE) after an AI/eval change..."
+          # --max-usd is a PER-SUITE cap, so 'all' stays bounded at 4 x $0.25 = ~$1.00 while still
+          # exercising + emitting every node, instead of one shared budget starving the later suites.
+          npx tsx src/evals/margin/margin-eval.eval.ts --suite "$SUITE" --max-usd 0.25 --run-id "ci-${GITHUB_SHA::7}"
+          echo "::notice::Margin cost-per-outcome refreshed for ${GITHUB_SHA::7} (suite=$SUITE, sessionId=eval:[<op>:]ci-${GITHUB_SHA::7})."
 
       - name: SKIPPED (secrets not set)
         if: ${{ env.ANTHROPIC_API_KEY == '' || env.MARGIN_INGEST_KEY == '' }}
