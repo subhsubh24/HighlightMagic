@@ -152,13 +152,13 @@ export async function POST(req: Request) {
     return Response.json({ error: "userId is required" }, { status: 400 });
   }
 
-  // NO monthly-quota gate here (by design — see the route docstring): validation is a sub-step of
-  // an export whose monthly quota was already consumed at /api/ios-score. Re-checking checkExportAllowed()
-  // here 402'd the LAST allowed free export of the month — score consumes the 5th, bringing usage to the
-  // limit, then this sub-step saw used==limit and rejected the QA pass of an already-paid export. The
-  // wallet backstop for this paid Haiku call is the per-user daily generation ceiling (enforced below),
-  // exactly as on the sibling sub-step routes (sfx/voiceover/intro/outro/…), which likewise do not
-  // re-gate the monthly quota.
+  // NO monthly-quota gate here (by design — see the route docstring + this file's test header):
+  // validation is a QA sub-step of an export whose monthly quota was already consumed at
+  // /api/ios-score. Re-checking checkExportAllowed() here 402'd the LAST allowed free export of the
+  // month — score consumes the 5th, bringing usage to the limit, then this sub-step saw used==limit
+  // and rejected the QA pass of an already-paid export. The wallet backstop for this paid Haiku call
+  // is the per-user daily generation ceiling (enforceGenerationCeiling, KV-atomic + fail-closed),
+  // enforced below.
 
   if (!Array.isArray(clips) || clips.length === 0) {
     return Response.json({ error: "clips must be a non-empty array" }, { status: 400 });
