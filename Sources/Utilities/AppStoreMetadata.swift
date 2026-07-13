@@ -40,7 +40,6 @@ enum AppStoreMetadata {
     HIGHLIGHT MAGIC PRO ($14.99/mo or $149.99/yr — save 17%):
     • Unlimited monthly exports (a 50-per-day fair-use ceiling applies to all tiers)
     • No watermark
-    • Advanced multi-pass AI detection
     • Premium filters & effects
     • iCloud project sync across devices
     """
