@@ -5,7 +5,7 @@ Build + stage only — owner wires to the email provider (Resend / SendGrid / Ma
 See `docs/growth/CONNECT.md` for the provider connection steps.
 
 **Voice**: confident, direct, peer-to-creator. Lead with the outcome. Short sentences. No hype.  
-**Product facts** (never contradict): 5 free exports/month with watermark; Pro at $14.99/month or $149.99/year — no monthly export cap (a 50/day fair-use ceiling applies to all tiers), no watermark. Never use the bare word "unlimited" — always "no monthly export cap".  
+**Product facts** (never contradict): 5 free exports/month with watermark; Pro at $14.99/month or $149.99/year — no monthly export cap (a 50/day fair-use ceiling applies to all tiers), no watermark. Never use the bare word "unlimited" — always "no monthly export cap". **No music/SFX in v1** — the in-app music picker ships but is non-functional (no bundled audio assets; the mix path is unreachable, per REMAINING_STEPS 0d.3 and the #461/#470 honesty fixes that removed the same claim from the paywall + App Store listing). Never claim music, sound effects, or audio generation until real tracks are bundled or AI music ships backend-routed.  
 **Social proof**: never invented. Leave blank until real examples exist.
 
 ---
@@ -66,7 +66,7 @@ You don't touch the timeline.
 
 **Here's what you get on the free plan:**
 - Automatic highlight selection from hours of footage
-- AI-synced music, sound effects, and captions
+- Kinetic captions and smooth transitions, auto-applied
 - Export in 9:16 for TikTok, Reels, and Shorts
 - 5 exports per month
 
@@ -98,7 +98,7 @@ As a waitlist member, you're first. When the App Store listing is live, you'll g
 **What you're getting:**
 - 5 free exports per month — no card required
 - AI highlight detection from your raw footage
-- Music, captions, and sound effects — automatically
+- Captions and smooth transitions — automatically
 - Export ready to post to TikTok, Reels, or Shorts
 
 Pro is $14.99/month (no monthly export cap, no watermark). Start free — no commitment.
