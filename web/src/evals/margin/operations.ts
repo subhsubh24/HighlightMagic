@@ -20,15 +20,14 @@
  */
 
 import type { EvalFrameScore } from "./input-matrix";
+import { HM_OPERATION } from "../../lib/margin-meter-client";
 
 export type OperationId = "scorer" | "planner" | "validator";
 
-/** Per-operation workflow id — the supply-chain NODE identity in Margin. */
-export const OP_WORKFLOW: Record<OperationId, string> = {
-  scorer: "highlightmagic-scorer",
-  planner: "highlightmagic-planner",
-  validator: "highlightmagic-validator",
-};
+/** Per-operation workflow id — the supply-chain NODE identity in Margin. Sourced
+ *  from the production meter client (web/src/lib/margin-meter-client.ts) so eval
+ *  and the real app path emit under byte-identical node ids (no drift). */
+export const OP_WORKFLOW: Record<OperationId, string> = HM_OPERATION;
 
 /** The Anthropic model each operation uses (from web/src/lib/ai-models.ts). */
 export const OP_MODEL: Record<OperationId, string> = {

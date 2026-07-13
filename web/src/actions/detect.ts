@@ -4,7 +4,7 @@ import type { SourceFileInfo } from "@/lib/frame-batching";
 import { getEffectiveDuration } from "@/lib/velocity";
 import type { VelocityPreset } from "@/lib/velocity";
 import { CLAUDE_FRAME_SCORER, CLAUDE_PLANNER, estimateCostUSD } from "@/lib/ai-models";
-import { getMeter } from "@/lib/margin-meter-client";
+import { getMeter, HM_OPERATION } from "@/lib/margin-meter-client";
 
 // ── Debug logging ──
 
@@ -580,14 +580,18 @@ function buildSourceFilesMap(frames: MultiFrameInput[]): Map<string, { name: str
 export async function scoreSingleBatch(
   batch: MultiFrameInput[],
   sourceFileList: SourceFileInfo[],
-  templateName?: string
+  templateName?: string,
+  // Margin journey session id — links this scorer call to its planner/validator
+  // siblings in one tape run. Optional + telemetry-only: omitting it changes
+  // nothing about scoring behaviour.
+  sessionId?: string
 ): Promise<ScoredFrame[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured. AI analysis requires a valid API key.");
   }
   const sourceFiles = new Map(sourceFileList.map((s) => [s.id, { name: s.name, type: s.type, frameCount: s.frameCount }]));
-  return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName);
+  return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, 0, sessionId);
 }
 
 
@@ -661,7 +665,11 @@ export async function planFromScores(
   onPhase?: (phase: "thinking" | "generating") => void,
   photoAnimations?: PhotoAnimationInfo[],
   onPartial?: OnPartialField,
-  aiDecideAnimations?: boolean
+  aiDecideAnimations?: boolean,
+  // Margin journey session id — links this planner call to its scorer/validator
+  // siblings in one tape run. Optional + telemetry-only: omitting it changes
+  // nothing about planning behaviour.
+  sessionId?: string
 ): Promise<DetectionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -675,7 +683,7 @@ export async function planFromScores(
 
   // Single attempt — Opus with effort:max can take 2-3+ minutes.
   // Retrying would compound the wait and cause client-side "Failed to fetch" timeouts.
-  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures, aiDecideAnimations);
+  const result = await planHighlightTape(apiKey, normalizedScores, frames, sourceFiles, templateName, userFeedback, creativeDirection, onPhase, photoAnimations, onPartial, disabledFeatures, aiDecideAnimations, sessionId);
 
   if (result.clips.length === 0) {
     throw new Error(
@@ -1005,7 +1013,8 @@ async function analyzeMultiBatch(
   batch: MultiFrameInput[],
   sourceFiles: Map<string, { name: string; type: "video" | "photo"; frameCount: number }>,
   templateName?: string,
-  attempt = 0
+  attempt = 0,
+  sessionId?: string
 ): Promise<ScoredFrame[]> {
   const batchStart = Date.now();
   const batchLabel = `Scoring batch (${batch.length} frames, attempt ${attempt + 1}/${MAX_BATCH_RETRIES + 1})`;
@@ -1055,7 +1064,7 @@ async function analyzeMultiBatch(
         const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
         console.warn(`${batchLabel}: retryable error, batch retry in ${waitMs}ms`);
         await new Promise((r) => setTimeout(r, waitMs));
-        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1, sessionId);
       }
       throw new Error(`Scoring failed (HTTP ${response.status}): ${errorBody.slice(0, 200)}`);
     }
@@ -1070,7 +1079,10 @@ async function analyzeMultiBatch(
     // with no ingest key (the SDK makes no network call), so this is instant
     // in every keyless environment.
     await getMeter()?.recordCall({
-      workflowId: "highlightmagic-tape",
+      // Own supply-chain node (the scorer step), linked to its planner/validator
+      // siblings by the shared per-run sessionId. isRetry marks a re-attempted
+      // batch so each retry shows as its own call in the chain.
+      workflowId: HM_OPERATION.scorer,
       provider: "anthropic",
       model: CLAUDE_FRAME_SCORER,
       inputTokens: scoreIn,
@@ -1078,6 +1090,8 @@ async function analyzeMultiBatch(
       cacheReadTokens: data.usage?.cache_read_input_tokens ?? 0,
       latencyMs: Date.now() - batchStart,
       status: "ok",
+      isRetry: attempt > 0,
+      ...(sessionId ? { sessionId } : {}),
     })?.catch(() => {});
 
     // Warn on truncated response — still attempt to parse what we got
@@ -1097,7 +1111,7 @@ async function analyzeMultiBatch(
       console.warn(`Scoring: no text block in response (attempt ${attempt + 1}):`, preview);
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
-        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1, sessionId);
       }
       throw new Error(`Scoring returned no text content after ${attempt + 1} attempts`);
     }
@@ -1108,7 +1122,7 @@ async function analyzeMultiBatch(
       console.warn(`Scoring: unparsable response (attempt ${attempt + 1}):`, text.slice(0, 300));
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
-        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1, sessionId);
       }
       throw new Error(`Scoring returned unparsable response after ${attempt + 1} attempts`);
     }
@@ -1125,7 +1139,7 @@ async function analyzeMultiBatch(
       console.warn(`Scoring: JSON parsed to non-array (attempt ${attempt + 1}):`, typeof parsed);
       if (attempt < MAX_BATCH_RETRIES) {
         await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt)));
-        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+        return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1, sessionId);
       }
       throw new Error(`Scoring returned non-array JSON after ${attempt + 1} attempts`);
     }
@@ -1163,7 +1177,7 @@ async function analyzeMultiBatch(
       const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
       console.warn(`${batchLabel}: batch-level retry in ${waitMs}ms`);
       await new Promise((r) => setTimeout(r, waitMs));
-      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1);
+      return analyzeMultiBatch(apiKey, batch, sourceFiles, templateName, attempt + 1, sessionId);
     }
     throw new Error(`Scoring batch failed after ${attempt + 1} attempts: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -1345,7 +1359,8 @@ async function planHighlightTape(
   photoAnimations?: PhotoAnimationInfo[],
   onPartial?: OnPartialField,
   disabledFeatures?: DisabledFeatures,
-  aiDecideAnimations?: boolean
+  aiDecideAnimations?: boolean,
+  sessionId?: string
 ): Promise<{ clips: DetectedClip[]; detectedTheme: DetectedTheme; contentSummary: string; productionPlan?: ProductionPlan }> {
   // Compute approximate duration for each source from max timestamp + sample interval
   const sourceDurations = new Map<string, number>();
@@ -2821,13 +2836,18 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     // with no ingest key (the SDK makes no network call), so this is instant
     // in every keyless environment.
     await getMeter()?.recordCall({
-      workflowId: "highlightmagic-tape",
+      // Own supply-chain node (the planner step), linked to its scorer/validator
+      // siblings by the shared per-run sessionId. isRetry marks a re-attempted
+      // stream (empty/incomplete 200) so each retry shows as its own call.
+      workflowId: HM_OPERATION.planner,
       provider: "anthropic",
       model: CLAUDE_PLANNER,
       inputTokens: plannerIn,
       outputTokens: plannerOut,
       latencyMs: Date.now() - plannerStartMs,
       status: "ok",
+      isRetry: attempt > 0,
+      ...(sessionId ? { sessionId } : {}),
     })?.catch(() => {});
 
     if (stopReason === "max_tokens") {

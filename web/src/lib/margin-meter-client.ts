@@ -37,6 +37,25 @@ import type { RecordCallInput, RecordOutcomeInput, IngestResult } from "margin-m
  * the validation-manifest gate is unaffected.
  */
 
+/**
+ * Per-operation Margin workflow ids — the supply-chain NODE identity of each LLM
+ * step in the `highlightmagic-tape` journey. Emitting each step under its OWN
+ * `workflowId` (instead of collapsing all three under one "highlightmagic-tape"
+ * node) is what makes Margin's supply-chain graph show the REAL multi-node chain:
+ *
+ *     scorer (Haiku vision) → planner (Sonnet) → validator (Haiku)
+ *
+ * The three nodes are linked into a single journey run by a shared `sessionId`
+ * (generated once per run on the client and threaded into each metered call).
+ * The offline eval harness (web/src/evals/margin/operations.ts) re-uses these
+ * exact ids, so eval and production emit under the same nodes.
+ */
+export const HM_OPERATION = {
+  scorer: "highlightmagic-scorer",
+  planner: "highlightmagic-planner",
+  validator: "highlightmagic-validator",
+} as const;
+
 /** The two-method surface the app call sites use (a subset of `MarginMeter`). */
 export interface Meter {
   recordCall(input: RecordCallInput): Promise<IngestResult>;

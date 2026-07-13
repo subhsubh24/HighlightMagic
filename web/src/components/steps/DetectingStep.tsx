@@ -130,7 +130,10 @@ async function callPlannerSSE(
   signal?: AbortSignal,
   onPartial?: (field: string, value: unknown) => void,
   disabledFeatures?: DisabledFeatures,
-  aiDecideAnimations?: boolean
+  aiDecideAnimations?: boolean,
+  // Margin journey session id — links the planner call to its scorer/validator
+  // siblings in one tape run (telemetry-only).
+  sessionId?: string
 ): Promise<DetectionResult> {
   const payloadSize = JSON.stringify({ frames, scores }).length;
   console.log(`[Planner SSE] Sending request — ${frames.length} frames, ${(scores as unknown[]).length} scores, payload ~${(payloadSize / 1024).toFixed(0)}KB`);
@@ -138,7 +141,7 @@ async function callPlannerSSE(
   const response = await fetch("/api/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations }),
+    body: JSON.stringify({ frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations, sessionId }),
     signal,
   });
   console.log(`[Planner SSE] Response received — HTTP ${response.status} in ${((Date.now() - fetchStart) / 1000).toFixed(1)}s`);
@@ -314,6 +317,11 @@ export default function DetectingStep() {
     earlyMusicPromiseRef.current = null;
     earlySfxStartedRef.current = false;
     let abort = abortRef.current;
+
+    // Margin journey session id — one per tape run, generated once here and threaded
+    // into every metered LLM step (scorer → planner → validator) so Margin links
+    // them into a single supply-chain chain. Telemetry-only: never affects behaviour.
+    const journeySessionId = `hm-tape:${uuid()}`;
 
     // ── Early generator start from streaming partial fields (Arch #4) ──
     // Start music/SFX as soon as the planner streams the relevant field,
@@ -524,7 +532,8 @@ export default function DetectingStep() {
           abort.signal,
           handlePartialField,
           { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
-          state.aiDecideAnimations || undefined
+          state.aiDecideAnimations || undefined,
+          journeySessionId
         );
 
         clearInterval(plannerTimer);
@@ -581,7 +590,8 @@ export default function DetectingStep() {
             const scores = await scoreSingleBatch(
               batch,
               sourceFileList,
-              state.selectedTemplate?.name
+              state.selectedTemplate?.name,
+              journeySessionId
             );
             completedBatches++;
             debugLog(`[Scoring] Batch ${w + i + 1}/${batches.length} done — ${scores.length} scores (${((Date.now() - waveStart) / 1000).toFixed(1)}s)`);
@@ -697,7 +707,8 @@ export default function DetectingStep() {
           abort.signal,
           handlePartialField,
           { music: !state.aiMusicEnabled, sfx: !state.sfxEnabled, introOutro: !state.introOutroEnabled },
-          state.aiDecideAnimations || undefined
+          state.aiDecideAnimations || undefined,
+          journeySessionId
         );
         console.log(`[Detection] Planner complete — ${result.clips.length} clips in ${((Date.now() - plannerClientStart) / 1000).toFixed(1)}s`);
 
@@ -1471,6 +1482,9 @@ export default function DetectingStep() {
                 plan: productionPlan,
                 contentSummary: result.contentSummary ?? "",
                 assetStatuses,
+                // Margin journey session id — links this validator call to its
+                // scorer/planner siblings in one tape run (telemetry-only).
+                sessionId: journeySessionId,
                 clipFrames: clipFrames.length > 0 ? clipFrames : undefined,
                 // Extra context so the validator can make better-informed decisions
                 sourceFiles: mediaFilesRef.current.map((f) => ({ name: f.name, type: f.type, duration: f.duration })),
