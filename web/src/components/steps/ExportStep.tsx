@@ -1026,7 +1026,7 @@ export default function ExportStep() {
               <div>
                 <p className="text-sm font-semibold text-white">Go Pro on iOS</p>
                 <p className="text-xs text-[var(--text-tertiary)]">
-                  Unlimited monthly exports, no watermark, premium effects
+                  No monthly export cap, no watermark, premium effects
                 </p>
               </div>
             </a>
@@ -1073,7 +1073,7 @@ export default function ExportStep() {
               {FREE_EXPORT_LIMIT}/{FREE_EXPORT_LIMIT} exports used
             </p>
             <h3 className="text-2xl font-bold leading-tight">
-              <span className="gradient-text">Go unlimited.</span>
+              <span className="gradient-text">No monthly cap.</span>
             </h3>
             <p className="mt-2 text-[var(--text-secondary)] text-[15px] leading-relaxed">
               You&apos;ve hit the free tier limit. Upgrade to Pro and keep creating.
@@ -1087,7 +1087,7 @@ export default function ExportStep() {
                 <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
               </div>
               <span className="text-sm text-[var(--text-secondary)]">
-                Unlimited exports — no monthly cap
+                No monthly export cap (50/day fair-use)
               </span>
             </div>
             <div className="flex items-center gap-3">
