@@ -10,15 +10,22 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-11
+  as_of: 2026-07-13
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
       priority: normal
       status: open
       why: "Growth Agent created a pre-launch pitch email for Sam Gutelle (Senior Editor, Tubefilter, creator economy press) as a Gmail DRAFT for owner to review + send. The agent never sends; the owner sends after reviewing."
-      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-11 (12 days old)."
+      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-13 (14 days old)."
       blocks: press-outreach
+    - id: film-demand-validation-kit
+      title: "Film + post the demand-validation content kit (docs/growth/DEMAND_VALIDATION_KIT.md)"
+      priority: normal
+      status: open
+      why: "Growth Agent built a Content-First Demand Validation kit this run (hero-feature pick, a self-contained fake-data HTML demo prop, 15 hook variations, a shot list, reaction/audio direction) per docs/growth/DEMAND_VALIDATION_PLAYBOOK.md. This is the CREATING-signal counterpart to the existing mined demand_signal — it needs the owner to film + post; the agent never posts to social accounts (GTM_STANDARD S7)."
+      how: "Open docs/growth/demand-validation-demo.html in a browser (or on a phone), screen-record the 3-screen tap-through per the shot list in DEMAND_VALIDATION_KIT.md section C, pick 2-3 hooks to start with, post across TikTok/Reels/Shorts via your own accounts. Report back the COMMENT TEXT (not just view counts) so the Growth Agent can read intent-comment rate next run."
+      blocks: none
     - id: cleanup-stale-gmail-draft
       title: "Delete a leftover Gmail draft ('HighlightMagic Growth — 2026-06-29') — a status-report email that predates the current no-digest-email policy"
       priority: normal

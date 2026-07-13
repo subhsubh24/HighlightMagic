@@ -626,3 +626,113 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    throwaway demo prototype spec, hook variations, shot list) — a real gap, deferred this run in favor of
    the content-honesty fix.
 5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change between runs.
+
+---
+
+## 2026-07-13 — Run 9
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged). Channels connected: none —
+  **9th consecutive run** with connect-channels open. Re-probed `env` for `GROWTH_AGENT_SECRET`/
+  `PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent, unchanged since
+  Run 6. `SITE_GATE_PASSWORD`/`BROWSERBASE_*` still present in shell env alongside other products'
+  validator creds — per Run 7's established finding, treated as shared sandbox plumbing, NOT
+  evidence of an owner action; `site_gate_up` stays `false`.
+- Product `QUALITY_SCORECARD.md` re-graded 2026-07-13 (commit a4863f5): still overall B,
+  `ship_gate_met: false` — `store_readiness` C for a **seventh cycle** (only a doc has ever moved
+  that window), `functional_reality` B, `tests_evals` B unchanged. `artifact_integrity` rose A→A+.
+  This does not change GTM_STANDARD §13 Gate 1 (still blocked on the same owner-only Mac/Xcode gap).
+- `GTM_SCORECARD.md` unchanged since Run 8's re-grade (`as_of: 2026-07-10`, overall A,
+  `ship_gate_met: true`) — only 3 days/1 run since last grade, not yet a staleness signal worth
+  flagging (the bar that mattered was ~9 days/3+ runs at bootstrap).
+- 12 product-loop commits landed since Run 8 (`8b0b04b..6ad9e69`): two more honesty fixes on the
+  exact class of defect this agent has been tracking — #461 (paywall) dropped a false "Premium
+  music library" Pro claim, #470 (App Store listing) dropped a false "Advanced multi-pass AI
+  detection" Pro-tier claim (both confirm detection is identical free/Pro and music/SFX is
+  non-functional in v1, matching what `post-batch-2.md`'s usage notes already documented).
+- Sam Gutelle (Tubefilter) draft: confirmed via `list_drafts` still present, unedited, unsent, now
+  14 days old. `search_threads` for tubefilter/sam@tubefilter.com: zero replies (one unrelated 2023
+  marketing email is the only hit). Also re-noticed the pre-existing leftover Run-3-era Gmail
+  drafts (a "Growth Report" status email + several older auto-generated "daily digest" drafts,
+  none sent, all predate the current no-digest-email policy) — still an owner cleanup item, not a
+  new finding, not re-escalated with new prose this run.
+
+### What I did this run
+- **Found and fixed a real, previously-undetected honesty defect** in `docs/growth/email-sequences.md`
+  (a queued, ready-to-fire pre-launch email asset): EMAIL 1B and EMAIL 1C both claimed "AI-synced
+  music, sound effects, and captions" / "Music, captions, and sound effects — automatically" as
+  delivered free-tier features. Confirmed via grep + `post-batch-2.md`'s own usage notes that
+  music/SFX generation is non-functional in v1 (no bundled audio assets; the mix path is
+  unreachable) — the exact fact #461/#470 just re-confirmed by removing the same claim from the
+  in-app paywall and the App Store listing. This is the SAME landmine class Run 8 found in the
+  video-script batches (a queued marketing asset silently drifting out of compliance with a
+  product-honesty fact) but in a DIFFERENT file Run 8's pass didn't touch — a reminder that a
+  find-and-fix in one asset class doesn't guarantee the others are clean; worth a repo-wide grep
+  for the specific false claim whenever a product-honesty commit lands, not just a re-check of the
+  file that prompted the fix. Rewrote both bullets to "captions and smooth transitions" (matching
+  `press-kit.md`'s own accurate phrasing) and added an explicit "No music/SFX in v1" guardrail
+  line to the file's Product-facts block so a future edit doesn't reintroduce the claim.
+- **Built the Content-First Demand Validation kit** (`docs/growth/DEMAND_VALIDATION_PLAYBOOK.md`
+  existed since before Run 7 but was never executed — flagged as a real gap in Run 8's
+  `next_actions`): `docs/growth/DEMAND_VALIDATION_KIT.md` (hero-feature pick grounded in the
+  ALREADY-corroborated `demand_signal` theme 1 — raw-footage-in/finished-highlight-out — not a new
+  guess; 15 original hook variations; a demo shot list; reaction/audio direction; a volume +
+  signal-reading plan) plus `docs/growth/demand-validation-demo.html` (a self-contained, brand-token-
+  accurate, fake-data 3-screen phone-frame mockup for the owner to screen-record, explicitly
+  labeled a content prop, not the real app). Filed the owner action (`film-demand-validation-kit`)
+  in `PENDING_OPS.md`. Zero posts filmed/posted this run — correctly recorded as not-yet-done, not
+  fabricated.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on both
+  deliverables together: verdict **APPROVE** on first pass — checked honesty (no residual music/SFX
+  claim anywhere in the diff or repo-wide grep), CTA scoping across all 5 email sequences, no
+  fabricated social proof/metrics, hook originality (no verbatim viral-sound lift), on-brand design
+  (real `brand-kit.md` tokens, not generic-AI slop) for the HTML prototype, and fidelity to the
+  playbook's own A-D structure.
+- Caught + fixed a self-introduced YAML syntax bug while editing `GROWTH_STATUS.md`'s `learnings[]`
+  (a missing closing quote on one new block-scalar entry) via a `yaml.safe_load` check before
+  committing — the same category of self-review blind spot Run 5's reviewer caught; worth always
+  re-parsing after ANY multi-line YAML string edit, not just after adding a new block.
+- Bumped `as_of` in `GROWTH_STATUS.md` and `PENDING_OPS.md` to 2026-07-13; validated both YAML
+  blocks with `python3 -c "import yaml; ..."` before committing.
+
+### Learnings
+- **A product-honesty fix landing in ONE surface (app/store) doesn't mean every marketing-asset
+  surface is clean** — #461/#470 fixed the paywall and the App Store listing, but a marketing-copy
+  asset in a completely different file/directory (`docs/growth/email-sequences.md`) carried the
+  exact same false claim, undetected across 8 prior runs. Whenever a product-honesty commit lands,
+  grep the FULL marketing-content surface (`docs/growth/`, `docs/content/`, `docs/press-kit.md`,
+  landing copy) for the SAME false claim, not just spot-check the file the fix came from.
+- **A queued content asset needs the same "is this still true" audit no matter which run wrote
+  it or how long ago** — `email-sequences.md` was Run 1's asset (2026-06-27), untouched by 8
+  subsequent runs, and nobody happened to grep it for the music/SFX claim until this run. The
+  circuit-breaker discipline (short PREPARE work when connect-channels is stuck) should not mean
+  "stop re-auditing old assets" — it should mean "spend the run's effort on real audits like this
+  one, not on new escalation prose."
+- Circuit breaker discipline held again: 9th consecutive run, no new escalation prose on
+  connect-channels — the run's effort went into one real honesty fix + one real new deliverable
+  (the demand-validation kit), both genuinely new and non-duplicative.
+
+### Dead ends / what NOT to repeat
+- Do NOT assume a marketing asset is "already audited" just because a different asset in the same
+  content library was audited in a prior run — each file needs its own grep against the current
+  product-honesty facts.
+- Do NOT skip the `yaml.safe_load` re-check after editing a multi-line `learnings[]`/`next_actions[]`
+  block scalar — a missing closing quote is an easy, silent self-introduced break.
+
+### Circuit-breaker status
+- **Still open at Run 9 (9 consecutive runs).** No new owner action since Run 8. The ask is
+  unchanged: connect Resend per `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single
+  highest-leverage unlock; `site-gate` (`SITE_GATE_PASSWORD` in Vercel prod env) is the second.
+
+### Next run priorities (Run 10)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social
+   tokens — never infer from git; if any present, pull real data and move toward execute mode.
+2. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the demand-validation
+   kit was filmed/posted — if posted, read the comment signal per `DEMAND_VALIDATION_KIT.md` §D.
+3. Whenever a NEW product-honesty commit lands (search `git log` for `honesty(` commits since this
+   run), grep the FULL marketing-content surface for the same false claim before assuming a prior
+   pass caught everything.
+4. Check whether the product `QUALITY_SCORECARD` finally moved `store_readiness` off C (7 cycles
+   unchanged) — that's the actual remaining GTM_STANDARD §13 Gate 1 blocker.
+5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
+   between runs.
