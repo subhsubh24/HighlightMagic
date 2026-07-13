@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const { userId, signedTransaction, frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations } = body as {
+  const { userId, signedTransaction, frames, scores, templateName, userFeedback, creativeDirection, photoAnimations, disabledFeatures, aiDecideAnimations, sessionId } = body as {
     userId?: unknown;
     signedTransaction?: unknown;
     frames: unknown;
@@ -55,6 +55,9 @@ export async function POST(req: Request) {
     photoAnimations?: Array<{ sourceFileId: string; animatePhoto: boolean; animationInstructions: string }>;
     disabledFeatures?: { music?: boolean; sfx?: boolean; introOutro?: boolean };
     aiDecideAnimations?: boolean;
+    // Margin journey session id — links the planner call to its scorer/validator
+    // siblings in one tape run (telemetry-only, from the client).
+    sessionId?: string;
   };
 
   if (!userId || typeof userId !== "string") {
@@ -171,7 +174,8 @@ export async function POST(req: Request) {
               // Controller closed — ignore
             }
           },
-          aiDecideAnimations ?? undefined
+          aiDecideAnimations ?? undefined,
+          typeof sessionId === "string" ? sessionId : undefined
         );
         clearInterval(keepalive);
         controller.enqueue(

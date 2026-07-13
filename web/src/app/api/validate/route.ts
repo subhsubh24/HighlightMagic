@@ -1,5 +1,5 @@
 import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
-import { getMeter } from "@/lib/margin-meter-client";
+import { getMeter, HM_OPERATION } from "@/lib/margin-meter-client";
 import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
@@ -39,7 +39,11 @@ export async function POST(req: Request) {
       // Extended context for richer validation
       sourceFiles, audioTranscript, creativeDirection, regenerateFeedback,
       viralOptions, detectedTheme, introCard, outroCard, sfxTracks, voiceoverSegments,
+      // Margin journey session id — links this validator call to its scorer/planner
+      // siblings in one tape run (telemetry-only, from the client).
+      sessionId,
     } = await req.json();
+    const journeySessionId = typeof sessionId === "string" ? sessionId : undefined;
 
     if (!clips || !Array.isArray(clips) || clips.length === 0) {
       return Response.json({ passed: true, issues: [], fixes: {} });
@@ -294,13 +298,16 @@ If passed is true, fixes should be empty or omitted.`;
     // no ingest key (the SDK makes no network call), so it is instant in every
     // keyless environment.
     await getMeter()?.recordCall({
-      workflowId: "highlightmagic-tape",
+      // Own supply-chain node (the validator step), linked to its scorer/planner
+      // siblings by the shared per-run sessionId.
+      workflowId: HM_OPERATION.validator,
       provider: "anthropic",
       model: CLAUDE_VALIDATOR,
       inputTokens,
       outputTokens,
       latencyMs: Date.now() - validateStartMs,
       status: "ok",
+      ...(journeySessionId ? { sessionId: journeySessionId } : {}),
     })?.catch(() => {});
 
     // Extract JSON from response
@@ -350,7 +357,9 @@ If passed is true, fixes should be empty or omitted.`;
     // freezes; a bare floating promise would be dropped. Fail-safe + a no-op
     // with no ingest key, so it is instant in every keyless environment.
     await getMeter()?.recordOutcome({
-      workflowId: "highlightmagic-tape",
+      // The tape's graded outcome attaches to the validator node — the step that
+      // produces the pass/fail signal for the whole chain.
+      workflowId: HM_OPERATION.validator,
       passed: !!result.passed,
       qualityScore: 1 - Math.min(result.issues?.length ?? 0, 5) / 5,
       qualityMethod: "llm_judge",
