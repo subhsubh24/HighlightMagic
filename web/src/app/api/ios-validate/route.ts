@@ -115,9 +115,11 @@ function buildTapeDescription(
 /**
  * POST /api/ios-validate
  *
- * Haiku QA pass on an assembled iOS highlight tape. Mirrors the web /api/validate endpoint.
- * Fail-open: returns passed=true on any error. Does NOT consume quota — validation is a
- * sub-step of the export whose quota was already consumed at /api/ios-score.
+ * Haiku QA pass on an assembled iOS highlight tape.
+ * Fail-open: returns passed=true on any error. No monthly-quota gate — validation is a QA polish
+ * sub-step of an export whose quota was already consumed at /api/ios-score (unlike /api/ios-plan,
+ * which deliberately re-checks checkExportAllowed so only eligible users can plan). The wallet
+ * backstop for this paid call is the per-user daily generation ceiling (enforceGenerationCeiling).
  *
  * Request:  { userId, clips, contentSummary, musicPrompt?, sfx?, voiceover?, intro?, outro?, clipFrames? }
  * Response: { passed, issues, fixes }
@@ -152,13 +154,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "userId is required" }, { status: 400 });
   }
 
-  // NO monthly-quota gate here (by design — see the route docstring + this file's test header):
-  // validation is a QA sub-step of an export whose monthly quota was already consumed at
-  // /api/ios-score. Re-checking checkExportAllowed() here 402'd the LAST allowed free export of the
-  // month — score consumes the 5th, bringing usage to the limit, then this sub-step saw used==limit
-  // and rejected the QA pass of an already-paid export. The wallet backstop for this paid Haiku call
-  // is the per-user daily generation ceiling (enforceGenerationCeiling, KV-atomic + fail-closed),
-  // enforced below.
+  // NO monthly-quota gate here (by design — the route docstring + this file's test header both state
+  // this route has no quota gate): validation is a QA polish sub-step of an export whose monthly quota
+  // was already consumed at /api/ios-score. Re-checking checkExportAllowed() here returned 402 on the
+  // LAST allowed free export of the month (score consumes the 5th → usage==limit → this sub-step denied
+  // it). The iOS client fails open on a non-2xx (TapeValidationService: "treating as passed"), so the
+  // export still completed — but the Haiku QA/caption-fix pass was silently skipped on that one
+  // export/month, degrading the polish of exactly the export at the free→paid moment.
+  //   NB: deliberately DIFFERENT from /api/ios-plan, which DOES re-check checkExportAllowed (its
+  //   docstring: "Still checks checkExportAllowed so only eligible users can plan" — planning is the
+  //   substantive step). QA validation is not gated; planning is. Both leave consumeExport to
+  //   /api/ios-score. The wallet backstop for this paid Haiku call is the per-user daily generation
+  //   ceiling (enforceGenerationCeiling, KV-atomic + fail-closed), enforced below.
 
   if (!Array.isArray(clips) || clips.length === 0) {
     return Response.json({ error: "clips must be a non-empty array" }, { status: 400 });
