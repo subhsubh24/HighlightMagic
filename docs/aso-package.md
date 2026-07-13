@@ -80,7 +80,7 @@ FREE TIER:
 5 full AI-powered exports per month. All core features included. A small watermark is added — remove it with Pro.
 
 PRO SUBSCRIPTION:
-Unlimited monthly exports (a 50-per-day fair-use ceiling applies to all tiers) + no watermark. $14.99/month or $149.99/year (2 months free), cancel anytime.
+No monthly export cap (a 50-per-day fair-use ceiling applies to all tiers) + no watermark. $14.99/month or $149.99/year (2 months free), cancel anytime.
 
 PRIVACY:
 Your videos are processed on secure servers to create your highlights. We do not store your raw footage after processing is complete. See our full privacy policy at highlightmagic.app/privacy.
@@ -115,7 +115,7 @@ Required: 5 screenshots (6.9-inch format: 1320×2868). Captions appear below scr
 | 2 | Detection progress screen | **AI scores your footage** | Scores emotion, action, and energy — no scrubbing needed |
 | 3 | Editor — trim + captions | **Edit like a pro. In seconds.** | Captions, filters, and transitions — all in one timeline |
 | 4 | Export preview (vertical clip) | **Vertical-perfect export** | 1080×1920 MP4 ready for TikTok, Reels, and Shorts |
-| 5 | Paywall / Pro screen | **No monthly export cap** | Unlimited monthly exports, no watermark — $14.99/month or $149.99/year |
+| 5 | Paywall / Pro screen | **No monthly export cap** | No monthly export cap, no watermark — $14.99/month or $149.99/year |
 
 ---
 
