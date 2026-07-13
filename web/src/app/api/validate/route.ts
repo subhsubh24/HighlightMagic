@@ -1,7 +1,7 @@
 import { CLAUDE_VALIDATOR, estimateCostUSD } from "@/lib/ai-models";
 import { getMeter, HM_OPERATION } from "@/lib/margin-meter-client";
 import { checkExportAllowed } from "@/lib/entitlement";
-import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
+import { enforceGenerationCeiling, enforceGlobalGenerationCeiling, GLOBAL_VALIDATE_DAILY_CAP } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_FILES } from "@/lib/constants";
 import {
@@ -101,11 +101,19 @@ export async function POST(req: Request) {
         );
       }
       // H7: per-user daily generation ceiling — wallet-drain backstop on the paid Haiku
-      // vision call. Only enforceable when a userId is supplied; anonymous web callers'
-      // brake is the per-IP rate limiter above (same posture as /api/stems).
+      // vision call. Only enforceable when a userId is supplied.
       const genBlock = await enforceGenerationCeiling(userId);
       if (genBlock) return genBlock;
     }
+
+    // H7 (anonymous backstop): the web pipeline (DetectingStep) posts NO userId, so the per-user
+    // ceiling above never fires for it — leaving only the per-IP rate limiter, which is NOT
+    // rotation-proof. Since each call can trigger a paid Haiku VISION request, add the same
+    // rotation-proof aggregate daily ceiling /api/stems uses. Applied unconditionally (a shared
+    // global counter is the point); fail-open at the client (a 429 is treated as "passed"), so
+    // hitting the cap only skips the optional QA pass — the export still completes.
+    const globalBlock = await enforceGlobalGenerationCeiling("validate", GLOBAL_VALIDATE_DAILY_CAP);
+    if (globalBlock) return globalBlock;
 
     const hasFrames = Array.isArray(clipFrames) && clipFrames.length > 0;
 

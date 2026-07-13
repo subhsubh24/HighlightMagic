@@ -60,6 +60,21 @@ export const DAILY_GENERATION_CAP = 500;
  */
 export const GLOBAL_STEMS_DAILY_CAP = 200;
 
+/**
+ * GLOBAL (userId-less) daily cap for the anonymous web-editor validation route (/api/validate).
+ * The browser pipeline (DetectingStep) posts NO userId, so — exactly like /api/stems — the route
+ * has no per-user identity to meter and the per-user {@link enforceGenerationCeiling} can never
+ * fire; its only per-actor brake is the per-IP PAID_RATE_LIMIT (10/min), which this module's
+ * header notes is NOT rotation-proof. Each call can trigger a paid Anthropic Haiku VISION request
+ * (a frame per clip), so an IP-rotating attacker could drain the wallet over a day. This shared
+ * daily counter is the one rotation-proof aggregate backstop. (The iOS product uses the separate
+ * userId-bearing /api/ios-validate, not this route.) Set well above legitimate aggregate web use
+ * so it trips only on abuse. Fail-open by design: the client treats a 429 here as "passed" and the
+ * export still completes — hitting the cap only skips the optional QA polish pass for the rest of
+ * the UTC day, far preferable to unbounded vision-model spend.
+ */
+export const GLOBAL_VALIDATE_DAILY_CAP = 1000;
+
 /** Two-day TTL on each per-day key so buckets self-clean in KV (yesterday's expires). */
 const KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
 
