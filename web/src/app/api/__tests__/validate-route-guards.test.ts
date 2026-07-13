@@ -12,8 +12,11 @@
  * `enforceGenerationCeiling(...)` whose 429 is dropped, would keep those source references intact
  * (so any grep/wiring scan stays green) while silently re-opening an unbounded paid-vision path on
  * the single most expensive call in the pipeline. This suite closes that gap: each guard must both
- * (a) return its status and (b) NEVER reach the Anthropic fetch. The final case pins the route's
- * documented fail-open contract — an anonymous caller skips the userId-scoped guards and a failing
+ * (a) return its status and (b) NEVER reach the Anthropic fetch. Because the web pipeline posts NO
+ * userId, the per-user guards never fire for it, so the rotation-proof GLOBAL aggregate ceiling
+ * (H7, mirroring /api/stems) is the real backstop on that anonymous paid-vision path — its 429 must
+ * also short-circuit the fetch. The final case pins the route's documented fail-open contract — an
+ * anonymous caller clears the global backstop, skips the userId-scoped guards, and a failing
  * provider call fails OPEN to { passed: true } so validation never blocks an export.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -31,12 +34,16 @@ vi.mock("@/lib/entitlement", () => ({
 }));
 vi.mock("@/lib/spend-ceiling", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/spend-ceiling")>();
-  return { ...actual, enforceGenerationCeiling: vi.fn(async () => null) };
+  return {
+    ...actual,
+    enforceGenerationCeiling: vi.fn(async () => null),
+    enforceGlobalGenerationCeiling: vi.fn(async () => null),
+  };
 });
 
 import { _resetBuckets, PAID_RATE_LIMIT } from "@/lib/rate-limit";
 import { checkExportAllowed } from "@/lib/entitlement";
-import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
+import { enforceGenerationCeiling, enforceGlobalGenerationCeiling } from "@/lib/spend-ceiling";
 import { POST as validate } from "@/app/api/validate/route";
 
 /** A body that clears every pre-guard check (non-empty, under the H2 bound) so the request
@@ -111,13 +118,31 @@ describe("/api/validate honors its wallet-drain guards (H1 / P0 / H7)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("anonymous callers skip the userId-scoped guards and fail OPEN on a provider error", async () => {
-    // No userId → the guards are skipped by design (their brake is the per-IP rate limiter). The
-    // request reaches the paid fetch, which our spy rejects → the route's documented fail-open
-    // contract returns { passed: true } so a validation outage never blocks an export.
+  it("H7 (anonymous backstop): the GLOBAL validation ceiling 429 short-circuits the paid call", async () => {
+    // The web pipeline posts no userId, so the per-user guards never fire for it. The rotation-
+    // proof aggregate ceiling is the backstop: when it trips, the route must return 429 and the
+    // paid Haiku vision call must never fire (mirrors /api/stems).
+    (enforceGlobalGenerationCeiling as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      Response.json(
+        { error: "Daily generation limit reached. Please try again tomorrow." },
+        { status: 429 },
+      ),
+    );
+    const res = await validate(req(validBody(undefined), "203.0.113.44"));
+    expect(res.status).toBe(429);
+    expect(enforceGlobalGenerationCeiling).toHaveBeenCalledWith("validate", expect.any(Number));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("anonymous callers skip the userId-scoped guards but still pass the global backstop, then fail OPEN on a provider error", async () => {
+    // No userId → the userId-scoped guards are skipped by design. The request still runs the
+    // rotation-proof GLOBAL ceiling (its real per-actor brake), then reaches the paid fetch, which
+    // our spy rejects → the route's documented fail-open contract returns { passed: true } so a
+    // validation outage never blocks an export.
     const res = await validate(req(validBody(undefined), "203.0.113.43"));
     expect(checkExportAllowed).not.toHaveBeenCalled();
     expect(enforceGenerationCeiling).not.toHaveBeenCalled();
+    expect(enforceGlobalGenerationCeiling).toHaveBeenCalledWith("validate", expect.any(Number));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.passed).toBe(true);
