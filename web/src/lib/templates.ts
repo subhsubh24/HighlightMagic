@@ -1,6 +1,7 @@
 import type { HighlightTemplate } from "./types";
 
-// ── 8 templates ported from iOS TemplateLibrary ──
+// ── 9 templates (web) — originally ported from the iOS TemplateLibrary (which ships 8);
+//    Wedding is web-only, so the two libraries have since diverged. ──
 
 export const TEMPLATES: HighlightTemplate[] = [
   {
