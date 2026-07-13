@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { WifiOff } from "lucide-react";
 import { IOS_APP_STORE_URL } from "@/lib/constants";
+
+export const metadata: Metadata = {
+  title: "Offline — Highlight Magic",
+  description:
+    "Highlight Magic needs an internet connection for AI video analysis. Reconnect and try again.",
+};
 
 export default function OfflinePage() {
   return (
