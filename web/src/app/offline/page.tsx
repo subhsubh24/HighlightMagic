@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { WifiOff } from "lucide-react";
-import { IOS_APP_STORE_URL } from "@/lib/constants";
+import { IOS_APP_STORE_URL, IS_APP_LIVE } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Offline — Highlight Magic",
@@ -16,16 +16,19 @@ export default function OfflinePage() {
       <p className="max-w-sm text-[var(--text-secondary)]">
         Highlight Magic needs an internet connection for AI video analysis. Please reconnect and try again.
       </p>
-      <p className="text-sm text-[var(--text-tertiary)]">
-        Prefer a native experience? Get the{" "}
-        <a
-          href={IOS_APP_STORE_URL}
-          className="text-[var(--accent)] underline"
-        >
-          iOS app
-        </a>
-        .
-      </p>
+      {/* Only once the app is live (launch); pre-launch the store link would 404. */}
+      {IS_APP_LIVE && (
+        <p className="text-sm text-[var(--text-tertiary)]">
+          Prefer a native experience? Get the{" "}
+          <a
+            href={IOS_APP_STORE_URL}
+            className="text-[var(--accent)] underline"
+          >
+            iOS app
+          </a>
+          .
+        </p>
+      )}
     </div>
   );
 }

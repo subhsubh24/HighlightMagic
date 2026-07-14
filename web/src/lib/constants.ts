@@ -58,3 +58,15 @@ export const BEAT_SYNC_TOLERANCE_MS = 47; // max ms off-beat before snapping
 export const IOS_APP_STORE_URL =
   process.env.NEXT_PUBLIC_IOS_APP_STORE_URL ??
   "https://apps.apple.com/app/highlight-magic/id0000000000";
+
+/**
+ * True once the REAL App Store listing is live, signalled by the owner setting
+ * NEXT_PUBLIC_IOS_APP_STORE_URL at launch. Pre-launch that env var is unset, so IOS_APP_STORE_URL
+ * falls back to a placeholder id that 404s and the app is not yet downloadable.
+ *
+ * The landing page reads this to route "Get the App" / "Download on the App Store" CTAs to the
+ * waitlist while pre-launch (a page that runs a "we'll email you when we launch" waitlist must not
+ * simultaneously send visitors to a dead App Store link), and to flip them to the real store link
+ * automatically the moment the env var is set — no code change needed at launch.
+ */
+export const IS_APP_LIVE = Boolean(process.env.NEXT_PUBLIC_IOS_APP_STORE_URL);

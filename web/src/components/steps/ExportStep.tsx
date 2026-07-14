@@ -8,6 +8,7 @@ import {
   WATERMARK_TEXT,
   FREE_EXPORT_LIMIT,
   IOS_APP_STORE_URL,
+  IS_APP_LIVE,
   EXPORT_BITRATE,
 } from "@/lib/constants";
 import { getEditingStyle } from "@/lib/editing-styles";
@@ -1015,7 +1016,8 @@ export default function ExportStep() {
 
           <p className="text-xs text-[var(--text-tertiary)]">Made with Highlight Magic</p>
 
-          {isFree && (
+          {/* Pre-launch the store link 404s, so this upsell only appears once the app is live. */}
+          {isFree && IS_APP_LIVE && (
             <a
               href={IOS_APP_STORE_URL}
               target="_blank"
@@ -1100,15 +1102,16 @@ export default function ExportStep() {
             </div>
           </div>
 
-          {/* Primary CTA — behavior/href/handlers unchanged */}
+          {/* Primary CTA. At launch: the real App Store upgrade. Pre-launch (no live store listing)
+              the store link would 404, so route to the waitlist and label it honestly — you can't
+              upgrade to a product that isn't purchasable yet. */}
           <a
-            href={IOS_APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={IS_APP_LIVE ? IOS_APP_STORE_URL : "/landing"}
+            {...(IS_APP_LIVE ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             className="btn-primary flex items-center gap-2 w-full max-w-xs justify-center"
           >
             <Sparkles className="h-5 w-5" />
-            Upgrade to Pro
+            {IS_APP_LIVE ? "Upgrade to Pro" : "Join the Waitlist"}
           </a>
 
           {/* Both price options at the highest-intent moment — annual surfaces the higher-LTV
