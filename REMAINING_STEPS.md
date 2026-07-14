@@ -150,7 +150,12 @@ In the Vercel dashboard for the `web/` deployment, add these environment variabl
 Also set:
 - `NEXT_PUBLIC_APP_URL=https://highlightmagic.app` (or your Vercel domain)
 - `NEXT_PUBLIC_IOS_APP_STORE_URL=https://apps.apple.com/app/highlight-magic/idXXXXXXXXX`
-  (update after App Store Connect record is created — see Step 3)
+  (update after App Store Connect record is created — see Step 3). **This env var is now the
+  launch flip (#498):** while it is UNSET the web app is in pre-launch/waitlist mode — every
+  "Get the App"/"Download"/"Upgrade to Pro" store CTA (landing, `/offline`, the editor
+  Header/Footer/ExportStep paywall) is hidden or routes to the waitlist so no visitor hits the
+  placeholder App Store link. The moment you set it to the REAL listing URL, all those CTAs flip
+  to the store automatically — no code change needed.
 
 **Set an Anthropic spend cap** at console.anthropic.com to bound worst-case monthly API cost
 while you gather per-export COGS data from Vercel function logs. Suggested cap: $50–100/month
@@ -224,7 +229,9 @@ activating them on the weekly cadence is an owner step:
    - SKU: `HIGHLIGHTMAGIC-001` (your choice)
    - Primary language: English
 4. Copy the App Store URL once the record is created and set it in Vercel env
-   (`NEXT_PUBLIC_IOS_APP_STORE_URL`)
+   (`NEXT_PUBLIC_IOS_APP_STORE_URL`) — this also flips the web app out of pre-launch/waitlist
+   mode (see Phase 1, Step 1: it's the launch signal that turns the "Get the App" store CTAs back
+   on across the landing page, `/offline`, and the editor shell)
 
 ### 4. Create StoreKit live products
 
