@@ -7,6 +7,7 @@ import { POST } from "@/app/api/ios-score/route";
 import { consumeExport } from "@/lib/entitlement";
 import { FREE_EXPORT_LIMIT } from "@/lib/constants";
 import { DAILY_EXPORT_CAP, recordDailyExport, __resetCeilingStoreForTests } from "@/lib/spend-ceiling";
+import { MAX_TEMPLATE_NAME_CHARS } from "@/lib/input-bounds";
 
 function req(body: unknown): Request {
   return new Request("http://localhost/api/ios-score", {
@@ -44,6 +45,26 @@ describe("POST /api/ios-score", () => {
   it("400s when a frame is missing jpegBase64", async () => {
     const res = await POST(req({ userId: "u", frames: [{ timeSec: 1.0 }] }));
     expect(res.status).toBe(400);
+  });
+
+  it("413s on an oversized templateName — before any paid Anthropic call (H2 cost/injection bound)", async () => {
+    // templateName is interpolated verbatim into the paid scoring system prompt; an unbounded value
+    // would inflate the per-call token bill. It must be rejected before the provider fetch.
+    // Distinct IP so this extra request doesn't consume the shared per-IP PAID_RATE_LIMIT bucket
+    // that the other same-IP tests in this file collectively fill.
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const bigTemplateReq = new Request("http://localhost/api/ios-score", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.7" },
+      body: JSON.stringify({
+        userId: "ios-score-big-template-user",
+        frames: [frame],
+        templateName: "x".repeat(MAX_TEMPLATE_NAME_CHARS + 1),
+      }),
+    });
+    const res = await POST(bigTemplateReq);
+    expect(res.status).toBe(413);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("402s once the free monthly limit is reached (gate runs before any paid call)", async () => {
