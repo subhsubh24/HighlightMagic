@@ -68,7 +68,7 @@ WHAT IT DOES:
 • Exports a perfect 1080×1920 MP4 ready for TikTok, Instagram Reels, and YouTube Shorts
 
 THE FULL CREATIVE STUDIO:
-• Kinetic captions with 7 animation styles
+• Kinetic captions — pop, bounce, slide & typewriter animations
 • 10 color filters (cinematic, warm, cool, B&W, and more)
 • Trim and reorder clips in the built-in editor
 • One-tap share via the iOS share sheet — TikTok, Reels, Shorts, and more
@@ -99,7 +99,7 @@ Character count: ~1,650 (well within 4000-char limit — room for localization)
 Character count: 119 ✓
 
 **Post-launch A/B candidates**:
-- `New: 7 kinetic caption styles — make every word pop, automatically.`
+- `New: kinetic captions — make every word pop, slide & bounce, automatically.`
 - `Summer update: 5 new filters + improved AI detection for sports & action footage.`
 
 ---
