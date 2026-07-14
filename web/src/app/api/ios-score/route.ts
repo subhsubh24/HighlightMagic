@@ -2,7 +2,13 @@ import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
 import { CLAUDE_FRAME_SCORER, estimateCostUSD } from "@/lib/ai-models";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
-import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, tooLargeResponse } from "@/lib/input-bounds";
+import {
+  anyFrameOverLimit,
+  MAX_FRAME_B64_CHARS,
+  MAX_TEMPLATE_NAME_CHARS,
+  overStringLimit,
+  tooLargeResponse,
+} from "@/lib/input-bounds";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -328,6 +334,10 @@ export async function POST(req: Request) {
   }
   // H2: bound per-frame payload — cost scales with each base64 image sent to the vision model.
   if (anyFrameOverLimit(frames, "jpegBase64", MAX_FRAME_B64_CHARS)) return tooLargeResponse();
+  // H2: bound the free-text template label — it's interpolated verbatim into the paid scoring
+  // system prompt, so an unbounded value inflates the Anthropic token bill (and is an injection
+  // surface). Rejected before the entitlement/paid path, like the frame bound above.
+  if (overStringLimit(templateName, MAX_TEMPLATE_NAME_CHARS)) return tooLargeResponse();
 
   // Validate each frame has required fields
   for (let i = 0; i < frames.length; i++) {

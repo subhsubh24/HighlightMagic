@@ -36,6 +36,11 @@ export const MAX_FRAME_B64_CHARS = 12_000_000;
 /** A StoreKit signed transaction (compact JWS incl. the x5c cert chain) — a few KB in practice;
  *  cap generously so the crypto verifier never touches an oversized payload. */
 export const MAX_JWS_CHARS = 20_000;
+/** A scoring "style context" template label (e.g. "Sports", "Wedding") interpolated verbatim into
+ *  the paid frame-scoring SYSTEM prompt. It's a short human-chosen label, so cap it tight: an
+ *  unbounded value would inflate the per-call Anthropic token bill and is a system-prompt injection
+ *  surface. 200 chars is far above any real template name. */
+export const MAX_TEMPLATE_NAME_CHARS = 200;
 
 /** True when `value` is a string longer than `max`. Absent / non-string values pass (other
  *  validation handles required-ness); this check is only about size. */
