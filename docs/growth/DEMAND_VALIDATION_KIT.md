@@ -13,7 +13,7 @@ product-facts line).
 
 This is HighlightMagic's actual core loop (no invented framing): import a game/trip/concert/event
 video → AI samples and scores frames for the moments that matter → auto-assembles a vertical
-1080×1920 clip with kinetic captions (7 styles) and color filters (10) → export. It is the single
+1080×1920 clip with kinetic captions (4 animated styles) and color filters (10) → export. It is the single
 input→reveal moment that makes the value legible in 3–5 seconds: **hours of raw footage in, a
 finished highlight out, with zero scrubbing.** This is also the theme the `demand_signal` block
 (GROWTH_STATUS) already validates as `strength: strong` (3 independent cited sources: manual

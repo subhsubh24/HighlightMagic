@@ -249,7 +249,7 @@ The app I use is called Highlight Magic. Join the waitlist → link in bio
 "Every word is written by AI based on what's happening in the clip. Kinetic animations auto-applied. No typing required."
 
 [End card]
-"7 kinetic caption styles. All automatic. Highlight Magic."
+"4 animated caption styles. All automatic. Highlight Magic."
 ```
 
 **Caption**:
@@ -258,7 +258,7 @@ AI writes the captions AND animates them 🤯
 
 No typing. No timing. It watches your video and generates text that matches what's happening.
 
-7 kinetic caption styles included (auto-applied based on the vibe of your clip).
+4 animated caption styles — pop, bounce, slide, typewriter — auto-applied based on the vibe of your clip.
 
 Join the waitlist → link in bio
 
