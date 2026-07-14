@@ -71,6 +71,28 @@ const faqJsonLd = {
   })),
 };
 
+// Organization structured data (JSON-LD) — declares the publishing ENTITY behind the product,
+// which SoftwareApplication does not: it makes the brand eligible for Google's knowledge-graph
+// / brand-panel features (name, logo, and a support contact on branded "Highlight Magic" queries)
+// distinct from the app-listing snippet. Every field is a REAL, honest fact: the live logo asset,
+// the support address used across the Footer/terms/support pages. No `sameAs` social profiles are
+// declared — none exist yet (channels unconnected), and linking to non-existent handles would be
+// a fabrication (honesty rule). Add sameAs only once the real profiles are live.
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Highlight Magic",
+  url: SITE_URL,
+  logo: `${SITE_URL}/icons/icon-512.png`,
+  description:
+    "Highlight Magic makes an AI-powered iOS app that automatically finds your best video moments and exports them as polished vertical clips for TikTok, Reels, and Shorts.",
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "customer support",
+    email: "support@highlightmagic.app",
+  },
+};
+
 export default function LandingLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -79,6 +101,11 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
         // Static object serialized to JSON — no user input is interpolated, so this inline
         // JSON-LD script is safe.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // Static object (no user input) — safe inline JSON-LD.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
       />
       <script
         type="application/ld+json"
