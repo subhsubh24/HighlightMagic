@@ -11,7 +11,7 @@ import {
   Star,
   Download,
 } from "lucide-react";
-import { IOS_APP_STORE_URL } from "@/lib/constants";
+import { IOS_APP_STORE_URL, IS_APP_LIVE } from "@/lib/constants";
 import { trackEvent } from "@/lib/analytics";
 import { Turnstile } from "@/components/Turnstile";
 import { FAQ } from "./faq-data";
@@ -116,6 +116,7 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
         <button
           type="submit"
           disabled={status === "loading" || !email.trim() || (captchaRequired && !turnstileToken)}
+          aria-busy={status === "loading"}
           className="btn-primary flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === "loading" ? "Joining…" : "Join Waitlist"}
@@ -218,8 +219,10 @@ const PRICING: PricingPlan[] = [
       "1080×1920 MP4 export",
       "HighlightMagic watermark",
     ],
-    cta: "Get the App",
-    ctaHref: IOS_APP_STORE_URL,
+    // Pre-launch (no live store listing yet) the CTA routes to the waitlist like the Pro tier
+    // (ctaHref:null → #waitlist-bottom); at launch it becomes the real "Get the App" store link.
+    cta: IS_APP_LIVE ? "Get the App" : "Join the Waitlist",
+    ctaHref: IS_APP_LIVE ? IOS_APP_STORE_URL : null,
   },
   {
     name: "Pro",
@@ -291,14 +294,14 @@ function Nav() {
             FAQ
           </a>
         </nav>
+        {/* Pre-launch: route to the waitlist (the store link would 404); at launch: the real store. */}
         <a
-          href={IOS_APP_STORE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={IS_APP_LIVE ? IOS_APP_STORE_URL : "#waitlist-bottom"}
+          {...(IS_APP_LIVE ? { target: "_blank", rel: "noopener noreferrer" } : {})}
           onClick={() => trackEvent("cta_click", { source: "nav" })}
           className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
         >
-          Get the App
+          {IS_APP_LIVE ? "Get the App" : "Join the Waitlist"}
         </a>
       </div>
     </header>
@@ -366,16 +369,20 @@ export default function LandingPage() {
             <p className="text-sm text-[var(--text-secondary)]">
               No credit card required &middot; 5 free exports per month
             </p>
-            <a
-              href={IOS_APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => trackEvent("cta_click", { source: "hero" })}
-              className="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
-            >
-              <Download aria-hidden="true" className="h-4 w-4" />
-              Already have the app? Download on the App Store
-            </a>
+            {/* Only shown once the app is actually downloadable (launch); pre-launch nobody "already
+                has the app" and the store link would 404, so the waitlist form above is the sole CTA. */}
+            {IS_APP_LIVE && (
+              <a
+                href={IOS_APP_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackEvent("cta_click", { source: "hero" })}
+                className="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Already have the app? Download on the App Store
+              </a>
+            )}
           </div>
         </div>
       </section>
@@ -604,15 +611,18 @@ export default function LandingPage() {
             <a href="/support" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Support
             </a>
-            <a
-              href={IOS_APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => trackEvent("cta_click", { source: "footer" })}
-              className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
-            >
-              iOS App
-            </a>
+            {/* Shown once the app is live (launch); pre-launch the store link would 404. */}
+            {IS_APP_LIVE && (
+              <a
+                href={IOS_APP_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackEvent("cta_click", { source: "footer" })}
+                className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
+              >
+                iOS App
+              </a>
+            )}
           </div>
         </div>
       </footer>

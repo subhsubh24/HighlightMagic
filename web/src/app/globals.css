@@ -213,6 +213,14 @@ input[type="range"]::-webkit-slider-thumb {
   button {
     min-height: 44px;
   }
+
+  /* Form fields get the same minimum tap size as buttons on touch devices (the waitlist email
+     input sits right next to the 48px submit button — keep them consistent and comfortably
+     tappable). */
+  input,
+  textarea {
+    min-height: 44px;
+  }
 }
 
 /* ── Tabular numbers for progress/timers ── */

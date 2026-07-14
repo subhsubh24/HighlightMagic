@@ -1,4 +1,4 @@
-import { IOS_APP_STORE_URL } from "@/lib/constants";
+import { IOS_APP_STORE_URL, IS_APP_LIVE } from "@/lib/constants";
 
 export default function Footer() {
   return (
@@ -11,14 +11,17 @@ export default function Footer() {
           <a href="/privacy" className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
             Privacy Policy
           </a>
-          <a
-            href={IOS_APP_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
-          >
-            iOS App
-          </a>
+          {/* Only once the app is live (launch); pre-launch the store link would 404. */}
+          {IS_APP_LIVE && (
+            <a
+              href={IOS_APP_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
+            >
+              iOS App
+            </a>
+          )}
           <a
             href="mailto:support@highlightmagic.app"
             className="rounded hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"

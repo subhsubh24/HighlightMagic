@@ -2,7 +2,7 @@
 
 import { useApp } from "@/lib/store";
 import { Sparkles } from "lucide-react";
-import { IOS_APP_STORE_URL } from "@/lib/constants";
+import { IOS_APP_STORE_URL, IS_APP_LIVE } from "@/lib/constants";
 
 export default function Header() {
   const { state, dispatch } = useApp();
@@ -21,7 +21,8 @@ export default function Header() {
       </button>
 
       <div className="flex items-center gap-3">
-        {!state.isProUser && (
+        {/* Only once the app is live (launch); pre-launch the store link would 404. */}
+        {IS_APP_LIVE && !state.isProUser && (
           <a
             href={IOS_APP_STORE_URL}
             target="_blank"
