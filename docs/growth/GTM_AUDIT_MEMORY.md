@@ -110,3 +110,63 @@ only blocker.
   that A currently rests on the corpus staying non-decisional (recommend-only).
 - as_of freshness recurs (1d stale again). Low severity; note it, don't inflate a fix that isn't the
   Auditor's to make.
+
+---
+
+## 2026-07-14 — Audit Run 3 (second re-grade)
+
+### State found (diff vs Run 2, 2026-07-10)
+- GTM Factory activity since Run 2: **Run 9 (#474, 62c14d0, 2026-07-13)** — fixed a false "AI-synced
+  music, sound effects" free-tier claim in `email-sequences.md` (rewrote to "captions and smooth
+  transitions" + added a "No music/SFX in v1" guardrail) and built two NEW assets:
+  `DEMAND_VALIDATION_KIT.md` + `demand-validation-demo.html`. GROWTH_STATUS re-stamped as_of 2026-07-13.
+- Product-side (not GTM) since Run 2: several honesty commits (#461 paywall, #470 store, #479/#478/#476
+  bare-"unlimited", **#487 "7 kinetic caption styles" walk-back**, #488 JSON-LD). #487 is load-bearing
+  for this grade — see below.
+
+### Grades (overall B; **ship_gate_met FALSE** — REGRESSED from true)
+| Dimension | Grade | Δ vs Run 2 | Note |
+|---|---|---|---|
+| metric_integrity \* | A | = | No fabrication; engine_pct 100 = 5/5 anchors; drafted_7d:0 correct (draft 14d old); cited_counts all reconcile. Nit: as_of 1d stale. |
+| business_case_honesty \* | A | ↓ (A+) | Arithmetic + floor math all reconcile, zero drift, no gamed number. Eased for a real S9 prose inconsistency (BUSINESS_CASE.md:428-429 attributes the mo-42→38 crossing to annual uptake, contradicting the reconciled YAML/price-move attribution). Not gaming. |
+| experiment_validity | A | = | One designed test; power calc 2210/arm re-verified; result null. |
+| roadmap_steer_justification \* | A | = | steers_opened []; NO GTM-opened ROADMAP/VISION commit since Run 2. Held at A (second-hand corpus). |
+| self_validation_honesty \* | A+ | = | All 9 manifest line numbers re-verified exact; Plausible code-half-done disclosure confirmed against layout.tsx + metrics.ts (grep: no plausible ref). Fail-closed. |
+| pmf_read_accuracy | A | = | pmf null/signal null; NOT_YET; demand_signal firewalled from PMF. |
+| compliance | A → **B** | ↓ | Rails strong (draft-only, no fake reviews, music fix complete). Eased: the queued "7 kinetic caption styles" script (post-batch-1.md:252,261) is a latent FTC-substantiation risk in a ready-to-record asset. |
+| artifact_freshness | A → **C** | ↓↓ | **The regression.** False "7 kinetic caption styles" claim persists in ready-to-record post-batch-1.md:252,261 (only 4 of 7 animate, KineticCaptionRenderer.swift:34-36) — the exact item #487 handed to growth, unfixed across two GTM honesty passes, re-echoed this run in DEMAND_VALIDATION_KIT.md:16. |
+
+### Method
+Spawned 3 fresh, independent, adversarial grader subagents (Opus, each told to REFUTE): (1) metric
+integrity + self-validation — verified all 5 preflight anchors on disk, all 9 validation-manifest.ts
+line numbers exact, and the Plausible honesty crux against layout.tsx/metrics.ts source; (2)
+business-case honesty — recomputed base/conservative/optimistic ARR + floor math from the body,
+confirmed StoreKit/constants pricing zero-drift, found the S9 prose inconsistency; (3) artifact
+freshness + compliance — verified the post-batch-1 overclaim against the Swift KineticCaptionStyle
+source, confirmed the KIT re-echo, confirmed pricing/music-fix/demo-prop honesty passed. The Auditor
+confirmed no GTM-opened ROADMAP/VISION commit since Run 2 and graded experiment_validity/pmf/roadmap
+directly (unchanged, low risk).
+
+### Ship gate
+**NOT MET (regressed).** All 4 ship_critical dimensions still A/A+ — no integrity failure, no fabricated
+metric, no gamed number, no speculative steer. The gate closed on the non-critical clause: `artifact_freshness`
+fell to C (< B), so "every other dimension ≥ B" fails. This is a content-honesty regression, not a
+maker-gaming event.
+
+### Top gap filed
+1. **artifact_freshness C → raise to A** (gtm-quality issue): remove the false "7 kinetic caption styles"
+   count from post-batch-1.md:252,261 (name the 4 animating styles per #487's own fix) + de-ambiguate
+   DEMAND_VALIDATION_KIT.md:16; compliance B rides the same fix. The two low-severity A-grade nits (S9 prose
+   inconsistency; as_of 1d-stale) were NOT filed — filing A-grade trivia is noise.
+
+### Read for next run
+- **First priority: is the "7 kinetic caption styles" overclaim fixed?** If post-batch-1.md:252,261 still say
+  "7 kinetic caption styles" (or the KIT line still ambiguous), artifact_freshness stays C and the gate stays
+  closed — keep the issue open, re-surface as top gap. If fixed → re-verify against the Swift source (only
+  pop/bounce/slide/typewriter animate) before restoring A.
+- Watch that the S9 BUSINESS_CASE.md:428-429 annual-vs-price attribution gets reconciled (keeps business_case
+  at A, not A+).
+- Re-verify each run (regression watch): the 5 preflight anchors, validation-manifest line numbers, StoreKit
+  pricing, no ARR booked for credit packs, and that no NEW GTM asset reintroduces a walked-back product claim
+  (the KIT re-echo this run shows the failure mode — GTM assets drifting from product-side honesty fixes).
+- as_of freshness recurs (1d stale again). Low severity.
