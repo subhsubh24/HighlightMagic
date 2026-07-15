@@ -736,3 +736,123 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    unchanged) — that's the actual remaining GTM_STANDARD §13 Gate 1 blocker.
 5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
    between runs.
+
+---
+
+## 2026-07-15 — Run 10
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged). Channels connected: none —
+  **10th consecutive run** with connect-channels open. Re-probed `env` for `GROWTH_AGENT_SECRET`/
+  `PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent, unchanged since
+  Run 6. `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID`/`SITE_GATE_PASSWORD` present in env
+  (unchanged shared-plumbing pattern per Run 7), but this run — for the first time — the
+  Browserbase credentials were actually USABLE (see below).
+- `GTM_SCORECARD.md` (as_of 2026-07-14, Audit Run 3, commit `1abada2`/#491): ship_gate_met
+  REGRESSED to false over a false "7 kinetic caption styles" claim in `docs/content/post-batch-1.md`
+  + a re-echo in Run 9's own `DEMAND_VALIDATION_KIT.md:16`. Checked both files: the product loop
+  had ALREADY fixed both (`3bfd330`/#493, landing ~3h after the GTM re-grade; `1e00ca7`/#494 for the
+  related BUSINESS_CASE §9 nit) — repo-wide grep for the claim = 0. No growth-side fix needed; the
+  scorecard is simply stale pending the Auditor's next re-grade.
+- New capability since Run 9: FACTORY_STANDARD §44 Layer-B (live-prod browser access via
+  Browserbase) landed in the product factory (#500, `a754876`) and the credentials are genuinely
+  live (a session create call returned 201, not an auth error).
+- Sam Gutelle (Tubefilter) draft: confirmed via `list_drafts` still present, unedited, unsent, now
+  16 days old (verified via date arithmetic, not eyeballed — a Run 9 dead end this run avoided on
+  the second pass, after the independent reviewer caught an initial 18-day miscalculation). Zero
+  replies (`search_threads`). `list_drafts` also surfaced SIX pre-existing stale digest/report
+  drafts (Runs 1-3 status reports, a quality-grade digest, two unlabeled pre-Growth-Agent daily
+  digests) — PENDING_OPS previously named only one; corrected the count.
+
+### What I did this run
+- **Ran the first genuine live-prod reachability probe this GTM loop has ever been able to run.**
+  Used the global `playwright` install + a direct HTTPS call to the Browserbase Sessions API (no
+  local playwright/browserbase SDK in `web/`, so wrote a small one-off Node script rather than add a
+  dependency) to open a real remote browser session. Sanity-checked it against `https://example.com`
+  first (HTTP 200) so a negative result on the real target would be trustworthy, not a broken
+  harness. Navigated to `https://highlightmagic.app` (both https and http): both failed with
+  `net::ERR_TUNNEL_CONNECTION_FAILED`. Independently, this run's local sandbox proxy also 502'd on
+  CONNECT to the same host (proxy status endpoint self-reported "policy denial or upstream
+  failure"), and a local `dns.resolve4()` call returned `ENOTFOUND`. Three signals, two independent
+  network paths, one conclusion: the domain is not currently resolving/reachable — meaningfully
+  stronger evidence than Run 7's single ambiguous local 502.
+  - Did NOT flip `site_gate_up` to true (no evidence supports that) — but reframed the blocker:
+    prior runs (1-9) all asked the owner to "set `SITE_GATE_PASSWORD`"; that presumes the domain
+    already resolves to the Vercel deployment, which this run found no evidence for. Added a new,
+    more specific `site-domain-dns` owner action AHEAD of `site-gate` in `PENDING_OPS.md` — verify
+    domain registration + DNS/alias config in Vercel first.
+  - Could not fully isolate "DNS never configured" from "domain never registered" from "Vercel
+    project has no domain alias" — named this limitation explicitly rather than guessing a specific
+    root cause I can't verify from outside the Vercel dashboard.
+- **Verified (did not re-fix) the GTM_SCORECARD's flagged content-honesty regression is already
+  resolved** by the product loop, and recorded that plainly so a future run doesn't spend effort
+  re-fixing an already-fixed defect.
+- **Corrected the Gmail-cleanup owner-action item** (6 stale drafts, not 1) after `list_drafts`
+  surfaced the full list.
+- **Bounded WebSearch refresh** (HighlightMagic-specific footprint + general AI-highlight-editor
+  complaints): found nothing new — `demand_signal` stands unchanged from Run 7's restructure,
+  correctly not re-churned for the second run running.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff.
+  **First pass: REQUEST_CHANGES** — caught a real arithmetic error (I wrote "18 days old" for a
+  draft created 2026-06-29 as of `as_of` 2026-07-15; actual elapsed time is 16 days, confirmed via
+  `python3 -c "from datetime import date; ..."`) and a clarity nit (a `next_actions` line said "the
+  C-grade shown is stale" when the GTM_SCORECARD's overall grade is B — only the `artifact_freshness`
+  dimension is C). Both fixed before merge. The reviewer also independently re-verified the #493/#494
+  commit timestamps, the zero-residual-claim grep, and that the YAML re-parsed cleanly after the fix.
+
+### Learnings
+- **Browserbase is a genuinely new capability for THIS agent, not just the product loop's.** §44
+  frames it as a product-factory Layer-B tool, but nothing prevents the GTM agent from using the same
+  provisioned credentials to answer its own long-standing "is the site actually reachable" question —
+  9 runs of ambiguous local-proxy 502s never resolved it; one Browserbase session (properly sanity-
+  checked first) did, in a single run. Worth checking at the START of future runs whether any newly-
+  landed FACTORY_STANDARD capability is usable from this side of the loop too, not just assuming it's
+  product-only because it was introduced under a product-facing section number.
+- **Sanity-check a new probing tool against a KNOWN-GOOD target before trusting a negative result
+  against the real one.** If the Browserbase call to `example.com` had also failed, the
+  `ERR_TUNNEL_CONNECTION_FAILED` on the target would have meant "the harness is broken," not "the
+  domain is unreachable" — an easy false-negative trap this run avoided by testing the control first.
+- **A stale metric-count claim is exactly the kind of thing the adversarial reviewer exists to
+  catch, and it worked again this run** — "16 vs 18 days" doesn't change any conclusion, but stating
+  a wrong number confidently is precisely GTM_STANDARD §4's anti-fabrication concern. Do the date
+  arithmetic in Bash (`python3 -c "from datetime import date; ..."`), never eyeball a day count from
+  two dates in prose.
+- **A ship-gate-blocking finding in an independent scorecard can already be resolved by the time you
+  read it** — GTM_SCORECARD.md's `ship_gate_met: false` (as_of 2026-07-14) described a real defect,
+  but the product loop fixed it hours later, before this run even started. Always re-verify a named
+  gap against the CURRENT repo state before treating it as this run's work — grepping for the
+  specific claim text is cheap and definitive.
+- Circuit breaker discipline held again: 10th consecutive run, no new escalation prose on
+  connect-channels — the run's effort went into a genuinely new capability (live reachability
+  probing) instead of repeating the same ask.
+
+### Dead ends / what NOT to repeat
+- Do NOT state a `_Nd`-style day-count (draft age, metric window) without computing it in Bash —
+  eyeballing two dates is exactly the kind of small, avoidable error the reviewer caught this run.
+- Do NOT assume a Browserbase/browser-tool negative result means the target is down without first
+  sanity-checking the same tool against a known-good site — otherwise a broken harness and a real
+  outage look identical.
+- Do NOT re-fix a GTM_SCORECARD-flagged content defect without first grepping the CURRENT repo for
+  the specific claim text — this run's "#493/#494 already fixed it" check took under a minute and
+  avoided duplicate work.
+
+### Circuit-breaker status
+- **Still open at Run 10 (10 consecutive runs).** New information this run doesn't resolve the
+  blocker but SHARPENS it: `site-domain-dns` (verify highlightmagic.app is registered + DNS-pointed
+  at Vercel) is now the single highest-priority ask, ahead of `site-gate`/`SITE_GATE_PASSWORD` and
+  ahead of `gtm-connect-email` (Resend) — none of the channel connections matter if the domain itself
+  doesn't resolve.
+
+### Next run priorities (Run 11)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social
+   tokens — never infer from git; if any present, pull real data and move toward execute mode.
+2. Re-run the Browserbase live-prod probe against `https://highlightmagic.app` — if the owner has
+   fixed DNS/domain registration since this run, this is the single most informative check available
+   (sanity-check against `example.com` first, exactly as this run did).
+3. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the demand-validation
+   kit was filmed/posted — if posted, read the comment signal per `DEMAND_VALIDATION_KIT.md` §D.
+4. Check whether `GTM_SCORECARD.md` was re-graded to reflect the #493/#494 fixes (ship_gate_met back
+   to true) — if still stale at `as_of: 2026-07-14` after several more runs, that itself becomes a
+   staleness signal worth flagging, the same pattern Run 7 named for the bootstrap grade.
+5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
+   between runs.
