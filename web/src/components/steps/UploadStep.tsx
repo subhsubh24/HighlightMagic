@@ -262,6 +262,19 @@ export default function UploadStep() {
     setDragOverIndex(null);
   };
 
+  // Keyboard parity for drag-to-reorder (WCAG 2.1 keyboard-operability): move the
+  // focused item earlier/later in the linear order. Reuses the same bounds-checked
+  // REORDER_MEDIA reducer action as the mouse path.
+  const handleReorderKey = (e: React.KeyboardEvent, index: number) => {
+    let toIndex: number | null = null;
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") toIndex = index - 1;
+    else if (e.key === "ArrowRight" || e.key === "ArrowDown") toIndex = index + 1;
+    if (toIndex === null) return;
+    e.preventDefault();
+    if (toIndex < 0 || toIndex >= state.mediaFiles.length) return;
+    dispatch({ type: "REORDER_MEDIA", fromIndex: index, toIndex });
+  };
+
   // Count how many pro features are enabled
   const animatedPhotoCount = state.mediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).length;
   const proFeaturesEnabled = [state.aiMusicEnabled, state.sfxEnabled, state.introOutroEnabled, animatedPhotoCount > 0].filter(Boolean).length;
@@ -404,10 +417,15 @@ export default function UploadStep() {
                     </button>
                   )}
 
-                  {/* Drag handle */}
-                  <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <GripVertical className="h-3.5 w-3.5 text-white/70" />
-                  </div>
+                  {/* Drag / keyboard reorder handle */}
+                  <button
+                    type="button"
+                    onKeyDown={(e) => handleReorderKey(e, index)}
+                    aria-label={`Reorder ${media.name}. Position ${index + 1} of ${state.mediaFiles.length}. Press the arrow keys to move it.`}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-black/40 text-white/70 opacity-0 backdrop-blur-sm transition-opacity hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </button>
 
                   {/* Remove button */}
                   <button

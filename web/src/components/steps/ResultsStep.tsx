@@ -92,6 +92,19 @@ export default function ResultsStep() {
     setDragOverIndex(null);
   };
 
+  // Keyboard parity for drag-to-reorder (WCAG 2.1 keyboard-operability): move the
+  // focused clip earlier/later. Reuses the same bounds-checked REORDER_CLIPS action
+  // as the mouse path.
+  const handleReorderKey = (e: React.KeyboardEvent, index: number) => {
+    let toIndex: number | null = null;
+    if (e.key === "ArrowUp" || e.key === "ArrowLeft") toIndex = index - 1;
+    else if (e.key === "ArrowDown" || e.key === "ArrowRight") toIndex = index + 1;
+    if (toIndex === null) return;
+    e.preventDefault();
+    if (toIndex < 0 || toIndex >= sortedClips.length) return;
+    dispatch({ type: "REORDER_CLIPS", fromIndex: index, toIndex });
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-6 animate-fade-in">
       {/* Header */}
@@ -275,7 +288,14 @@ export default function ResultsStep() {
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
                   {index + 1}
                 </div>
-                <GripVertical className="h-4 w-4 text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <button
+                  type="button"
+                  onKeyDown={(e) => handleReorderKey(e, index)}
+                  aria-label={`Reorder clip ${index + 1} of ${sortedClips.length}${clip.segment.label ? `, ${clip.segment.label}` : ""}. Press the arrow keys to move it.`}
+                  className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] opacity-0 transition-opacity hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
               </div>
 
               {/* Thumbnail */}
