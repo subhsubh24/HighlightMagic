@@ -77,6 +77,40 @@ describe("[CostMeter] /api/validate (streaming)", () => {
     const est = Number(meterLine!.match(/est=\$([0-9.]+)/)?.[1]);
     expect(est).toBeGreaterThan(0);
   });
+
+  it("marks the static validator system prompt as ephemeral-cacheable to cut input-token COGS", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchMock = vi.fn().mockResolvedValue(
+      streamingResponse([
+        { type: "message_start", message: { usage: { input_tokens: 1200, output_tokens: 1 } } },
+        {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: '{"passed":true,"issues":[],"fixes":{}}' },
+        },
+        { type: "message_delta", usage: { output_tokens: 50 } },
+      ])
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = new Request("http://localhost/api/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clips: [{ id: "c1", startTime: 0, endTime: 5 }], plan: {} }),
+    });
+    await validatePOST(req);
+
+    // The Anthropic call must send `system` as a block array whose (single, static-instructions)
+    // block carries cache_control:ephemeral — a plain string is uncacheable and re-bills the full
+    // system prefix on every export's validation call. The per-request tape rides in `messages`.
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body);
+    expect(Array.isArray(body.system)).toBe(true);
+    expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(typeof body.system[0].text).toBe("string");
+    expect(body.system[0].text.length).toBeGreaterThan(0);
+    // The tape/frames must stay in messages, never the cached system block.
+    expect(typeof body.messages[0].content === "string" || Array.isArray(body.messages[0].content)).toBe(true);
+  });
 });
 
 describe("[CostMeter] /api/ios-validate (non-streaming)", () => {

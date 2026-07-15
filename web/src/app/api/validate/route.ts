@@ -278,7 +278,18 @@ If passed is true, fixes should be empty or omitted.`;
         model: CLAUDE_VALIDATOR,
         max_tokens: 4096,
         stream: true,
-        system: fullSystemPrompt,
+        // COGS: the validator system prompt is large, static reviewer instructions
+        // (the per-request tape/frames ride in `messages`, never the system) reused on
+        // every validate call — so mark it ephemeral to cache the prefix and cut input
+        // tokens on repeat calls within the cache window (same pattern the planner and
+        // frame-scorer already use in detect.ts). Cannot change output, only billing.
+        system: [
+          {
+            type: "text",
+            text: fullSystemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
         messages: [{ role: "user", content: userContent }],
       }),
       // B6 resilience: bound the call (and the streamed read) under the 60s function
