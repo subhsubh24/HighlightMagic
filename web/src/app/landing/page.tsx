@@ -312,6 +312,7 @@ function Nav() {
 
 export default function LandingPage() {
   const pricingRef = useRef<HTMLElement>(null);
+  const waitlistRef = useRef<HTMLDivElement>(null);
 
   // Funnel instrumentation: fire `pricing_view` once when the pricing section first scrolls into
   // view. This is the visitor→pricing step of the acquisition funnel that analytics.ts already
@@ -328,6 +329,27 @@ export default function LandingPage() {
         }
       },
       { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Funnel instrumentation: fire `waitlist_form_view` once when the hero waitlist form first
+  // scrolls into view. This is the form-impression step between landing and `waitlist_signup`,
+  // so the owner can tell a below-the-fold visibility problem (few impressions) from a weak-copy
+  // conversion problem (impressions but no signups). Same once-then-disconnect / SSR-safe guard
+  // as pricing_view; a no-op until Plausible is loaded.
+  useEffect(() => {
+    const el = waitlistRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackEvent("waitlist_form_view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.5 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -364,7 +386,7 @@ export default function LandingPage() {
             in seconds.
           </p>
 
-          <div className="flex flex-col items-center gap-4">
+          <div ref={waitlistRef} className="flex flex-col items-center gap-4">
             <WaitlistForm />
             <p className="text-sm text-[var(--text-secondary)]">
               No credit card required &middot; 5 free exports per month
