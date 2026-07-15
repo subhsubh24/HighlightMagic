@@ -97,13 +97,13 @@ export default function EditorStep() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => dispatch({ type: "SET_STEP", step: "results" })}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[var(--text-secondary)] hover:bg-white/10"
+          className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-[var(--text-secondary)] hover:bg-white/10"
           aria-label="Go back"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="font-semibold text-white">Review Your Tape</h2>
-        <button onClick={handleExport} className="btn-primary !px-4 !py-2 text-sm flex items-center gap-1.5">
+        <button onClick={handleExport} className="btn-primary !px-4 !py-2 text-sm flex min-h-[44px] items-center gap-1.5">
           <Download className="h-4 w-4" />
           Export
         </button>
