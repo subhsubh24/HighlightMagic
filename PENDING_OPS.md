@@ -10,7 +10,7 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-13
+  as_of: 2026-07-15
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
@@ -27,11 +27,11 @@ OWNER_ACTIONS:
       how: "Open docs/growth/demand-validation-demo.html in a browser (or on a phone), screen-record the 3-screen tap-through per the shot list in DEMAND_VALIDATION_KIT.md section C, pick 2-3 hooks to start with, post across TikTok/Reels/Shorts via your own accounts. Report back the COMMENT TEXT (not just view counts) so the Growth Agent can read intent-comment rate next run."
       blocks: none
     - id: cleanup-stale-gmail-draft
-      title: "Delete a leftover Gmail draft ('HighlightMagic Growth — 2026-06-29') — a status-report email that predates the current no-digest-email policy"
+      title: "Delete SIX leftover Gmail drafts — pre-policy status-report/digest emails that predate the current no-digest-email rule"
       priority: normal
       status: open
-      why: "The Growth Agent's Run 3 (2026-06-29) created a full status-report email as a Gmail draft, addressed to the owner. GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these, but this one pre-existing draft was never cleaned up. It is unsent and harmless (no auto-send exists), but it clutters Gmail drafts alongside the real to-send outreach draft."
-      how: "Open Gmail drafts, find the one titled 'HighlightMagic Growth — 2026-06-29', delete it. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
+      why: "Corrected count (2026-07-15, Run 10): list_drafts shows SIX pre-existing stale drafts, not one — 3 Growth Agent status-report emails ('HighlightMagic Growth — 2026-06-27/28/29', Runs 1-3), 1 quality-grade digest ('HighlightMagic Quality — 2026-06-29'), and 2 unlabeled 'daily digest' entries (2026-06-24, predating the Growth Agent entirely). GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these. All are unsent and harmless (no auto-send exists), but they clutter Gmail drafts alongside the real to-send Sam Gutelle outreach draft."
+      how: "Open Gmail drafts, find the six drafts named above (search 'HighlightMagic' in drafts), delete them. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
       blocks: none
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
@@ -70,11 +70,18 @@ OWNER_ACTIONS:
       why: "The publishing queue (web/src/lib/social/queue.ts) is built and dry-run-safe but refuses to post without a channel's API key/OAuth token. Reconciles GROWTH_STATUS validation.sources[social_x, social_instagram, social_tiktok, social_reddit] (all unavailable)."
       how: "Set one of X_API_BEARER_TOKEN, INSTAGRAM_ACCESS_TOKEN, TIKTOK_ACCESS_TOKEN, or REDDIT_ACCESS_TOKEN in Vercel env per the platform's developer portal. Start with whichever platform the owner already has an account on."
       blocks: growth-execution
+    - id: site-domain-dns
+      title: "URGENT (new 2026-07-15, Run 10): verify highlightmagic.app is registered + DNS-pointed at the Vercel deployment"
+      priority: urgent
+      status: open
+      why: "This run drove a real Browserbase-hosted browser (sanity-checked working: loaded https://example.com -> HTTP 200) to https://highlightmagic.app and got net::ERR_TUNNEL_CONNECTION_FAILED on both https and http. Independently, this run's local sandbox got a 502 from its outbound proxy on the same host and a local DNS resolve4 returned ENOTFOUND. Three signals across two different network paths all agree the domain is not currently resolving/connecting — this is upstream of and blocks confirming site-gate (below): the gate cannot be verified up if the domain itself is unreachable. Consistent with either the domain never having been registered/pointed at Vercel, or no production domain alias being attached in the Vercel project — the agent cannot distinguish which from outside the Vercel dashboard."
+      how: "In the Vercel dashboard, confirm highlightmagic.app is added as a Domain on the web/ project and its DNS records (A/CNAME per Vercel's instructions) are set at the registrar. If the domain isn't purchased/pointed yet, either complete that or share a working *.vercel.app preview/production URL so the agent has a fallback to probe. Once resolving, re-run this check (or the next Growth Agent run will)."
+      blocks: launch-exposure
     - id: site-gate
       title: "Set SITE_GATE_PASSWORD pre-launch (password-protect the unfinished web app); UNSET at launch"
       priority: high
       status: open
-      why: "Pre-launch, the public must NOT reach the half-baked web app. The gate (ROADMAP D6, web/src/middleware.ts) is ON only when SITE_GATE_PASSWORD is set; the waitlist/landing/legal + /api/* stay open so people can still join the waitlist. EXECUTE-mode marketing is BLOCKED until the gate is up (GROWTH_STATUS.site_gate_up: true)."
+      why: "Pre-launch, the public must NOT reach the half-baked web app. The gate (ROADMAP D6, web/src/middleware.ts) is ON only when SITE_GATE_PASSWORD is set; the waitlist/landing/legal + /api/* stay open so people can still join the waitlist. EXECUTE-mode marketing is BLOCKED until the gate is up (GROWTH_STATUS.site_gate_up: true). BLOCKED ON site-domain-dns above until the domain itself resolves — this agent cannot verify the gate is up on an unreachable domain."
       how: "In Vercel env for web/, set SITE_GATE_PASSWORD=deepster (never commit the value), then flip GROWTH_STATUS.site_gate_up to true. At launch (every ship-critical QUALITY_SCORECARD dim A/A+ + readiness passed), UNSET SITE_GATE_PASSWORD to open the app."
       blocks: launch-exposure
     - id: enforce-ci-gates
