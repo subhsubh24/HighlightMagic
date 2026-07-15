@@ -3,6 +3,7 @@
  *
  * Event taxonomy (visit → waitlist → install → activate → export → Pro):
  *   page_view           — automatic via Plausible script
+ *   waitlist_form_view  — the waitlist form first scrolled into view (form-impression step)
  *   waitlist_signup     — user submitted the waitlist form
  *   cta_click           — user clicked any primary CTA (App Store badge, hero button)
  *   pricing_view        — user scrolled to / clicked the pricing section
@@ -19,6 +20,7 @@
  */
 
 export type AnalyticsEvent =
+  | "waitlist_form_view"
   | "waitlist_signup"
   | "cta_click"
   | "pricing_view"
