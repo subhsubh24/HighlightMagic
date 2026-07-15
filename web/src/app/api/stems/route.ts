@@ -2,6 +2,7 @@ import { isolateInstrumental } from "@/lib/elevenlabs-stems";
 import { enforceGlobalGenerationCeiling, GLOBAL_STEMS_DAILY_CAP } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { enforceBodyLimit } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -21,6 +22,11 @@ export async function POST(req: Request) {
   // throttle is its primary abuse brake (Track H1).
   const rl = checkRateLimit(`stems:${getClientIP(req)}`, PAID_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // Track H: reject an over-declared body before req.json() buffers it. Cap just above the
+  // 15MB per-field musicDataUri limit so a legitimate track is never rejected pre-parse.
+  const tooLarge = enforceBodyLimit(req, MAX_DATA_URI_LENGTH + 1024 * 1024);
+  if (tooLarge) return tooLarge;
 
   try {
     const { musicDataUri } = await req.json();
