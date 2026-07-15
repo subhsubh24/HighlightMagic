@@ -3,6 +3,7 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
+import { enforceBodyLimit, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,6 +18,10 @@ export async function POST(req: Request) {
   // request floods even before the quota gate (Track H1).
   const rl = checkRateLimit(`outro:${getClientIP(req)}`, PAID_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // Track H: reject an over-declared body before req.json() buffers it (pre-parse DoS guard).
+  const tooLarge = enforceBodyLimit(req, JSON_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   try {
     const { userId, signedTransaction, prompt, duration } = await req.json();
