@@ -412,3 +412,72 @@ Overall holds **B**, gate stays false.
 1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker; owner-only Mac work). #174 / #427.
 2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota. #176.
 3. `tests_evals` B — make a real AI round-trip eval required / hard-fail when keyless (#289) and promote `ios` to a required check. #177.
+
+---
+
+## 2026-07-15 — grade, commit a754876
+
+Re-ran the web gate this run: `npm ci && test && lint && build` → build compiled successfully, **1124 tests passed (80 files)**
+(up from 1110/79), coverage stmts **93.15%** / branch 84.62% / funcs 92.65% / lines 94.57% (all above the 60/60/50/60 floor),
+**0 lint warnings**. Latest ci.yml run on HEAD `a754876` = success; latest 15 main CI runs all green. Graded with **9 fresh,
+adversarial per-dimension grader subagents** (none wrote the code), each backing its letter with a mechanical signal it ACTUALLY
+RAN + file/line evidence (subagent test runs cited: security 134 passed / 10 files, correctness 185 passed / 11 files). 31 commits
+since the last grade (`a4863f5`) — mostly FACTORY_STANDARD docs + honesty fixes, plus a few real code changes (#496/#475 security,
+#469 ios-validate re-gate drop, #471/#482 test coverage, #498 CTA routing).
+
+**Grades:** overall **B**; `ship_gate_met = false`.
+
+| Dimension | ship_critical | Grade | Δ vs 2026-07-13 |
+|---|:---:|:---:|:---:|
+| functional_reality | ✅ | B | = (both iOS gaps unchanged) |
+| correctness_reliability | ✅ | A | = (#469 re-gate drop verified correct; credit atomicity still mock-only; 185/185 pass) |
+| security | ✅ | A | = (#496/#475 confirmed at cause; in-memory buckets residual remains) |
+| design_taste | ✅ | A+ | = (emoji-as-UI grep 0; new 404/CTA surfaces clean; tokens mirrored) |
+| store_readiness | ✅ | C | = (8th cycle; only docs/copy ever moved) |
+| artifact_integrity | ✅ | **A** | **A+ → A ↓** (one fresh verified finding: sibling GTM_SCORECARD feed stale re: the #493-fixed kinetic-caption claim) |
+| business_case_strength | ✅ | A | = (numbers reconcile; #494 §9 reconcile intact; credit lever half-shipped) |
+| tests_evals | ✅ | B | = (no real AI round-trip gates a merge; #289 open) |
+| performance | ⬜ | A | = (#419 intact; 31 commits add no hot-path hazard; no-LRU-test residual remains) |
+
+**What changed (real, verified):**
+- **artifact_integrity A+ → A:** the sole grade change and NOT a product regression. Fresh, independently-verified finding —
+  `docs/growth/GTM_SCORECARD.md:19` still asserts `ship_gate_met: false` with the rationale "a false '7 kinetic caption styles'
+  claim in a ready-to-record content asset," but **#493** (3bfd330, 2026-07-14 10:58) already fixed that claim
+  (`post-batch-1.md` now reads "4 animated caption styles"; grep for residual "7 kinetic/caption" overclaim = 0), landing ~3h AFTER
+  the GTM re-grade **#491** (1abada2, 07:49), and `git log 3bfd330..HEAD -- docs/growth/GTM_SCORECARD.md` is empty (not re-graded
+  since). A dashboard feed no longer matches reality ⇒ not a zero-findings state ⇒ A. Held at A (not lower) because it is
+  CONSERVATIVE staleness in a SIBLING-owned feed (the independent GTM auditor's lagging snapshot, pending its own re-grade) — the
+  product does NOT overclaim; if anything the GTM feed under-claims. No product integrity defect found; everything else exemplary
+  (5/5 dashboard feeds parse, zero pricing drift, kinetic-caption honesty now accurate, 8 sampled ticked boxes back real artifacts).
+- **correctness (held A):** #469 (drop the erroneous ios-validate monthly-quota re-gate) verified CORRECT at cause — the dropped gate
+  was a READ-ONLY checkExportAllowed; ios-validate never called consumeExport (sole decrement is ios-score:409), so removal can't
+  double-count or bypass, the KV-atomic wallet backstop is preserved, and the prior behavior wrongly 402'd the last free export's QA
+  step. Credit-grant atomicity still proven ONLY against a mock (unchanged to-A+ residual). 185/185 tests pass.
+- **security (held A):** #496 (templateName length-bound before the paid ios-score call) + #475 (rotation-proof global anonymous
+  ceiling on /api/validate — KV-atomic on a dedicated "global-gen" keyspace, fail-closed) both CONFIRMED at cause. ONE compounding
+  residual remains: rate-limit.ts:28 in-memory per-instance buckets (defense-in-depth only; wallet guards KV-atomic + fail-closed).
+- **store_readiness (held C, 8th cycle):** the honesty-copy fixes (#498 route store CTAs to waitlist; #470/#476/#478/#479 drop false
+  claims) are real but copy/doc-only — no archivable app target (Package.swift .library-only), no 6.9-inch screenshots, placeholder
+  team/app IDs + empty products:[]. THE ship blocker; only docs/copy have ever moved.
+- **business_case (held A):** every load-bearing number independently recomputed (python3) and reconciles; #494 §9 double-attribution
+  reconcile verified internally consistent; floor_met_year1=false honest; credit lever still half-shipped (Sources/ = 0 credit/consumable).
+
+**Auditor reconciliation (recorded for transparency):**
+- artifact_integrity: subagent returned A (A+→A) on the GTM_SCORECARD staleness finding; I VERIFIED it independently
+  (git show confirms #493 landed 10:58 vs #491 07:49; `git log 3bfd330..HEAD -- docs/growth/GTM_SCORECARD.md` empty; the content
+  asset now reads "4 animated caption styles" with no residual overclaim; GTM_SCORECARD.md:19 still cites the fixed defect) and
+  ACCEPTED the downgrade rather than overriding up — holding A+ over a fresh, verified dashboard-feed-vs-reality mismatch would be the
+  inflation the rubric warns against. A still clears the A bar, so no ship-gate impact. Remediation belongs to the GTM audit routine's
+  next re-grade (self-healing), NOT to factory product work.
+
+**Ship gate NOT met:** needs A/A+ on every ship_critical dim; `store_readiness` C (8 cycles), `functional_reality` B,
+`tests_evals` B remain below the A bar.
+
+**Diff vs last grade (2026-07-13, a4863f5):** `artifact_integrity` **A+→A** (fresh verified sibling-feed staleness; NOT a product
+regression); no other letter moved; no product regressed. The three sub-A ship-critical dims are the SAME three on the SAME root
+blockers. Overall holds **B**, gate stays false.
+
+**Top gaps (ordered; tracked on open issues #174, #176, #177):**
+1. `store_readiness` C — archivable Xcode app target + 6.9-inch screenshots (the hard ship blocker; owner-only Mac work). #174 / #427.
+2. `functional_reality` B — executing test for the watermark/overlay export path (the real shipped free-tier path) + server-side export-count quota. #176.
+3. `tests_evals` B — make a real AI round-trip eval required / hard-fail when keyless (#289) and promote `ios` to a required check. #177.
