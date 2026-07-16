@@ -6,6 +6,7 @@
  *   waitlist_form_view  — the waitlist form first scrolled into view (form-impression step)
  *   waitlist_signup     — user submitted the waitlist form
  *   cta_click           — user clicked any primary CTA (App Store badge, hero button)
+ *   features_view       — user scrolled to the features section (mid-funnel engagement step)
  *   pricing_view        — user scrolled to / clicked the pricing section
  *   faq_open            — user expanded an FAQ item
  *
@@ -23,6 +24,7 @@ export type AnalyticsEvent =
   | "waitlist_form_view"
   | "waitlist_signup"
   | "cta_click"
+  | "features_view"
   | "pricing_view"
   | "faq_open";
 
