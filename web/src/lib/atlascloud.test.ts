@@ -262,6 +262,66 @@ describe("Atlas Cloud API", () => {
       expect(result.error).toBe("Content policy violation");
     });
 
+    it("treats the 'completed' status alias like 'succeeded'", async () => {
+      // AtlasCloud reports terminal success as either "succeeded" or "completed"; the export path
+      // must accept both and surface the output URL, or a finished render would look stuck.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_c", status: "completed", outputs: ["https://cdn.example.com/done.mp4"] },
+          }),
+      });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const result = await checkTaskResult("pred_c");
+
+      expect(result.status).toBe("completed");
+      expect(result.outputUrl).toBe("https://cdn.example.com/done.mp4");
+    });
+
+    it("maps a 'canceled' task to failed and surfaces its error", async () => {
+      // A canceled task is terminal — it must resolve to failed (not hang the poll loop as if
+      // still processing), carrying whatever reason the provider gave.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_x", status: "canceled", error: "user canceled" },
+          }),
+      });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const result = await checkTaskResult("pred_x");
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("user canceled");
+    });
+
+    it("falls back to 'unknown error' when a failed task omits an error message", async () => {
+      // Providers sometimes report a terminal failure with no error field; the result must still
+      // carry a non-empty reason rather than an undefined that reads as "no error".
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            code: 200,
+            message: "ok",
+            data: { id: "pred_n", status: "failed" },
+          }),
+      });
+
+      const { checkTaskResult } = await import("./atlascloud");
+      const result = await checkTaskResult("pred_n");
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("unknown error");
+    });
+
     it("retries a THROWN fetch (network/DNS/timeout) instead of aborting the poll", async () => {
       vi.useFakeTimers();
       // First poll throws like a socket/DNS blip or the AbortSignal.timeout firing; the retry
