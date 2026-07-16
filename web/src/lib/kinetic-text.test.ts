@@ -15,6 +15,13 @@ interface TextCall { text: string; x: number; y: number; font: string; fillStyle
 function makeTextCtx(charWidth = 10) {
   const texts: TextCall[] = [];
   const translates: [number, number][] = [];
+  // Every value assigned to ctx.shadowColor / ctx.shadowBlur, in order. The glow pass sets a glow
+  // color/blur, draws, then the main pass overwrites with the drop-shadow — so only a recorded
+  // HISTORY (not the final value) can prove the glow layers ran and what color hexToRgba produced.
+  const shadowColors: string[] = [];
+  const shadowBlurs: number[] = [];
+  let _shadowColor = "";
+  let _shadowBlur = 0;
   let saves = 0;
   let restores = 0;
   const ctx = {
@@ -22,8 +29,10 @@ function makeTextCtx(charWidth = 10) {
     font: "",
     textAlign: "start",
     fillStyle: "" as unknown,
-    shadowColor: "",
-    shadowBlur: 0,
+    get shadowColor() { return _shadowColor; },
+    set shadowColor(v: string) { _shadowColor = v; shadowColors.push(v); },
+    get shadowBlur() { return _shadowBlur; },
+    set shadowBlur(v: number) { _shadowBlur = v; shadowBlurs.push(v); },
     save() { saves++; },
     restore() { restores++; },
     translate(x: number, y: number) { translates.push([x, y]); },
@@ -36,7 +45,7 @@ function makeTextCtx(charWidth = 10) {
   };
   return {
     ctx: ctx as unknown as CanvasRenderingContext2D,
-    texts, translates,
+    texts, translates, shadowColors, shadowBlurs,
     get saves() { return saves; },
     get restores() { return restores; },
   };
@@ -271,6 +280,60 @@ describe("drawKineticCaption", () => {
     // "Hey" → 3 chars drawn separately, not one "Hey" fillText.
     expect(m.texts).toHaveLength(3);
     expect(m.texts.map((t) => t.text)).toEqual(["H", "e", "y"]);
+  });
+
+  // ── Glow pass + hexToRgba color conversion ──
+  // When glowRadius/glowAlpha are active the render lays down two glow shadow layers (in the caption
+  // glow color) BEFORE the main drop-shadow pass. These lock the glow color math — a hexToRgba
+  // regression would silently ship the wrong caption glow color in every export.
+
+  it("converts a hex glow color to rgba at the caption's glow alpha", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(
+      m.ctx, "Nice", "Bold",
+      plainTransform({ glowRadius: 20, glowAlpha: 0.5 }),
+      1080, 1920, 48,
+      { color: "white", glowColor: "#ff00aa" },
+    );
+    // #ff00aa → r=255 g=0 b=170; layer 1 uses the full glow alpha.
+    expect(m.shadowColors).toContain("rgba(255, 0, 170, 0.5)");
+    // Both glow layers use the same hue (the second at a reduced alpha), so ≥2 glow entries appear.
+    expect(m.shadowColors.filter((c) => c.startsWith("rgba(255, 0, 170,")).length).toBeGreaterThanOrEqual(2);
+    // Blur is driven by glowRadius (layer 1) then glowRadius × glowSpread(1.5) = 30 (layer 2).
+    expect(m.shadowBlurs).toContain(20);
+    expect(m.shadowBlurs).toContain(30);
+  });
+
+  it("passes an rgb()/rgba() glow color through with the new alpha", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(
+      m.ctx, "Go", "Bold",
+      plainTransform({ glowRadius: 12, glowAlpha: 0.5 }),
+      1080, 1920, 48,
+      { color: "white", glowColor: "rgb(100, 200, 50)" },
+    );
+    expect(m.shadowColors).toContain("rgba(100, 200, 50, 0.5)");
+  });
+
+  it("falls back to white for an unparseable glow color", () => {
+    const m = makeTextCtx();
+    drawKineticCaption(
+      m.ctx, "Yo", "Bold",
+      plainTransform({ glowRadius: 12, glowAlpha: 0.5 }),
+      1080, 1920, 48,
+      // "magenta" is a valid CSS name but not hex/rgb — hexToRgba can't parse it → white fallback.
+      { color: "white", glowColor: "magenta" },
+    );
+    expect(m.shadowColors).toContain("rgba(255, 255, 255, 0.5)");
+  });
+
+  it("skips the glow layers entirely when glow is inactive", () => {
+    const m = makeTextCtx();
+    // glowRadius 0 (plainTransform default) → the glow branch never runs; a single-line caption
+    // draws exactly once (the main pass), not the 3× (2 glow layers + main) an active glow yields.
+    drawKineticCaption(m.ctx, "Plain", "Bold", plainTransform(), 1080, 1920, 48, { color: "white", glowColor: "#ff00aa" });
+    expect(m.texts.filter((t) => t.text === "Plain")).toHaveLength(1);
+    expect(m.shadowColors.some((c) => c.startsWith("rgba(255, 0, 170,"))).toBe(false);
   });
 });
 
