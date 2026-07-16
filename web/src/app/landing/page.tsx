@@ -311,8 +311,30 @@ function Nav() {
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
+  const featuresRef = useRef<HTMLElement>(null);
   const pricingRef = useRef<HTMLElement>(null);
   const waitlistRef = useRef<HTMLDivElement>(null);
+
+  // Funnel instrumentation: fire `features_view` once when the features section first scrolls into
+  // view. This is the mid-funnel engagement step between the hero (`waitlist_form_view`) and
+  // `pricing_view`, so the owner can separate a "few visitors scroll past the hero" problem from a
+  // "they engage with features but bounce before pricing" problem. Same once-then-disconnect /
+  // SSR-safe guard as pricing_view; a no-op until Plausible is loaded.
+  useEffect(() => {
+    const el = featuresRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackEvent("features_view");
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Funnel instrumentation: fire `pricing_view` once when the pricing section first scrolls into
   // view. This is the visitor→pricing step of the acquisition funnel that analytics.ts already
@@ -440,7 +462,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Features ── */}
-      <section id="features" className="px-6 py-20">
+      <section id="features" ref={featuresRef} className="px-6 py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mb-14 text-center">
             <h2 className="mb-3 text-3xl font-bold md:text-4xl">
