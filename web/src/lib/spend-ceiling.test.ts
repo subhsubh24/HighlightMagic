@@ -291,6 +291,17 @@ describe("fail-closed on KV error", () => {
     expect(result.allowed).toBe(false);
   });
 
+  it("blocks the generation ceiling check (fail closed, at the cap) when KV throws", async () => {
+    // checkDailyGenerationCeiling reads the "gen" counter to decide allow/deny. Its sibling
+    // checkDailySpendCeiling has this exact fail-closed assertion; this one's catch branch
+    // (return { allowed:false, usage:CAP, cap:CAP }) was the sole uncovered path. A KV read that
+    // throws must deny (never fail OPEN into an unmetered paid call) and report usage AT the cap.
+    selectFailingKVStore();
+    const result = await checkDailyGenerationCeiling(uniqueUser());
+    expect(result.allowed).toBe(false);
+    expect(result.usage).toBe(result.cap);
+  });
+
   it("returns 429 from enforceGenerationCeiling when KV throws", async () => {
     selectFailingKVStore();
     const blocked = await enforceGenerationCeiling(uniqueUser());
