@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { kv } from "@vercel/kv";
 import {
   enqueue,
   listQueue,
@@ -7,6 +8,12 @@ import {
   isChannelConnected,
   _resetQueueMemory,
 } from "./queue";
+
+// The queue dynamically `import("@vercel/kv")` only when KV_REST_API_URL/TOKEN are set, so the
+// mock stays inert for the in-memory tests below (which never set those env vars).
+vi.mock("@vercel/kv", () => ({
+  kv: { rpush: vi.fn(), lrange: vi.fn() },
+}));
 
 describe("social publishing queue (E6c)", () => {
   beforeEach(() => {
@@ -52,5 +59,60 @@ describe("social publishing queue (E6c)", () => {
     const res = await publish({ channel: "x", text: "post" });
     expect(res.status).toBe("failed");
     expect(res.note).toBe("poster-not-implemented");
+  });
+});
+
+describe("social publishing queue — durable KV store path (E6c)", () => {
+  beforeEach(() => {
+    _resetQueueMemory();
+    vi.unstubAllEnvs();
+    vi.mocked(kv.rpush).mockReset();
+    vi.mocked(kv.lrange).mockReset();
+    // isQueueStoreConfigured() requires BOTH env vars — flips enqueue/listQueue onto the KV branch.
+    vi.stubEnv("KV_REST_API_URL", "https://kv.example.com");
+    vi.stubEnv("KV_REST_API_TOKEN", "tok");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("enqueue rpushes a serialized item to the KV list instead of the in-memory queue", async () => {
+    const item = await enqueue({ channel: "x", text: "hello", mediaUrl: "https://cdn/x.png" });
+    expect(kv.rpush).toHaveBeenCalledTimes(1);
+    const [key, payload] = vi.mocked(kv.rpush).mock.calls[0];
+    expect(key).toBe("social:queue");
+    // The stored payload is the JSON of the returned item (round-trips id/status/mediaUrl).
+    expect(JSON.parse(payload as string)).toEqual(item);
+    expect(item).toMatchObject({
+      channel: "x",
+      text: "hello",
+      mediaUrl: "https://cdn/x.png",
+      status: "queued",
+    });
+  });
+
+  it("listQueue reads the KV list and deserializes both raw-string and pre-parsed object rows", async () => {
+    const stringRow = JSON.stringify({
+      id: "a",
+      channel: "x" as const,
+      text: "from-json",
+      status: "queued" as const,
+    });
+    const objectRow = {
+      id: "b",
+      channel: "reddit" as const,
+      text: "already-object",
+      status: "sent" as const,
+    };
+    vi.mocked(kv.lrange).mockResolvedValue([stringRow, objectRow]);
+
+    const q = await listQueue();
+
+    expect(kv.lrange).toHaveBeenCalledWith("social:queue", 0, -1);
+    // string row parsed, object row passed through unchanged — both branches of line 88.
+    expect(q).toEqual([
+      { id: "a", channel: "x", text: "from-json", status: "queued" },
+      objectRow,
+    ]);
   });
 });
