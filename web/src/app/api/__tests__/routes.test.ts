@@ -283,6 +283,18 @@ describe("POST /api/intro", () => {
     expect(res.status).toBe(402);
   });
 
+  it("rejects an oversized prompt BEFORE the entitlement gate (H2 bounds-first)", async () => {
+    // The prompt bound must fire ahead of checkExportAllowed so a hostile client cannot make us
+    // burn an ES256 JWS verify + KV quota read on a multi-KB malformed prompt. A valid userId is
+    // supplied so the userId gate passes and the oversized prompt is the only thing left to reject.
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockClear();
+    const { POST } = await import("@/app/api/intro/route");
+    const res = await POST(jsonRequest({ userId: "test-user", prompt: "x".repeat(1001) }));
+    expect(res.status).toBe(400);
+    expect(checkExportAllowed).not.toHaveBeenCalled();
+  });
+
   it("returns prediction ID on success", async () => {
     const { submitTextToVideo } = await import("@/lib/atlascloud");
     (submitTextToVideo as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred_intro_123");

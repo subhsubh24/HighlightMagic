@@ -93,6 +93,18 @@ describe("POST /api/outro", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects an oversized prompt BEFORE the entitlement gate (H2 bounds-first)", async () => {
+    // The prompt bound must fire ahead of checkExportAllowed so a hostile client cannot make us
+    // burn an ES256 JWS verify + KV quota read on a multi-KB malformed prompt. userId is valid so
+    // the only remaining rejection is the oversized prompt.
+    const { checkExportAllowed } = await import("@/lib/entitlement");
+    (checkExportAllowed as ReturnType<typeof vi.fn>).mockClear();
+    const { POST } = await import("@/app/api/outro/route");
+    const res = await POST(jsonRequest({ userId: "u1", prompt: "x".repeat(1001) }));
+    expect(res.status).toBe(400);
+    expect(checkExportAllowed).not.toHaveBeenCalled();
+  });
+
   it("returns predictionId on success", async () => {
     const { submitTextToVideo } = await import("@/lib/atlascloud");
     (submitTextToVideo as ReturnType<typeof vi.fn>).mockResolvedValueOnce("pred-outro-001");

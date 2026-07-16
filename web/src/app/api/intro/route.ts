@@ -30,6 +30,21 @@ export async function POST(req: Request) {
       return Response.json({ error: "userId is required" }, { status: 400 });
     }
 
+    // H2 (bounds before expensive work): validate the prompt's type + length BEFORE the
+    // entitlement gate. checkExportAllowed can trigger an ES256 JWS verify (when a Pro
+    // signedTransaction is present) plus a KV quota read — a hostile client must not be able to
+    // make us burn that work on a malformed/oversized prompt. Matches the sibling paid routes
+    // (voiceover/sfx/music), which all field-validate before checkExportAllowed.
+    if (!prompt || typeof prompt !== "string") {
+      return Response.json({ error: "prompt is required" }, { status: 400 });
+    }
+    if (prompt.length > 1000) {
+      return Response.json(
+        { error: "prompt must be 1000 characters or fewer" },
+        { status: 400 }
+      );
+    }
+
     const decision = await checkExportAllowed({
       userId,
       signedTransaction: typeof signedTransaction === "string" ? signedTransaction : null,
@@ -38,16 +53,6 @@ export async function POST(req: Request) {
       return Response.json(
         { error: decision.reason ?? "quota exceeded", remaining: 0, limit: decision.limit, upgrade: !decision.isPro },
         { status: 402 }
-      );
-    }
-
-    if (!prompt || typeof prompt !== "string") {
-      return Response.json({ error: "prompt is required" }, { status: 400 });
-    }
-    if (prompt.length > 1000) {
-      return Response.json(
-        { error: "prompt must be 1000 characters or fewer" },
-        { status: 400 }
       );
     }
 
