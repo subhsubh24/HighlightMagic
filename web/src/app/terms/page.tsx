@@ -136,7 +136,7 @@ export default function TermsPage() {
             Questions about these Terms? Email{" "}
             <a
               href="mailto:support@highlightmagic.app"
-              className="text-[var(--accent)] underline"
+              className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               support@highlightmagic.app
             </a>
