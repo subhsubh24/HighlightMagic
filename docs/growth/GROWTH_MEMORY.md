@@ -856,3 +856,138 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    staleness signal worth flagging, the same pattern Run 7 named for the bootstrap grade.
 5. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
    between runs.
+
+---
+
+## 2026-07-17 — Run 11
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged). Channels connected: none —
+  **11th consecutive run** with connect-channels open. Re-probed `env` for `GROWTH_AGENT_SECRET`/
+  `PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent, unchanged since
+  Run 6. `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID`/`SITE_GATE_PASSWORD` present in env
+  (unchanged shared-plumbing pattern, per Run 7's established finding).
+- `GTM_SCORECARD.md` (`as_of: 2026-07-14`) and product `QUALITY_SCORECARD.md` (`as_of: 2026-07-15`)
+  both unchanged since Run 10 last read them — 3 days / 1 run since the last grade, not yet a
+  staleness signal worth flagging (the established bar is ~9 days / 3+ runs, per Run 7). The
+  product loop is highly active (Run 80 of the product factory landed the same day as this run,
+  per `git log`), but neither independent scorecard has re-graded since Run 10.
+- Re-verified the "7 kinetic caption styles" false claim GTM_SCORECARD flagged (as_of 2026-07-14) is
+  still fixed in the current repo (`grep -rn "7 kinetic\|kinetic caption styles"` across
+  `docs/content/` and `docs/growth/` = 0 hits) — no growth-side action needed, just confirming Run
+  10's finding still holds.
+- Sam Gutelle (Tubefilter) draft: confirmed via `list_drafts` still present, unedited, unsent, now
+  **18 days old** (`python3` date arithmetic: 2026-07-17 − 2026-06-29 = 18 days). Zero replies
+  (`search_threads` for tubefilter/sam@tubefilter.com: one unrelated 2023 marketing email only).
+  `list_drafts` (unfiltered query "HighlightMagic", pageSize 20) returned **10 total drafts**: the
+  1 real Sam Gutelle draft + **9 stale pre-policy drafts** — Run 10's count of "SIX" was itself an
+  undercount: it named only 2 of the 5 actual unlabeled "daily digest" entries (2026-06-24 x2,
+  06-25, 06-26, 06-27), missing 3. Corrected in `PENDING_OPS.md` this run.
+
+### What I did this run
+- **Re-ran the Run 10 Browserbase live-prod reachability probe** (new session, sanity-checked
+  against `https://example.com` -> HTTP 200 first, exactly as Run 10 did) against
+  `https://highlightmagic.app` and `http://highlightmagic.app`: both still
+  `net::ERR_TUNNEL_CONNECTION_FAILED`, an EXACT repeat of Run 10's result two days later. Also
+  reproduced the local `curl` 502 (outbound proxy CONNECT tunnel failure) and `dns.resolve4()`
+  ENOTFOUND from Run 7/10. This is a second independent confirmation across two separate runs —
+  genuinely stronger evidence the domain issue is persistent, not a transient blip — but NOT new
+  information requiring new escalation prose; updated `PENDING_OPS.site-domain-dns` to note the
+  re-confirmation plainly rather than repeating the original finding verbatim.
+- **Closed part of a real, independently-named evidence-quality gap.** `GTM_SCORECARD.md`'s
+  `roadmap_steer_justification` evidence (as_of 2026-07-14) explicitly held the dimension at A
+  (not A+) because "the demand corpus underpinning the no-steer call is still entirely
+  aggregator/blog citations... the evidence base is second-hand by the agent's own disclosure."
+  Runs 5-10 all hit HTTP 403 on the App Store review-LISTING page (`apps.apple.com/.../reviews`)
+  and Reddit/Trustpilot, and (per Run 5's own next-step) never tried an alternate path. This run
+  tried Apple's SEPARATE, PUBLIC, unauthenticated App Store customer-review RSS/JSON feed
+  (`itunes.apple.com/us/rss/customerreviews/id=<appId>/sortby=mostrecent/json`) — a genuinely
+  different endpoint, NOT blocked. Fetched cleanly via `WebFetch` for two of the four
+  already-cited competitors: CapCut (`id1500855883`) and Eklipse.gg (`id1638105930`, the exact
+  competitor named as counter-signal in theme 2). **Verified the extraction wasn't a
+  WebFetch-summarizer hallucination**: re-fetched two Eklipse entries asking for the RAW JSON
+  verbatim and confirmed author/id/`updated`-date/`content` fields matched the summarized version
+  exactly before citing anything (the same integrity discipline GTM_STANDARD demands for any
+  quoted evidence). Added 3 new `primary_examples` to `demand_signal` theme 3 (pricing/trust
+  friction) in `docs/growth/GROWTH_STATUS.md`, all dated within the last 2 weeks (2026-07-03 to
+  2026-07-15 — far more current than the "dated 2026" aggregator citations) and all directly
+  corroborating the EXISTING theme, not a new one: Eklipse "Overcharging" (refund refused after
+  same-day cancellation), Eklipse premium-paywall frustration ("everything cost premium... barely
+  works unless u have premium"), CapCut free-tier-treatment complaint. `cited_count` for theme 3
+  rose 3→5, reflecting only the new REAL citations added (no inflation). Updated
+  `sources_covered[]`/`sources_unconnected[]` and the `limitation` field to be precise: the RSS
+  FEED is now reachable; the review-LISTING PAGE and Reddit/Trustpilot are still not. Themes 1/2/4
+  and the `synthesis`/`reconciliation`/`steers_opened_note` fields are UNCHANGED — no reason found
+  to touch them (same conclusion, same already-built product fit, still zero steers — this is an
+  evidence-quality upgrade to an EXISTING finding, not a new one, and the BUSINESS_CASE has no
+  number to recompute from a qualitative signal, per the standing anti-gaming rule).
+- **Corrected the stale Gmail-cleanup owner-action count** in `PENDING_OPS.md` (SIX → NINE,
+  see State found above) — a real accuracy fix to an owner-facing action item, not new escalation.
+- Bounded WebSearch refresh (HighlightMagic-specific footprint + general AI-video-editor
+  complaints): found nothing new — no new theme forced; consistent with Runs 7/10's "correctly not
+  re-churned" pattern.
+- Caught and fixed a self-introduced YAML bug before committing: an unquoted trailing parenthetical
+  after a quoted `quote:` scalar (the exact bug class Run 5's reviewer first caught, and Run 9's
+  learnings warned to re-check for) broke `python3 -c "import yaml; ..."` parsing on first attempt —
+  fixed by moving the parenthetical inside the quotes, then re-validated clean. Also validated
+  `PENDING_OPS.md`'s YAML block separately. `scripts/validate-gtm.mjs` could not run (needs
+  `web/node_modules/js-yaml`, and a full `web/` `npm ci` wasn't warranted for this diff) — used the
+  same `yaml.safe_load` parser directly instead, consistent with Run 8's precedent.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff
+  before committing.
+
+### Learnings
+- **A "blocked" primary source is sometimes only ONE endpoint of that platform, not the whole
+  platform.** Five runs (5-10) recorded "App Store reviews are 403 to WebFetch" as a settled fact
+  and moved on. The App Store's REVIEW-LISTING PAGE is indeed blocked, but its separate RSS/JSON
+  review FEED (`itunes.apple.com/us/rss/customerreviews/...`) is a different endpoint entirely and
+  was never tried until this run, despite Run 5 explicitly flagging "try alternate access paths
+  (e.g. App Store RSS review feeds)" as a next step 6 runs ago. Worth generalizing: when a source
+  is marked unreachable, check whether the block is PLATFORM-wide or ENDPOINT-specific before
+  writing off the whole platform for good.
+- **Verify an AI-summarized web fetch before citing it as evidence.** `WebFetch` runs a small model
+  over the fetched content — useful for a first pass, but not itself proof a quote is verbatim. This
+  run's second RAW-JSON fetch (asking for the literal `content`/`author`/`updated` fields with "no
+  paraphrasing") is a cheap, concrete way to confirm a citation before it goes into a document that
+  GTM_STANDARD §10 requires be backed by REAL, non-fabricated evidence — worth doing whenever a
+  WebFetch-sourced quote is about to be cited verbatim, not just trusted on the first pass.
+- **An undercount can itself compound.** Run 10 corrected Run 1-9's "one leftover draft" claim to
+  "six," which was real progress — but it was ALSO an undercount (missed 3 of 5 unlabeled digest
+  entries), only caught because this run re-ran `list_drafts` fresh rather than trusting the prior
+  count. A correction is not automatically the final correct number; re-derive small counts from
+  the live source each time they're touched, don't just trust the last agent's arithmetic.
+- Circuit breaker discipline held again: 11th consecutive run, no new escalation prose on
+  connect-channels or site-domain-dns — the confirmed-unchanged Browserbase result was reported as
+  a confirmation, not restated as a new finding; the run's real effort went into the primary-source
+  evidence upgrade and the Gmail-count correction.
+
+### Dead ends / what NOT to repeat
+- Do NOT conclude a data source is fully blocked from one 403'd endpoint — check for a separate
+  feed/API endpoint on the same platform (this run's App Store RSS-feed find) before writing it off.
+- Do NOT trust a WebFetch-summarized quote as citation-ready without a second raw-verbatim fetch
+  when the citation will be written into a document that must be evidence-backed.
+- Do NOT assume a prior run's corrected count is exhaustive — re-derive small enumerable counts
+  (draft counts, file counts) from the live source rather than carrying forward the last figure.
+
+### Circuit-breaker status
+- **Still open at Run 11 (11 consecutive runs).** `site-domain-dns` is now confirmed across TWO
+  independent runs (Run 10 + Run 11), not just one — still the highest-priority ask, ahead of
+  `site-gate`/`SITE_GATE_PASSWORD` and the `gtm-connect-*` items. No new owner action taken since
+  Run 10.
+
+### Next run priorities (Run 12)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social
+   tokens — never infer from git; if any present, pull real data and move toward execute mode.
+2. Re-run the Browserbase live-prod probe against `https://highlightmagic.app` (sanity-check against
+   `example.com` first) — a THIRD consecutive unchanged result would be worth stating plainly as a
+   multi-run-confirmed, not just twice-confirmed, blocker.
+3. If there's genuine capacity: extend this run's App Store RSS-feed technique to more named
+   competitors (Opus Clip, Descript, FullCourt.ai — find their App Store ids first, if they have iOS
+   apps) to add primary evidence to themes 1/2/4, which still rest on aggregator citations only.
+4. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the demand-validation
+   kit was filmed/posted.
+5. Check whether `GTM_SCORECARD.md`/`QUALITY_SCORECARD.md` were re-graded — if still stale after
+   several more runs, that becomes a staleness signal worth flagging (as Run 7 did for the bootstrap
+   grade).
+6. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
+   between runs.

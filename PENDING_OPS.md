@@ -10,14 +10,14 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-15
+  as_of: 2026-07-17
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
       priority: normal
       status: open
       why: "Growth Agent created a pre-launch pitch email for Sam Gutelle (Senior Editor, Tubefilter, creator economy press) as a Gmail DRAFT for owner to review + send. The agent never sends; the owner sends after reviewing."
-      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-13 (14 days old)."
+      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-17 (18 days old, verified via computed date arithmetic)."
       blocks: press-outreach
     - id: film-demand-validation-kit
       title: "Film + post the demand-validation content kit (docs/growth/DEMAND_VALIDATION_KIT.md)"
@@ -27,11 +27,11 @@ OWNER_ACTIONS:
       how: "Open docs/growth/demand-validation-demo.html in a browser (or on a phone), screen-record the 3-screen tap-through per the shot list in DEMAND_VALIDATION_KIT.md section C, pick 2-3 hooks to start with, post across TikTok/Reels/Shorts via your own accounts. Report back the COMMENT TEXT (not just view counts) so the Growth Agent can read intent-comment rate next run."
       blocks: none
     - id: cleanup-stale-gmail-draft
-      title: "Delete SIX leftover Gmail drafts — pre-policy status-report/digest emails that predate the current no-digest-email rule"
+      title: "Delete NINE leftover Gmail drafts — pre-policy status-report/digest emails that predate the current no-digest-email rule"
       priority: normal
       status: open
-      why: "Corrected count (2026-07-15, Run 10): list_drafts shows SIX pre-existing stale drafts, not one — 3 Growth Agent status-report emails ('HighlightMagic Growth — 2026-06-27/28/29', Runs 1-3), 1 quality-grade digest ('HighlightMagic Quality — 2026-06-29'), and 2 unlabeled 'daily digest' entries (2026-06-24, predating the Growth Agent entirely). GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these. All are unsent and harmless (no auto-send exists), but they clutter Gmail drafts alongside the real to-send Sam Gutelle outreach draft."
-      how: "Open Gmail drafts, find the six drafts named above (search 'HighlightMagic' in drafts), delete them. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
+      why: "RE-CORRECTED count (2026-07-17, Run 11): a fresh list_drafts shows NINE pre-existing stale drafts, not six (Run 10's count on 2026-07-15 undercounted the unlabeled digests) — 3 Growth Agent status-report emails ('HighlightMagic Growth — 2026-06-27/28/29', Runs 1-3), 1 quality-grade digest ('HighlightMagic Quality — 2026-06-29'), and 5 unlabeled 'HighlightMagic - daily digest' entries (2026-06-24 x2, 06-25, 06-26, 06-27 — predating the Growth Agent entirely). GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these. All are unsent and harmless (no auto-send exists), but they clutter Gmail drafts alongside the real to-send Sam Gutelle outreach draft."
+      how: "Open Gmail drafts, find the nine drafts named above (search 'HighlightMagic' in drafts), delete them. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
       blocks: none
     - id: spend-caps
       title: Set HARD daily API spend caps + alerts in every provider dashboard
@@ -71,10 +71,10 @@ OWNER_ACTIONS:
       how: "Set one of X_API_BEARER_TOKEN, INSTAGRAM_ACCESS_TOKEN, TIKTOK_ACCESS_TOKEN, or REDDIT_ACCESS_TOKEN in Vercel env per the platform's developer portal. Start with whichever platform the owner already has an account on."
       blocks: growth-execution
     - id: site-domain-dns
-      title: "URGENT (new 2026-07-15, Run 10): verify highlightmagic.app is registered + DNS-pointed at the Vercel deployment"
+      title: "URGENT (found 2026-07-15 Run 10, RE-CONFIRMED 2026-07-17 Run 11): verify highlightmagic.app is registered + DNS-pointed at the Vercel deployment"
       priority: urgent
       status: open
-      why: "This run drove a real Browserbase-hosted browser (sanity-checked working: loaded https://example.com -> HTTP 200) to https://highlightmagic.app and got net::ERR_TUNNEL_CONNECTION_FAILED on both https and http. Independently, this run's local sandbox got a 502 from its outbound proxy on the same host and a local DNS resolve4 returned ENOTFOUND. Three signals across two different network paths all agree the domain is not currently resolving/connecting — this is upstream of and blocks confirming site-gate (below): the gate cannot be verified up if the domain itself is unreachable. Consistent with either the domain never having been registered/pointed at Vercel, or no production domain alias being attached in the Vercel project — the agent cannot distinguish which from outside the Vercel dashboard."
+      why: "Run 10 drove a real Browserbase-hosted browser (sanity-checked working: loaded https://example.com -> HTTP 200) to https://highlightmagic.app and got net::ERR_TUNNEL_CONNECTION_FAILED on both https and http; corroborated by a local outbound-proxy 502 and a local DNS resolve4 ENOTFOUND. Run 11 independently re-ran the SAME Browserbase probe (fresh session, sanity-checked against example.com again) two days later: identical result, both https and http still net::ERR_TUNNEL_CONNECTION_FAILED, plus a repeat local 502/ENOTFOUND — this is now confirmed across two separate runs, not a one-off blip. This is upstream of and blocks confirming site-gate (below): the gate cannot be verified up if the domain itself is unreachable. Consistent with either the domain never having been registered/pointed at Vercel, or no production domain alias being attached in the Vercel project — the agent cannot distinguish which from outside the Vercel dashboard."
       how: "In the Vercel dashboard, confirm highlightmagic.app is added as a Domain on the web/ project and its DNS records (A/CNAME per Vercel's instructions) are set at the registrar. If the domain isn't purchased/pointed yet, either complete that or share a working *.vercel.app preview/production URL so the agent has a fallback to probe. Once resolving, re-run this check (or the next Growth Agent run will)."
       blocks: launch-exposure
     - id: site-gate
