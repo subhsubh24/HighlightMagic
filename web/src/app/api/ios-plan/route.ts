@@ -3,6 +3,7 @@ import { checkExportAllowed } from "@/lib/entitlement";
 import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, MAX_FRAME_B64_CHARS, anyFrameOverLimit, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { enforceBodyLimit, PLANNER_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 import { MAX_PLANNER_FRAMES } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -34,6 +35,12 @@ interface IOSScore {
  * Response: DetectionResult JSON (clips, productionPlan, detectedTheme, contentSummary)
  */
 export async function POST(req: Request) {
+  // Track H2: reject an over-declared body BEFORE req.json() buffers it. The planner
+  // accepts up to MAX_PLANNER_FRAMES frames, so it uses the larger PLANNER cap — a
+  // legitimate full-size multi-clip project must not be 413'd.
+  const tooLarge = enforceBodyLimit(req, PLANNER_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();

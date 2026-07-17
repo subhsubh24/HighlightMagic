@@ -4,6 +4,7 @@ import { enforceGenerationCeiling } from "@/lib/spend-ceiling";
 
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_DIRECTION_CHARS, MAX_FRAME_B64_CHARS, anyFrameOverLimit, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { enforceBodyLimit, PLANNER_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 import { MAX_FILES, MAX_PLANNER_FRAMES } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -32,6 +33,12 @@ export async function POST(req: Request) {
   // request floods even before the quota gate (Track H1).
   const rl = checkRateLimit(`plan:${getClientIP(req)}`, PAID_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // Track H2: reject an over-declared body BEFORE req.json() buffers it. The planner
+  // accepts up to MAX_PLANNER_FRAMES frames (≫ the vision routes' 1000), so it uses the
+  // larger PLANNER cap — a legitimate full-size multi-clip project must not be 413'd.
+  const tooLarge = enforceBodyLimit(req, PLANNER_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   let body: Record<string, unknown>;
   try {

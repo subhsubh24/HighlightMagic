@@ -3,6 +3,7 @@ import { checkExportAllowed, consumeExport } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { checkDailySpendCeiling, recordDailyExport } from "@/lib/spend-ceiling";
 import { anyFrameOverLimit, MAX_FRAME_B64_CHARS, MAX_PROMPT_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { enforceBodyLimit, VISION_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -31,6 +32,10 @@ export async function POST(req: Request) {
     frames?: Array<{ timeSec?: number; jpegBase64?: string }>;
     prompt?: string;
   };
+  // Track H2: reject an over-declared body BEFORE req.json() buffers it (frame
+  // arrays can otherwise push GBs into memory before the per-frame caps run).
+  const tooLarge = enforceBodyLimit(req, VISION_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
   try {
     body = await req.json();
   } catch {
