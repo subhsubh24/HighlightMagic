@@ -49,8 +49,16 @@ describe("scoreSingleBatch — upstream call is time-bounded", () => {
     expect(scores).toHaveLength(1);
     expect(scores[0].score).toBeCloseTo(0.8);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    // Inspect the SCORING call specifically (by its Anthropic URL) rather than asserting a total
+    // call count: on the real path the scorer also emits Margin telemetry via getMeter()?.recordCall,
+    // which fires its own ingest fetch when MARGIN_INGEST_* is configured in the environment (a
+    // developer running Margin locally). Counting all fetches would spuriously fail there while
+    // passing in keyless CI — so target the one call under test to keep the assertion hermetic.
+    const scoringCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("api.anthropic.com")
+    );
+    expect(scoringCalls).toHaveLength(1);
+    const init = scoringCalls[0][1] as RequestInit;
     // Before the fix this was undefined (unbounded call → potential opaque hang).
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
