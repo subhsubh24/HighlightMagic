@@ -1,4 +1,14 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+
+// Mock @vercel/kv so the KV-backed ("connected") snapshot can be exercised without a real
+// connection (mirrors waitlist-store.test.ts). Harmless to the in-memory suites below — they
+// never set KV env, so getGrowthMetrics never reaches the KV import.
+const mockKv = {
+  scard: vi.fn<(key: string) => Promise<number>>(),
+  hgetall: vi.fn<(key: string) => Promise<Record<string, number> | null>>(),
+};
+vi.mock("@vercel/kv", () => ({ kv: mockKv }));
+
 import { getGrowthMetrics } from "./metrics";
 import { addPendingSignup, confirmSignup, _resetWaitlistMemory } from "./waitlist-store";
 import { recordEvent, _resetExperimentMemory, EXPERIMENTS } from "./experiments";
@@ -53,5 +63,25 @@ describe("growth metrics (E6d)", () => {
     expect(m.channels_connected).toContain("email");
     expect(m.awaiting_connect).toBe(false);
     expect(m.email.provider).toBe("resend");
+  });
+
+  it("reports source=kv + the waitlist-store channel once KV is configured", async () => {
+    // The storeLive branch (source "kv" + the "waitlist-store" channel) only fires with real KV
+    // env; the in-memory suites above never exercise it. Stub the KV env + the durable reads so the
+    // connected snapshot is proven end to end — a regression here would misreport connection state
+    // to the Growth dashboard (channels_connected / awaiting_connect).
+    vi.stubEnv("KV_REST_API_URL", "https://example.kv.vercel.app");
+    vi.stubEnv("KV_REST_API_TOKEN", "tok_secret");
+    mockKv.scard.mockImplementation(async (key: string) =>
+      key === "waitlist:emails" ? 7 : 3
+    );
+    mockKv.hgetall.mockResolvedValue(null); // no experiment traffic yet → honest zeros
+
+    const m = await getGrowthMetrics();
+    expect(m.source).toBe("kv");
+    expect(m.channels_connected).toContain("waitlist-store");
+    expect(m.awaiting_connect).toBe(false);
+    expect(m.funnel.waitlist_signups).toBe(7);
+    expect(m.funnel.waitlist_confirmed).toBe(3);
   });
 });
