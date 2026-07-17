@@ -9,6 +9,7 @@ import {
   overStringLimit,
   tooLargeResponse,
 } from "@/lib/input-bounds";
+import { enforceBodyLimit, VISION_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -305,6 +306,10 @@ function zScoreNormalize(frames: ScoredFrameOutput[]): ScoredFrameOutput[] {
  * Response: { frames: [{timeSec, score, label, role}], remaining }
  */
 export async function POST(req: Request) {
+  // Track H2: reject an over-declared body BEFORE req.json() buffers it (frame
+  // arrays can otherwise push GBs into memory before the per-frame caps run).
+  const tooLarge = enforceBodyLimit(req, VISION_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
   let body: Record<string, unknown>;
   try {
     body = await req.json();

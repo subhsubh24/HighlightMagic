@@ -11,6 +11,7 @@ import {
   MAX_TAPE_DESCRIPTION_CHARS,
   tooLargeResponse,
 } from "@/lib/input-bounds";
+import { enforceBodyLimit, VISION_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 // B6 resilience: the Haiku vision validation call below is bounded at 45s (parity with
@@ -129,6 +130,11 @@ export async function POST(req: Request) {
   // to resist request floods even though it does not itself consume export quota.
   const rl = checkRateLimit(`ios-validate:${getClientIP(req)}`, PAID_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // Track H2: reject an over-declared body BEFORE req.json() buffers it (clipFrames
+  // arrays can otherwise push GBs into memory before the per-frame caps run).
+  const tooLarge = enforceBodyLimit(req, VISION_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   let body: Record<string, unknown>;
   try {

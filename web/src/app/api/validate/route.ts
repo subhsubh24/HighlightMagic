@@ -14,6 +14,7 @@ import {
   MAX_TAPE_DESCRIPTION_CHARS,
   tooLargeResponse,
 } from "@/lib/input-bounds";
+import { enforceBodyLimit, VISION_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,6 +29,13 @@ export async function POST(req: Request) {
     const ip = getClientIP(req);
     const rl = checkRateLimit(`validate:${ip}`, PAID_RATE_LIMIT);
     if (!rl.allowed) return rateLimitResponse(rl);
+
+    // Track H2: reject an over-declared body BEFORE req.json() buffers it (clips +
+    // clipFrames arrays can otherwise push GBs into memory before the per-field caps
+    // run). Placed before the fail-open no-key short-circuit so abuse is rejected
+    // regardless of whether the paid path is active this request.
+    const tooLarge = enforceBodyLimit(req, VISION_BODY_LIMIT_BYTES);
+    if (tooLarge) return tooLarge;
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
