@@ -99,6 +99,18 @@ describe("verifyAppStoreJWS (cryptographic verification)", () => {
     expect(verifyAppStoreJWS(undefined, { trustedRootDer })).toBeNull();
     expect(verifyAppStoreJWS("not-base64.@@@.###", { trustedRootDer })).toBeNull();
   });
+
+  it("rejects a chain whose trusted root is not self-signed (Apple roots are self-signed)", () => {
+    // Construct a chain [leaf, intermediate] and TRUST the intermediate DER directly. Every earlier
+    // guard passes — ES256 alg, x5c length 2, both certs in-validity, the last cert (the intermediate)
+    // byte-matches a configured trusted root, and leaf verifies under the intermediate's key — so the
+    // ONLY check that can fail is the self-signed-root guard: the intermediate is signed by the real
+    // root, not itself, so `root.verify(root.publicKey)` is false. This locks the invariant that an
+    // attacker can't smuggle a mid-chain CA in as a "root" to forge entitlements.
+    const intDer = Buffer.from(INT_DER_B64, "base64");
+    const jws = makeJWS(proPayload, { x5c: [LEAF_DER_B64, INT_DER_B64] });
+    expect(verifyAppStoreJWS(jws, { trustedRootDer: [intDer] })).toBeNull();
+  });
 });
 
 describe("loadTrustedRootsFromEnv", () => {
