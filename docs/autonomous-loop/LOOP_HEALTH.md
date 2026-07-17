@@ -13,10 +13,10 @@ the only channel by which the loop's own rules improve, since it can't edit its 
 ```yaml
 LOOP_HEALTH:
   project: HighlightMagic
-  as_of: 2026-07-02
-  enforced_in_ci: true           # quality gates are REQUIRED checks [web, ios, web-e2e, web-lint] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass
-  last_run: 2026-07-02
-  last_deep_audit: 2026-07-02
+  as_of: 2026-07-17
+  enforced_in_ci: true           # quality gates are REQUIRED checks [web, web-lint, web-e2e, validate-capabilities, validate-gtm] with enforce_admins ON — a broken-for-a-user or lint-dirty change CANNOT auto-merge, and even --admin can't bypass (ios is a NON-required advisory check)
+  last_run: 2026-07-17
+  last_deep_audit: 2026-07-17
   validation:                    # self-validation capability gate (ROADMAP G8). TWO DISTINCT blocked-states — do NOT conflate:
                                  #   owner_blocked / `unmet` = the OWNER must provide a key/secret (this is what the dashboard shows as "needs your key").
                                  #   awaiting_loop_eval      = key/prereq ALREADY PROVIDED; the LOOP must BUILD the eval (loop work, ROADMAP G3) — NOT owner-blocked.
@@ -32,21 +32,23 @@ LOOP_HEALTH:
                                  #   elevenlabs (G3 rung 4): src/evals/elevenlabs.eval.ts — real TTS round-trip, in-bounds audio, VALIDATED.
                                  #   atlascloud (G3 rung 6): src/evals/atlascloud.eval.ts — real Kling image→video, status=completed + valid MP4 URL, VALIDATED
                                  #     (fixed en route: submitPhotoAnimation snapped an invalid duration 2 → 5; PR #386. The fixture keeps durationSec=2 as the regression test.)
-  this_run:
-    changes_shipped: 6          # #243 proxy-video H1, #244 landing honesty+a11y, #245 atlascloud submit-retry, #246 ios-score COGS, #247 plan tests, #248 content honesty
-    changes_abandoned: 0
-    abandoned_reasons: []        # [{change, reason}] reason ∈ gate_web_build|gate_web_test|gate_lint|gate_ios_ci|review_value|review_correctness|circuit_breaker|conflict|dead_end|blocked_owner
-    verify_cycle_failures: 0
-    review_rejections: 1         # #248 Rev B first pass (claimed music library is "live" — factually wrong; verified via git that no audio is committed → picker non-functional; note tightened + fresh reviewer APPROVED). All other 11 reviewer verdicts APPROVE first pass.
+  this_run:                     # Run 80 (2026-07-17)
+    changes_shipped: 3          # #529 a11y focus rings, #530 security H2 vision+planner body cap, #531 waitlist-store KV coverage
+    changes_abandoned: 1
+    abandoned_reasons:          # [{change, reason}] reason ∈ gate_web_build|gate_web_test|gate_lint|gate_ios_ci|review_value|review_correctness|circuit_breaker|conflict|dead_end|blocked_owner
+      - change: "atlascloud generateLipSync/generateStyleTransfer coverage"
+        reason: review_value    # Reviewer B: dead code — the one-shot generate* wrappers have NO production callers (routes call submit* directly). Pivoted the slot to reachable waitlist-store KV coverage (#531).
+    verify_cycle_failures: 0    # all 3 shipped changes went green on the web gate first try
+    review_rejections: 4        # maker≠checker caught real defects, all resolved before merge: #530 v1 (BOTH reviewers — 300MB cap would 413 legit large /api/plan; re-scoped to 2 caps + ios-plan, cycle-2 APPROVE), #529 (Rev B — 2 missed text-sm support links, fixed), atlascloud (Rev B — dead code, pivoted). Change #531 both APPROVE first pass.
     circuit_breaker_trips: 0
   rolling_7d:
-    merged_prs: 56
+    merged_prs: 53              # git log origin/main --since=2026-07-10 (merges with #N)
     reverts: 0
-    readiness_attempts: 0
+    readiness_attempts: 0       # still blocked on the 3 owner/iOS ship-critical dims (store_readiness C, functional_reality B, tests_evals B)
     readiness_rejected: 0
     recurring_failures: []
     harness_proposals_open: 0    # #163 "enforce gates as required CI checks" APPLIED in #164 (web-e2e+web-lint REQUIRED). Deploy-automation Part B (auto-migrate) = N/A: no SQL DB to migrate.
-  signal: improving              # bootstrapping | improving | steady | churning | stuck
+  signal: improving              # bootstrapping | improving | steady | churning | stuck — 3 shipped vs 1 abandoned (pivoted, not a dead-end wall), 0 reverts, 0 circuit-breaker trips; maker≠checker catching real regressions before merge is the gate working
 ```
 
 ## How to read it (owner)
