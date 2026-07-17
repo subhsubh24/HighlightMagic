@@ -562,7 +562,7 @@ export default function LandingPage() {
                     className={`block rounded-2xl py-3 text-center text-sm font-semibold transition-all ${
                       plan.highlight
                         ? "btn-primary"
-                        : "border border-white/15 text-white hover:bg-white/5"
+                        : "border border-white/15 text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                     }`}
                   >
                     {plan.cta}
@@ -574,7 +574,7 @@ export default function LandingPage() {
                     className={`block rounded-2xl py-3 text-center text-sm font-semibold transition-all ${
                       plan.highlight
                         ? "btn-primary"
-                        : "border border-white/15 text-white hover:bg-white/5"
+                        : "border border-white/15 text-white hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                     }`}
                   >
                     {plan.cta}

@@ -17,7 +17,7 @@ export default function SupportPage() {
             Need help? Email us at{" "}
             <a
               href="mailto:support@highlightmagic.app"
-              className="text-[var(--accent)] underline"
+              className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               support@highlightmagic.app
             </a>{" "}
@@ -27,7 +27,7 @@ export default function SupportPage() {
             For privacy questions, contact{" "}
             <a
               href="mailto:privacy@highlightmagic.app"
-              className="text-[var(--accent)] underline"
+              className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               privacy@highlightmagic.app
             </a>
@@ -67,7 +67,7 @@ export default function SupportPage() {
                 <strong className="text-white">Settings &rarr; Delete All Data</strong>. This
                 permanently removes your anonymous ID, project history, and all locally stored
                 data. See our{" "}
-                <a href="/privacy" className="text-[var(--accent)] underline">
+                <a href="/privacy" className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
                   Privacy Policy
                 </a>{" "}
                 for full details.
@@ -101,7 +101,7 @@ export default function SupportPage() {
                 No. Full video files stay on your device. Only sampled video frames (approximately
                 1 per second, at reduced resolution) are sent to our AI servers for highlight
                 detection. See our{" "}
-                <a href="/privacy" className="text-[var(--accent)] underline">
+                <a href="/privacy" className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
                   Privacy Policy
                 </a>{" "}
                 for complete details.
@@ -114,7 +114,7 @@ export default function SupportPage() {
                 Refund requests for App Store purchases are handled directly by Apple. Visit{" "}
                 <a
                   href="https://reportaproblem.apple.com"
-                  className="text-[var(--accent)] underline"
+                  className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -129,10 +129,10 @@ export default function SupportPage() {
         <section>
           <h2 className="text-lg font-semibold text-white">Legal</h2>
           <div className="flex gap-4 mt-2">
-            <a href="/privacy" className="text-[var(--accent)] underline text-sm">
+            <a href="/privacy" className="text-[var(--accent)] underline text-sm rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Privacy Policy
             </a>
-            <a href="/terms" className="text-[var(--accent)] underline text-sm">
+            <a href="/terms" className="text-[var(--accent)] underline text-sm rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               Terms of Use
             </a>
           </div>

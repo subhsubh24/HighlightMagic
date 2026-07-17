@@ -105,7 +105,7 @@ export default function PrivacyPage() {
               sent via the API is not used to train their models.{" "}
               <a
                 href="https://www.anthropic.com/privacy"
-                className="text-[var(--accent)] underline"
+                className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -120,7 +120,7 @@ export default function PrivacyPage() {
               voices after generation.{" "}
               <a
                 href="https://elevenlabs.io/privacy"
-                className="text-[var(--accent)] underline"
+                className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -134,7 +134,7 @@ export default function PrivacyPage() {
               prompts.{" "}
               <a
                 href="https://atlascloud.ai/privacy"
-                className="text-[var(--accent)] underline"
+                className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -185,7 +185,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-white">Contact</h2>
           <p>
             Questions about your privacy? Email{" "}
-            <a href="mailto:privacy@highlightmagic.app" className="text-[var(--accent)] underline">
+            <a href="mailto:privacy@highlightmagic.app" className="text-[var(--accent)] underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
               privacy@highlightmagic.app
             </a>
           </p>
