@@ -261,6 +261,10 @@ describe("drawKineticCaption", () => {
     expect(fontFor("Bold")).toMatch(/^900 /);
     expect(fontFor("Minimal")).toMatch(/^300 /);
     expect(fontFor("Classic")).toMatch(/italic .*Georgia/);
+    // Neon (set by 2 style templates via suggestedCaptionStyle) renders a bold
+    // apple-system face — distinct from Bold's numeric 900 weight and the serif
+    // Classic. Covers the previously-untested "Neon" switch arm.
+    expect(fontFor("Neon")).toMatch(/^bold \d+px -apple-system/);
   });
 
   it("honours a custom color and font override", () => {
