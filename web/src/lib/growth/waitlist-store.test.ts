@@ -195,4 +195,36 @@ describe("waitlist store (E6a) — Vercel KV path", () => {
 
     vi.useRealTimers();
   });
+
+  // addConfirmedSignup is the DECISION-COROLLARY path (no email provider): the signup is written
+  // straight to CONFIRMED so the user is never dead-ended awaiting an un-sendable email. In KV
+  // mode it must durably add to BOTH the raw-signup set (funnel top) and the confirmed set.
+  it("addConfirmedSignup writes the email to both the emails and confirmed KV sets", async () => {
+    mockKv.sadd.mockResolvedValue(1);
+
+    await addConfirmedSignup("direct-kv@b.com");
+
+    expect(mockKv.sadd).toHaveBeenCalledWith("waitlist:emails", "direct-kv@b.com");
+    expect(mockKv.sadd).toHaveBeenCalledWith("waitlist:confirmed", "direct-kv@b.com");
+  });
+
+  it("getWaitlistCounts reads the real KV set cardinalities", async () => {
+    mockKv.scard.mockResolvedValueOnce(42).mockResolvedValueOnce(7);
+
+    const counts = await getWaitlistCounts();
+
+    expect(mockKv.scard).toHaveBeenCalledWith("waitlist:emails");
+    expect(mockKv.scard).toHaveBeenCalledWith("waitlist:confirmed");
+    expect(counts).toEqual({ signups: 42, confirmed: 7 });
+  });
+
+  // Regression: kv.scard can return null (missing key). The counts MUST coalesce to 0, never
+  // surface undefined into the funnel/analytics feed (the `?? 0` branch).
+  it("getWaitlistCounts coalesces a null KV cardinality to 0 (never undefined)", async () => {
+    mockKv.scard.mockResolvedValue(null as unknown as number);
+
+    const counts = await getWaitlistCounts();
+
+    expect(counts).toEqual({ signups: 0, confirmed: 0 });
+  });
 });
