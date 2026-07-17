@@ -286,7 +286,12 @@ If passed is true, fixes should be empty or omitted.`;
         model: CLAUDE_VALIDATOR,
         max_tokens: 4096,
         stream: true,
-        system: fullSystemPrompt,
+        // COGS: cache the large, fully-static validator system prompt (~1.5-2.5k tokens)
+        // like the scorer/planner already do. Ephemeral cache persists ~5min across
+        // requests, so the two-pass validation loop and back-to-back exports hit the
+        // cache on the 2nd+ call instead of re-paying the full system-prompt input.
+        // Only the per-tape user content varies; the system prefix is identical.
+        system: [{ type: "text", text: fullSystemPrompt, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: userContent }],
       }),
       // B6 resilience: bound the call (and the streamed read) under the 60s function
