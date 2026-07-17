@@ -245,4 +245,37 @@ describe("drawTransitionOverlay", () => {
     const a = Number(String(fullFrameRects(rects)[0].fillStyle).match(/,([^,)]+)\)$/)![1]);
     expect(a).toBeCloseTo(0.5, 2); // sin(pi/2)=1 * 0.5
   });
+
+  it("glitch tints both RGB bands with the AI-provided custom colors", () => {
+    // renderOptions.glitchColors flows from the production plan (ExportStep/DetectingStep
+    // pass productionPlan.glitchColors into the render). Default bands are already smoke-
+    // tested via ALL_TYPES; this locks the CUSTOM branch (glitchColors provided).
+    const { ctx, rects } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "glitch", 0.5, 0, undefined, { glitchColors: ["#ff0000", "#00ff00"] });
+    const styles = rects.map((r) => String(r.fillStyle));
+    // hexToRgb("#ff0000") = [255,0,0] on the primary band at 0.4 alpha
+    expect(styles).toContain("rgba(255,0,0,0.4)");
+    // hexToRgb("#00ff00") = [0,255,0] on the secondary band at 0.3 alpha
+    expect(styles).toContain("rgba(0,255,0,0.3)");
+    // The hardcoded defaults must NOT appear once custom colors are supplied.
+    expect(styles).not.toContain("rgba(255,0,80,0.4)");
+    expect(styles).not.toContain("rgba(0,200,255,0.3)");
+  });
+
+  it("light_leak tints all 3 gradient stops with the AI-provided leak color", () => {
+    // renderOptions.lightLeakColor likewise flows from productionPlan.lightLeakColor.
+    // The default warm wash is covered above; this locks the custom-tint branch.
+    const { ctx, gradients } = makeCtx();
+    drawTransitionOverlay(ctx, W, H, "light_leak", 0.5, 0, undefined, { lightLeakColor: "#3366ff" });
+    expect(gradients).toHaveLength(1);
+    expect(gradients[0].stops).toHaveLength(3);
+    // hexToRgb("#3366ff") = [51,102,255] — every stop uses the custom tint (varying alpha)
+    for (const [, color] of gradients[0].stops) {
+      expect(color).toMatch(/^rgba\(51, 102, 255, /);
+    }
+    // The default warm tint must NOT leak through when a custom color is set.
+    for (const [, color] of gradients[0].stops) {
+      expect(color).not.toMatch(/255, 200, 100/);
+    }
+  });
 });
