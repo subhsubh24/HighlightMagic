@@ -369,4 +369,24 @@ describe("VercelKVDailyCeilingStore — TTL + timeout behavior", () => {
     expect(blocked).toBeInstanceOf(Response);
     expect(blocked?.status).toBe(429);
   });
+
+  // The GET success path (VercelKVDailyCeilingStore.get → `return val ?? 0`). The fail-closed
+  // suite only exercises GET rejecting and the TTL suite only exercises INCR, so a KV that
+  // successfully RETURNS a count was previously unread by any test.
+  it("reads the stored count through the KV store when GET resolves a number", async () => {
+    selectKVStore();
+    mockKv.get.mockReset().mockResolvedValueOnce(3);
+    const result = await checkDailySpendCeiling(uniqueUser());
+    expect(result.usage).toBe(3); // the value came back through kv.get, not the InMemory default
+    expect(result.allowed).toBe(true); // 3 < DAILY_EXPORT_CAP
+  });
+
+  it("falls back to 0 usage when GET resolves null (the `?? 0` branch)", async () => {
+    // Mutation-effective for `?? 0`: without it a null KV value would surface as usage=null.
+    selectKVStore();
+    mockKv.get.mockReset().mockResolvedValueOnce(null);
+    const result = await checkDailySpendCeiling(uniqueUser());
+    expect(result.usage).toBe(0);
+    expect(result.allowed).toBe(true);
+  });
 });

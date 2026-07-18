@@ -128,6 +128,13 @@ describe("loadTrustedRootsFromEnv", () => {
   it("ignores malformed blocks without throwing", () => {
     expect(loadTrustedRootsFromEnv("-----BEGIN CERTIFICATE-----\ngarbage\n-----END CERTIFICATE-----")).toEqual([]);
   });
+  it("returns [] for a non-empty string with no PEM blocks (no regex match)", () => {
+    // Distinct from the malformed-block case above: here the block regex matches NOTHING, so the
+    // `if (!blocks) return []` guard fires. Mutation-effective — the helper has no outer try/catch,
+    // so removing that guard would iterate `null` and throw instead of failing closed to [].
+    expect(loadTrustedRootsFromEnv("no certificates here")).toEqual([]);
+    expect(() => loadTrustedRootsFromEnv("no certificates here")).not.toThrow();
+  });
 });
 
 describe("verifyProEntitlement (end-to-end, env-configured trusted root)", () => {
