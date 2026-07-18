@@ -10,6 +10,7 @@ import { POST as iosValidatePOST } from "@/app/api/ios-validate/route";
 import { POST as redeemPOST } from "@/app/api/credits/redeem/route";
 import { POST as waitlistPOST } from "@/app/api/waitlist/route";
 import { POST as experimentPOST } from "@/app/api/growth/experiment/route";
+import { POST as animateCheckPOST } from "@/app/api/animate/check/route";
 import { VISION_BODY_LIMIT_BYTES, PLANNER_BODY_LIMIT_BYTES, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 import { _resetBuckets } from "@/lib/rate-limit";
 
@@ -103,15 +104,16 @@ describe("Track H body guard wiring", () => {
   }
 
   // Track H2 — the text-only JSON routes (a signed transaction, a waitlist email, an
-  // experiment beacon) carry only a few KB, so they use the 1 MB JSON cap. An over-declared
-  // body must 413 BEFORE req.json() buffers it (and before the crypto/KV/email side-effects).
-  // Mutation-effective: without the guard the empty-bodied oversizedReq falls through to
-  // req.json() and returns 400, not 413.
+  // experiment beacon, an animation-status poll) carry only a few KB, so they use the 1 MB
+  // JSON cap. An over-declared body must 413 BEFORE req.json() buffers it (and before the
+  // crypto/KV/email/provider side-effects). Mutation-effective: without the guard the
+  // empty-bodied oversizedReq falls through to req.json() and returns a 400/500 (never 413).
   const OVER_JSON = JSON_BODY_LIMIT_BYTES + 1;
   const jsonRoutes: Array<[string, string, (req: Request) => Promise<Response>, string]> = [
     ["credits/redeem", "credits/redeem", redeemPOST as (req: Request) => Promise<Response>, "203.0.113.30"],
     ["waitlist", "waitlist", waitlistPOST as (req: Request) => Promise<Response>, "203.0.113.31"],
     ["growth/experiment", "growth/experiment", experimentPOST as (req: Request) => Promise<Response>, "203.0.113.32"],
+    ["animate/check", "animate/check", animateCheckPOST as (req: Request) => Promise<Response>, "203.0.113.33"],
   ];
 
   for (const [name, path, handler, ip] of jsonRoutes) {

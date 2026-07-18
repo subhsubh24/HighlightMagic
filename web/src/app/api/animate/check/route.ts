@@ -1,5 +1,6 @@
 import { checkAnimationResult } from "@/lib/kling";
 import { checkRateLimit, getClientIP, rateLimitResponse, POLL_RATE_LIMIT } from "@/lib/rate-limit";
+import { enforceBodyLimit, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -18,6 +19,14 @@ export async function POST(req: Request) {
     // without breaking legitimate ~5s polling of an in-flight job.
     const rl = checkRateLimit(`animate-check:${getClientIP(req)}`, POLL_RATE_LIMIT);
     if (!rl.allowed) return rateLimitResponse(rl);
+
+    // H2: pre-parse body cap — the poll body carries only a small predictionId, so reject an
+    // over-declared body before req.json() buffers it into memory, closing the same pre-parse
+    // memory-exhaustion surface the sibling routes already guard (animate/submit via its inline
+    // 20MB cap; credits/redeem, waitlist, growth/experiment via enforceBodyLimit). The
+    // POLL_RATE_LIMIT bounds request COUNT, not per-request body SIZE.
+    const tooLarge = enforceBodyLimit(req, JSON_BODY_LIMIT_BYTES);
+    if (tooLarge) return tooLarge;
 
     const { predictionId } = await req.json();
 
