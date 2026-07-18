@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel superseded in-progress runs for the same PR. The autonomous loop pushes commits in rapid
+# succession; without this, every intermediate push ran full CI (incl. the 10x macOS iOS job) to
+# completion even though only the latest commit matters. PR runs are cancellable; main runs finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # ---- WEB (Next.js backend + marketing) — REQUIRED check ----
   web:
@@ -121,12 +128,40 @@ jobs:
       - name: GTM honesty gate (metric-without-a-source tripwire + scorecard validity)
         run: node scripts/validate-gtm.mjs
 
-  # ---- iOS (Swift app) ----
-  # Kept NON-required until reliably green, then promote `ios` to a required check.
-  # The app builds as a SwiftPM package (Package.swift, target HighlightMagic +
-  # test target HighlightMagicTests); xcodebuild resolves the package scheme.
-  ios:
-    name: ios
+  # ---- CHANGE DETECTION — decides whether the expensive iOS (macOS, 10x) build must run ----
+  # The vast majority of factory PRs touch web/** (or docs) only; the Swift app is a fully separate
+  # codebase, so a web/docs change CANNOT affect the iOS build. Running the 10x macOS job on those
+  # PRs is pure waste (the single biggest line in the org's Actions bill). This cheap ubuntu job
+  # detects whether any iOS-relevant path changed so the macOS build runs ONLY when it can matter.
+  detect-changes:
+    name: detect-changes
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Fail-safe: on any ambiguity dorny reports the filter as matched (build runs), so we never
+          # skip iOS validation for a change that actually touched it.
+          filters: |
+            ios:
+              - 'Sources/**'
+              - 'Tests/**'
+              - 'Package.swift'
+              - 'Package.resolved'
+              - 'Assets.xcassets/**'
+              - '**/*.xcodeproj/**'
+              - '.github/workflows/ci.yml'
+
+  # ---- iOS BUILD (Swift app on macOS — 10x billing) — runs ONLY when iOS files changed ----
+  # The app builds as a SwiftPM package (Package.swift, target HighlightMagic + test target
+  # HighlightMagicTests); xcodebuild resolves the package scheme.
+  ios-build:
+    name: ios-build
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ios == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -149,3 +184,27 @@ jobs:
           UDID=$(xcrun simctl create ci-iphone 'iPhone 16' "$RUNTIME")
           echo "Created simulator: $UDID"
           xcodebuild -scheme HighlightMagic -destination "id=$UDID" clean build test
+
+  # ---- iOS (REQUIRED check) — cheap ubuntu gate over the macOS build ----
+  # Branch protection requires a check named `ios`. This aggregator preserves that contract while
+  # letting the 10x macOS build be path-gated: it PASSES when the build succeeded OR was skipped
+  # (no iOS files changed) and FAILS only when the build actually failed/was cancelled. Net: a
+  # web-only PR spends ZERO macOS minutes yet still satisfies the required `ios` check.
+  ios:
+    name: ios
+    needs: [detect-changes, ios-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on the iOS build result
+        run: |
+          detect="${{ needs.detect-changes.result }}"
+          build="${{ needs.ios-build.result }}"
+          echo "detect-changes: $detect | ios-build: $build (iOS files changed: ${{ needs.detect-changes.outputs.ios }})"
+          if [ "$detect" != "success" ]; then
+            echo "::error::change detection did not succeed — cannot safely skip the iOS build"; exit 1
+          fi
+          if [ "$build" = "failure" ] || [ "$build" = "cancelled" ]; then
+            echo "::error::iOS build failed"; exit 1
+          fi
+          echo "iOS check satisfied (build result: $build)."
