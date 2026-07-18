@@ -1022,7 +1022,7 @@ export default function ExportStep() {
               href={IOS_APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="glass-card flex items-center gap-3 p-4 transition-all hover:border-yellow-500/50"
+              className="glass-card flex items-center gap-3 p-4 transition-all hover:border-yellow-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
             >
               <Crown className="h-8 w-8 text-yellow-500" />
               <div>

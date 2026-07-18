@@ -299,7 +299,7 @@ function Nav() {
           href={IS_APP_LIVE ? IOS_APP_STORE_URL : "#waitlist-bottom"}
           {...(IS_APP_LIVE ? { target: "_blank", rel: "noopener noreferrer" } : {})}
           onClick={() => trackEvent("cta_click", { source: "nav" })}
-          className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
+          className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-4 py-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
         >
           {IS_APP_LIVE ? "Get the App" : "Join the Waitlist"}
         </a>
