@@ -7,7 +7,10 @@ import { POST as planPOST } from "@/app/api/plan/route";
 import { POST as iosPlanPOST } from "@/app/api/ios-plan/route";
 import { POST as validatePOST } from "@/app/api/validate/route";
 import { POST as iosValidatePOST } from "@/app/api/ios-validate/route";
-import { VISION_BODY_LIMIT_BYTES, PLANNER_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
+import { POST as redeemPOST } from "@/app/api/credits/redeem/route";
+import { POST as waitlistPOST } from "@/app/api/waitlist/route";
+import { POST as experimentPOST } from "@/app/api/growth/experiment/route";
+import { VISION_BODY_LIMIT_BYTES, PLANNER_BODY_LIMIT_BYTES, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 import { _resetBuckets } from "@/lib/rate-limit";
 
 /**
@@ -96,6 +99,28 @@ describe("Track H body guard wiring", () => {
         oversizedReq(`http://localhost/api/${name}`, VISION_BODY_LIMIT_BYTES + 1, `${ip}9`)
       );
       expect(res.status).not.toBe(413);
+    });
+  }
+
+  // Track H2 — the text-only JSON routes (a signed transaction, a waitlist email, an
+  // experiment beacon) carry only a few KB, so they use the 1 MB JSON cap. An over-declared
+  // body must 413 BEFORE req.json() buffers it (and before the crypto/KV/email side-effects).
+  // Mutation-effective: without the guard the empty-bodied oversizedReq falls through to
+  // req.json() and returns 400, not 413.
+  const OVER_JSON = JSON_BODY_LIMIT_BYTES + 1;
+  const jsonRoutes: Array<[string, string, (req: Request) => Promise<Response>, string]> = [
+    ["credits/redeem", "credits/redeem", redeemPOST as (req: Request) => Promise<Response>, "203.0.113.30"],
+    ["waitlist", "waitlist", waitlistPOST as (req: Request) => Promise<Response>, "203.0.113.31"],
+    ["growth/experiment", "growth/experiment", experimentPOST as (req: Request) => Promise<Response>, "203.0.113.32"],
+  ];
+
+  for (const [name, path, handler, ip] of jsonRoutes) {
+    it(`${name}: 413s an over-declared body before req.json() or any side-effect`, async () => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+      const res = await handler(oversizedReq(`http://localhost/api/${path}`, OVER_JSON, ip));
+      expect(res.status).toBe(413);
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
   }
 });

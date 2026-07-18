@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIP, PUBLIC_RATE_LIMIT } from "@/lib/rate-limit";
 import { addPendingSignup, addConfirmedSignup } from "@/lib/growth/waitlist-store";
 import { sendEmail, buildConfirmationEmail, isEmailConfigured } from "@/lib/email";
+import { enforceBodyLimit, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 // Signup does KV writes + a confirmation-email send (the email client has its own 10s
@@ -37,6 +38,11 @@ export async function POST(req: NextRequest) {
       { status: 429, headers: { "Retry-After": String(Math.max(1, rl.resetAt - Math.floor(Date.now() / 1000))) } }
     );
   }
+
+  // H2: pre-parse body cap on this PUBLIC form — reject an over-declared body before
+  // req.json() buffers it (the per-field email/token caps below stay authoritative after parse).
+  const tooLarge = enforceBodyLimit(req, JSON_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   try {
     const body = await req.json();

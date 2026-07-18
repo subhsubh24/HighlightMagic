@@ -1,6 +1,7 @@
 import { redeemCreditPack } from "@/lib/entitlement";
 import { checkRateLimit, getClientIP, PAID_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { MAX_JWS_CHARS, overStringLimit, tooLargeResponse } from "@/lib/input-bounds";
+import { enforceBodyLimit, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,6 +24,11 @@ export async function POST(req: Request) {
   const ip = getClientIP(req);
   const rl = checkRateLimit(`credits-redeem:${ip}`, PAID_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // H2: pre-parse body cap — reject an over-declared body before req.json() buffers it into
+  // memory (the per-field MAX_JWS_CHARS cap below stays the authoritative bound after parse).
+  const tooLarge = enforceBodyLimit(req, JSON_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   let body: { userId?: string; signedTransaction?: string };
   try {

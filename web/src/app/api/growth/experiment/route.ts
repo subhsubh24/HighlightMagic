@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIP, PUBLIC_RATE_LIMIT, rateLimitResponse } from "@/lib/rate-limit";
 import { isValidVariant, recordEvent, type ExperimentEvent } from "@/lib/growth/experiments";
+import { enforceBodyLimit, JSON_BODY_LIMIT_BYTES } from "@/lib/http/body-limit";
 
 // E8 — Experiment exposure/conversion beacon.
 // The surface (landing/app) POSTs which registered experiment+variant a visitor SAW
@@ -24,6 +25,11 @@ export async function POST(req: NextRequest) {
   const ip = getClientIP(req);
   const rl = checkRateLimit(`experiment:${ip}`, PUBLIC_RATE_LIMIT);
   if (!rl.allowed) return rateLimitResponse(rl);
+
+  // H2: pre-parse body cap on this PUBLIC beacon — reject an over-declared body before
+  // req.json() buffers it (the per-field validation below stays authoritative after parse).
+  const tooLarge = enforceBodyLimit(req, JSON_BODY_LIMIT_BYTES);
+  if (tooLarge) return tooLarge;
 
   let body: unknown;
   try {
