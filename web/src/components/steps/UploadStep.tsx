@@ -433,7 +433,7 @@ export default function UploadStep() {
                       e.stopPropagation();
                       handleRemove(media.id);
                     }}
-                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500"
+                    className="absolute right-1.5 bottom-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60"
                     aria-label={`Remove ${media.name}`}
                   >
                     <X className="h-3 w-3" />
