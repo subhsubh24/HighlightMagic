@@ -62,15 +62,19 @@ function WaitlistForm({ compact = false }: { compact?: boolean }) {
       if (!res.ok) {
         setErrorMsg(data.error ?? "Something went wrong.");
         setStatus("error");
+        trackEvent("waitlist_error", { reason: "server" });
         resetCaptcha();
       } else {
         trackEvent("waitlist_signup");
-        setConfirmSent(Boolean(data.confirmationEmailSent));
+        const pendingConfirmation = Boolean(data.confirmationEmailSent);
+        if (pendingConfirmation) trackEvent("waitlist_confirmation_sent");
+        setConfirmSent(pendingConfirmation);
         setStatus("success");
       }
     } catch {
       setErrorMsg("Network error. Please try again.");
       setStatus("error");
+      trackEvent("waitlist_error", { reason: "network" });
       resetCaptcha();
     }
   }
