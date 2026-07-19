@@ -35,6 +35,25 @@ describe("social publishing queue (E6c)", () => {
     expect(isChannelConnected("x")).toBe(true);
   });
 
+  it("maps each channel to its OWN credential env (no cross-wiring)", () => {
+    // Each channel resolves via a distinct env var; a mutation that pushes the
+    // wrong channel key (e.g. INSTAGRAM_ACCESS_TOKEN -> "x") would route a
+    // post to the wrong poster. Assert the per-channel mapping one branch at a
+    // time so each of the instagram/tiktok/reddit arms is pinned independently.
+    for (const [envVar, channel] of [
+      ["INSTAGRAM_ACCESS_TOKEN", "instagram"],
+      ["TIKTOK_ACCESS_TOKEN", "tiktok"],
+      ["REDDIT_ACCESS_TOKEN", "reddit"],
+    ] as const) {
+      vi.stubEnv(envVar, "tok");
+      expect(connectedChannels()).toEqual([channel]);
+      expect(isChannelConnected(channel)).toBe(true);
+      // the other channels stay dry-run — only this one credential is set
+      expect(isChannelConnected("x")).toBe(false);
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("enqueues drafts FIFO with a queued status", async () => {
     const a = await enqueue({ channel: "x", text: "hello" });
     await enqueue({ channel: "reddit", text: "world" });
