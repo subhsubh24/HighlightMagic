@@ -991,3 +991,127 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    grade).
 6. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change
    between runs.
+
+---
+
+## 2026-07-19 — Run 12
+
+### State found
+- Phase: pre_launch (unchanged); engine_built: true (unchanged). Channels connected: none —
+  **12th consecutive run** with connect-channels open. Re-probed `env` for `GROWTH_AGENT_SECRET`/
+  `PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent, unchanged since
+  Run 6 (only `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID` present, shared sandbox plumbing per
+  Run 7's established finding). `site_gate_up`: false (unchanged).
+- Did NOT re-run the paid Browserbase live-prod probe this run. Runs 10 and 11 already independently
+  confirmed `net::ERR_TUNNEL_CONNECTION_FAILED` against `https://highlightmagic.app` with zero signal
+  anything had changed between them — a third identical paid-browser run would be redundant cost, not
+  diligence (the same anti-churn call Run 6 made about re-deriving demand-signal citations). Instead
+  ran the cheap local check: `node -e "dns.resolve4(...)"` → `ENOTFOUND`; `curl https://highlightmagic.app`
+  → CONNECT tunnel failed / 502 — exact repeats of every prior run's result. Domain still unreachable;
+  no owner action detected.
+- `GTM_SCORECARD.md` is STILL `as_of: 2026-07-14` — unchanged for a **3rd consecutive run (Runs 10,
+  11, 12) / 5 days** — even though the artifact-freshness defect it cited (post-batch-1.md's false
+  "7 kinetic caption styles" claim) has now been independently reconfirmed FIXED in-repo TWICE (Run 10
+  found the product-side fix; this run re-verified via repo-wide grep + a direct read of
+  `post-batch-1.md:252,261` and `DEMAND_VALIDATION_KIT.md:16` — both correctly say "4 animated
+  [caption] styles"). `QUALITY_SCORECARD.md` also unchanged (`as_of: 2026-07-15`, overall B,
+  `ship_gate_met: false` — `store_readiness` C persists on the owner-only Xcode/Mac gap, functional
+  reality and tests_evals both B).
+- Sam Gutelle (Tubefilter) draft (Run 3, 2026-06-29): confirmed via `list_drafts` still present,
+  unedited, unsent, now 20 days old (python3-verified). `search_threads` for
+  tubefilter/sam@tubefilter.com: zero replies. The 9 stale pre-policy Gmail drafts (Run 11's
+  corrected count) are all still present, unchanged.
+
+### What I did this run
+- **Extended Run 11's App Store RSS primary-source technique to 2 more named competitors** (closing
+  the exact gap Run 11 flagged in its own `next_actions`): found real App Store ids via WebSearch for
+  OpusClip (`id6743615403`), Vizard (`id6748490660`), and FullCourt.ai (`id1534211457`); fetched all
+  three review feeds. FullCourt.ai's newest review is ~5 months old with no new citable pattern —
+  correctly not added. OpusClip and Vizard both surfaced real, current, primary evidence: an OpusClip
+  1-star review dated 2026-07-12 ("Rip Off") reporting a paid watermark-removal purchase that produced
+  a broken (still-photo) export and burned credits with no refund; and 3 independent Vizard reviews
+  (2026-04-07 to 2026-06-29) reporting the mobile app's advertised editing features silently don't work
+  on-device — real functionality is web-only. Verified both extractions against the raw JSON (exact
+  character match, no paraphrase) before citing. Added both to `demand_signal` theme 3 (trust/
+  reliability friction) — the Vizard finding is a genuinely different angle (delivery-gap, not
+  mis-selection) but fits theme 3's existing frame better than inventing a new theme, and it has only
+  ONE independent source (Vizard's own reviews) so it does not by itself clear the S10 auto-steer
+  corroboration bar even though theme 3 as a whole already does (unchanged conclusion — no steer
+  opened, consistent with Run 7/9's reasoning that theme 3's product-fit is already the existing
+  flat-pricing decision). `cited_count` corrected 5→8 (1 top-level quote + 2 examples + 5
+  primary_examples, matching the additive convention the other 3 themes already use — an
+  independent reviewer caught that a first pass at this run mis-bumped it to 7). No
+  `BUSINESS_CASE.md` number changed (qualitative
+  evidence-quality upgrade only — deliberately did NOT touch the existing Section 2 addendum, since
+  it already generically names Opus Clip/CapCut/Descript as carrying trust friction and the new
+  citations reinforce, not contradict, that text).
+- **Flagged the GTM_SCORECARD staleness plainly** (3 runs / 5 days, underlying defect independently
+  reconfirmed fixed twice) in `next_actions` — not a new escalation tone, just the incremented fact,
+  matching how Run 7 flagged the bootstrap-grade staleness before Run 8 found it re-graded. This is
+  the Auditor's file, never this agent's to write.
+- Bounded WebSearch for a HighlightMagic-specific public footprint (nothing, expected pre-launch) and
+  for a named AI-clip-tool-beat journalist (only unattributed aggregator/roundup content, no
+  individual with a verifiable beat — same dead end as Runs 5/6/7/9/10/11). **Zero new outreach
+  drafts** — correct, not a miss.
+- Bumped `as_of` in `GROWTH_STATUS.md` and `PENDING_OPS.md` to 2026-07-19; validated both YAML blocks
+  with `python3 -c "import yaml; ..."` before committing.
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff
+  before committing.
+
+### Learnings
+- **The App Store RSS technique has a real ceiling worth naming**: every citation it has surfaced
+  across Runs 11-12, for 4 different competitors, has matched theme 3's frame (trust/reliability/
+  delivery-gap complaints) — none has spoken to theme 1 (the core JTBD) or theme 2 (mis-selection on
+  visual content). Worth stating explicitly so a future run doesn't keep re-trying it against those
+  themes expecting a different result; the technique is a strong tool for ONE theme, not a general
+  solution to the aggregator-only limitation on the other three.
+- **A cheap local check can substitute for a repeated expensive one when the question is "did
+  anything change," not "what's the answer."** Two independent Browserbase runs (10, 11) already
+  answered "is the domain reachable" with a strong, corroborated no. This run's job was only to check
+  whether that had changed — and a `dns.resolve4`/`curl` call answers that exact question for near-zero
+  cost. Save the paid browser probe for when there's a real reason to expect a different result (e.g.
+  the owner reports acting on the DNS item).
+- **A one-source finding can still be added as evidence without claiming it clears the corroboration
+  bar.** The Vizard mobile-completeness pattern is real and citable, but GTM_STANDARD §10's auto-steer
+  bar requires ≥2 independent SOURCES, not just ≥3 posts — 3 reviews from the same competitor's own
+  feed is 1 source. Recording it honestly as sub-bar evidence (strengthening an already-corroborated
+  theme, not itself corroborated) is the correct middle ground between omitting real evidence and
+  overclaiming what it proves.
+- Circuit breaker discipline held again: 12th consecutive run, no new escalation prose on
+  connect-channels — incremented the count and put the run's effort into the two genuinely new,
+  real deliverables (the extended primary-evidence citations + the plainly-stated scorecard-staleness
+  note) instead of padding.
+
+### Dead ends / what NOT to repeat
+- Do NOT re-try the App Store RSS technique against themes 1/2/4 expecting it to generalize — 2 runs
+  and 4 competitors have only ever produced theme-3-shaped evidence (trust/reliability/delivery-gap).
+  If a future run wants primary evidence for the JTBD or mis-selection themes, a different source is
+  needed (Reddit/Trustpilot/the review-listing page, all still 403'd, or a genuinely new access path).
+- Do NOT re-run the paid Browserbase probe on a run where nothing in `env`/PENDING_OPS/owner
+  communication suggests the domain situation could have changed — the cheap local DNS/curl check
+  answers "did anything change" just as reliably for near-zero cost.
+- FullCourt.ai (`id1534211457`) is a dead end for FRESH primary evidence right now — its most recent
+  review is ~5 months old. Don't re-fetch it again soon; if revisited, check whether newer reviews
+  exist first.
+
+### Circuit-breaker status
+- **Still open at Run 12 (12 consecutive runs).** No new owner action since Run 6 (the last real
+  channel-adjacent movement was `spend-caps` closing back at Run 5). The ask is unchanged: Resend per
+  `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single highest-leverage unlock;
+  `site-domain-dns` is the second (and now blocks confirming `site-gate` itself).
+
+### Next run priorities (Run 13)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social
+   tokens — never infer from git; if any present, pull real data and move toward execute mode.
+2. Only re-run the paid Browserbase probe if there's a specific reason to expect a different result
+   (an owner-reported DNS change, a new Vercel domain attached); otherwise the cheap local DNS/curl
+   check is sufficient to confirm "nothing changed."
+3. Check whether `GTM_SCORECARD.md` was finally re-graded (still `as_of: 2026-07-14` after 3 runs/
+   5 days) — if still unchanged at Run 13, this is a 4th-run / ~1-week staleness pattern worth
+   surfacing more prominently as a stuck-Auditor signal, same treatment Run 7 gave the bootstrap grade.
+4. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the demand-validation kit
+   was filmed/posted.
+5. If a genuinely new, verifiable outreach target surfaces, draft it; otherwise zero new outreach
+   remains correct (6 consecutive runs of the same journalist-search dead end now).
+6. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change between
+   runs; this run found no material change since Run 11's read.
