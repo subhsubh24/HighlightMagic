@@ -108,6 +108,15 @@ describe("nextBeatAfter", () => {
     // nextBeatAfter uses 0.001s tolerance
     expect(nextBeatAfter(0.4999, grid)).toBe(0.5);
   });
+
+  it("falls back to the input time when it is past the last beat (clip starts beyond the grid)", () => {
+    // grid spans 0..10.5s; a clip whose start is beyond the last beat has no later beat to snap
+    // to, so nextBeatAfter returns the time unchanged rather than undefined/NaN — the clip simply
+    // starts where it is. Locks the tail fallback that a longer-than-music timeline exercises.
+    const lastBeat = grid.beats[grid.beats.length - 1];
+    expect(lastBeat).toBeLessThan(20);
+    expect(nextBeatAfter(20, grid)).toBe(20);
+  });
 });
 
 // ── getBeatPhase ──
