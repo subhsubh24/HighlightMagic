@@ -173,6 +173,7 @@ export const VALIDATION_MANIFEST: ServiceEntry[] = [
   { env: "NODE_ENV", service: "Framework", purpose: "Node/Next environment (set by the framework).", validation: "build-config" },
   { env: "RENDER_ENABLED", service: "Config", purpose: "Feature flag for server-side render path.", validation: "build-config" },
   { env: "DEBUG_DETECT", service: "Config", purpose: "Verbose detection logging flag.", validation: "build-config" },
+  { env: "PLANNER_EFFORT", service: "Config", purpose: "Overrides the Sonnet planner reasoning effort (low|medium|high); defaults to medium. Used by the effort A/B eval to measure COGS before any default change.", validation: "build-config" },
 
   // ── Test-only flags — production must NEVER set these ──
   {
