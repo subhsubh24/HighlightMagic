@@ -23,6 +23,17 @@ const INITIAL_BACKOFF_MS = 2000;
 const MAX_RETRY_WAIT_MS = 15_000;
 
 /**
+ * Planner reasoning effort (output_config.effort). Adaptive-thinking output tokens are the planner's
+ * dominant COGS (~75% of API spend); `effort` is the primary knob on how much thinking it emits.
+ * Env-overridable ONLY so the golden-fixture eval can A/B low-vs-medium and quantify the token/cost
+ * delta before we change the shipped default (MODEL_COSTS.md protocol). Default stays "medium".
+ */
+const PLANNER_EFFORT: "low" | "medium" | "high" =
+  process.env.PLANNER_EFFORT === "low" || process.env.PLANNER_EFFORT === "high"
+    ? process.env.PLANNER_EFFORT
+    : "medium";
+
+/**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
  */
 async function fetchWithRetry(
@@ -2766,7 +2777,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     }\n\nNow create the highlight tape.`,
   });
 
-  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${CLAUDE_PLANNER}, effort=medium`);
+  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${CLAUDE_PLANNER}, effort=${PLANNER_EFFORT}`);
   const plannerStartMs = Date.now();
 
   // Retry an EMPTY/INCOMPLETE stream (200 OK but no text — e.g. stop_reason=null, the stream cut off
@@ -2800,7 +2811,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
             type: "adaptive",
           },
           output_config: {
-            effort: "medium",
+            effort: PLANNER_EFFORT,
           },
           system: [
             {
