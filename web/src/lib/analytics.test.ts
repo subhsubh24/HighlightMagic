@@ -49,4 +49,20 @@ describe("analytics.trackEvent (E5/G2)", () => {
     vi.stubGlobal("window", { plausible: "not-a-fn" });
     expect(() => trackEvent("waitlist_signup")).not.toThrow();
   });
+
+  it("sends the coarse failure category for waitlist_error (never the raw message)", () => {
+    const plausible = vi.fn();
+    vi.stubGlobal("window", { plausible });
+    trackEvent("waitlist_error", { reason: "network" });
+    trackEvent("waitlist_error", { reason: "server" });
+    expect(plausible).toHaveBeenNthCalledWith(1, "waitlist_error", { props: { reason: "network" } });
+    expect(plausible).toHaveBeenNthCalledWith(2, "waitlist_error", { props: { reason: "server" } });
+  });
+
+  it("tracks the pending double-opt-in step (waitlist_confirmation_sent)", () => {
+    const plausible = vi.fn();
+    vi.stubGlobal("window", { plausible });
+    trackEvent("waitlist_confirmation_sent");
+    expect(plausible).toHaveBeenCalledWith("waitlist_confirmation_sent", undefined);
+  });
 });

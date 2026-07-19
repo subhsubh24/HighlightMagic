@@ -3,12 +3,17 @@
  *
  * Event taxonomy (visit → waitlist → install → activate → export → Pro):
  *   page_view           — automatic via Plausible script
- *   waitlist_form_view  — the waitlist form first scrolled into view (form-impression step)
- *   waitlist_signup     — user submitted the waitlist form
- *   cta_click           — user clicked any primary CTA (App Store badge, hero button)
- *   features_view       — user scrolled to the features section (mid-funnel engagement step)
- *   pricing_view        — user scrolled to / clicked the pricing section
- *   faq_open            — user expanded an FAQ item
+ *   waitlist_form_view          — the waitlist form first scrolled into view (form-impression step)
+ *   waitlist_signup             — user submitted the waitlist form and the server accepted it
+ *   waitlist_confirmation_sent  — signup accepted but pending double-opt-in (a confirmation email was sent);
+ *                                 pairing it with waitlist_signup exposes the confirm-step drop-off AND
+ *                                 surfaces email-deliverability failures (signups with no confirmations)
+ *   waitlist_error              — the waitlist submission failed; { reason: "network" | "server" } so a
+ *                                 broken form or a server-side spike is visible without leaking the message
+ *   cta_click                   — user clicked any primary CTA (App Store badge, hero button)
+ *   features_view               — user scrolled to the features section (mid-funnel engagement step)
+ *   pricing_view                — user scrolled to / clicked the pricing section
+ *   faq_open                    — user expanded an FAQ item
  *
  * Owner setup (E5):
  *   1. Create a free/paid account at plausible.io (or use Vercel Analytics).
@@ -23,6 +28,8 @@
 export type AnalyticsEvent =
   | "waitlist_form_view"
   | "waitlist_signup"
+  | "waitlist_confirmation_sent"
+  | "waitlist_error"
   | "cta_click"
   | "features_view"
   | "pricing_view"
@@ -33,6 +40,9 @@ export type EventProps = {
   source?: string;
   /** FAQ question title (truncated to 60 chars) */
   question?: string;
+  /** Coarse failure category for waitlist_error (never the raw message: no PII, bounded cardinality).
+   *  Typed as a literal union so a call site can't accidentally pass an unbounded error string. */
+  reason?: "network" | "server";
   [key: string]: string | undefined;
 };
 
