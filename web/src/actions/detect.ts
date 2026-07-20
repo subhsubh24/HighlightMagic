@@ -36,6 +36,16 @@ const PLANNER_EFFORT: "low" | "medium" | "high" =
     : "medium";
 
 /**
+ * Planner MODEL. Defaults to CLAUDE_PLANNER (Sonnet 4.6). Env-overridable ONLY so the golden-fixture
+ * eval can benchmark a cheaper candidate (e.g. Haiku) for plan quality vs COGS before any default
+ * change (MODEL_COSTS.md switch protocol). Adaptive thinking + output_config.effort are a Sonnet/Opus
+ * 4.x capability; a Haiku planner runs PLAIN (no thinking/effort) — which is also its cheap config —
+ * so we gate those params off for non-thinking models to avoid an invalid-parameter API error.
+ */
+const PLANNER_MODEL: string = process.env.PLANNER_MODEL || CLAUDE_PLANNER;
+const PLANNER_USES_THINKING = !PLANNER_MODEL.includes("haiku");
+
+/**
  * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
  */
 async function fetchWithRetry(
@@ -2614,7 +2624,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
     }\n\nNow create the highlight tape.`,
   });
 
-  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${CLAUDE_PLANNER}, effort=${PLANNER_EFFORT}`);
+  debugLog(`[Planner] Sending request — ${userContent.length} content blocks, model=${PLANNER_MODEL}, effort=${PLANNER_USES_THINKING ? PLANNER_EFFORT : "n/a"}`);
   const plannerStartMs = Date.now();
 
   // Retry an EMPTY/INCOMPLETE stream (200 OK but no text — e.g. stop_reason=null, the stream cut off
@@ -2638,18 +2648,17 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: CLAUDE_PLANNER,
+          model: PLANNER_MODEL,
           // max_tokens caps thinking + response text COMBINED — raised 32000→64000 so adaptive
           // thinking + a full plan fit without truncation. Well under the 128k ceiling; you only pay
           // for tokens actually generated. See docs/MODEL_COSTS.md.
           max_tokens: 64000,
           stream: true,
-          thinking: {
-            type: "adaptive",
-          },
-          output_config: {
-            effort: PLANNER_EFFORT,
-          },
+          // Adaptive thinking + effort are Sonnet/Opus 4.x capabilities; a non-thinking candidate
+          // (e.g. Haiku, via PLANNER_MODEL) runs plain to avoid an invalid-parameter error.
+          ...(PLANNER_USES_THINKING
+            ? { thinking: { type: "adaptive" }, output_config: { effort: PLANNER_EFFORT } }
+            : {}),
           system: [
             {
               type: "text",
@@ -2677,7 +2686,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       onPhase,
       onPartial,
     ));
-    console.log(`[CostMeter] planner: model=${CLAUDE_PLANNER}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(CLAUDE_PLANNER, plannerIn, plannerOut).toFixed(4)}`);
+    console.log(`[CostMeter] planner: model=${PLANNER_MODEL}, in=${plannerIn}, out=${plannerOut}, est=$${estimateCostUSD(PLANNER_MODEL, plannerIn, plannerOut).toFixed(4)}`);
     // Emit this call's economics to Margin (cost-per-outcome). Awaited so the
     // emit reliably completes before a Vercel serverless instance freezes (a
     // bare floating promise would be dropped mid-flight). Fail-safe + a no-op
@@ -2689,7 +2698,7 @@ Respond with ONLY a JSON object. STUDY THIS 3-CLIP EXAMPLE for STRUCTURE and VAR
       // stream (empty/incomplete 200) so each retry shows as its own call.
       workflowId: HM_OPERATION.planner,
       provider: "anthropic",
-      model: CLAUDE_PLANNER,
+      model: PLANNER_MODEL,
       inputTokens: plannerIn,
       outputTokens: plannerOut,
       latencyMs: Date.now() - plannerStartMs,
