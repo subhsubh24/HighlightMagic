@@ -104,14 +104,14 @@ const SLOW_THRESHOLD_S = 90;
 const VERY_SLOW_THRESHOLD_S = 240;
 
 /** Max time (ms) to wait for the next SSE chunk from the server before aborting.
- * Set high to allow for Opus extended thinking (can take 2-3 min on complex edits).
+ * Set high to allow for the Sonnet 4.6 planner's extended thinking (can take 2-3 min on complex edits).
  * Keepalive pings every 15s ensure the connection stays alive. */
 const SSE_READ_TIMEOUT_MS = 300_000;
 
 /**
  * Call the planner via SSE route handler (/api/plan).
  * The route sends keepalive pings every 15s so the connection doesn't drop
- * during the 2-5 minute Opus response.
+ * during the 2-5 minute Sonnet 4.6 planner response.
  */
 interface DisabledFeatures {
   music?: boolean;
@@ -768,7 +768,7 @@ export default function DetectingStep() {
       const highlights = buildHighlights(detectedClips);
       const clips = buildClips(detectedClips, state.selectedTemplate);
 
-      // Animate any photos that the user marked or that Opus gave an animationPrompt
+      // Animate any photos that the user marked or that the Sonnet 4.6 planner gave an animationPrompt
       const animatableSourceIds = new Set(
         currentMediaFiles.filter((f) => f.type === "photo" && f.animatePhoto).map((f) => f.id)
       );
@@ -876,7 +876,7 @@ export default function DetectingStep() {
         });
       }
 
-      // When AI decides animations, update media files to reflect Opus's choices
+      // When AI decides animations, update media files to reflect the Sonnet 4.6 planner's choices
       if (state.aiDecideAnimations) {
         const aiAnimatedIds = new Set(
           detectedClips.filter((c) => c.animationPrompt).map((c) => c.sourceFileId)
@@ -1809,7 +1809,7 @@ export default function DetectingStep() {
         if (!media || media.type !== "photo") continue;
 
         // Determine the animation prompt:
-        // 1. Use Opus-generated animationPrompt if available
+        // 1. Use the Sonnet 4.6 planner-generated animationPrompt if available
         // 2. Fall back to user's animationInstructions
         // 3. Fall back to a generic prompt based on the clip label
         const prompt = clip.animationPrompt

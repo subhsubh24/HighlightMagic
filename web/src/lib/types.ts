@@ -518,7 +518,7 @@ export interface AppState {
   viralOptions: ViralExportOptions;
   // Regeneration — when set, detecting step skips scoring and re-runs planner with this feedback
   regenerateFeedback: string | null;
-  // Creative direction — optional user-provided style instructions passed to Opus planner
+  // Creative direction — optional user-provided style instructions passed to the Sonnet 4.6 planner
   creativeDirection: string;
   // ── Pro feature toggles (anyone can toggle, labeled Pro) ──
   aiMusicEnabled: boolean;
