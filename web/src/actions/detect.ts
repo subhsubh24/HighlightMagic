@@ -27,13 +27,14 @@ const MAX_RETRY_WAIT_MS = 15_000;
 /**
  * Planner reasoning effort (output_config.effort). Adaptive-thinking output tokens are the planner's
  * dominant COGS (~75% of API spend); `effort` is the primary knob on how much thinking it emits.
- * Env-overridable ONLY so the golden-fixture eval can A/B low-vs-medium and quantify the token/cost
- * delta before we change the shipped default (MODEL_COSTS.md protocol). Default stays "medium".
+ * DEFAULT = "low" (adopted 2026-07-20): the golden-fixture A/B (run 29747572301) showed effort=low
+ * holds quality 4/4 at −76% output-token cost vs medium ($2.12→$0.50 across the 4-fixture eval).
+ * See docs/MODEL_COSTS.md decision log. Still env-overridable (medium|high) for future re-benching.
  */
 const PLANNER_EFFORT: "low" | "medium" | "high" =
-  process.env.PLANNER_EFFORT === "low" || process.env.PLANNER_EFFORT === "high"
+  process.env.PLANNER_EFFORT === "medium" || process.env.PLANNER_EFFORT === "high"
     ? process.env.PLANNER_EFFORT
-    : "medium";
+    : "low";
 
 /**
  * Planner MODEL. Defaults to CLAUDE_PLANNER (Sonnet 4.6). Env-overridable ONLY so the golden-fixture
