@@ -11,10 +11,19 @@ name: live-eval
 on:
   workflow_dispatch: # run manually / ON-SIGNAL (the loop triggers this when it changes a model id or
                      # the detect/score/plan/gen code, to validate that change — see ROADMAP G3)
+    inputs:
+      run_video:
+        description: "Also run the EXPENSIVE AtlasCloud/Kling video eval (~$1). Set true ON-SIGNAL only when video/atlascloud code or the Kling model id changed."
+        type: boolean
+        default: false
   schedule:
-    - cron: "0 9 * * 1" # WEEKLY (Mondays 09:00 UTC). Cheap real evals cost ~$0.30/run (~$1.2/mo weekly);
-                        # weekly + on-signal. The expensive video-gen eval is gated separately
-                        # (RUN_VIDEO_EVAL) so it NEVER runs on this weekly cadence. See ROADMAP G3 COST.
+    # WEEKLY (Mondays 09:00 UTC) — the CHEAP evals only (detection + scoring + TTS ≈ $0.30/run,
+    # ~$1.2/mo). The expensive video-gen eval does NOT run on this cadence (see the video step's `if`).
+    - cron: "0 9 * * 1"
+    # MONTHLY (1st, 09:00 UTC) — a FULL run that ALSO includes the expensive video eval, so the
+    # AtlasCloud/Kling round-trip is validated ~monthly (owner cost decision 2026-07-20). On-signal
+    # video validation is via the workflow_dispatch `run_video` input above.
+    - cron: "0 9 1 * *"
 
 permissions:
   contents: read
@@ -59,11 +68,11 @@ jobs:
         run: npx tsx src/evals/elevenlabs.eval.ts
 
       - name: Video-gen eval (AtlasCloud/Kling — real image-to-video round-trip) [G3 rung 6]
-        # The expensive rung — owner-approved for the weekly cadence (2026-07-02) now that BOTH prereqs
-        # are met: the in-code per-run cost ceiling (eval-assertions.ts EVAL_MAX_USD, aborts before any
-        # paid call) AND the provider spend cap (OWNER_ACTIONS spend-caps, done). Double-gated: needs
-        # RUN_VIDEO_EVAL=1 + the key. Bounded to one Kling job (~$0.50–1); EVAL_MAX_USD caps a runaway.
-        if: ${{ env.ATLASCLOUD_API_KEY != '' }}
+        # The EXPENSIVE rung (~$0.50–1 per Kling job). To control spend (owner decision 2026-07-20) it
+        # runs ONLY on the MONTHLY schedule (cron '0 9 1 * *') OR on-signal via workflow_dispatch with
+        # run_video=true — NEVER on the weekly cron. Still needs the key; RUN_VIDEO_EVAL=1 + the in-code
+        # EVAL_MAX_USD ceiling (aborts before any paid call) + the provider spend cap remain the backstops.
+        if: ${{ env.ATLASCLOUD_API_KEY != '' && (github.event.schedule == '0 9 1 * *' || github.event.inputs.run_video == 'true') }}
         env:
           RUN_VIDEO_EVAL: "1"
         run: npx tsx src/evals/atlascloud.eval.ts
