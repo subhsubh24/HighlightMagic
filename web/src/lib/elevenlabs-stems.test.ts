@@ -44,6 +44,35 @@ describe("separateStems", () => {
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
   });
 
+  it("logs a [CostMeter] line for the paid ElevenLabs isolation call (COGS observability)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(audioResponse(48_000)));
+
+    // ~48KB input ≈ 2s at the 24KB/s heuristic.
+    const r = await separateStems(Buffer.alloc(48_000, 1), "track.mp3");
+
+    expect(r.status).toBe("completed");
+    const meterLine = logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.includes("[CostMeter] elevenlabs-stems:"));
+    expect(meterLine).toBeTruthy();
+    expect(meterLine).toContain("seconds=2");
+    expect(meterLine).toContain("inputBytes=48000");
+  });
+
+  it("does NOT log a cost line when the isolation call fails (no paid units consumed)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(audioResponse(0, false, 500)));
+
+    const r = await separateStems(Buffer.from("x"));
+
+    expect(r.status).toBe("failed");
+    const metered = logSpy.mock.calls
+      .map((c) => String(c[0]))
+      .some((l) => l.includes("[CostMeter] elevenlabs-stems:"));
+    expect(metered).toBe(false);
+  });
+
   it("accepts a Blob input as well as a Buffer", async () => {
     const fetchMock = vi.fn().mockResolvedValue(audioResponse(12_000));
     vi.stubGlobal("fetch", fetchMock);

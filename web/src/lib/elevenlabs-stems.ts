@@ -10,6 +10,8 @@
  * Server-side only — requires ELEVENLABS_API_KEY env var.
  */
 
+import { logProviderUsage } from "./usage-meter";
+
 const ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1";
 
 function getApiKey(): string {
@@ -46,8 +48,9 @@ export async function separateStems(
 ): Promise<StemSeparationResult> {
   const apiKey = getApiKey();
 
+  const inputBytes = audioData instanceof Blob ? audioData.size : audioData.byteLength;
   console.log(
-    `[elevenlabs-stems] Separating stems from "${fileName}" (${audioData instanceof Blob ? audioData.size : audioData.byteLength} bytes)`
+    `[elevenlabs-stems] Separating stems from "${fileName}" (${inputBytes} bytes)`
   );
 
   const blob =
@@ -99,6 +102,19 @@ export async function separateStems(
   console.log(
     `[elevenlabs-stems] Separated: instrumental=${audioBuffer.byteLength} bytes`
   );
+
+  // COGS observability: ElevenLabs Audio Isolation bills by the length of audio processed.
+  // We don't have the exact duration here, so we log the input audio size as the cost driver
+  // (MP3 ≈ 24KB/s at 192kbps → an approximate seconds figure) so a per-export COGS reconcile
+  // against the ElevenLabs invoice sees this call — it was previously the only paid ElevenLabs
+  // op (vs tts/sfx/music) with no [CostMeter] line.
+  logProviderUsage({
+    provider: "elevenlabs",
+    op: "stems",
+    units: Math.round(inputBytes / 24_000),
+    unit: "seconds",
+    meta: { inputBytes, instrumentalBytes: audioBuffer.byteLength },
+  });
 
   return {
     status: "completed",
