@@ -7,6 +7,7 @@ import { POST } from "@/app/api/ios-score/route";
 import { consumeExport } from "@/lib/entitlement";
 import { FREE_EXPORT_LIMIT } from "@/lib/constants";
 import { DAILY_EXPORT_CAP, recordDailyExport, __resetCeilingStoreForTests } from "@/lib/spend-ceiling";
+import { grantCredits, getCreditBalance } from "@/lib/credit-store";
 import { MAX_TEMPLATE_NAME_CHARS } from "@/lib/input-bounds";
 
 function req(body: unknown): Request {
@@ -119,6 +120,41 @@ describe("POST /api/ios-score", () => {
     expect(body.frames[0].timeSec).toBe(1.0);
     expect(typeof body.frames[0].score).toBe("number");
     expect(body.remaining).toBe(FREE_EXPORT_LIMIT - 1);
+  });
+
+  it("authorizes a credit-backed export once monthly quota is exhausted and reports remaining=0 (not the -1 Pro sentinel)", async () => {
+    // A free user who has spent all 5 monthly exports but bought a credit pack: checkExportAllowed
+    // returns { allowed:true, viaCredit:true, isPro:false, remaining:0 }. The route's response calc
+    // is `decision.isPro ? -1 : Math.max(0, decision.remaining - 1)` → Math.max(0, 0-1) = 0. The
+    // Math.max floor is ONLY exercised at this boundary — the fresh-user test drives remaining 5→4,
+    // never the 0→-1 clamp. A mutation dropping the floor would return -1, which iOS reads as the
+    // Pro/unlimited sentinel — i.e. a paying credit user would be told they have unlimited exports.
+    const userId = "ios-score-credit-user";
+    __resetCeilingStoreForTests();
+    for (let i = 0; i < FREE_EXPORT_LIMIT; i++) await consumeExport({ userId }); // exhaust monthly
+    await grantCredits(userId, 3, "txn-ios-score-credit"); // buys a credit pack
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: '[{"index":0,"score":0.9,"role":"HERO","label":"x"}]' }],
+          usage: { input_tokens: 10, output_tokens: 2 },
+        }),
+        { status: 200 },
+      ),
+    );
+    // Distinct IP so this request doesn't hit the shared per-IP PAID_RATE_LIMIT bucket the other
+    // same-IP tests in this file collectively fill.
+    const creditReq = new Request("http://localhost/api/ios-score", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.9" },
+      body: JSON.stringify({ userId, frames: [frame] }),
+    });
+    const res = await POST(creditReq);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.remaining).toBe(0); // NOT -1
+    // The export spent one purchased credit (monthly counter is already maxed), not free quota.
+    expect(await getCreditBalance(userId)).toBe(2);
   });
 
   it("logs a [CostMeter] line with the per-export Anthropic token usage (COGS observability)", async () => {
