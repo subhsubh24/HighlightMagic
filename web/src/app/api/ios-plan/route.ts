@@ -25,7 +25,7 @@ interface IOSScore {
  * POST /api/ios-plan
  *
  * iOS tape-planning proxy. Accepts iOS-format scored frames and routes them through
- * the Opus planner on the backend — keeping the API key server-side.
+ * the Sonnet 4.6 planner on the backend — keeping the API key server-side.
  *
  * Does NOT consume quota (quota consumed at /api/ios-score; planning is a sub-step).
  * Still checks checkExportAllowed so only eligible users can plan.
