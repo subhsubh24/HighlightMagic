@@ -1,9 +1,10 @@
 name: planner-effort-ab
 
-# One-off A/B: runs the golden DETECTION eval at effort=medium (current default) and effort=low,
-# so we can compare plan quality (pass/fail, clip counts, theme) AND the real output-token/cost delta
-# (CostMeter logs `[CostMeter] planner: ... out=... est=$...`). Detection eval ONLY — no scoring/TTS/
-# video — so the A/B costs ~2 × ~$0.28. Dispatch-only; delete once the effort decision is logged.
+# One-off A/B: runs the golden DETECTION eval under three planner configs so we can compare plan
+# quality (pass/fail, clip counts, theme) AND the real output-token/cost delta (CostMeter logs
+# `[CostMeter] planner: model=..., out=..., est=$...`). Detection eval ONLY — no scoring/TTS/video —
+# so each arm costs ~$0.28. Dispatch-only; delete once the model/effort decision is logged in
+# MODEL_COSTS.md. Arms run in parallel (a matrix), one per config.
 on:
   workflow_dispatch:
 
@@ -11,15 +12,30 @@ permissions:
   contents: read
 
 jobs:
-  planner-effort-ab:
-    name: planner-effort-ab
+  ab:
+    name: ab (${{ matrix.label }})
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
+    strategy:
+      fail-fast: false # always run every arm, even if one drops a fixture
+      matrix:
+        include:
+          - label: sonnet-medium (baseline / current default)
+            model: claude-sonnet-4-6
+            effort: medium
+          - label: sonnet-low
+            model: claude-sonnet-4-6
+            effort: low
+          - label: haiku-low (cheapest candidate)
+            model: claude-haiku-4-5-20251001
+            effort: low
     env:
       EVAL_MODE: "1"
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PLANNER_MODEL: ${{ matrix.model }}
+      PLANNER_EFFORT: ${{ matrix.effort }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,10 +44,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-
-      - name: A — BASELINE effort=medium (current shipped default)
-        run: PLANNER_EFFORT=medium npx tsx src/evals/detect.eval.ts
-
-      - name: B — CANDIDATE effort=low
-        if: ${{ always() }} # run B even if A had a fixture fail, so we always get both sides
-        run: PLANNER_EFFORT=low npx tsx src/evals/detect.eval.ts
+      - name: Detection eval — ${{ matrix.label }}
+        run: |
+          echo "=== ARM: ${{ matrix.label }} (PLANNER_MODEL=$PLANNER_MODEL PLANNER_EFFORT=$PLANNER_EFFORT) ==="
+          npx tsx src/evals/detect.eval.ts
