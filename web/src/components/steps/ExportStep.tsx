@@ -1008,7 +1008,7 @@ export default function ExportStep() {
               <p className="text-xs text-[var(--text-tertiary)]">Social Thumbnail</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={thumbnailUrl} alt="Generated thumbnail" className="w-32 rounded-lg border border-white/10" />
-              <a href={thumbnailUrl} download="thumbnail.png" className="text-xs text-[var(--accent)] hover:underline">
+              <a href={thumbnailUrl} download="thumbnail.png" className="rounded text-xs text-[var(--accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60">
                 Download Thumbnail
               </a>
             </div>
