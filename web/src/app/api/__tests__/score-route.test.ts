@@ -7,6 +7,7 @@ import { POST } from "@/app/api/score/route";
 import { consumeExport } from "@/lib/entitlement";
 import { FREE_EXPORT_LIMIT } from "@/lib/constants";
 import { DAILY_EXPORT_CAP, recordDailyExport, __resetCeilingStoreForTests } from "@/lib/spend-ceiling";
+import { grantCredits, getCreditBalance } from "@/lib/credit-store";
 
 function req(body: unknown): Request {
   return new Request("http://localhost/api/score", {
@@ -116,5 +117,37 @@ describe("/api/score", () => {
     const json = await res.json();
     expect(json.scores).toEqual([{ timeSec: 1, score: 0.91 }]);
     expect(json.remaining).toBe(FREE_EXPORT_LIMIT - 1);
+  });
+
+  it("authorizes a credit-backed export once monthly quota is exhausted and reports remaining=0 (not the -1 Pro sentinel)", async () => {
+    // Monthly quota spent + a purchased credit pack: checkExportAllowed returns viaCredit with
+    // remaining:0, so the route calc `Math.max(0, decision.remaining - 1)` must clamp 0→-1 back to
+    // 0. The fresh-user test only drives 5→4, never this boundary; a mutation dropping Math.max
+    // would emit -1, which the client reads as the Pro/unlimited sentinel for a paying credit user.
+    const userId = "credit-backed-user";
+    __resetCeilingStoreForTests();
+    for (let i = 0; i < FREE_EXPORT_LIMIT; i++) await consumeExport({ userId }); // exhaust monthly
+    await grantCredits(userId, 3, "txn-score-credit"); // buys a credit pack
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [{ text: '[{"time":1,"score":0.91}]' }],
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200 },
+      ),
+    );
+    // Distinct IP so this request doesn't hit the shared per-IP PAID_RATE_LIMIT bucket the other
+    // same-IP tests in this file collectively fill.
+    const creditReq = new Request("http://localhost/api/score", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-real-ip": "203.0.113.19" },
+      body: JSON.stringify({ userId, frames: [frame], prompt: "dunks" }),
+    });
+    const res = await POST(creditReq);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.remaining).toBe(0); // NOT -1
+    expect(await getCreditBalance(userId)).toBe(2); // spent one purchased credit, not free quota
   });
 });
