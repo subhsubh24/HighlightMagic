@@ -9,20 +9,16 @@ name: live-eval
 # Provider spend caps (PENDING_OPS: spend-caps) are the backstop; keep the eval set small + cheap.
 
 on:
-  workflow_dispatch: # run manually / ON-SIGNAL (the loop triggers this when it changes a model id or
-                     # the detect/score/plan/gen code, to validate that change — see ROADMAP G3)
-    inputs:
-      run_video:
-        description: "Also run the EXPENSIVE AtlasCloud/Kling video eval (~$1). Set true ON-SIGNAL only when video/atlascloud code or the Kling model id changed."
-        type: boolean
-        default: false
+  # Real paid Anthropic/ElevenLabs/AtlasCloud round-trips are MONTHLY ONLY (owner cost decision
+  # 2026-07-21). The weekly cron AND the on-signal workflow_dispatch were REMOVED: the real
+  # detect/score evals cost ~$12-14/run (Claude Sonnet 4.6 vision over the gold fixtures + cache
+  # writes) -- the old "$0.30/run" note was ~40x too low -- and the loop auto-dispatching this on
+  # every AI-code change drove ~$48 in 21 days on the highlightmagic-v2 key ($13.85 on Mon 7/13,
+  # $12.49 on Mon 7/20). AI-code changes are still validated KEYLESS (mock + gold fixtures) in CI on
+  # every PR; the REAL paid round-trip is validated just once a month here. The provider spend cap
+  # (PENDING_OPS: spend-caps) is the hard backstop.
   schedule:
-    # WEEKLY (Mondays 09:00 UTC) — the CHEAP evals only (detection + scoring + TTS ≈ $0.30/run,
-    # ~$1.2/mo). The expensive video-gen eval does NOT run on this cadence (see the video step's `if`).
-    - cron: "0 9 * * 1"
-    # MONTHLY (1st, 09:00 UTC) — a FULL run that ALSO includes the expensive video eval, so the
-    # AtlasCloud/Kling round-trip is validated ~monthly (owner cost decision 2026-07-20). On-signal
-    # video validation is via the workflow_dispatch `run_video` input above.
+    # MONTHLY (1st, 09:00 UTC) -- the ONLY paid-eval run; this monthly run also runs the video eval.
     - cron: "0 9 1 * *"
 
 permissions:
@@ -72,7 +68,7 @@ jobs:
         # runs ONLY on the MONTHLY schedule (cron '0 9 1 * *') OR on-signal via workflow_dispatch with
         # run_video=true — NEVER on the weekly cron. Still needs the key; RUN_VIDEO_EVAL=1 + the in-code
         # EVAL_MAX_USD ceiling (aborts before any paid call) + the provider spend cap remain the backstops.
-        if: ${{ env.ATLASCLOUD_API_KEY != '' && (github.event.schedule == '0 9 1 * *' || github.event.inputs.run_video == 'true') }}
+        if: ${{ env.ATLASCLOUD_API_KEY != '' && github.event.schedule == '0 9 1 * *' }}
         env:
           RUN_VIDEO_EVAL: "1"
         run: npx tsx src/evals/atlascloud.eval.ts
