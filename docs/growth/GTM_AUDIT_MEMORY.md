@@ -170,3 +170,66 @@ maker-gaming event.
   pricing, no ARR booked for credit packs, and that no NEW GTM asset reintroduces a walked-back product claim
   (the KIT re-echo this run shows the failure mode — GTM assets drifting from product-side honesty fixes).
 - as_of freshness recurs (1d stale again). Low severity.
+
+---
+
+## 2026-07-22 — Audit Run 4 (third re-grade)
+
+### State found (diff vs Run 3, 2026-07-14)
+- The Run-3 ship-gate blocker is **CLOSED**: the false "7 kinetic caption styles" claim in the ready-to-record
+  `docs/content/post-batch-1.md` is FIXED — :252 now "4 animated caption styles. All automatic.", :261 names
+  "pop, bounce, slide, typewriter"; `DEMAND_VALIDATION_KIT.md:16` de-ambiguated to "4 animated styles". A grep
+  for "7 kinetic/7 styles/seven" is clean across all public/ready-to-record assets (remaining hits are only in
+  audit/memory files describing the historical defect). Reconfirmed against the Swift source
+  (`KineticCaptionRenderer.swift:34-36` animates only 4; `.flicker/.fade` static behind a TODO, `.none` static).
+  Issue **#492** closed-completed this run after independent verification.
+- GTM Factory activity since Run 3: **Run 11 (#537, b0a738f, 2026-07-17)** + **Run 12 (#561, e2db587, 2026-07-19)**
+  — added PRIMARY App Store RSS review citations (`itunes.apple.com/us/rss/customerreviews`) to `demand_signal`,
+  raw-JSON-verified before citing, and re-confirmed site-domain-dns. Both touched only `PENDING_OPS.md` +
+  `docs/growth/*` — NO ROADMAP.md/VISION.md write. Product-side: the S9 BUSINESS_CASE double-attribution was
+  reconciled (Run 72). GROWTH_STATUS re-stamped as_of 2026-07-19.
+
+### Grades (overall A; **ship_gate_met TRUE** — RECOVERED from false)
+| Dimension | Grade | Δ vs Run 3 | Note |
+|---|---|---|---|
+| metric_integrity \* | A | = | No fabrication; engine_pct 100 = 5/5 anchors; drafted_7d:0 correct (draft 20d old, Gmail-confirmed unsent); cited_counts reconcile (theme 3:8). Nit: as_of 3d stale. |
+| business_case_honesty \* | A+ | ↑ (A) | S9 double-attribution FIXED (BUSINESS_CASE.md:427-433 → price move, "not re-counted"); arithmetic + floor math reconcile zero-drift; credit-pack zero ARR. |
+| experiment_validity | A | = | One designed test; power calc 2210/arm; result null. |
+| roadmap_steer_justification \* | A+ | ↑ (A) | steers_opened []; no ROADMAP/VISION commit; the prior second-hand-corpus reason RESOLVED — primary ID-verified App Store citations (every app ID independently confirmed); exemplary restraint. |
+| self_validation_honesty \* | A+ | = | All 9 manifest line numbers re-verified exact; Plausible crux holds (layout.tsx:52-66 gated, metrics.ts zero refs); RSS honestly kept out of validation.sources. |
+| pmf_read_accuracy | A | = | pmf null/signal null; NOT_YET; demand_signal firewalled from PMF. |
+| compliance | B → **A** | ↑ | FTC risk from the 7-kinetic overclaim RESOLVED; RSS technique legitimate (public unauth endpoint, not ToS circumvention); draft-only rail intact. |
+| artifact_freshness | C → **A** | ↑↑ | **The recovery.** 7-kinetic overclaim fixed in post-batch-1.md + KIT, reconfirmed vs Swift source; pricing zero-drift. |
+
+### Method
+Spawned 4 fresh, independent, adversarial grader subagents (Opus, each told to REFUTE): (1) metric_integrity +
+self_validation — verified all 5 preflight anchors, all 9 validation-manifest.ts line numbers exact, the
+Plausible crux against layout.tsx/metrics.ts, live Gmail draft age; (2) business_case_honesty — recomputed all
+3 scenarios + floor math, confirmed StoreKit/constants pricing zero-drift, verified the S9 fix text at 427-433;
+(3) roadmap_steer + demand corpus — confirmed both GTM commits touched no roadmap file, independently resolved
+every cited App Store app ID via the iTunes lookup API to the claimed competitor; (4) artifact_freshness +
+compliance — grepped docs/ for the 7-kinetic overclaim (clean), reconfirmed vs Swift source, verified the RSS
+endpoint is public/unauthenticated. experiment_validity + pmf graded directly (unchanged, low risk). Two graders
+argued metric_integrity → A+; the Auditor HELD it at A — the recurring as_of staleness (now 3d) is a real finding
+and A+ requires zero findings (consistent with Runs 1-3; not inflated).
+
+### Ship gate
+**MET (recovered).** All 4 ship_critical dimensions A/A+ (metric_integrity A, business_case_honesty A+,
+roadmap_steer A+, self_validation_honesty A+); every non-critical dimension A (≥ B); none null. The #492 fix
+removed the only blocker. No fabricated metric, no gamed number, no speculative steer.
+
+### Gaps filed
+- **None filed this run.** Issue #492 closed-completed after verifying the fix. The only remaining gap is the
+  low-severity `as_of` freshness nit (metric_integrity A) — self-tracked; filing A-grade trivia is noise.
+
+### Read for next run
+- Diff every dimension vs the table above. Gate is MET again — watch for REGRESSIONS: did an A/A+ dimension slip?
+- **Two A+ upgrades this run rest on resolved-prior-gap reasoning — re-verify they hold:** business_case A+ needs
+  the S9 prose (BUSINESS_CASE.md:427-433) to stay reconciled to the price-move attribution; roadmap_steer A+ rests
+  on the primary App Store citations staying verifiable AND no steer being opened on them. If a future GTM run
+  opens ANY ROADMAP/VISION steer built on the (now primary) demand corpus, re-scrutinize roadmap_steer hard — the
+  richer corpus makes a speculative steer more tempting, and A+ becomes F the moment a low-confidence steer ships.
+- Re-verify each run: 5 preflight anchors, validation-manifest line numbers, StoreKit pricing, no ARR booked for
+  credit packs, and that no NEW GTM asset reintroduces a walked-back product claim (the "7 kinetic" saga is the
+  canonical failure mode — GTM assets drifting from product-side honesty fixes).
+- as_of freshness recurs (now 3d stale, worse than the usual 1d). Low severity; note it, don't inflate a fix.
