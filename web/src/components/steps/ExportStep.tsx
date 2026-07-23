@@ -964,6 +964,7 @@ export default function ExportStep() {
               <video
                 src={blobUrl}
                 className="h-full w-full object-contain"
+                aria-label="Your finished highlight tape — preview and play"
                 controls
                 playsInline
                 loop
