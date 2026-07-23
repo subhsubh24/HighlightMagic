@@ -58,8 +58,13 @@ export async function GET(req: NextRequest) {
   }
 
   // Welcome email is dry-run safe and best-effort; a send failure must not break confirmation.
+  // But it MUST be observable — a silent failure behind a "you're on the list" page leaves the
+  // user waiting on an email that never arrives with zero server-side signal to diagnose it.
   const { subject, text } = buildWelcomeEmail();
-  await sendEmail({ to: email, subject, text });
+  const welcome = await sendEmail({ to: email, subject, text });
+  if (!welcome.ok) {
+    console.warn(`[waitlist-confirm] welcome email send failed: ${welcome.error ?? "unknown"}`);
+  }
 
   return page(
     "You're on the list! 🎬",

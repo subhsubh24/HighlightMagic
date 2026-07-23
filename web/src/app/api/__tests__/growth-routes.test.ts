@@ -4,7 +4,8 @@ import { POST as waitlistPOST } from "@/app/api/waitlist/route";
 import { GET as confirmGET } from "@/app/api/waitlist/confirm/route";
 import { GET as statsGET } from "@/app/api/growth/stats/route";
 import { _resetBuckets } from "@/lib/rate-limit";
-import { _resetWaitlistMemory } from "@/lib/growth/waitlist-store";
+import { _resetWaitlistMemory, addPendingSignup } from "@/lib/growth/waitlist-store";
+import * as emailModule from "@/lib/email";
 
 function waitlistReq(body: unknown, ip = "198.51.100.1") {
   return new NextRequest("http://localhost/api/waitlist", {
@@ -51,6 +52,23 @@ describe("E6a — waitlist double-opt-in flow", () => {
       last = r.status;
     }
     expect(last).toBe(429);
+  });
+
+  it("confirms a real token AND logs (never swallows) a failed welcome-email send", async () => {
+    const token = await addPendingSignup("confirmed@example.com");
+    const sendSpy = vi
+      .spyOn(emailModule, "sendEmail")
+      .mockResolvedValue({ ok: false, dryRun: false, provider: "resend", error: "send_error" });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const req = new NextRequest(`http://localhost/api/waitlist/confirm?token=${token}`);
+    const res = await confirmGET(req);
+
+    // Confirmation still succeeds (best-effort email must not break it)...
+    expect(res.status).toBe(200);
+    expect(sendSpy).toHaveBeenCalledOnce();
+    // ...but the failure is observable server-side, not silently swallowed.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("welcome email send failed"));
   });
 
   it("confirm link with a bad token shows a generic expired page (no enumeration)", async () => {
