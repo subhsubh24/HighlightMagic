@@ -16,10 +16,10 @@ actor HighlightDetectionService {
     struct DetectionResult: Sendable {
         var segments: [HighlightSegment]
         var overallConfidence: Double
-        /// Per-clip AI creative configs from the Opus planner (1:1 with segments).
+        /// Per-clip AI creative configs from the Sonnet 4.6 planner (1:1 with segments).
         /// When present, downstream clip generation skips re-planning.
         var perClipConfigs: [CustomEffectConfig]?
-        /// AI production plan from Opus — drives SFX, voiceover, music, intro/outro, post-processing.
+        /// AI production plan from Sonnet 4.6 — drives SFX, voiceover, music, intro/outro, post-processing.
         var productionPlan: AiProductionPlan?
         /// Audio transcript from ElevenLabs Scribe (when available).
         /// Provides word-level timing for caption generation and content understanding.
@@ -42,7 +42,7 @@ actor HighlightDetectionService {
             throw DetectionError.invalidVideo
         }
 
-        // Cloud-first path: when API is available, use Haiku scoring + Opus planning
+        // Cloud-first path: when API is available, use Haiku scoring + Sonnet 4.6 planning
         // (identical to web platform). Falls back to Vision pipeline only when offline.
         if await CloudScoringService.shared.isAvailable {
             return try await detectHighlightsCloud(
@@ -63,14 +63,14 @@ actor HighlightDetectionService {
         )
     }
 
-    // MARK: - Cloud Detection (Haiku + Opus — identical to web)
+    // MARK: - Cloud Detection (Haiku + Sonnet 4.6 — identical to web)
 
     /// Cloud-first detection pipeline matching the web platform exactly:
     /// 1. Extract audio features (energy, onset, bass/mid/treble per second)
     /// 2. Score all frames with Claude Haiku (1 frame/sec, batches of 35)
     /// 3. Z-score normalize across batches
     /// 4. Build segments from scored frames
-    /// 5. Plan tape with Claude Opus 4.6 (extended thinking, SSE streaming)
+    /// 5. Plan tape with Claude Sonnet 4.6 (extended thinking, SSE streaming)
     private func detectHighlightsCloud(
         asset: AVURLAsset,
         totalSeconds: Double,
@@ -78,7 +78,7 @@ actor HighlightDetectionService {
         creativeDirection: String = "",
         progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> DetectionResult {
-        logger.info("Cloud detection pipeline: Haiku scoring → Opus planning (matching web)")
+        logger.info("Cloud detection pipeline: Haiku scoring → Sonnet 4.6 planning (matching web)")
 
         // Phase 1: Extract audio features + transcription in parallel (0-5%)
         progressHandler(0.01)
@@ -119,8 +119,8 @@ actor HighlightDetectionService {
                 prompt: prompt, progressHandler: progressHandler
             )
         }
-        // Phase 3+4: Plan tape with Opus 4.6 (75-98%)
-        // Gap 1: Opus decides clip boundaries (startTime/endTime) — no pre-built segments.
+        // Phase 3+4: Plan tape with Sonnet 4.6 (75-98%)
+        // Gap 1: Sonnet 4.6 decides clip boundaries (startTime/endTime) — no pre-built segments.
         // This matches the web platform where AI has full creative control over WHERE to cut.
         progressHandler(0.75)
 
@@ -136,7 +136,7 @@ actor HighlightDetectionService {
             progressHandler(phase)
         }
 
-        // If Opus returned valid clips, use them directly.
+        // If Sonnet 4.6 returned valid clips, use them directly.
         // Otherwise fall back to the legacy segment-building approach.
         var finalSegments: [HighlightSegment]
         var finalConfigs: [CustomEffectConfig]?
@@ -144,7 +144,7 @@ actor HighlightDetectionService {
             finalSegments = planResult.segments
             finalConfigs = planResult.configs
         } else {
-            logger.warning("Opus returned no clips, falling back to scored-frame segment builder")
+            logger.warning("Sonnet 4.6 returned no clips, falling back to scored-frame segment builder")
             finalSegments = buildSegmentsFromScoredFrames(
                 scoredFrames: scoredFrames,
                 totalSeconds: totalSeconds
