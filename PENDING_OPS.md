@@ -10,14 +10,14 @@ the detailed how-to for each item.
 ```yaml
 OWNER_ACTIONS:
   project: HighlightMagic
-  as_of: 2026-07-19
+  as_of: 2026-07-23
   items:
     - id: review-outreach-drafts
       title: "Review + send 1 strategic outreach draft (Gmail — Sam Gutelle, Tubefilter)"
       priority: normal
       status: open
       why: "Growth Agent created a pre-launch pitch email for Sam Gutelle (Senior Editor, Tubefilter, creator economy press) as a Gmail DRAFT for owner to review + send. The agent never sends; the owner sends after reviewing."
-      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-19 (20 days old, verified via computed date arithmetic)."
+      how: "Search Gmail drafts for 'Highlight Magic (iOS, pre-launch) — AI auto-editing for TikTok/Reels creators'. BEFORE SENDING: (1) replace [Your Full Name] placeholder, (2) add your business mailing address (CAN-SPAM legal requirement), (3) add one specific Tubefilter article reference for personalization, (4) verify sam@tubefilter.com is current. See draft body for full instructions. Still unsent as of 2026-07-23 (24 days old, verified via computed date arithmetic)."
       blocks: press-outreach
     - id: film-demand-validation-kit
       title: "Film + post the demand-validation content kit (docs/growth/DEMAND_VALIDATION_KIT.md)"
@@ -30,7 +30,7 @@ OWNER_ACTIONS:
       title: "Delete NINE leftover Gmail drafts — pre-policy status-report/digest emails that predate the current no-digest-email rule"
       priority: normal
       status: open
-      why: "Count reconfirmed unchanged 2026-07-19 (Run 12, via a fresh list_drafts): still NINE pre-existing stale drafts — 3 Growth Agent status-report emails ('HighlightMagic Growth — 2026-06-27/28/29', Runs 1-3), 1 quality-grade digest ('HighlightMagic Quality — 2026-06-29'), and 5 unlabeled 'HighlightMagic - daily digest' entries (2026-06-24 x2, 06-25, 06-26, 06-27 — predating the Growth Agent entirely). GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these. All are unsent and harmless (no auto-send exists), but they clutter Gmail drafts alongside the real to-send Sam Gutelle outreach draft."
+      why: "Count reconfirmed unchanged 2026-07-23 (Run 13, via a fresh list_drafts): still NINE pre-existing stale drafts — 3 Growth Agent status-report emails ('HighlightMagic Growth — 2026-06-27/28/29', Runs 1-3), 1 quality-grade digest ('HighlightMagic Quality — 2026-06-29'), and 5 unlabeled 'HighlightMagic - daily digest' entries (2026-06-24 x2, 06-25, 06-26, 06-27 — predating the Growth Agent entirely). GTM_STANDARD S5 now explicitly forbids status-report/digest emails (reporting is dashboard-only) — the Growth Agent no longer creates these. All are unsent and harmless (no auto-send exists), but they clutter Gmail drafts alongside the real to-send Sam Gutelle outreach draft."
       how: "Open Gmail drafts, find the nine drafts named above (search 'HighlightMagic' in drafts), delete them. The Growth Agent has no Gmail delete capability (its Gmail tool is create_draft-only) so this is owner-only cleanup."
       blocks: none
     - id: spend-caps
@@ -74,7 +74,7 @@ OWNER_ACTIONS:
       title: "URGENT (found 2026-07-15 Run 10, RE-CONFIRMED 2026-07-17 Run 11): verify highlightmagic.app is registered + DNS-pointed at the Vercel deployment"
       priority: urgent
       status: open
-      why: "Run 10 drove a real Browserbase-hosted browser (sanity-checked working: loaded https://example.com -> HTTP 200) to https://highlightmagic.app and got net::ERR_TUNNEL_CONNECTION_FAILED on both https and http; corroborated by a local outbound-proxy 502 and a local DNS resolve4 ENOTFOUND. Run 11 independently re-ran the SAME Browserbase probe two days later: identical result. Run 12 (2026-07-19) did not repeat the paid Browserbase probe (no signal anything changed) but re-ran the cheap local DNS/curl check: still ENOTFOUND / 502, unchanged. Confirmed across three separate runs now, not a one-off blip. This is upstream of and blocks confirming site-gate (below): the gate cannot be verified up if the domain itself is unreachable. Consistent with either the domain never having been registered/pointed at Vercel, or no production domain alias being attached in the Vercel project — the agent cannot distinguish which from outside the Vercel dashboard."
+      why: "Run 10 drove a real Browserbase-hosted browser (sanity-checked working: loaded https://example.com -> HTTP 200) to https://highlightmagic.app and got net::ERR_TUNNEL_CONNECTION_FAILED on both https and http; corroborated by a local outbound-proxy 502 and a local DNS resolve4 ENOTFOUND. Run 11 independently re-ran the SAME Browserbase probe two days later: identical result. Runs 12 and 13 (2026-07-19, 2026-07-23) did not repeat the paid Browserbase probe (no signal anything changed) but re-ran the cheap local DNS/curl check both times: still ENOTFOUND / 502, unchanged. Confirmed across FOUR separate runs now, not a one-off blip. This is upstream of and blocks confirming site-gate (below): the gate cannot be verified up if the domain itself is unreachable. Consistent with either the domain never having been registered/pointed at Vercel, or no production domain alias being attached in the Vercel project — the agent cannot distinguish which from outside the Vercel dashboard."
       how: "In the Vercel dashboard, confirm highlightmagic.app is added as a Domain on the web/ project and its DNS records (A/CNAME per Vercel's instructions) are set at the registrar. If the domain isn't purchased/pointed yet, either complete that or share a working *.vercel.app preview/production URL so the agent has a fallback to probe. Once resolving, re-run this check (or the next Growth Agent run will)."
       blocks: launch-exposure
     - id: site-gate
