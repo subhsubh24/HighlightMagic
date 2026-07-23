@@ -1115,3 +1115,120 @@ The `connect-channels` owner blocker has been open since engine launch. If it is
    remains correct (6 consecutive runs of the same journalist-search dead end now).
 6. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change between
    runs; this run found no material change since Run 11's read.
+
+---
+
+## 2026-07-23 — Run 13
+
+### State found
+- Phase: pre_launch (unchanged); `engine_built: true` / `engine_pct: 100` (unchanged, code-pinned).
+  Channels connected: none — **13th consecutive run** with connect-channels open. Re-probed `env` for
+  `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social tokens: all still absent,
+  unchanged since Run 6 (only `BROWSERBASE_API_KEY`/`BROWSERBASE_PROJECT_ID` present, same shared
+  sandbox plumbing). `site_gate_up`: false (unchanged).
+- Did NOT re-run the paid Browserbase live-prod probe — no signal since Run 12 to expect a different
+  result (three independent runs, 10/11/12, already agree the domain doesn't resolve). Ran the cheap
+  local check instead: `node dns.resolve4('highlightmagic.app')` -> `ENOTFOUND`; `curl
+  https://highlightmagic.app` -> CONNECT tunnel failed / 502 (proxy status log: "gateway answered 502
+  to CONNECT... policy denial or upstream failure") — an exact repeat of every run since Run 7. Domain
+  still unreachable; no owner action detected.
+- **The genuine new fact this run: the independent GTM Auditor DID re-grade since Run 12.**
+  `GTM_SCORECARD.md` is now `as_of: 2026-07-22` (Audit Run 4, commit `b5d3765`) — `overall: A`,
+  `ship_gate_met` RECOVERED `false -> true`. This closes the exact 3-run/5-day staleness gap this
+  agent flagged in Run 12's `next_actions`: the auditor independently reconfirmed the "7 kinetic
+  caption styles" fix (`post-batch-1.md:252,261` / `DEMAND_VALIDATION_KIT.md:16` correctly say "4
+  animated styles"), upgrading `artifact_freshness` C->A and `compliance` B->A on that fix, plus two
+  unrelated genuine upgrades (`business_case_honesty` A->A+, `roadmap_steer_justification` A->A+ on
+  the primary-source App Store RSS work Runs 11/12 did). Its own sole remaining `top_gap` is the SAME
+  `as_of`-freshness nit this agent has carried for months (GROWTH_STATUS `as_of` was 3 days stale at
+  grading time) — low severity, not a fabrication, addressed by this run's `as_of` stamp.
+  `QUALITY_SCORECARD.md` (the PRODUCT scorecard, which actually gates `launch_readiness`) is
+  unchanged: `as_of: 2026-07-15`, overall B, `ship_gate_met: false`, `store_readiness` C persisting a
+  9th+ cycle on the owner-only Xcode/Mac gap — the GTM scorecard improving does NOT unlock outbound
+  marketing on its own (GTM_STANDARD S13 Gate 1 keys off the product scorecard, not this one).
+- Gmail state re-verified: Sam Gutelle (Tubefilter) draft (Run 3, 2026-06-29) still present via
+  `list_drafts`, unedited, unsent, now 24 days old (python3-verified). `search_threads` for
+  tubefilter/sam@tubefilter.com: zero replies (one unrelated 2023 email is the only hit). All 9
+  pre-policy stale drafts still present, unchanged — 10 total drafts via a fresh `list_drafts`,
+  matching Run 11's corrected count exactly.
+
+### What I did this run
+- **Recorded the GTM_SCORECARD re-grade** in `GROWTH_STATUS.md`'s `learnings`/`next_actions` — the
+  correct action here is to READ and reconcile the auditor's independent finding, not to touch the
+  scorecard itself (maker≠checker: this agent never writes `GTM_SCORECARD.md`).
+- **Bumped `as_of` everywhere** (`GROWTH_STATUS.md` top-level, `validation.as_of`,
+  `demand_signal.as_of`; `PENDING_OPS.md` top-level) to 2026-07-23 — directly closes the one
+  remaining gap the auditor's own `top_gaps` cited.
+- Bounded WebSearch for a HighlightMagic-specific public footprint (still none, expected pre-launch)
+  and for a named AI-clip-tool-beat journalist (again only unattributed aggregator/roundup content,
+  no individual with a verifiable beat) — **7 consecutive dead-end runs** on outreach-target search
+  now (5/6/7/9/10/11/12/13). Correctly drafted **zero new outreach**.
+- **Deliberately declined to extend the App Store RSS technique to a 5th competitor** (Descript,
+  flagged as untried in Run 12's own `next_actions`): theme 3 already clears the S10 corroboration
+  bar several times over (4 independent primary sources / 8 citations) and Run 12's own recorded
+  learning is that this technique has only ever surfaced theme-3-shaped evidence (trust/reliability/
+  delivery-gap), never theme 1 (JTBD) or theme 2 (mis-selection). A 5th same-shaped citation would be
+  padding, not a genuinely new deliverable — correctly skipped rather than churned for the sake of
+  "doing something."
+- No `BUSINESS_CASE.md` number changed (nothing new to model this run) and no `ROADMAP`/`VISION`
+  steer opened (no new high-confidence, causally revenue-linked data surfaced).
+- Ran an independent adversarial reviewer subagent (maker≠checker, fresh context) on the full diff.
+  Verdict: REQUEST_CHANGES on one real issue — this same paragraph, in an earlier draft, described
+  the review as already complete ("addressed its findings... see PR for detail") before the review
+  had actually run, pre-writing an outcome that wasn't yet known. Fixed by replacing that placeholder
+  with this actual verdict. Every other check the reviewer ran passed: the GTM_SCORECARD/
+  QUALITY_SCORECARD claims verified byte-for-byte against the real files (including `git show
+  b5d3765 --stat` to confirm the auditor commit is real and touches only scorecard/audit-memory
+  files), the "24 days old" date arithmetic re-verified independently, both YAML blocks re-validated
+  with `yaml.safe_load`, `git diff --name-only` confirmed no scope creep into ROADMAP/VISION/
+  BUSINESS_CASE/GTM_SCORECARD, and the anti-churn reasoning (skipping a 5th RSS competitor, skipping
+  a 4th paid Browserbase probe) was judged sound rather than lazy.
+
+### Learnings
+- **A scorecard re-grade can be the run's real deliverable even when this agent writes zero new
+  research.** Run 12 flagged the GTM_SCORECARD staleness plainly, without escalating tone, and kept
+  its effort on genuine research (RSS extension). The auditor acted on that signal between runs. This
+  run's job was to notice the change, reconcile it honestly (including the "this does NOT unlock
+  marketing" caveat against the still-B product scorecard), and move on — not to re-derive or second-
+  guess an independent grade this agent doesn't own.
+- **"Nothing changed, confirmed cheaply" is itself the correct output on a circuit-breaker run.**
+  13 consecutive runs of an unmet owner blocker is not itself a finding to dress up — the discipline
+  is to check cheaply, record the unchanged state honestly, and spend the run's real effort on
+  whatever genuine analysis is available (here: reconciling the scorecard re-grade), not on
+  manufacturing busywork.
+- Reconfirms Run 12's lesson: **a one-source finding can strengthen a theme without needing to be
+  re-derived every run.** No new theme-3 evidence was needed or sought this run since the bar was
+  already cleared multiple times over.
+
+### Dead ends / what NOT to repeat
+- Do NOT extend the App Store RSS technique to Descript (or any other named competitor) expecting
+  NEW-theme evidence — 3 runs and 4 competitors have only ever produced theme-3-shaped evidence.
+  Revisit only if there's a specific reason to expect a different theme's evidence (e.g. a Descript
+  review specifically calling out visual-content mis-selection or a manual-editing time-cost
+  complaint — check the review content, don't just fetch more of the same shape).
+- Do NOT re-run the paid Browserbase probe without a specific reason to expect a changed result — the
+  cheap local DNS/curl check has now answered "did anything change" correctly on 3 consecutive checks
+  (Runs 12, 13, and implicitly the unchanged proxy log).
+
+### Circuit-breaker status
+- **Still open at Run 13 (13 consecutive runs).** No new owner action since Run 6 (the last real
+  channel-adjacent movement was `spend-caps` closing back at Run 5). The ask is unchanged: Resend per
+  `docs/growth/CONNECT.md` Step 1 (~5 min, free) remains the single highest-leverage unlock;
+  `site-domain-dns` is the second (and now blocks confirming `site-gate` itself) — reconfirmed
+  unreachable across 4 separate runs now (10, 11, 12, 13).
+
+### Next run priorities (Run 14)
+1. Re-probe `env` for `GROWTH_AGENT_SECRET`/`PROD_URL`/`RESEND_API_KEY`/`KV_REST_API_URL`/social
+   tokens — never infer from git; if any present, pull real data and move toward execute mode.
+2. Only re-run the paid Browserbase probe if there's a specific reason to expect a different result
+   (an owner-reported DNS change, a new Vercel domain attached); otherwise the cheap local DNS/curl
+   check is sufficient to confirm "nothing changed."
+3. Check whether `QUALITY_SCORECARD.md` (the product scorecard that actually gates launch_readiness)
+   has moved off `store_readiness: C` — if still unchanged, that's now a 9th+-cycle owner-only gap
+   worth naming plainly (not escalating tone, just the incremented fact).
+4. Check whether the Sam Gutelle draft was sent (owner-reported) and whether the demand-validation
+   kit was filmed/posted.
+5. If a genuinely new, verifiable outreach target surfaces, draft it; otherwise zero new outreach
+   remains correct (7 consecutive runs of the same journalist-search dead end now).
+6. Re-read `GTM_STANDARD.md`/`FACTORY_STANDARD.md` in full, not from memory — both can change between
+   runs; this run found no material change since Run 12's read.
