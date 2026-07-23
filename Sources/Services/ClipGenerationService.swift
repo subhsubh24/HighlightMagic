@@ -16,7 +16,7 @@ actor ClipGenerationService {
     /// per-clip creative decisions for a cohesive tape (custom velocity curves,
     /// custom color grades, per-clip caption styling, transitions).
     ///
-    /// When `precomputedConfigs` is provided (from the Opus cloud planner), those configs
+    /// When `precomputedConfigs` is provided (from the Sonnet 4.6 cloud planner), those configs
     /// are used directly — skipping the legacy Sonnet re-planning call entirely.
     func generateClips(
         from video: VideoItem,
@@ -29,7 +29,7 @@ actor ClipGenerationService {
         // Hook-first ordering: put the highest-confidence segment first
         let ordered = segments.sorted { $0.confidenceScore > $1.confidenceScore }
 
-        // If Opus already planned configs (cloud path), use them directly.
+        // If Sonnet 4.6 already planned configs (cloud path), use them directly.
         // Reorder configs to match hook-first segment ordering.
         if let precomputed = precomputedConfigs, precomputed.count == segments.count {
             // Build a lookup from segment ID → config, then reorder to match `ordered`

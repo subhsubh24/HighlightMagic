@@ -124,13 +124,13 @@ struct ProcessingView: View {
 
             appState.detectedHighlights = result.segments
 
-            // Store AI production plan from Opus for downstream generation (SFX, music, intro/outro, post-processing)
+            // Store AI production plan from Sonnet 4.6 for downstream generation (SFX, music, intro/outro, post-processing)
             if let plan = result.productionPlan {
                 appState.aiProductionPlan = plan
             }
 
             // Generate clips with AI-powered effect recommendations.
-            // Pass Opus-planned configs when available to skip legacy Sonnet re-planning.
+            // Pass the cloud planner's (Sonnet 4.6) configs when available to skip legacy on-device re-planning.
             let clips = await ClipGenerationService.shared.generateClips(
                 from: video,
                 segments: result.segments,

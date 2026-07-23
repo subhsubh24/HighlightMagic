@@ -30,7 +30,7 @@ actor AIEffectRecommendationService {
         return fallbackRecommendation(template: template, prompt: userPrompt)
     }
 
-    /// Plan the entire highlight tape via the backend Opus planner.
+    /// Plan the entire highlight tape via the backend Sonnet 4.6 planner.
     func planTapeFromScoredFrames(
         for asset: AVURLAsset,
         totalSeconds: Double,
