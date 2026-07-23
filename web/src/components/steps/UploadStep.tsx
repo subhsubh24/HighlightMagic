@@ -55,7 +55,7 @@ function ProToggle({
         aria-label={`Toggle ${label}`}
         className={`relative h-6 w-11 rounded-full transition-colors ${
           enabled ? "bg-[var(--accent)]" : "bg-white/20"
-        } cursor-pointer flex-shrink-0`}
+        } cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60`}
       >
         <div
           className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
@@ -468,7 +468,7 @@ export default function UploadStep() {
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
             }}
-            className={`mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed py-3 transition-all ${
+            className={`mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed py-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60 ${
               isDragging
                 ? "border-[var(--accent)] bg-[var(--accent)]/5 text-[var(--accent)]"
                 : "border-white/10 text-[var(--text-tertiary)] hover:border-white/20 hover:text-[var(--text-secondary)]"
@@ -667,7 +667,7 @@ export default function UploadStep() {
             if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
           }}
           aria-label="Upload video and photo files"
-          className={`glass-card group flex w-full max-w-md cursor-pointer flex-col items-center gap-5 p-10 transition-all duration-300 ${
+          className={`glass-card group flex w-full max-w-md cursor-pointer flex-col items-center gap-5 p-10 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/60 ${
             isDragging
               ? "scale-[1.02] border-[var(--accent)] shadow-[0_0_30px_rgba(124,58,237,0.3)]"
               : "hover:border-white/20 hover:shadow-[0_0_20px_rgba(124,58,237,0.1)]"
