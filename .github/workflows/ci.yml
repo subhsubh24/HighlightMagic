@@ -3,6 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'PENDING_OPS.md'
+      - 'IMPROVEMENT_LOG.md'
+      - 'ROADMAP.md'
+      - 'docs/**'
   pull_request:
 
 # Cancel superseded in-progress runs for the same PR. The autonomous loop pushes commits in rapid
@@ -10,7 +15,7 @@ on:
 # completion even though only the latest commit matters. PR runs are cancellable; main runs finish.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true   # was PR-only, so push bursts never cancelled
 
 jobs:
   # ---- WEB (Next.js backend + marketing) — REQUIRED check ----
