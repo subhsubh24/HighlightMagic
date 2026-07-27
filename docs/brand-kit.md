@@ -93,7 +93,7 @@ Maintain a minimum clear space of 10% of the icon size on all sides. Never place
 - Background: `#0F0A1A` with a subtle radial purple glow center-left
 - Left half: app icon (256×256) + wordmark "Highlight Magic" in white bold + tagline in `--text-secondary`
 - Right half: mockup of a phone frame showing a vertical clip editor screen (screenshot placeholder until owner provides real screenshot)
-- Bottom: "Available on the App Store — Free to start" in small white text
+- Bottom: "iOS · Free to start" in small white text (pre-launch: do NOT claim App Store availability until the app is actually live — matches the shipped `opengraph-image.tsx`)
 - Gradient bar (2 px, full width) along the top edge: `#7C3AED → #EC4899`
 
 **Twitter card type**: `summary_large_image` (already set in `web/src/app/landing/layout.tsx`)
