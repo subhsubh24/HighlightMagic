@@ -598,7 +598,7 @@ export default function UploadStep() {
               {state.voiceSampleUrl && (
                 <button
                   onClick={() => dispatch({ type: "SET_VOICE_SAMPLE", url: null })}
-                  className="text-xs text-red-400/60 hover:text-red-400"
+                  className="text-xs text-red-400 hover:text-red-300"
                 >
                   Remove
                 </button>
