@@ -4,7 +4,7 @@ import UIKit
 import QuartzCore
 
 /// Renders animated (kinetic) text overlays onto video compositions using Core Animation.
-/// Supports pop, bounce, slide, and typewriter animations synced to beat timing.
+/// Supports pop, bounce, slide, typewriter, flicker, and fade animations synced to beat timing.
 enum KineticCaptionRenderer {
 
     /// Adds an animated caption layer to a parent CALayer for use with AVVideoCompositionCoreAnimationTool.
@@ -31,9 +31,10 @@ enum KineticCaptionRenderer {
             addSlideCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration)
         case .typewriter:
             addTypewriterCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration)
-        case .flicker, .fade:
-            // TODO: dedicated flicker/fade animations; render statically for now so the caption still appears.
-            addStaticCaption(to: parentLayer, text: text, style: style, videoSize: videoSize)
+        case .flicker:
+            addFlickerCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration, beatTimes: beatTimes)
+        case .fade:
+            addFadeCaption(to: parentLayer, text: text, style: style, videoSize: videoSize, clipDuration: clipDuration)
         }
     }
 
@@ -222,6 +223,68 @@ enum KineticCaptionRenderer {
         fadeIn.timingFunction = CAMediaTimingFunction(name: .easeIn)
 
         layer.add(fadeIn, forKey: "typewriter")
+
+        parentLayer.addSublayer(layer)
+    }
+
+    // MARK: - Flicker: Neon-sign flicker entrance (opacity stutters on, then holds)
+
+    private static func addFlickerCaption(
+        to parentLayer: CALayer,
+        text: String,
+        style: CaptionStyle,
+        videoSize: CGSize,
+        clipDuration: Double,
+        beatTimes: [Double]?
+    ) {
+        let layer = makeBaseCaptionLayer(text: text, style: style, videoSize: videoSize)
+
+        // Initial state: invisible
+        layer.opacity = 0
+
+        // Land the flicker on the first beat (or 0.3s) so it feels synced.
+        let appearTime = beatTimes?.first(where: { $0 >= 0.1 }) ?? 0.3
+
+        // Rapid on/off stutters that settle fully on — a neon tube warming up.
+        // `.discrete` gives hard cuts (true flicker) rather than smooth cross-fades.
+        let flicker = CAKeyframeAnimation(keyPath: "opacity")
+        flicker.values = [0.0, 1.0, 0.2, 1.0, 0.4, 1.0, 0.75, 1.0]
+        flicker.keyTimes = [0.0, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 1.0]
+        flicker.duration = 0.6
+        flicker.beginTime = AVCoreAnimationBeginTimeAtZero + appearTime
+        flicker.calculationMode = .discrete
+        flicker.fillMode = .both
+        flicker.isRemovedOnCompletion = false
+
+        layer.add(flicker, forKey: "flicker")
+
+        parentLayer.addSublayer(layer)
+    }
+
+    // MARK: - Fade: Soft opacity fade-in
+
+    private static func addFadeCaption(
+        to parentLayer: CALayer,
+        text: String,
+        style: CaptionStyle,
+        videoSize: CGSize,
+        clipDuration: Double
+    ) {
+        let layer = makeBaseCaptionLayer(text: text, style: style, videoSize: videoSize)
+
+        // Initial state: invisible
+        layer.opacity = 0
+
+        let fadeIn = CABasicAnimation(keyPath: "opacity")
+        fadeIn.fromValue = 0
+        fadeIn.toValue = 1
+        fadeIn.duration = 0.6
+        fadeIn.beginTime = AVCoreAnimationBeginTimeAtZero + 0.2
+        fadeIn.fillMode = .both
+        fadeIn.isRemovedOnCompletion = false
+        fadeIn.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+        layer.add(fadeIn, forKey: "fade")
 
         parentLayer.addSublayer(layer)
     }
