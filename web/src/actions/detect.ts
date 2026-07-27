@@ -8,6 +8,7 @@ import { getMeter, HM_OPERATION } from "@/lib/margin-meter-client";
 import { normalizeScoresAcrossBatches } from "@/lib/detect-normalize";
 import { extractBalancedJSON, safeParseJSONArray } from "@/lib/detect-json";
 import { selectPlannerFrames, frameKey } from "@/lib/detect-planner-frames";
+import { fetchWithRetry, INITIAL_BACKOFF_MS } from "@/lib/detect-fetch";
 
 // ── Debug logging ──
 
@@ -18,12 +19,6 @@ function debugLog(...args: unknown[]) {
 }
 
 // ── API helpers ──
-
-/** Retry config for 429/529 responses */
-const MAX_RETRIES = 5;
-const INITIAL_BACKOFF_MS = 2000;
-/** Cap Retry-After waits — staggered launches prevent most 429s now */
-const MAX_RETRY_WAIT_MS = 15_000;
 
 /**
  * Planner reasoning effort (output_config.effort). Adaptive-thinking output tokens are the planner's
@@ -46,66 +41,6 @@ const PLANNER_EFFORT: "low" | "medium" | "high" =
  */
 const PLANNER_MODEL: string = process.env.PLANNER_MODEL || CLAUDE_PLANNER;
 const PLANNER_USES_THINKING = !PLANNER_MODEL.includes("haiku");
-
-/**
- * Fetch with retry + exponential backoff for rate limits (429) and overload (529).
- */
-async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
-  label: string,
-  timeoutMs?: number
-): Promise<Response> {
-  const fetchStart = Date.now();
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const fetchInit = timeoutMs
-        ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
-        : init;
-      const attemptStart = Date.now();
-      const response = await fetch(url, fetchInit);
-      if (response.ok) {
-        if (attempt > 0) {
-          console.log(`${label}: succeeded on attempt ${attempt + 1} after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s total`);
-        }
-        return response;
-      }
-
-      // Only retry on rate-limit (429) or overloaded (529)
-      if (response.status === 429 || response.status === 529) {
-        const retryAfter = response.headers.get("retry-after");
-        const retryAfterSec = retryAfter ? parseFloat(retryAfter) : NaN;
-        const rawWaitMs = !isNaN(retryAfterSec) && retryAfterSec > 0
-          ? retryAfterSec * 1000
-          : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        const waitMs = Math.min(rawWaitMs, MAX_RETRY_WAIT_MS);
-        console.warn(`${label}: HTTP ${response.status} (${response.status === 429 ? "rate-limited" : "overloaded"}), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${Math.round(waitMs)}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-
-      // Non-retryable HTTP error — return as-is
-      console.error(`${label}: non-retryable HTTP ${response.status} after ${((Date.now() - attemptStart) / 1000).toFixed(1)}s`);
-      return response;
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "network error";
-      if (attempt < MAX_RETRIES) {
-        const waitMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        console.warn(`${label}: ${errMsg}, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${waitMs}ms (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-      console.error(`${label}: all ${MAX_RETRIES} retries exhausted after ${((Date.now() - fetchStart) / 1000).toFixed(1)}s — last error: ${errMsg}`);
-      throw err;
-    }
-  }
-  // All retries exhausted — make one final attempt (will throw on failure)
-  console.warn(`${label}: retries exhausted, making final attempt (elapsed ${((Date.now() - fetchStart) / 1000).toFixed(1)}s)`);
-  const fetchInit = timeoutMs
-    ? { ...init, signal: AbortSignal.timeout(timeoutMs) }
-    : init;
-  return fetch(url, fetchInit);
-}
 
 /**
  * Run async tasks with a concurrency limit.
